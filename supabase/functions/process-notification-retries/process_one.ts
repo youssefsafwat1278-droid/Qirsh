@@ -1,6 +1,6 @@
 import { serviceClient } from '../_shared/capture_auth.ts';
 import { sendCapturePush } from '../_shared/apns.ts';
-import { clearDeadApnsToken, GENERIC_CAPTURE_PUSH, isDeadApnsToken } from '../_shared/capture_push.ts';
+import { clearDeadApnsToken, capturePushContent, isDeadApnsToken } from '../_shared/capture_push.ts';
 import { markApnsLogFailed, markApnsLogSent } from '../_shared/notification_logs.ts';
 import { isTransientApnsFailure, nextRetryDelayMs } from '../_shared/notification_retry_policy.ts';
 
@@ -66,14 +66,16 @@ export async function processOne(
   }
 
   const token = gate.apns_token as string;
+  // Read only this fenced capture. A missing/consumed row supplies no details.
+  const content = await supabase.from('processed_captures').select('notification')
+    .eq('install_id_hash', row.install_id_hash).eq('payload_id', row.payload_id).maybeSingle();
+  if (content.error) return 'retrying';
   const result = await sendPush({
     token,
     environment: gate.apns_environment as 'sandbox' | 'production',
     payloadId: row.payload_id,
     notificationLogId: row.notification_log_id,
-    // Q3: generic alert only.
-    title: GENERIC_CAPTURE_PUSH.title,
-    body: GENERIC_CAPTURE_PUSH.body,
+    ...capturePushContent(content.data?.notification),
     notificationType: gate.notification_type ?? 'new_transaction',
   });
 

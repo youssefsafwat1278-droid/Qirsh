@@ -10,8 +10,16 @@ import '../security/secure_storage_options.dart';
 /// column, so adopting it needs no Drift migration. Loads once on creation;
 /// [set] writes through immediately.
 class ThemeModeController extends StateNotifier<ThemeMode> {
-  ThemeModeController() : super(ThemeMode.system) {
-    _load();
+  ThemeModeController() : super(_initialMode) {
+    if (!_preloaded) _load();
+  }
+
+  static ThemeMode _initialMode = ThemeMode.system;
+  static bool _preloaded = false;
+
+  static Future<void> preload() async {
+    _initialMode = _decode(await _storage.read(key: _key));
+    _preloaded = true;
   }
 
   static const String _key = 'app_theme_mode';
@@ -19,12 +27,14 @@ class ThemeModeController extends StateNotifier<ThemeMode> {
 
   Future<void> _load() async {
     final raw = await _storage.read(key: _key);
-    state = _decode(raw);
+    if (mounted) state = _decode(raw);
   }
 
   Future<void> set(ThemeMode mode) async {
     if (mode == state) return;
     state = mode;
+    _initialMode = mode;
+    _preloaded = true;
     await _storage.write(key: _key, value: _encode(mode));
   }
 

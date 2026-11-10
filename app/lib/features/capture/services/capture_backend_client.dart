@@ -9,15 +9,18 @@ class CaptureBackendClient {
     required String anonKey,
     http.Client? httpClient,
     Duration processIosSmsTimeout = const Duration(seconds: 25),
+    bool notificationDetails = false,
   })  : _supabaseUrl = supabaseUrl,
         _anonKey = anonKey,
         _http = httpClient ?? GatedHttpClient(),
-        _processIosSmsTimeout = processIosSmsTimeout;
+        _processIosSmsTimeout = processIosSmsTimeout,
+        _notificationDetails = notificationDetails;
 
   final String _supabaseUrl;
   final String _anonKey;
   final http.Client _http;
   final Duration _processIosSmsTimeout;
+  final bool _notificationDetails;
 
   Uri _functionUri(String name) =>
       Uri.parse('$_supabaseUrl/functions/v1/$name');
@@ -182,6 +185,7 @@ class CaptureBackendClient {
             'locale': locale,
             'tzOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes,
             'allowAi': allowAi,
+            'notificationDetails': _notificationDetails,
             if (allowAi) 'analysis_mode': 'ai_primary_v1',
             if (allowAi) 'backgroundAnalysis': true,
             if (allowAi) 'localNotification': false,

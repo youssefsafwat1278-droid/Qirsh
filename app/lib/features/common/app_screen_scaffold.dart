@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
+import '../../core/theme/widgets/section_photo_header.dart';
 
 /// هيكل شاشة قياسي — خلفية مع أوربت مضيئة خافتة للوضع الداكن، SafeArea، وهيدر اختياري.
 class AppScreenScaffold extends StatelessWidget {
@@ -9,6 +10,7 @@ class AppScreenScaffold extends StatelessWidget {
     super.key,
     required this.body,
     this.header,
+    this.scrollHeader = false,
     this.padding,
     this.bottomNavPadding,
     this.bottomArea,
@@ -22,6 +24,9 @@ class AppScreenScaffold extends StatelessWidget {
 
   /// Widget فوق المحتوى. يُعرَض قبل [body].
   final Widget? header;
+
+  /// Photographic headers collapse while the content surface covers them.
+  final bool scrollHeader;
 
   /// padding للمحتوى داخل body.
   final EdgeInsetsGeometry? padding;
@@ -48,6 +53,30 @@ class AppScreenScaffold extends StatelessWidget {
 
     if (padding != null) {
       content = Padding(padding: padding!, child: content);
+    }
+
+    if (scrollHeader && header != null) {
+      return Scaffold(
+        backgroundColor: c.bg,
+        resizeToAvoidBottomInset: resizeToAvoidBottomInset,
+        body: QirshSectionBackdrop(
+          child: SafeArea(
+            bottom: false,
+            child: NestedScrollView(
+              headerSliverBuilder: (context, _) => [
+                SliverToBoxAdapter(child: header!),
+              ],
+              body: Material(
+                color: c.bg,
+                child: Column(children: [
+                  Expanded(child: content),
+                  if (bottomArea != null) bottomArea!,
+                ]),
+              ),
+            ),
+          ),
+        ),
+      );
     }
 
     final bodyColumn = Column(

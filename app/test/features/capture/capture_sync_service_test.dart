@@ -52,7 +52,8 @@ class _FakeRegistrationService implements CaptureDeviceRegistrationService {
       false;
 
   @override
-  Future<void> resolvePendingDisable({EgressResolutionToken? resolution}) async {}
+  Future<void> resolvePendingDisable(
+      {EgressResolutionToken? resolution}) async {}
   @override
   Future<void> reconcileAfterAdmission({
     required AdmissionAuthority authority,
@@ -98,8 +99,8 @@ class _FakeRegistrationService implements CaptureDeviceRegistrationService {
   Future<bool> liveOnVerified({String? owner}) async => false;
 
   @override
-  Future<({ServerRevocation status, int generation})?> serverRevocation() async =>
-      null;
+  Future<({ServerRevocation status, int generation})?>
+      serverRevocation() async => null;
 
   @override
   Future<({bool cloud, bool ai, int version})?> consentAckSnapshot() async =>
@@ -109,9 +110,8 @@ class _FakeRegistrationService implements CaptureDeviceRegistrationService {
   int? get mirroredConsentVersion => null;
 
   @override
-  ValueListenable<CaptureRegistrationStatus> get status =>
-      ValueNotifier(const CaptureRegistrationStatus(
-          CaptureRegistrationPhase.notRequested));
+  ValueListenable<CaptureRegistrationStatus> get status => ValueNotifier(
+      const CaptureRegistrationStatus(CaptureRegistrationPhase.notRequested));
 
   @override
   Future<void> retry() async {}
@@ -129,7 +129,8 @@ class _FakeRegistrationService implements CaptureDeviceRegistrationService {
   Future<String?> readDeviceSecret() async => 'device-secret';
 
   @override
-  Future<void> linkToCurrentUser({AdmissionAuthority? admissionAuthority}) async {}
+  Future<void> linkToCurrentUser(
+      {AdmissionAuthority? admissionAuthority}) async {}
 
   @override
   Future<void> unlinkCurrentDevice() async {}
@@ -155,6 +156,7 @@ class _FakeCaptureBackendClient implements CaptureBackendClient {
   String? lastOwnerUid;
   int? lastOwnerGeneration;
   bool? lastSchemaV2;
+  String? lastLocale;
   Object? processError;
 
   @override
@@ -177,6 +179,7 @@ class _FakeCaptureBackendClient implements CaptureBackendClient {
     lastOwnerUid = ownerUid;
     lastOwnerGeneration = ownerGeneration;
     lastSchemaV2 = schemaV2;
+    lastLocale = locale;
   }
 
   @override
@@ -332,6 +335,24 @@ void main() {
     // whole run (was one getAll() per captured row before batching).
     expect(counting.getAllCalls, 1,
         reason: 'accounts prefetched once per sync run, not per capture');
+  });
+
+  test(
+      'relay redelivery repairs a missing receipt without blocking newer captures',
+      () async {
+    final older = _capture(payloadId: 'older-capture', status: 'processed');
+    await service(_FakeCaptureBackendClient([older])).sync();
+    // A ledger restore/pull can preserve the transaction without its local
+    // capture receipt. A redelivery must adopt it, not INSERT its ID again.
+    await db.customStatement('DELETE FROM dedup_hashes;');
+    final client = _FakeCaptureBackendClient([
+      older,
+      _capture(payloadId: 'newer-capture', status: 'processed'),
+    ]);
+    final result = await service(client).sync();
+    expect(result.importedPayloadIds, {'older-capture', 'newer-capture'});
+    expect((await DriftTransactionRepository(db).getAll()).length, 2);
+    expect(client.ackedPayloadIds, ['older-capture', 'newer-capture']);
   });
 
   test('needs_review capture records its transaction id', () async {
@@ -567,8 +588,7 @@ void main() {
     expect(await db.count('transactions'), 0);
   });
 
-  test('backend rejected redelivery creates exactly one review item',
-      () async {
+  test('backend rejected redelivery creates exactly one review item', () async {
     const payloadId = 'payload-backend-rejected-redelivery';
     final client = _FakeCaptureBackendClient([
       const ProcessedCaptureDto(
@@ -650,6 +670,27 @@ void main() {
     expect(client.ackedPayloadIds, [payloadId]);
   });
 
+  test('replay uses current app language instead of the old device locale',
+      () async {
+    final client = _FakeCaptureBackendClient([]);
+    final syncService = service(client);
+    final native = SharedCapturedMessage(
+      id: 'language-replay',
+      text: 'IPN transfer EGP 1.00',
+      source: CapturedMessageSource.iosShortcut,
+      status: 'pendingSend',
+      receivedAt: DateTime.utc(2026, 11, 9),
+      locale: 'en_US',
+    );
+    final settings = await settingsRepository.getSettings();
+    await settingsRepository.saveSettings(settings.copyWith(language: 'ar'));
+    expect(await syncService.retryPendingSend(native), isTrue);
+    expect(client.lastLocale, 'ar');
+    await settingsRepository.saveSettings(settings.copyWith(language: 'en'));
+    expect(await syncService.retryPendingSend(native), isTrue);
+    expect(client.lastLocale, 'en');
+  });
+
   test('pendingSend rejected replay is durable before native ack is allowed',
       () async {
     const payloadId = 'payload-pending-send-rejected';
@@ -696,11 +737,12 @@ void main() {
           receivedAt: DateTime.utc(2026, 8, 20, 12),
         );
 
-    test('a localOnly pendingSend (a killed Cloud-OFF intent) never uploads '
+    test(
+        'a localOnly pendingSend (a killed Cloud-OFF intent) never uploads '
         'even with Cloud ON', () async {
       final client = _FakeCaptureBackendClient(const []);
-      final svc = service(client,
-          authorization: CaptureUploadAuthorization.denied);
+      final svc =
+          service(client, authorization: CaptureUploadAuthorization.denied);
       expect(await svc.retryPendingSend(pending()), isFalse);
       expect(client.processedPayloadIds, isEmpty);
     });
@@ -708,15 +750,14 @@ void main() {
     test('a waiting item is retried later, never uploaded', () async {
       final client = _FakeCaptureBackendClient(const []);
       final svc = service(client,
-          authorization: const CaptureUploadAuthorization(
-              CaptureUploadDecision.waiting));
+          authorization:
+              const CaptureUploadAuthorization(CaptureUploadDecision.waiting));
       await expectLater(svc.retryPendingSend(pending()),
           throwsA(isA<CaptureBackendException>()));
       expect(client.processedPayloadIds, isEmpty);
     });
 
-    test('a localOnly item that is still .pending is never replayed',
-        () async {
+    test('a localOnly item that is still .pending is never replayed', () async {
       final client = _FakeCaptureBackendClient(const []);
       final svc = service(client);
       final item = SharedCapturedMessage(
@@ -786,7 +827,8 @@ void main() {
       'capture_id_conflict',
       'capture_expired',
     ]) {
-      test('a 409 $code is terminal: no upload retry, the caller parses locally',
+      test(
+          'a 409 $code is terminal: no upload retry, the caller parses locally',
           () async {
         final client = _FakeCaptureBackendClient(const [])
           ..processError =
@@ -894,8 +936,8 @@ void main() {
     ]);
     await service(
       client,
-      coordinator: const FixedPlanningCutoverCoordinator(
-          PlanningCutoverState.canonical),
+      coordinator:
+          const FixedPlanningCutoverCoordinator(PlanningCutoverState.canonical),
     ).sync();
     final tx = (await DriftTransactionRepository(db).getAll()).single;
     expect(tx.status, TransactionStatus.pending); // forced to review
@@ -913,8 +955,8 @@ void main() {
     ]);
     await service(
       client,
-      coordinator: const FixedPlanningCutoverCoordinator(
-          PlanningCutoverState.canonical),
+      coordinator:
+          const FixedPlanningCutoverCoordinator(PlanningCutoverState.canonical),
     ).sync();
     final tx = (await DriftTransactionRepository(db).getAll()).single;
     expect(tx.status, TransactionStatus.confirmed);

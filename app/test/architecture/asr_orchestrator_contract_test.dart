@@ -121,7 +121,7 @@ void main() {
         contains('AutomaticSessionRecovery.active?.yieldToExplicitAttempt()'));
   });
 
-  test('ASR triggers only from resumed; every other state latches loss (B5)',
+  test('ASR starts only resumed; real background states latch loss while inactive may finish adoption',
       () {
     final at = bootstrap.indexOf('class _AsrLifecycleObserver');
     expect(at, greaterThan(-1));
@@ -133,11 +133,16 @@ void main() {
     expect(body, contains('AppLifecycleState.inactive'));
     final cases = body.substring(0, body.indexOf('\n}'));
     expect(
-        RegExp(r'case AppLifecycleState\.inactive:\s*case AppLifecycleState\.paused:'
+        RegExp(r'case AppLifecycleState\.paused:'
                 r'\s*case AppLifecycleState\.hidden:\s*case AppLifecycleState\.detached:'
                 r'\s*asr\.onBackground\(\);')
             .hasMatch(cases),
         isTrue);
+    final inactive = cases.substring(cases.indexOf('case AppLifecycleState.inactive:'),
+        cases.indexOf('case AppLifecycleState.paused:'));
+    expect(inactive, contains('break;'));
+    expect(inactive, isNot(contains('asr.onBackground()')));
+    expect(asr, contains('(accepted ? host.foreground : host.resumed)'));
     expect(
         asr,
         contains('authority.mayContinue = false;\n'

@@ -24,6 +24,7 @@ import '../../core/utils/app_lucide_icons.dart';
 import '../../core/theme/widgets/directional_chevron.dart';
 import '../common/app_error_state.dart';
 import '../common/app_header.dart';
+import '../common/app_screen_scaffold.dart';
 
 class AccountsScreen extends ConsumerWidget {
   const AccountsScreen({super.key});
@@ -35,9 +36,9 @@ class AccountsScreen extends ConsumerWidget {
     final unassigned =
         ref.watch(accountCardGroupsProvider).valueOrNull?.unassigned ??
             const <CardSummary>[];
-    return Scaffold(
-      backgroundColor: c.bg,
-      appBar: AppHeader(
+    return AppScreenScaffold(
+      scrollHeader: true,
+      header: AppHeader(
         title: context.l10n.accTitle,
         sectionPhoto: QirshSectionPhoto.accounts,
       ),
@@ -48,7 +49,8 @@ class AccountsScreen extends ConsumerWidget {
             child: accountsAsync.when(
               skipLoadingOnReload: true,
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => SingleChildScrollView(child: AppErrorState(
+              error: (e, _) => SingleChildScrollView(
+                  child: AppErrorState(
                 title: context.l10n.txnError,
                 description: context.l10n.annTryAgainSoon,
                 retryLabel: context.l10n.startRetry,
@@ -63,6 +65,7 @@ class AccountsScreen extends ConsumerWidget {
                 ),
                 children: [
                   _CurrencyTotals(accounts: accounts),
+                  const SizedBox(height: AppSpacing.s3),
                   if (accounts.isEmpty)
                     const Center(
                       child: QirshIllustration(name: 'accounts'),
@@ -76,7 +79,8 @@ class AccountsScreen extends ConsumerWidget {
                           for (var i = 0; i < accounts.length; i++) ...[
                             if (i > 0)
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 16),
                                 child: Divider(height: 1, color: c.border),
                               ),
                             _AccountCard(account: accounts[i]),
@@ -133,15 +137,14 @@ class _CurrencyTotals extends StatelessWidget {
     final entries = totals.entries.toList()
       ..sort((x, y) => y.value.abs().compareTo(x.value.abs()));
 
-    return QirshPhotoCard(
-      photo: QirshPhoto.cards,
-      height: 150,
-      margin: const EdgeInsets.only(bottom: 14),
+    final c = context.colors;
+    return MaliCard(
+      padding: const EdgeInsets.all(AppSpacing.s4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(context.l10n.accTotalBalance,
-              style: AppTypography.caption(Colors.white.withValues(alpha: 0.72))),
+              style: AppTypography.caption(c.textSecondary)),
           const SizedBox(height: 5),
           for (final e in entries)
             Wrap(
@@ -152,12 +155,12 @@ class _CurrencyTotals extends StatelessWidget {
                   Money(e.value, e.key),
                   style: AppTypography.custom(
                       size: entries.length == 1 ? 24 : 20,
-                      weight: FontWeight.w700, height: 1.35,
-                      color: e.value < 0 ? const Color(0xFFFFD485) : Colors.white),
+                      weight: FontWeight.w700,
+                      height: 1.35,
+                      color: e.value < 0 ? c.danger : c.textMain),
                 ),
                 Text(Currency.label(context, e.key),
-                    style: AppTypography.caption(
-                        Colors.white.withValues(alpha: 0.72))),
+                    style: AppTypography.caption(c.textSecondary)),
               ],
             ),
         ],
@@ -172,10 +175,12 @@ class _AccountsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, 8, AppSpacing.gutter, 0),
-      child: Align(alignment: AlignmentDirectional.centerStart,
-        child: Text(context.l10n.accSubtitle,
-          style: AppTypography.caption(context.colors.textSecondary))),
+      padding:
+          const EdgeInsets.fromLTRB(AppSpacing.gutter, 8, AppSpacing.gutter, 0),
+      child: Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(context.l10n.accSubtitle,
+              style: AppTypography.caption(context.colors.textSecondary))),
     );
   }
 }
@@ -302,8 +307,7 @@ class _UnassignedCardTile extends StatelessWidget {
                 ],
               ),
             ),
-            Text(formatMoney(net),
-                style: AppTypography.caption(c.textLight)),
+            Text(formatMoney(net), style: AppTypography.caption(c.textLight)),
             const SizedBox(width: 6),
             DirectionalChevron(color: c.textLight, size: 20),
           ],

@@ -151,7 +151,7 @@ class MyCardsScreen extends ConsumerWidget {
     ];
 
     return AppScreenScaffold(
-      safeArea: false, // The photographic header owns the top inset.
+      scrollHeader: true,
       header: AppHeader(
         sectionPhoto: QirshSectionPhoto.cards,
         title: context.l10n.cardAllCards,
@@ -173,19 +173,19 @@ class MyCardsScreen extends ConsumerWidget {
               },
             )
           : (async.isLoading && grouping == null) ||
-              (accountsAsync.isLoading && !accountsAsync.hasValue) ||
-              (cardsAsync.isLoading && !cardsAsync.hasValue)
-          ? const Center(child: CircularProgressIndicator())
-          : sections.isEmpty
-              ? _empty(context, ref)
-              : ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
-                      AppSpacing.s2, AppSpacing.gutter, AppSpacing.s6),
-                  itemCount: displaySections.length,
-                  separatorBuilder: (_, __) =>
-                      const SizedBox(height: AppSpacing.s3),
-                  itemBuilder: (_, i) => displaySections[i],
-                ),
+                  (accountsAsync.isLoading && !accountsAsync.hasValue) ||
+                  (cardsAsync.isLoading && !cardsAsync.hasValue)
+              ? const Center(child: CircularProgressIndicator())
+              : sections.isEmpty
+                  ? _empty(context, ref)
+                  : ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                          AppSpacing.s2, AppSpacing.gutter, AppSpacing.s6),
+                      itemCount: displaySections.length,
+                      separatorBuilder: (_, __) =>
+                          const SizedBox(height: AppSpacing.s3),
+                      itemBuilder: (_, i) => displaySections[i],
+                    ),
     );
   }
 
@@ -198,7 +198,8 @@ class MyCardsScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const QirshIllustration(name: 'accounts', width: 220, height: 165),
+              const QirshIllustration(
+                  name: 'accounts', width: 220, height: 165),
               const SizedBox(height: AppSpacing.s4),
               Text(context.l10n.cardEmptyTitle,
                   style: AppTypography.title2(c.textMain)),
@@ -272,81 +273,111 @@ class _CardRow extends ConsumerWidget {
     final c = context.colors;
     final net = card.totalIn - card.totalOut;
     return AppCard(
-      key: ValueKey('card-activity-${_cardKey(account?.id ?? entity?.accountId, card.last4)}'),
+      key: ValueKey(
+          'card-activity-${_cardKey(account?.id ?? entity?.accountId, card.last4)}'),
       onTap: () => context.push('/card/${card.last4}'),
       padding: const EdgeInsets.all(AppSpacing.s3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(children: [
-            MiniCardArt(network: card.network, themeKey: card.colorTheme,
-              accentHex: card.accentHex, width: 56),
+            MiniCardArt(
+                network: card.network,
+                themeKey: card.colorTheme,
+                accentHex: card.accentHex,
+                width: 56),
             const SizedBox(width: AppSpacing.s3),
-            Expanded(child: Column(
+            Expanded(
+                child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_title(context), maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.bodyStrong(c.textMain)),
-                Text('•••• ${card.last4}', textDirection: TextDirection.ltr,
-                  style: AppTypography.caption(c.textSecondary)),
-                if (entity?.nickname?.trim().isNotEmpty == true && account != null)
-                  Text(account!.name, maxLines: 1,
+                Text(_title(context),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodyStrong(c.textMain)),
+                Text('•••• ${card.last4}',
+                    textDirection: TextDirection.ltr,
                     style: AppTypography.caption(c.textSecondary)),
+                if (entity?.nickname?.trim().isNotEmpty == true &&
+                    account != null)
+                  Text(account!.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.caption(c.textSecondary)),
               ],
             )),
-            IconButton(onPressed: () => _edit(context, ref),
-              tooltip: context.l10n.cardEdit,
-              icon: Icon(AppLucideIcons.pencil, color: c.primary, size: 18)),
+            IconButton(
+                onPressed: () => _edit(context, ref),
+                tooltip: context.l10n.cardEdit,
+                icon: Icon(AppLucideIcons.pencil, color: c.primary, size: 18)),
           ]),
           const SizedBox(height: AppSpacing.s3),
           Row(children: [
-            Expanded(child: _flow(context, context.l10n.cardIn,
-                card.totalIn, c.success)),
+            Expanded(
+                child: _flow(
+                    context, context.l10n.cardIn, card.totalIn, c.success)),
             const SizedBox(width: AppSpacing.s2),
-            Expanded(child: _flow(context, context.l10n.cardOut,
-                card.totalOut, c.danger)),
+            Expanded(
+                child: _flow(
+                    context, context.l10n.cardOut, card.totalOut, c.danger)),
             const SizedBox(width: AppSpacing.s2),
-            Expanded(child: _flow(context, context.l10n.rptNet, net, c.textMain)),
+            Expanded(
+                child: _flow(context, context.l10n.rptNet, net, c.textMain)),
           ]),
           const SizedBox(height: AppSpacing.s2),
           Row(children: [
-            Expanded(child: _action(context,
-              icon: AppLucideIcons.plus, label: context.l10n.cardAddTx,
-              onTap: () => ManualTransactionSheet.show(context,
-                cardLast4: card.last4))),
+            Expanded(
+                child: _action(context,
+                    icon: AppLucideIcons.plus,
+                    label: context.l10n.cardAddTx,
+                    onTap: () => ManualTransactionSheet.show(context,
+                        cardLast4: card.last4))),
             const SizedBox(width: AppSpacing.s2),
-            Expanded(child: _action(context,
-              icon: AppLucideIcons.link, label: context.l10n.cardLinkExistingTx,
-              onTap: () => _showAttachSheet(context, card.last4))),
+            Expanded(
+                child: _action(context,
+                    icon: AppLucideIcons.link,
+                    label: context.l10n.cardLinkExistingTx,
+                    onTap: () => _showAttachSheet(context, card.last4))),
           ]),
         ],
       ),
     );
   }
 
-  Widget _action(BuildContext context, {
-    required IconData icon, required String label, required VoidCallback onTap,
-  }) => TextButton.icon(
-    onPressed: onTap,
-    icon: Icon(icon, size: 18),
-    label: Text(label, maxLines: 2, textAlign: TextAlign.center,
-      style: AppTypography.footnote(context.colors.primary)),
-    style: TextButton.styleFrom(
-      minimumSize: const Size(48, 48), backgroundColor: context.colors.surface2,
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8)),
-  );
+  Widget _action(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) =>
+      TextButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 18),
+        label: Text(label,
+            maxLines: 2,
+            textAlign: TextAlign.center,
+            style: AppTypography.footnote(context.colors.primary)),
+        style: TextButton.styleFrom(
+            minimumSize: const Size(48, 48),
+            backgroundColor: context.colors.surface2,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8)),
+      );
 
   Widget _flow(BuildContext context, String label, Money value, Color color) {
-    final text = '${formatMoney(value)} ${Currency.label(context, value.currency)}';
+    final text =
+        '${formatMoney(value)} ${Currency.label(context, value.currency)}';
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, maxLines: 1, overflow: TextOverflow.ellipsis,
-        style: AppTypography.caption(context.colors.textSecondary)),
-      FittedBox(fit: BoxFit.scaleDown,
-        alignment: AlignmentDirectional.centerStart,
-        child: Text(text, maxLines: 1, textDirection: TextDirection.ltr,
-          style: AppTypography.bodyStrong(color))),
+      Text(label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: AppTypography.caption(context.colors.textSecondary)),
+      FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(text,
+              maxLines: 1,
+              textDirection: TextDirection.ltr,
+              style: AppTypography.bodyStrong(color))),
     ]);
   }
 }
@@ -359,65 +390,94 @@ class _CardDeck extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => SizedBox(
-    height: 188 + (rows.length - 1) * 56.0,
-    child: Stack(children: [
-      for (var i = 0; i < rows.length; i++)
-        Positioned(top: i * 56.0, left: 0, right: 0, height: 188,
-          child: _tile(context, ref, rows[i])),
-    ]),
-  );
+        height: 188 + (rows.length - 1) * 56.0,
+        child: Stack(children: [
+          for (var i = 0; i < rows.length; i++)
+            Positioned(
+                top: i * 56.0,
+                left: 0,
+                right: 0,
+                height: 188,
+                child: _tile(context, ref, rows[i])),
+        ]),
+      );
 
   Widget _tile(BuildContext context, WidgetRef ref, _CardRow row) {
     final card = row.card;
     return Semantics(
-      button: true, label: '${row._title(context)} •••• ${card.last4}',
+      button: true,
+      label: '${row._title(context)} •••• ${card.last4}',
       child: Container(
-        key: ValueKey('card-deck-${_cardKey(row.account?.id ?? row.entity?.accountId, card.last4)}'),
+        key: ValueKey(
+            'card-deck-${_cardKey(row.account?.id ?? row.entity?.accountId, card.last4)}'),
         decoration: BoxDecoration(
-          gradient: cardGradient(context,
-            themeKey: card.colorTheme, accentHex: card.accentHex),
+            gradient: cardGradient(context,
+                themeKey: card.colorTheme, accentHex: card.accentHex),
+            borderRadius: BorderRadius.circular(22),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withValues(alpha: .18),
+                  blurRadius: 24,
+                  offset: const Offset(0, -8))
+            ]),
+        child: Material(
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(22),
-          boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: .18),
-            blurRadius: 24, offset: const Offset(0, -8))]),
-        child: Material(color: Colors.transparent,
-          borderRadius: BorderRadius.circular(22), clipBehavior: Clip.antiAlias,
-          child: InkWell(onTap: () => context.push('/card/${card.last4}'),
-            child: Padding(padding: const EdgeInsets.fromLTRB(16, 4, 12, 16),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => context.push('/card/${card.last4}'),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 12, 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Row(children: [
                     if (row.account != null) ...[
-                      BankMark(accountName: row.account!.name,
-                        accountType: row.account!.type, size: 24),
+                      BankMark(
+                          accountName: row.account!.name,
+                          accountType: row.account!.type,
+                          size: 24),
                       const SizedBox(width: 8),
                     ],
-                    Expanded(child: Text(row._title(context), maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.bodyStrong(Colors.white))),
+                    Expanded(
+                        child: Text(row._title(context),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodyStrong(Colors.white))),
                     CardNetworkBadge(network: card.network),
                     const SizedBox(width: 4),
                     IconButton(
-                      key: ValueKey('card-deck-edit-${_cardKey(row.account?.id ?? row.entity?.accountId, card.last4)}'),
-                      tooltip: '${context.l10n.cardEdit} •••• ${card.last4}',
-                      onPressed: () => row._edit(context, ref),
-                      icon: const Icon(AppLucideIcons.pencil,
-                        color: Colors.white, size: 18),
-                      constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-                      padding: EdgeInsets.zero),
+                        key: ValueKey(
+                            'card-deck-edit-${_cardKey(row.account?.id ?? row.entity?.accountId, card.last4)}'),
+                        tooltip: '${context.l10n.cardEdit} •••• ${card.last4}',
+                        onPressed: () => row._edit(context, ref),
+                        icon: const Icon(AppLucideIcons.pencil,
+                            color: Colors.white, size: 18),
+                        constraints:
+                            const BoxConstraints(minWidth: 48, minHeight: 48),
+                        padding: EdgeInsets.zero),
                   ]),
-                  Container(width: 38, height: 28,
-                    decoration: BoxDecoration(borderRadius: BorderRadius.circular(7),
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFFF8E3A1), Color(0xFFD6A93A)]))),
+                  Container(
+                      width: 38,
+                      height: 28,
+                      decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(7),
+                          gradient: const LinearGradient(
+                              colors: [Color(0xFFF8E3A1), Color(0xFFD6A93A)]))),
                   Row(children: [
-                    Expanded(child: Text('•••• ${card.last4}',
-                      textDirection: TextDirection.ltr,
-                      style: AppTypography.headline(Colors.white)
-                        .copyWith(letterSpacing: 2))),
-                    Flexible(child: Text(row.account?.name ?? context.l10n.cardUnassigned,
-                      maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: AppTypography.caption(Colors.white.withValues(alpha: .8)))),
+                    Expanded(
+                        child: Text('•••• ${card.last4}',
+                            textDirection: TextDirection.ltr,
+                            style: AppTypography.headline(Colors.white)
+                                .copyWith(letterSpacing: 2))),
+                    Flexible(
+                        child: Text(
+                            row.account?.name ?? context.l10n.cardUnassigned,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.caption(
+                                Colors.white.withValues(alpha: .8)))),
                   ]),
                 ],
               ),
@@ -557,77 +617,84 @@ class _AttachExistingSheetState extends ConsumerState<_AttachExistingSheet> {
                               title: context.l10n.txnError,
                               description: context.l10n.annTryAgainSoon,
                               retryLabel: context.l10n.startRetry,
-                              onRetry: () => ref.invalidate(pickTransactionsProvider(_query)),
+                              onRetry: () => ref
+                                  .invalidate(pickTransactionsProvider(_query)),
                             ),
                           )
                         : items.isEmpty
-                        ? SingleChildScrollView(
-                            controller: controller,
-                            child: AppEmptyState(
-                              icon: AppLucideIcons.receipt,
-                              title: context.l10n.cardNoTx,
-                              subtitle: '',
-                              illustration: const QirshIllustration(
-                                name: 'emptyTx', width: 120, height: 90),
-                            ),
-                          )
-                        : Material(
-                          type: MaterialType.transparency,
-                          child: ListView.builder(
-                            controller: controller,
-                            itemCount: items.length,
-                            itemBuilder: (_, i) {
-                              final tx = items[i];
-                              final linked = tx.cardLast4 == last4;
-                              return ListTile(
-                                title: Text(
-                                    tx.rawMerchant ??
-                                        context.l10n.txnTransactionWord,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppTypography.body(c.textMain)),
-                                subtitle: Text(
-                                  '${formatMoney(tx.amountMoney)} ${tx.currency}'
-                                  '${tx.cardLast4 != null ? ' • •••• ${tx.cardLast4}' : ''}',
-                                  style: AppTypography.footnote(c.textLight),
+                            ? SingleChildScrollView(
+                                controller: controller,
+                                child: AppEmptyState(
+                                  icon: AppLucideIcons.receipt,
+                                  title: context.l10n.cardNoTx,
+                                  subtitle: '',
+                                  illustration: const QirshIllustration(
+                                      name: 'emptyTx', width: 120, height: 90),
                                 ),
-                                trailing: AppCheckMark(selected: linked),
-                                onTap: linked
-                                    ? null
-                                    : () async {
-                                        try {
-                                          await ref
-                                              .read(
-                                                  transactionRepositoryProvider)
-                                              .updateCard(
-                                                transactionId: tx.id,
-                                                cardLast4: last4,
-                                              );
-                                        } on RepoException catch (e) {
-                                          if (!context.mounted) return;
-                                          AppToast.showError(context,
-                                              repoErrorMessage(context, e));
-                                          return;
-                                        }
-                                        ref.invalidate(cardSummariesProvider);
-                                        ref.invalidate(
-                                            accountCardGroupsProvider);
-                                        ref.invalidate(
-                                            pickTransactionsProvider);
-                                        ref.invalidate(
-                                            cardTransactionsProvider(last4));
-                                        if (context.mounted) {
-                                          Navigator.of(context).pop();
-                                          AppToast.show(
-                                              context,
-                                              context.l10n
-                                                  .cardTxLinkedTo(last4));
-                                        }
-                                      },
-                              );
-                            },
-                          ),
-                        ),
+                              )
+                            : Material(
+                                type: MaterialType.transparency,
+                                child: ListView.builder(
+                                  controller: controller,
+                                  itemCount: items.length,
+                                  itemBuilder: (_, i) {
+                                    final tx = items[i];
+                                    final linked = tx.cardLast4 == last4;
+                                    return ListTile(
+                                      title: Text(
+                                          tx.rawMerchant ??
+                                              context.l10n.txnTransactionWord,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style:
+                                              AppTypography.body(c.textMain)),
+                                      subtitle: Text(
+                                        '${formatMoney(tx.amountMoney)} ${tx.currency}'
+                                        '${tx.cardLast4 != null ? ' • •••• ${tx.cardLast4}' : ''}',
+                                        style:
+                                            AppTypography.footnote(c.textLight),
+                                      ),
+                                      trailing: AppCheckMark(selected: linked),
+                                      onTap: linked
+                                          ? null
+                                          : () async {
+                                              try {
+                                                await ref
+                                                    .read(
+                                                        transactionRepositoryProvider)
+                                                    .updateCard(
+                                                      transactionId: tx.id,
+                                                      cardLast4: last4,
+                                                    );
+                                              } on RepoException catch (e) {
+                                                if (!context.mounted) return;
+                                                AppToast.showError(
+                                                    context,
+                                                    repoErrorMessage(
+                                                        context, e));
+                                                return;
+                                              }
+                                              ref.invalidate(
+                                                  cardSummariesProvider);
+                                              ref.invalidate(
+                                                  accountCardGroupsProvider);
+                                              ref.invalidate(
+                                                  pickTransactionsProvider);
+                                              ref.invalidate(
+                                                  cardTransactionsProvider(
+                                                      last4));
+                                              if (context.mounted) {
+                                                Navigator.of(context).pop();
+                                                AppToast.show(
+                                                    context,
+                                                    context.l10n
+                                                        .cardTxLinkedTo(last4));
+                                              }
+                                            },
+                                    );
+                                  },
+                                ),
+                              ),
               ),
             ],
           ),

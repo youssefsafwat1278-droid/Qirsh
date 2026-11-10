@@ -208,29 +208,13 @@ void main() {
     });
   });
 
-  group('H-9 — Google is unaffected', () {
-    test('the Google flow still passes no nonce', () {
-      final s = _source;
-      final google = s.substring(
-        s.indexOf('Future<AuthIdentity> signInWithGoogle()'),
-        s.indexOf('Future<AuthIdentity> signInWithApple()'),
-      );
-      // The native Google SDK hashes its own nonce and never exposes the raw
-      // value, so there is nothing to send. Its provider keeps "skip nonce
-      // checks" ON — a separate, per-provider setting from Apple's.
-      expect(google.contains('nonce:'), isFalse,
-          reason: 'Google cannot supply a raw nonce; adding one would break '
-              'sign-in rather than harden it');
-      expect(google, contains('OAuthProvider.google'));
-    });
-
-    test('the Apple fix did not alter the Google call shape', () {
-      final s = _source;
-      final google = s.substring(
-        s.indexOf('Future<AuthIdentity> signInWithGoogle()'),
-        s.indexOf('Future<AuthIdentity> signInWithApple()'),
-      );
-      expect(google, contains('accessToken: auth.accessToken'));
+  group('Google token exchange uses the platform nonce contract', () {
+    test('iOS supplies its raw nonce and Android leaves it absent', () {
+      expect(_source, contains('await authorizeIosGoogle(nonce)'));
+      expect(_source, contains("'nonce': appleHashedNonce(nonce)"));
+      expect(_source, contains('nonce: tokens.nonce'));
+      expect(_source, contains('email: account.email, nonce: null'));
+      expect(_source, contains('accessToken: tokens.accessToken'));
     });
   });
 

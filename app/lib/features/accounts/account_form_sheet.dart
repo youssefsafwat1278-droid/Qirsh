@@ -518,9 +518,9 @@ class _AccountFormState extends ConsumerState<AccountFormPanel> {
                 for (final type in AccountType.values)
                   ChoiceChip(
                     label: Text(accountTypeLabel(context, type)),
-                    avatar: Icon(accountTypeIcon(type), size: 16),
+                    avatar: Icon(accountTypeIcon(type), size: 16,
+                      color: _type == type ? c.onCta : c.textSecondary),
                     selected: _type == type,
-                    selectedColor: c.primary.withValues(alpha: 0.16),
                     onSelected:
                         _busy ? null : (_) => setState(() => _type = type),
                   ),

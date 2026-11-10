@@ -2,6 +2,7 @@ import 'budget_alert_commits.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../core/backend/supabase_config.dart';
+import '../../../core/observability/diagnostics.dart';
 import '../../../core/privacy/consent_authority.dart';
 import '../../../core/utils/install_id.dart';
 import '../../../data/db/ownership_guard.dart';
@@ -18,6 +19,7 @@ import '../../../domain/entities/transaction_entity.dart';
 import '../../../domain/finance/money.dart';
 import '../../../domain/repositories/account_repository.dart';
 import '../../../domain/usecases/add_transaction_usecase.dart';
+import '../../../domain/usecases/user_settings_usecases.dart';
 import '../../../domain/usecases/ingest_captured_message_usecase.dart';
 import '../../../engine/privacy/sms_sanitizer.dart';
 import '../../../engine/parser/capture_money.dart';
@@ -214,6 +216,7 @@ class CaptureSyncService {
       installId: installId,
       deviceSecret: secret,
     );
+    Diag.log('[CaptureImport]', 'relay_fetched count=${captures.length}');
 
     // MALI-029 — prefetch accounts once (first-match-per-currency), reused for
     // every capture in this batch instead of a full accounts reload per row.
@@ -224,13 +227,29 @@ class CaptureSyncService {
     final needsReviewTransactionIds = <String>[];
     for (final capture in captures) {
       if (capture.payloadId.isEmpty) continue;
-      if (await isPayloadImported(capture.payloadId)) {
+      // A ledger restore can preserve the transaction without the local
+      // receipt. Repair that receipt under the same admission instead of
+      // inserting the existing ID and blocking every newer relay result.
+      final alreadyImported = await _dedupStore.runAtomically(() async {
+        await requireCurrentAdmission();
+        final found = await reconcileImportedPayload(capture.payloadId);
+        await requireCurrentAdmission();
+        return found;
+      });
+      if (alreadyImported) {
         imported.add(capture.payloadId);
         continue;
       }
-      final needsReviewTransactionId = await _importCapture(
-          capture, requireCurrentAdmission,
-          onCommitted: committedTransactions.addAll);
+      String? needsReviewTransactionId;
+      try {
+        needsReviewTransactionId = await _importCapture(
+            capture, requireCurrentAdmission,
+            onCommitted: committedTransactions.addAll);
+      } catch (error) {
+        // Release diagnostics contain no payload IDs, SMS, money or SQL.
+        Diag.log('[CaptureImport]', 'relay_commit_failed class=${error.runtimeType}');
+        rethrow;
+      }
       if (needsReviewTransactionId != null) {
         needsReviewTransactionIds.add(needsReviewTransactionId);
       }
@@ -309,10 +328,12 @@ class CaptureSyncService {
     if (!await _registrationService.isLinkedForCloud()) return false;
     final secret = await _registrationService.readDeviceSecret();
     if (secret == null || secret.isEmpty) return false;
+    final preferences = await LoadNotificationPreferencesUseCase(_settingsRepository).call();
     final client = _client ??
         CaptureBackendClient(
           supabaseUrl: SupabaseConfig.url,
           anonKey: SupabaseConfig.anonKey,
+          notificationDetails: !preferences.hideLockScreenContent,
         );
     try {
       await client.processIosSms(
@@ -327,7 +348,7 @@ class CaptureSyncService {
         smsText: SmsSanitizer.sanitize(message.text),
         sender: message.sender,
         receivedAt: message.receivedAt ?? DateTime.now().toUtc(),
-        locale: message.locale,
+        locale: settings.language,
         // The owner's consent mirror, never the install-level flag.
         allowAi: auth.allowAi,
         ownerUid: ownerUid,

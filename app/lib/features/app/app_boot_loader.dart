@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_assets.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_typography.dart';
-import '../../core/utils/l10n_ext.dart';
 
 /// True while the app is doing blocking startup work the user must not see
 /// half-populated — specifically the post-sign-in data restore, when the local
@@ -28,46 +27,38 @@ final ValueNotifier<bool> appDataRestoring = ValueNotifier<bool>(false);
 /// never previous-user cached data (that is the [appDataRestoring] gate's job).
 final ValueNotifier<bool> localFinancialUiUsable = ValueNotifier<bool>(false);
 
-/// The one branded loading view (logo + slim accent spinner). Matches
-/// `StartupLoadingScreen._LoadingBody` exactly so the cold-start screen and the
-/// restore overlay are indistinguishable.
+/// The same branded loading view is used for cold start and restore so their
+/// handoff never changes the background, logo, or visible language.
 class AppBootLoader extends StatelessWidget {
   const AppBootLoader({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    return Directionality(
-      textDirection: Directionality.of(context),
+    // One stable visual across cold boot, account-scope handoff and resume.
+    // No language-dependent text or theme-dependent asset can flash here.
+    return const AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
       child: ColoredBox(
-        color: c.bg,
+        key: Key('qirsh_stable_loader'),
+        color: AppBrandBlue.deep,
         child: SafeArea(
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset(
-                  AppAssets.getLogoTagline(context),
-                  width: 220,
-                  filterQuality: FilterQuality.high,
-                ),
-                const SizedBox(height: AppSpacing.s8),
-                SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation<Color>(c.accent),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.s5),
-                Text(context.l10n.startPreparing,
-                    style: AppTypography.callout(c.textLight)
-                        .copyWith(decoration: TextDecoration.none)),
-              ],
-            ),
-          ),
-        ),
+            child: Center(
+                child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image(
+                image: AssetImage(AppAssets.qirshCoinGold),
+                width: 150,
+                height: 150,
+                filterQuality: FilterQuality.high),
+            SizedBox(height: AppSpacing.s8),
+            SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2.5, color: AppBrandAccent.gold)),
+          ],
+        ))),
       ),
     );
   }

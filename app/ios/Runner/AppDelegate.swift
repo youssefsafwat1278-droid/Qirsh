@@ -1,3 +1,4 @@
+import AppAuth
 import AppIntents
 import Flutter
 import UIKit
@@ -125,6 +126,7 @@ enum ApnsEnvironment {
   private weak var nativeGlassChannelController: FlutterViewController?
   private var reduceTransparencyObserver: NSObjectProtocol?
   private var deviceTimezoneChannel: FlutterMethodChannel?
+  private var googleAuthorizationFlow: OIDExternalUserAgentSession?
 
   /// The controller [deviceTimezoneChannel] is bound to — weak, and identity
   /// compared, for the same reason as [captureChannelController]. See Audit 3A.
@@ -143,6 +145,9 @@ enum ApnsEnvironment {
     GeneratedPluginRegistrant.register(with: self)
     if let registrar = self.registrar(forPlugin: "QirshSessionKeychain") {
       sessionKeychain.attach(messenger: registrar.messenger())
+    }
+    if let registrar = self.registrar(forPlugin: "QirshGoogleAuthorization") {
+      configureGoogleAuthorization(messenger: registrar.messenger())
     }
     if let registrar = self.registrar(forPlugin: "NativeGlass") {
       registrar.register(
@@ -939,6 +944,13 @@ enum ApnsEnvironment {
             return map
           }
         }
+      case "shortcutSetupProbeStatus":
+        result(SharedCaptureStore.shortcutSetupProbeMilliseconds)
+      case "setNotificationLanguage":
+        SharedCaptureStore.setNotificationLanguage(
+          (call.arguments as? [String: Any])?["language"] as? String ?? "en"
+        )
+        result(nil)
       case "setCaptureNotifyV2":
         // CAP-7: mirrors the `capture_notify_v2` flag for the App Intent.
         SharedCaptureStore.setCaptureNotifyV2(
@@ -1151,6 +1163,64 @@ enum ApnsEnvironment {
       nil,
       .deliverImmediately
     )
+  }
+
+  private func configureGoogleAuthorization(messenger: FlutterBinaryMessenger) {
+    let channel = FlutterMethodChannel(name: "mali/google_authorization", binaryMessenger: messenger)
+    channel.setMethodCallHandler { [weak self] call, result in
+      guard call.method == "authorize" else {
+        result(FlutterMethodNotImplemented)
+        return
+      }
+      guard let self, self.googleAuthorizationFlow == nil,
+        let controller = self.rootFlutterViewController(),
+        let arguments = call.arguments as? [String: String],
+        let clientID = arguments["clientId"],
+        clientID.hasSuffix(".apps.googleusercontent.com"),
+        let nonce = arguments["nonce"], nonce.range(of: "^[0-9a-f]{64}$", options: .regularExpression) != nil,
+        let state = OIDAuthorizationRequest.generateState(),
+        let verifier = OIDAuthorizationRequest.generateCodeVerifier(),
+        let challenge = OIDAuthorizationRequest.codeChallengeS256(forVerifier: verifier)
+      else {
+        result(FlutterError(code: "google_unavailable", message: nil, details: nil))
+        return
+      }
+      let scheme = clientID.split(separator: ".").reversed().joined(separator: ".")
+      let urlTypes = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]]
+      guard urlTypes?.contains(where: { ($0["CFBundleURLSchemes"] as? [String])?.contains(scheme) == true }) == true,
+        let redirect = URL(string: "\(scheme):/oauth2callback")
+      else {
+        result(FlutterError(code: "google_configuration", message: nil, details: nil))
+        return
+      }
+      let config = OIDServiceConfiguration(
+        authorizationEndpoint: URL(string: "https://accounts.google.com/o/oauth2/v2/auth")!,
+        tokenEndpoint: URL(string: "https://oauth2.googleapis.com/token")!
+      )
+      // The SDK convenience initializer generates a nonce we cannot supply to
+      // Supabase. Use our own challenge alongside AppAuth's PKCE and state.
+      let request = OIDAuthorizationRequest(
+        configuration: config, clientId: clientID, clientSecret: nil,
+        scope: "openid email profile", redirectURL: redirect, responseType: OIDResponseTypeCode,
+        state: state, nonce: nonce, codeVerifier: verifier, codeChallenge: challenge,
+        codeChallengeMethod: OIDOAuthorizationRequestCodeChallengeMethodS256,
+        additionalParameters: ["prompt": "select_account"]
+      )
+      self.googleAuthorizationFlow = OIDAuthState.authState(byPresenting: request, presenting: controller) { [weak self] auth, error in
+        self?.googleAuthorizationFlow = nil
+        guard let tokens = auth?.lastTokenResponse, let idToken = tokens.idToken,
+          let accessToken = tokens.accessToken else {
+          let error = error as NSError?
+          if error?.domain == OIDGeneralErrorDomain && error?.code == OIDErrorCode.userCanceledAuthorizationFlow.rawValue {
+            result(nil)
+          } else {
+            result(FlutterError(code: "google_authorization_failed", message: nil, details: nil))
+          }
+          return
+        }
+        result(["idToken": idToken, "accessToken": accessToken])
+      }
+    }
   }
 
   private func rootFlutterViewController() -> FlutterViewController? {

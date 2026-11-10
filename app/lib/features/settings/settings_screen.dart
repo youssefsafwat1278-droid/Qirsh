@@ -18,10 +18,12 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../core/auth/auth_coordinator.dart';
 import '../../core/auth/auth_service.dart';
+import '../../core/auth/auth_methods_config.dart';
 import '../../core/backend/supabase_config.dart';
 import '../../core/di/app_providers.dart';
 import '../planning_sync/planning_conflicts_sheet.dart';
 import 'sign_out_sheet.dart';
+import 'sign_in_methods_sheet.dart';
 import '../../core/theme/app_shadows.dart';
 import '../../data/catalog/catalog_daos.dart';
 import '../../core/security/app_lock_service.dart';
@@ -375,6 +377,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             // A-5: the one quiet answer to "did my data reach
                             // the cloud?".
                             const SyncStatusTile(),
+                            if (!AppSession.instance.isGuest &&
+                                (ref.watch(authMethodsConfigProvider).google ||
+                                    ref.watch(authMethodsConfigProvider).email))
+                              _NavTile(
+                                key: const ValueKey('settings-sign-in-methods'),
+                                icon: AppLucideIcons.shieldCheck,
+                                title: context.l10n.authSignInMethods,
+                                subtitle: context.l10n.authSignInMethodsDescription,
+                                onTap: () => showGlassSheet<void>(context: context,
+                                  isScrollControlled: true, useSafeArea: true,
+                                  builder: (_) => const SignInMethodsSheet()),
+                              ),
                             _NavTile(
                               icon: AppLucideIcons.smartphone,
                               title: context.l10n.setMobileNumber,

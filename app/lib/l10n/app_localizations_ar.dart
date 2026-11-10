@@ -9,6 +9,31 @@ class AppL10nAr extends AppL10n {
   AppL10nAr([String locale = 'ar']) : super(locale);
 
   @override
+  String get shortcutAddReady => 'إضافة اختصار قرش';
+
+  @override
+  String get shortcutQuickHelp =>
+      'أضف قالب QIRSH وراجع فلتر الرسائل، ثم فعّل أتمتة Message. في إصدارات iOS الأقدم، أنشئ أتمتة Message تشغّل الاختصار مع Shortcut Input.';
+
+  @override
+  String get shortcutTestConnection => 'اختبار الاتصال';
+
+  @override
+  String get shortcutProbeWaiting =>
+      'شغّل الاختصار ثم ارجع لقرش. الاختبار لا يضيف معاملة مالية.';
+
+  @override
+  String get shortcutProbePassed =>
+      'تم التحقق من الاتصال. التسجيل التلقائي يتطلب تفعيل أتمتة الرسائل أيضًا.';
+
+  @override
+  String get shortcutOpenFailed =>
+      'تعذّر فتح الاختصارات. تأكّد من تثبيت تطبيق Shortcuts وحاول مرة أخرى.';
+
+  @override
+  String get shortcutManualSteps => 'تعليمات الإعداد بالتفصيل';
+
+  @override
   String get appTitle => 'قرش';
 
   @override
@@ -87,7 +112,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get setupShortcutStep5Body =>
-      'اختر New Blank Automation وابحث عن «Process Bank SMS»، وفي SMS Text اختر «Shortcut Input»، وفي Date Received اختر تاريخ استلام الرسالة. لا تترك Date Received فارغًا.';
+      'اختر New Blank Automation وابحث عن Process Bank SMS، واضبط SMS Text على Shortcut Input.';
 
   @override
   String get setupShortcutStep6Title => 'حفظ';
@@ -109,10 +134,10 @@ class AppL10nAr extends AppL10n {
   String get brandContinueCta => 'لنبدأ';
 
   @override
-  String get authTitle => 'رحلتك المالية محفوظة';
+  String get authTitle => 'سجّل الدخول لقرش';
 
   @override
-  String get authSubtitle => 'سجّل دخولك لحماية بياناتك واستعادتها على أجهزتك.';
+  String get authSubtitle => 'اختار طريقة تسجيل الدخول المناسبة ليك.';
 
   @override
   String get authTrustLocalEncryption => 'تشفير محلي';
@@ -466,7 +491,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get otpSentTo =>
-      'أرسلنا رمز التحقق المكون من 6 أرقام إلى البريد الإلكتروني:';
+      'اكتب الكود اللي وصلك على البريد ده. راجع الرسائل غير المرغوب فيها كمان.';
 
   @override
   String get verifyCode => 'تأكيد الرمز';
@@ -4902,7 +4927,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get iosStep6Body =>
-      'يجب أن يظهر حقل SMS Text. اختَر له Shortcut Input. وافتح تفاصيل الأكشن واضبط Date Received على تاريخ استلام الرسالة ولا تتركه فارغًا — يمنع تكرار العملية إذا شُغّلت الأتمتة مرتين لنفس الرسالة.';
+      'اضبط SMS Text على Shortcut Input وسيب Sender على مرسل الرسالة. قرش بيسجّل وقت الالتقاط تلقائيًا.';
 
   @override
   String get iosStep7 => 'طابق الشكل النهائي';
@@ -6407,7 +6432,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get deleteAccountIntro =>
-      'احذف حسابك في قرش وكل البيانات المحفوظة معه نهائيًا وعلى الفور. ستؤكد ذلك عبر Apple، ولا يمكن التراجع عنه.';
+      'احذف حساب قرش والبيانات المحفوظة فيه نهائيًا. هتأكّد هويتك الأول.';
 
   @override
   String get deleteAccountAction => 'حذف الحساب';
@@ -6417,7 +6442,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get deleteAccountConfirmBody =>
-      'سيُحذف حسابك وكل بياناتك نهائيًا وعلى الفور، ولا يمكن التراجع عن ذلك. ستحتاج إلى التأكيد عبر Apple.';
+      'هيتحذف حسابك وبياناته نهائيًا. أكّد هويتك عشان تكمل. الحذف لا يمكن التراجع عنه.';
 
   @override
   String get deleteAccountConfirmAction => 'حذف نهائي';
@@ -6976,4 +7001,206 @@ class AppL10nAr extends AppL10n {
   @override
   String get onboardingAccountCheckFailed =>
       'تعذّر التحقق من إعداد حسابك. تحقّق من اتصالك ثم أعد المحاولة.';
+
+  @override
+  String get shortcutVisualInstallTitle => 'أضف اختصار قرش';
+
+  @override
+  String get shortcutVisualInstallBody =>
+      'اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. احتفظ باسم القالب الجديد QIRSH عشان اختبار الاتصال يقدر يفتحه.';
+
+  @override
+  String get shortcutVisualFilterTitle => 'اختار الرسائل البنكية المطلوبة';
+
+  @override
+  String shortcutVisualFilterBody(String currencyCode) {
+    return 'القالب المشترك بيبدأ بـ EGP. اضبط Message contains على $currencyCode؛ لو هي نفس الكلمة سيبها زي ما هي. سيب Shortcut Input وSender في Process.';
+  }
+
+  @override
+  String get shortcutVisualAutomationTitle => 'فعّل الالتقاط التلقائي';
+
+  @override
+  String get shortcutVisualAutomationBody =>
+      'اضغط السهم جنب When I receive a message. شغّل Automation واقفل Confirm Before Run، ثم احفظ.\n\nلو إصدار iOS عندك بيعرض Run Immediately اختاره.';
+
+  @override
+  String get shortcutVisualTestTitle => 'اختبر الاتصال بقرش';
+
+  @override
+  String get shortcutVisualTestBody =>
+      'اختبار الاتصال بيشغّل QIRSH من غير إضافة معاملة. نجاحه بيأكد الاتصال.\n\nوللتأكد من الالتقاط التلقائي، استقبل رسالة بنكية تطابق الفلتر اللي اخترته.';
+
+  @override
+  String get shortcutVisualImageCaption =>
+      'مرجع من iOS · اضغط للتكبير. اسم الاختصار المستخدم في الاختبار QIRSH.';
+
+  @override
+  String get shortcutVisualEnlarge => 'تكبير صورة إعداد الاختصار في iOS';
+
+  @override
+  String get shortcutVisualReviewed =>
+      'راجعت الخطوات. الالتقاط التلقائي لسه محتاج تفعيل Automation داخل الاختصارات.';
+
+  @override
+  String get shortcutCatalogTitle => 'رسائل البنك';
+
+  @override
+  String get shortcutCatalogBody =>
+      'اختار الكلمة اللي بنكك بيستخدمها، وهنظبط معاك الفلتر والالتقاط التلقائي خطوة بخطوة.';
+
+  @override
+  String get shortcutCatalogSearch => 'كلمة أو عملة';
+
+  @override
+  String get shortcutCatalogOther => 'كلمات وعملات أخرى';
+
+  @override
+  String shortcutCatalogKeyword(String keyword) {
+    return 'رسائل فيها «$keyword»';
+  }
+
+  @override
+  String shortcutCatalogExample(String keyword) {
+    return 'تم خصم $keyword 450.00 عند Talabat.';
+  }
+
+  @override
+  String get shortcutCatalogSetUp => 'إعداد';
+
+  @override
+  String get shortcutCatalogReviewed => 'راجعت الخطوات';
+
+  @override
+  String get shortcutCatalogNoMatches =>
+      'مفيش نتيجة. جرّب رمز عملة زي EGP أو USD.';
+
+  @override
+  String get shortcutCatalogSingleTemplate =>
+      'كل الاختيارات بتستخدم قالب QIRSH نفسه. هتغيّر الفلتر الحالي داخل الاختصارات. مراجعة الخطوات مش تأكيد إن Automation اتفعّل في iOS.';
+
+  @override
+  String get shortcutOpenEditor => 'افتح QIRSH في الاختصارات';
+
+  @override
+  String get shortcutVisualArrowTitle => 'افتح إعدادات التشغيل التلقائي';
+
+  @override
+  String get shortcutVisualArrowBody =>
+      'افتح QIRSH في الاختصارات. اضغط السهم الأزرق الصغير جنب where تحت When I receive a message.';
+
+  @override
+  String shortcutVisualStep(int current, int total) {
+    return 'الخطوة $current من $total';
+  }
+
+  @override
+  String get shortcutStudioTitle => 'رسائلك مع قرش';
+
+  @override
+  String get shortcutStudioBody =>
+      'وصلة بسيطة بين رسائل بنكك وقرش. اختار الفلتر، جهّز الربط، وبعدها اختبره.';
+
+  @override
+  String get shortcutRouteMessage => 'رسالة';
+
+  @override
+  String get shortcutRouteAutomation => 'اختصار';
+
+  @override
+  String get shortcutStudioCurrency => '١ · عملة الرسائل';
+
+  @override
+  String get shortcutStudioWord => '٢ · الكلمة المطلوبة';
+
+  @override
+  String get shortcutStudioPreview => 'فلتر الالتقاط الخاص بك';
+
+  @override
+  String shortcutStudioBegin(String keyword) {
+    return 'ربط رسائل «$keyword»';
+  }
+
+  @override
+  String get authEmailExplanation =>
+      'اكتب البريد المرتبط بحساب قرش عشان تستلم كود دخول لمرة واحدة.';
+
+  @override
+  String get authEmailLinkExplanation =>
+      'أضف بريدًا لحسابك الحالي. عملياتك وإعداداتك هتفضل في نفس الحساب. تغيير البريد بيتطلب تأكيد البريد الحالي والجديد.';
+
+  @override
+  String get authInvalidEmail => 'اكتب بريدًا إلكترونيًا صحيحًا.';
+
+  @override
+  String get authCodeSendFailed =>
+      'تعذّر إرسال الكود. تأكد من اتصالك وحاول تاني بعد دقيقة.';
+
+  @override
+  String get authCodeVerifyFailed => 'تعذّر تأكيد الكود. راجعه وحاول تاني.';
+
+  @override
+  String get authResendCode => 'إرسال الكود مرة تانية';
+
+  @override
+  String get authChangeEmail => 'استخدام بريد آخر';
+
+  @override
+  String get authConfirmBothEmails =>
+      'اتأكدنا من البريد الجديد. اكتب الكود اللي اتبعت لبريدك الحالي عشان تكمل.';
+
+  @override
+  String get authCurrentEmailCode => 'كود البريد الحالي';
+
+  @override
+  String get authSignInMethods => 'طرق تسجيل الدخول';
+
+  @override
+  String get authSignInMethodsDescription =>
+      'أضف طريقة دخول لنفس الحساب، واحتفظ بكل بياناتك مع بعض.';
+
+  @override
+  String get authLinked => 'مرتبط';
+
+  @override
+  String get authLinkGoogle => 'ربط حساب Google';
+
+  @override
+  String get authLinkEmail => 'ربط البريد الإلكتروني';
+
+  @override
+  String get authLinkSuccess => 'تم ربط طريقة الدخول بحسابك.';
+
+  @override
+  String get authLinkFailed =>
+      'تعذّر ربط طريقة الدخول. لو مرتبطة بحساب قرش تاني، استخدم غيرها.';
+
+  @override
+  String get authExistingAccountHint =>
+      'بتستخدم Apple؟ ادخل بيه الأول عشان تربط طريقة دخول جديدة.';
+
+  @override
+  String get authCreateAccount => 'إنشاء حساب';
+
+  @override
+  String get authBackToSignIn => 'عندك حساب بالفعل؟ سجّل الدخول';
+
+  @override
+  String get authCreateAccountSubtitle =>
+      'اختار طريقة الدخول لحساب قرش الجديد.';
+
+  @override
+  String get authCreateEmailExplanation =>
+      'اكتب بريدك الإلكتروني وأكّد الكود لإكمال إنشاء حساب قرش.';
+
+  @override
+  String get deleteAccountEmailProofTitle => 'كود تأكيد البريد';
+
+  @override
+  String get deleteAccountEmailProofBody =>
+      'بعتنا كود لمرة واحدة على البريد المؤكّد لحساب قرش ده. أدخل الكود لتأكيد الحذف.';
+
+  @override
+  String get authGoogleSignupRequired =>
+      'حساب Google ده جديد على قرش. اختار «إنشاء حساب» عشان تسجّل.';
 }

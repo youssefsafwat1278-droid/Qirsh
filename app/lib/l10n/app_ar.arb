@@ -1,5 +1,12 @@
 {
   "@@locale": "ar",
+  "shortcutAddReady": "إضافة اختصار قرش",
+  "shortcutQuickHelp": "أضف قالب QIRSH وراجع فلتر الرسائل، ثم فعّل أتمتة Message. في إصدارات iOS الأقدم، أنشئ أتمتة Message تشغّل الاختصار مع Shortcut Input.",
+  "shortcutTestConnection": "اختبار الاتصال",
+  "shortcutProbeWaiting": "شغّل الاختصار ثم ارجع لقرش. الاختبار لا يضيف معاملة مالية.",
+  "shortcutProbePassed": "تم التحقق من الاتصال. التسجيل التلقائي يتطلب تفعيل أتمتة الرسائل أيضًا.",
+  "shortcutOpenFailed": "تعذّر فتح الاختصارات. تأكّد من تثبيت تطبيق Shortcuts وحاول مرة أخرى.",
+  "shortcutManualSteps": "تعليمات الإعداد بالتفصيل",
   "appTitle": "قرش",
   "setupHeaderTitle": "لنُجهّز قِرش",
   "setupHeaderSubtitle": "كام خطوة سريعة وتكون جاهز.",
@@ -40,15 +47,15 @@
   "setupShortcutStep4Title": "بدون تأكيد",
   "setupShortcutStep4Body": "فعّل «Run Immediately» واقفل «Notify When Run» لو ظهر، ثم Next.",
   "setupShortcutStep5Title": "إرسال للتطبيق",
-  "setupShortcutStep5Body": "اختر New Blank Automation وابحث عن «Process Bank SMS»، وفي SMS Text اختر «Shortcut Input»، وفي Date Received اختر تاريخ استلام الرسالة. لا تترك Date Received فارغًا.",
+  "setupShortcutStep5Body": "اختر New Blank Automation وابحث عن Process Bank SMS، واضبط SMS Text على Shortcut Input.",
   "setupShortcutStep6Title": "حفظ",
   "setupShortcutStep6Body": "اقفل «Show When Run» لو ظهر، واضغط حفظ.",
   "setupShortcutCta": "ثبّتّه",
   "setupFinishCta": "ابدأ",
   "brandTagline": "فلوسك أوضح. قرارك أذكى.",
   "brandContinueCta": "لنبدأ",
-  "authTitle": "رحلتك المالية محفوظة",
-  "authSubtitle": "سجّل دخولك لحماية بياناتك واستعادتها على أجهزتك.",
+  "authTitle": "سجّل الدخول لقرش",
+  "authSubtitle": "اختار طريقة تسجيل الدخول المناسبة ليك.",
   "authTrustLocalEncryption": "تشفير محلي",
   "authTrustOnDevice": "مشفّرة على جهازك، ومتزامنة بأمان",
   "authTermsNotice": "بالمتابعة أنت توافق على شروط الاستخدام وسياسة الخصوصية.",
@@ -157,7 +164,7 @@
   "sendOtpCode": "إرسال رمز الدخول الآمن",
   "byContinuingAgree": "بالمتابعة توافق على شروط الخدمة وسياسة الخصوصية الخاصة بـ قرش.",
   "enterOtpCode": "أدخل رمز التحقق",
-  "otpSentTo": "أرسلنا رمز التحقق المكون من 6 أرقام إلى البريد الإلكتروني:",
+  "otpSentTo": "اكتب الكود اللي وصلك على البريد ده. راجع الرسائل غير المرغوب فيها كمان.",
   "verifyCode": "تأكيد الرمز",
   "demoOtpCode": "للتجربة: الرمز 123456",
   "invalidOtpCode": "الرمز غير صحيح",
@@ -1988,7 +1995,13 @@
   "homeNoBudgetsOnAccount": "لا توجد ميزانيات على هذا الحساب.",
   "homeActiveBudget": "ميزانية نشطة",
   "homeAvailableCoupons": "{count, plural, =0{لا توجد كوبونات متاحة} =1{كوبون واحد متاح} =2{كوبونان متاحان} few{{count} كوبونات متاحة} many{{count} كوبونًا متاحًا} other{{count} كوبون متاح}}",
-  "@homeAvailableCoupons": {"placeholders": {"count": {"type": "int"}}},
+  "@homeAvailableCoupons": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "homePartnerOffers": "عروض من شركاء قرش",
   "homeAllCoupons": "عرض كل الكوبونات",
   "homeSpentToday": "صرفت اليوم",
@@ -2572,7 +2585,7 @@
   "iosStep5": "اختَر اختصار قِرش",
   "iosStep5Body": "اضغط New Blank Automation، وابحث عن Process Bank SMS.",
   "iosStep6": "مرّر نص الرسالة",
-  "iosStep6Body": "يجب أن يظهر حقل SMS Text. اختَر له Shortcut Input. وافتح تفاصيل الأكشن واضبط Date Received على تاريخ استلام الرسالة ولا تتركه فارغًا — يمنع تكرار العملية إذا شُغّلت الأتمتة مرتين لنفس الرسالة.",
+  "iosStep6Body": "اضبط SMS Text على Shortcut Input وسيب Sender على مرسل الرسالة. قرش بيسجّل وقت الالتقاط تلقائيًا.",
   "iosStep7": "طابق الشكل النهائي",
   "iosStep7Body": "يجب أن يكون: Receive messages as input ثم Process Bank SMS وفيها SMS Text = Shortcut Input. افتح تفاصيل الأكشن وأغلق Show When Run إذا ظهر.",
   "iosStep8": "احفظ الاختصار",
@@ -3459,10 +3472,10 @@
   "consentWithdrawFailed": "لم نتمكن من التأكد من إيقاف هذه الميزة. يبقى الإرسال متوقفًا. حاول مجددًا.",
   "signOutDataStays": "تبقى بياناتك على هذا الجهاز وتعود إليك عند تسجيل الدخول مجددًا.",
   "deleteAccountTitle": "حذف الحساب",
-  "deleteAccountIntro": "احذف حسابك في قرش وكل البيانات المحفوظة معه نهائيًا وعلى الفور. ستؤكد ذلك عبر Apple، ولا يمكن التراجع عنه.",
+  "deleteAccountIntro": "احذف حساب قرش والبيانات المحفوظة فيه نهائيًا. هتأكّد هويتك الأول.",
   "deleteAccountAction": "حذف الحساب",
   "deleteAccountConfirmTitle": "حذف حسابك؟",
-  "deleteAccountConfirmBody": "سيُحذف حسابك وكل بياناتك نهائيًا وعلى الفور، ولا يمكن التراجع عن ذلك. ستحتاج إلى التأكيد عبر Apple.",
+  "deleteAccountConfirmBody": "هيتحذف حسابك وبياناته نهائيًا. أكّد هويتك عشان تكمل. الحذف لا يمكن التراجع عنه.",
   "deleteAccountConfirmAction": "حذف نهائي",
   "deleteAccountProgress": "جارٍ حذف حسابك…",
   "deleteAccountSuccess": "تم حذف حسابك.",
@@ -3789,5 +3802,100 @@
   "coachBillsBody": "اضغط + لإضافة اشتراك أو قسط، وحدّد المبلغ وموعد الدفع. ثم سجّل الدفعات من صفحة التفاصيل.",
   "pasteSavedForAnalysis": "الرسالة محفوظة في الوارد الذكي وبانتظار التحليل.",
   "retryBankAnalysis": "أعد التحليل بالذكاء الاصطناعي",
-  "onboardingAccountCheckFailed": "تعذّر التحقق من إعداد حسابك. تحقّق من اتصالك ثم أعد المحاولة."
+  "onboardingAccountCheckFailed": "تعذّر التحقق من إعداد حسابك. تحقّق من اتصالك ثم أعد المحاولة.",
+  "shortcutVisualInstallTitle": "أضف اختصار قرش",
+  "shortcutVisualInstallBody": "اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. احتفظ باسم القالب الجديد QIRSH عشان اختبار الاتصال يقدر يفتحه.",
+  "shortcutVisualFilterTitle": "اختار الرسائل البنكية المطلوبة",
+  "shortcutVisualFilterBody": "القالب المشترك بيبدأ بـ EGP. اضبط Message contains على {currencyCode}؛ لو هي نفس الكلمة سيبها زي ما هي. سيب Shortcut Input وSender في Process.",
+  "@shortcutVisualFilterBody": {
+    "placeholders": {
+      "currencyCode": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutVisualAutomationTitle": "فعّل الالتقاط التلقائي",
+  "shortcutVisualAutomationBody": "اضغط السهم جنب When I receive a message. شغّل Automation واقفل Confirm Before Run، ثم احفظ.\n\nلو إصدار iOS عندك بيعرض Run Immediately اختاره.",
+  "shortcutVisualTestTitle": "اختبر الاتصال بقرش",
+  "shortcutVisualTestBody": "اختبار الاتصال بيشغّل QIRSH من غير إضافة معاملة. نجاحه بيأكد الاتصال.\n\nوللتأكد من الالتقاط التلقائي، استقبل رسالة بنكية تطابق الفلتر اللي اخترته.",
+  "shortcutVisualImageCaption": "مرجع من iOS · اضغط للتكبير. اسم الاختصار المستخدم في الاختبار QIRSH.",
+  "shortcutVisualEnlarge": "تكبير صورة إعداد الاختصار في iOS",
+  "shortcutVisualReviewed": "راجعت الخطوات. الالتقاط التلقائي لسه محتاج تفعيل Automation داخل الاختصارات.",
+  "shortcutCatalogTitle": "رسائل البنك",
+  "shortcutCatalogBody": "اختار الكلمة اللي بنكك بيستخدمها، وهنظبط معاك الفلتر والالتقاط التلقائي خطوة بخطوة.",
+  "shortcutCatalogSearch": "كلمة أو عملة",
+  "shortcutCatalogOther": "كلمات وعملات أخرى",
+  "shortcutCatalogKeyword": "رسائل فيها «{keyword}»",
+  "@shortcutCatalogKeyword": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutCatalogExample": "تم خصم {keyword} 450.00 عند Talabat.",
+  "@shortcutCatalogExample": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutCatalogSetUp": "إعداد",
+  "shortcutCatalogReviewed": "راجعت الخطوات",
+  "shortcutCatalogNoMatches": "مفيش نتيجة. جرّب رمز عملة زي EGP أو USD.",
+  "shortcutCatalogSingleTemplate": "كل الاختيارات بتستخدم قالب QIRSH نفسه. هتغيّر الفلتر الحالي داخل الاختصارات. مراجعة الخطوات مش تأكيد إن Automation اتفعّل في iOS.",
+  "shortcutOpenEditor": "افتح QIRSH في الاختصارات",
+  "shortcutVisualArrowTitle": "افتح إعدادات التشغيل التلقائي",
+  "shortcutVisualArrowBody": "افتح QIRSH في الاختصارات. اضغط السهم الأزرق الصغير جنب where تحت When I receive a message.",
+  "shortcutVisualStep": "الخطوة {current} من {total}",
+  "@shortcutVisualStep": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "shortcutStudioTitle": "رسائلك مع قرش",
+  "shortcutStudioBody": "وصلة بسيطة بين رسائل بنكك وقرش. اختار الفلتر، جهّز الربط، وبعدها اختبره.",
+  "shortcutRouteMessage": "رسالة",
+  "shortcutRouteAutomation": "اختصار",
+  "shortcutStudioCurrency": "١ · عملة الرسائل",
+  "shortcutStudioWord": "٢ · الكلمة المطلوبة",
+  "shortcutStudioPreview": "فلتر الالتقاط الخاص بك",
+  "shortcutStudioBegin": "ربط رسائل «{keyword}»",
+  "@shortcutStudioBegin": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "authEmailExplanation": "اكتب البريد المرتبط بحساب قرش عشان تستلم كود دخول لمرة واحدة.",
+  "authEmailLinkExplanation": "أضف بريدًا لحسابك الحالي. عملياتك وإعداداتك هتفضل في نفس الحساب. تغيير البريد بيتطلب تأكيد البريد الحالي والجديد.",
+  "authInvalidEmail": "اكتب بريدًا إلكترونيًا صحيحًا.",
+  "authCodeSendFailed": "تعذّر إرسال الكود. تأكد من اتصالك وحاول تاني بعد دقيقة.",
+  "authCodeVerifyFailed": "تعذّر تأكيد الكود. راجعه وحاول تاني.",
+  "authResendCode": "إرسال الكود مرة تانية",
+  "authChangeEmail": "استخدام بريد آخر",
+  "authConfirmBothEmails": "اتأكدنا من البريد الجديد. اكتب الكود اللي اتبعت لبريدك الحالي عشان تكمل.",
+  "authCurrentEmailCode": "كود البريد الحالي",
+  "authSignInMethods": "طرق تسجيل الدخول",
+  "authSignInMethodsDescription": "أضف طريقة دخول لنفس الحساب، واحتفظ بكل بياناتك مع بعض.",
+  "authLinked": "مرتبط",
+  "authLinkGoogle": "ربط حساب Google",
+  "authLinkEmail": "ربط البريد الإلكتروني",
+  "authLinkSuccess": "تم ربط طريقة الدخول بحسابك.",
+  "authLinkFailed": "تعذّر ربط طريقة الدخول. لو مرتبطة بحساب قرش تاني، استخدم غيرها.",
+  "authExistingAccountHint": "بتستخدم Apple؟ ادخل بيه الأول عشان تربط طريقة دخول جديدة.",
+  "authCreateAccount": "إنشاء حساب",
+  "authBackToSignIn": "عندك حساب بالفعل؟ سجّل الدخول",
+  "authCreateAccountSubtitle": "اختار طريقة الدخول لحساب قرش الجديد.",
+  "authCreateEmailExplanation": "اكتب بريدك الإلكتروني وأكّد الكود لإكمال إنشاء حساب قرش.",
+  "deleteAccountEmailProofTitle": "كود تأكيد البريد",
+  "deleteAccountEmailProofBody": "بعتنا كود لمرة واحدة على البريد المؤكّد لحساب قرش ده. أدخل الكود لتأكيد الحذف.",
+  "authGoogleSignupRequired": "حساب Google ده جديد على قرش. اختار «إنشاء حساب» عشان تسجّل."
 }

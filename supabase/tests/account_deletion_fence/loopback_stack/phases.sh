@@ -16,10 +16,10 @@ FENCE_RB="$repo/supabase/rollback/0117_account_deletion_fence_rollback.sql"
 psqlx() { psql -X -q -v ON_ERROR_STOP=1 "$FENCE_DB_URL" "$@"; }
 case "$phase" in
   migrate)
-    # Everything EXCEPT the fence (0117), so the pre-fence baseline stays pre-fence.
+    # Omit the fence and its dependent provider extension for the pre-fence baseline.
     n=0
     for f in $(ls "$repo"/supabase/migrations/*.sql | LC_ALL=C sort); do
-      [ "$(basename "$f")" = "$FENCE_MIG_NAME" ] && continue
+      case "$(basename "$f")" in "$FENCE_MIG_NAME"|*_deletion_provider_proofs.sql) continue;; esac
       psqlx -f "$f" >/dev/null 2>"$rundir/migrate.err" || { echo "MIGRATION FAILED: $(basename "$f")" >&2; sed -n 1,10p "$rundir/migrate.err" >&2; exit 1; }
       n=$((n + 1))
     done

@@ -23,6 +23,13 @@ import '../../../domain/finance/money.dart';
 import '../../../domain/finance/money_transport.dart';
 import 'planning_outbox_queue.dart';
 
+int? _pulledBudgetThreshold(Map<String, dynamic> row) {
+  final value = row['alert_threshold_percent'];
+  return value is num
+      ? BudgetEntity.normalizeAlertThreshold(value.toInt())
+      : null;
+}
+
 const planningSubscriptionsPullSelect = '*, amount_text:amount::text, '
     'manual_paid_amount_text:manual_paid_amount::text, '
     'total_purchase_amount_text:total_purchase_amount::text';
@@ -107,7 +114,8 @@ Money? deserializePlansPullMoney(Map<String, dynamic> row) {
   return (
     targetMoney:
         moneyFromPulledValueRequired(row['target_amount_text'], currency),
-    savedMoney: moneyFromPulledValueRequired(row['saved_amount_text'], currency),
+    savedMoney:
+        moneyFromPulledValueRequired(row['saved_amount_text'], currency),
     lastNotifiedSavedMoney: moneyFromPulledValueRequired(
         row['last_notified_saved_amount_text'], currency),
     autoSaveMoney: moneyFromPulledValue(row['auto_save_amount_text'], currency),
@@ -194,21 +202,25 @@ class PlanningPullService {
     Future<String?> Function()? getAuthUserId,
     PlanningRemoteSource? remoteSource,
     PlanningOutboxQueue? outboxQueue,
+
     /// C-3 — financial PULL downloads this user's money from the server.
     /// Consent is asked fresh at egress and defaults to DENY, so a caller that
     /// omits it performs no network at all.
     Future<bool> Function()? mayEgress,
+
     /// `user_settings` carries PII (profile) — a separate egress class. Falls
     /// back to [mayEgress] (and therefore to DENY) when omitted.
     Future<bool> Function()? mayEgressProfile,
     SyncHealth? health,
     int pageSize = 200,
+
     /// Per-cycle page cap for a NORMAL incremental pull: after this many pages
     /// the pull stops (not completed) and the next cycle continues from the
     /// persisted cursor, so a first sync with a large server history never runs
     /// as one unbounded loop. Epoch/reconcile pulls (`from` given) are exempt —
     /// they restart from epoch each time and must reach EOF to clear their marker.
     int maxPagesPerRun = 10,
+
     /// WP-4: sequence pull gate. Null keeps the legacy timestamp pull.
     SeqPullGate? seqGate,
   })  : assert(pageSize > 0),
@@ -299,8 +311,8 @@ class PlanningPullService {
   /// money, row currency, tombstones) without touching the cursor.
   Future<void> applyServerRow(
       String entityType, Map<String, dynamic> row) async {
-    final ctx = await _buildPageContext(
-        entityType, _localTable[entityType], [row]);
+    final ctx =
+        await _buildPageContext(entityType, _localTable[entityType], [row]);
     if (row['deleted_at'] != null) {
       await _processTombstone(entityType, row, ctx);
     } else {
@@ -359,7 +371,14 @@ class PlanningPullService {
 
       try {
         final cursorKey = 'planning_$entityType';
-        final forcedFromEpoch = fromEpochEntities?.contains(entityType) ?? false;
+        // Once per local owner, revisit legacy budgets without mutating any
+        // server rows merely to bump their cursors. NULL keeps the local choice.
+        final thresholdMarker = 'budget_warning_v1:$userId';
+        final upgradeThresholds = entityType == PlanningOutboxQueue.budgetsEntityType &&
+            _outboxQueue != null &&
+            (await readSyncCursor(_db, thresholdMarker)).id != 'done';
+        final forcedFromEpoch = upgradeThresholds ||
+            (fromEpochEntities?.contains(entityType) ?? false);
         final useSeq = plan.mode == SeqMode.seq && !forcedFromEpoch;
         var cursor = forcedFromEpoch
             ? const SyncCursor.epoch()
@@ -479,7 +498,13 @@ class PlanningPullService {
         if (useSeq && entityReachedEof) {
           await _seqGate!.markCaughtUp(userId, cursorKey, seqCursor, plan);
         }
-        if (entityReachedEof) completedEntities.add(entityType);
+        if (entityReachedEof && admitted()) {
+          completedEntities.add(entityType);
+          if (upgradeThresholds) {
+            await writeSyncCursor(_db, thresholdMarker,
+                const SyncCursor(updatedAt: syncCursorEpoch, id: 'done'));
+          }
+        }
       } on ReconcilePullCancelled {
         // Lifecycle/ownership cancellation for this entity — not transport.
         if (kDebugMode) {
@@ -611,7 +636,11 @@ class PlanningPullService {
           // WP-5 lost-ACK receipt: the cloud's last write is OUR queued op.
           final own = await _settleOwn(entityType, localTable, localId, row);
           if (own != OwnOpResult.none) return _PlanningPullOutcome.updated;
-          await _flagConflict(entityType, localTable, localId, row,
+          await _flagConflict(
+              entityType,
+              localTable,
+              localId,
+              row,
               await _pendingIsDelete(entityType, localId)
                   ? SyncConflictKind.delete
                   : SyncConflictKind.update);
@@ -625,6 +654,7 @@ class PlanningPullService {
       if (status == 'synced' &&
           existing.serverId == serverId &&
           existing.serverUpdatedAt == _dateString(row['updated_at'])) {
+        await _uploadMissingBudgetThreshold(entityType, localId, row);
         return _PlanningPullOutcome.skipped;
       }
       await _updateLocal(entityType, localTable, localId, row, ctx);
@@ -634,12 +664,14 @@ class PlanningPullService {
         serverId: serverId,
         serverUpdatedAt: _dateString(row['updated_at']),
       );
+      await _uploadMissingBudgetThreshold(entityType, localId, row);
       return _PlanningPullOutcome.updated;
     }
 
     final insertedId = await _insertLocal(entityType, row, ctx);
     await _applyServerRevision(localTable, serverId, row);
     if (insertedId != null) {
+      await _uploadMissingBudgetThreshold(entityType, insertedId, row);
       ctx.identity.remember(
         id: insertedId,
         serverId: serverId,
@@ -647,6 +679,25 @@ class PlanningPullService {
       );
     }
     return _PlanningPullOutcome.imported;
+  }
+
+  Future<void> _uploadMissingBudgetThreshold(
+      String entityType, String localId, Map<String, dynamic> row) async {
+    if (entityType != PlanningOutboxQueue.budgetsEntityType ||
+        !row.containsKey('alert_threshold_percent') ||
+        row['alert_threshold_percent'] != null ||
+        _outboxQueue == null) {
+      return;
+    }
+    final local = await _db
+        .customSelect(
+          'SELECT * FROM budgets WHERE id = ${sqlString(localId)} AND deleted_at IS NULL;',
+        )
+        .getSingleOrNull();
+    if (local != null) {
+      await _outboxQueue.enqueueBudget(
+          PlanningSyncOperation.update, budgetFromRow(local));
+    }
   }
 
   /// MALI-022 / 0068 — persist the pulled server revision (the CAS base) on the
@@ -772,7 +823,7 @@ class PlanningPullService {
       INSERT OR IGNORE INTO budgets(
         id, category_id, currency, amount, amount_minor, period, start_date, is_active,
         last_notified_spent_amount, last_notified_spent_amount_minor,
-        last_notified_period_start, show_on_header, account_id,
+        last_notified_period_start, show_on_header, account_id, alert_threshold_percent,
         server_id, synced_at, server_updated_at, sync_status, deleted_at
       ) VALUES (
         ${sqlString(id)},
@@ -788,6 +839,7 @@ class PlanningPullService {
         ${sqlString(row['last_notified_period_start'] as String? ?? '2000-01-01T00:00:00Z')},
         ${row['show_on_header'] == true ? 1 : 0},
         ${sqlNullableString(row['local_account_id'] as String?)},
+        ${_pulledBudgetThreshold(row) ?? BudgetEntity.defaultAlertThresholdPercent},
         ${sqlString(row['id'] as String)},
         ${sqlString(now)},
         ${sqlNullableString(_dateString(row['updated_at']))},
@@ -817,6 +869,7 @@ class PlanningPullService {
           last_notified_spent_amount_minor = ${kMoneyCodec.sqlMinorLiteral(money.lastNotifiedSpentMoney)},
           last_notified_period_start = ${sqlString(row['last_notified_period_start'] as String? ?? '2000-01-01T00:00:00Z')},
           show_on_header = ${row['show_on_header'] == true ? 1 : 0},
+          alert_threshold_percent = ${_pulledBudgetThreshold(row) ?? 'alert_threshold_percent'},
           account_id = ${sqlNullableString(row['local_account_id'] as String?)},
           server_id = ${sqlString(row['id'] as String)},
           synced_at = ${sqlString(dateTimeToSql(DateTime.now().toUtc()))},
@@ -909,7 +962,8 @@ class PlanningPullService {
         await _markConflict('user_settings', id);
         return _PlanningPullOutcome.conflict;
       }
-      await _updateSettings(id, serverId, row, local.read<String>('notifications_json'));
+      await _updateSettings(
+          id, serverId, row, local.read<String>('notifications_json'));
       await _applyServerRevision('user_settings', serverId, row);
       final rebound = await _db
           .customSelect(
@@ -926,14 +980,14 @@ class PlanningPullService {
       await _markConflict('user_settings', id);
       return _PlanningPullOutcome.conflict;
     }
-    await _updateSettings(id, serverId, row, local.read<String>('notifications_json'));
+    await _updateSettings(
+        id, serverId, row, local.read<String>('notifications_json'));
     await _applyServerRevision('user_settings', serverId, row);
     return _PlanningPullOutcome.updated;
   }
 
-  Future<void> _updateSettings(
-      String id, String serverId, Map<String, dynamic> row,
-      String localNotifications) async {
+  Future<void> _updateSettings(String id, String serverId,
+      Map<String, dynamic> row, String localNotifications) async {
     final now = dateTimeToSql(DateTime.now().toUtc());
     // نبقي القيمة المحلية إن كان الخادم لم يرسلها (أعمدة محلية NOT NULL).
     String keep(String col, Object? v) =>
@@ -948,10 +1002,7 @@ class PlanningPullService {
           language = ${keep('language', row['language'])},
           country = ${keep('country', row['country'])},
           input_method = ${keep('input_method', row['input_method'])},
-          notifications_json = ${keep('notifications_json', row['notifications_json'] is String
-              ? NotificationInboxState.mergeHistoryJson(
-                  row['notifications_json'] as String, localNotifications)
-              : null)},
+          notifications_json = ${keep('notifications_json', row['notifications_json'] is String ? NotificationInboxState.mergeHistoryJson(row['notifications_json'] as String, localNotifications) : null)},
           privacy_mode_enabled = ${(row['privacy_mode_enabled'] == true) ? 1 : 0},
           -- MALI-059n: consent is device-local + explicit. A server pull must
           -- NEVER set/inherit cloud/AI consent (that would auto-authorize a new
@@ -1246,11 +1297,11 @@ class PlanningPullService {
 
   Future<bool> _pendingIsDelete(String entityType, String localId) async =>
       (await _db
-              .customSelect(
-                  'SELECT 1 AS x FROM planning_sync_outbox WHERE entity_type = '
-                  "${sqlString(entityType)} AND entity_id = ${sqlString(localId)} "
-                  "AND operation = 'delete' LIMIT 1;")
-              .getSingleOrNull()) !=
+          .customSelect(
+              'SELECT 1 AS x FROM planning_sync_outbox WHERE entity_type = '
+              "${sqlString(entityType)} AND entity_id = ${sqlString(localId)} "
+              "AND operation = 'delete' LIMIT 1;")
+          .getSingleOrNull()) !=
       null;
 
   /// WP-5: the durable conflict record (snapshots) + the flag, then the same

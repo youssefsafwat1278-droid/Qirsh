@@ -82,9 +82,6 @@ void main() {
             ]));
             await tester.tap(find.text('Demo goal'));
             await tester.tap(find.text('Demo plan'));
-            final rail = find.byType(ListView);
-            await tester.drag(rail, Offset(language == 'ar' ? 260 : -260, 0));
-            await tester.pumpAndSettle();
             await tester.tap(find.text(l10n.homeNewGoal));
             expect([goalTaps, planTaps, newTaps], [1, 1, 1]);
             expect(goal.savedMoney, Money(12345, 'KWD'));

@@ -78,6 +78,8 @@ import '../dashboard/dashboard_providers.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../gamification/services/engagement_event_service.dart';
 import '../gamification/services/gamification_sync_service.dart';
+import '../gamification/services/achievement_unlocks.dart';
+import '../gamification/services/local_achievement_service.dart';
 import '../goals/goals_providers.dart';
 import '../plans/plans_providers.dart';
 import '../reports/reports_providers.dart';
@@ -224,6 +226,9 @@ class _AppShellState extends ConsumerState<AppShell> {
       });
     }
     _lifecycleListener = AppLifecycleListener(onResume: _onResume);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(_reconcileAchievements(announce: false));
+    });
     // O-LC-2: events carry the lifecycle they were raised in; this shell acts
     // only for events of ITS OWN lifecycle (a shell mounted for a successor never
     // inherits a stale callback).
@@ -432,6 +437,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   Future<void> _onResume() async {
     final work = AdmittedLocalWork.capture(ref);
     if (work == null) return;
+    unawaited(_reconcileAchievements());
     // Resume = the user is back → reset the poll cadence to its base interval.
     _syncCadence.recordActivity();
     _scheduleAdaptivePoll();
@@ -732,6 +738,28 @@ class _AppShellState extends ConsumerState<AppShell> {
     appDataRestoring.value = false;
     // Everything the pull imported must render fresh in one shot.
     if (mounted) _invalidateFinancialProviders();
+    unawaited(_reconcileAchievements(announce: false));
+  }
+
+  Future<void> _reconcileAchievements({bool announce = true}) async {
+    if (!mounted || _openedRestoreGate) return;
+    final work = AdmittedLocalWork.capture(ref);
+    if (work == null) return;
+    bool current() => work.current && !_openedRestoreGate;
+    try {
+      final earned = await work.local(() => LocalAchievementService(
+            work.database,
+          ).reconcile(now: DateTime.now(), isCurrent: current));
+      if (announce && earned.isNotEmpty && current()) {
+        await work.local(() => notifyAchievementUnlocks(
+              work.database, earned, isCurrent: current,
+            ));
+      }
+    } on StaleAdmissionException {
+      // The owner changed while evaluating the last batch.
+    } catch (error) {
+      if (kDebugMode) debugPrint('[AppShell] badge reconcile skipped: $error');
+    }
   }
 
   /// Push-only flush run by [AppSession.signOut] right before the wipe (no
@@ -1119,7 +1147,20 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
   }
 
-  Future<void> _consumeSharedInput() async {
+  Future<void>? _sharedInputInFlight;
+
+  Future<void> _consumeSharedInput() {
+    final existing = _sharedInputInFlight;
+    if (existing != null) return existing;
+    late final Future<void> run;
+    run = _consumeSharedInputOnce().whenComplete(() {
+      if (identical(_sharedInputInFlight, run)) _sharedInputInFlight = null;
+    });
+    _sharedInputInFlight = run;
+    return run;
+  }
+
+  Future<void> _consumeSharedInputOnce() async {
     // WP-7 §4.10: capture delivery stays off until the swap has committed.
     if (ReplicaFreeze.instance.frozen) return;
     if (_isConsumingSharedInput) return;
@@ -1155,7 +1196,6 @@ class _AppShellState extends ConsumerState<AppShell> {
       CaptureSyncResult? backendSync;
       try {
         backendSync = await ref.read(captureSyncServiceProvider).sync();
-        budgetCommits.addAll(backendSync.committedTransactions);
       } on AuthRepoException {
         await authFailure();
         return;
@@ -1227,7 +1267,6 @@ class _AppShellState extends ConsumerState<AppShell> {
             final sent = await captureSync.retryPendingSend(message);
             if (sent) {
               backendSync = await captureSync.sync();
-              budgetCommits.addAll(backendSync.committedTransactions);
               if (message.id != null &&
                   (backendSync.importedPayloadIds.contains(message.id) ||
                       await captureSync.isPayloadImported(message.id!))) {
@@ -1478,18 +1517,10 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
   }
 
-  Future<void>? _importV3InFlight;
-
   /// CAP-5 (`capture_import_v3`): the single iOS import. Android and manual
   /// paste keep the path below.
   Future<void> _runCaptureImportV3() async {
-    final run = _importAndNotifyV3();
-    _importV3InFlight = run;
-    try {
-      await run;
-    } finally {
-      _importV3InFlight = null;
-    }
+    await _importAndNotifyV3();
     unawaited(_maybePromptUnboundCaptures());
   }
 
@@ -1545,7 +1576,9 @@ class _AppShellState extends ConsumerState<AppShell> {
         ref.read(appDatabaseProvider),
         preferences,
         committedTransactions: report.imported
-            .where((item) => item.path != CaptureImportPath.alreadyImported)
+            // Server captures have already been evaluated for APNs budget
+            // delivery. Importing them is not a new local alert event.
+            .where((item) => item.path == CaptureImportPath.local)
             .expand((item) => item.committedTransactions),
         lang: LocalNotificationService.instance.notificationLanguage,
       );
@@ -1876,6 +1909,14 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
     // Before the id is claimed: a stale request must not consume it.
     if (origin != null && !_originIsMine(origin)) return;
+    final work = AdmittedLocalWork.capture(ref);
+    if (work == null) return;
+    final transaction = await ref.read(transactionRepositoryProvider).getById(transactionId);
+    if (!mounted || !work.current) return;
+    if (transaction?.status == TransactionStatus.confirmed) {
+      _handleNotificationRoute('/transaction/$transactionId');
+      return;
+    }
     if (!_claimAutoNavigation(transactionId)) {
       return;
     }
@@ -1883,8 +1924,6 @@ class _AppShellState extends ConsumerState<AppShell> {
     // transactionByIdProvider fresh, and refreshing the list/dashboard
     // providers before the sheet is even visible only caused a visible
     // flash right as a notification was tapped, with no data it needed.
-    final work = AdmittedLocalWork.capture(ref);
-    if (work == null) return;
     await showConfirmTransactionSheet(
       context,
       transactionId,
@@ -1963,13 +2002,11 @@ class _AppShellState extends ConsumerState<AppShell> {
           await NativeCaptureBridge.consumePendingNotificationRoutes();
       if (routes.isEmpty) return;
       _recordOpenedForRoutes(routes);
-      CaptureSyncResult? syncResult;
+      final route = routes.last;
       try {
-        if (_captureImportV3Enabled()) {
-          await (_importV3InFlight ?? _consumeSharedInput());
-        } else {
-          syncResult = await ref.read(captureSyncServiceProvider).sync();
-        }
+        // Join the entire drain, including owner/legacy resolution before
+        // either importer starts. A second tap must not outrun that work.
+        await _consumeSharedInput();
       } catch (error) {
         if (kDebugMode) {
           debugPrint('[Capture] notification route sync skipped: $error');
@@ -1977,7 +2014,6 @@ class _AppShellState extends ConsumerState<AppShell> {
       }
       _refreshAll();
       if (!mounted) return;
-      final route = routes.last;
       final action = route.action;
       if (action == kActionAddManually ||
           action == kActionEnableSmartAnalysis) {
@@ -1986,7 +2022,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       }
       final work = AdmittedLocalWork.capture(ref);
       if (work == null) return;
-      final target = await _routeForCaptureNotification(route, syncResult);
+      final target = await _routeForCaptureNotification(route);
       if (!mounted || !work.current) return;
       _handleNotificationRoute(target);
     } finally {
@@ -2017,8 +2053,9 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   Future<String> _routeForCaptureNotification(
     CaptureNotificationRoute route,
-    CaptureSyncResult? syncResult,
   ) async {
+    final section = notificationSectionRoute(route.notificationType);
+    if (section != null) return section;
     final payloadId = route.payloadId ?? route.smartInboxItemId;
     final payloadTransactionId = payloadId == null || payloadId.isEmpty
         ? null
@@ -2030,7 +2067,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       route.transactionId,
       payloadTransactionId,
       // Import V3 commits the transaction under the payload id atomically.
-      if (_captureImportV3Enabled()) payloadId,
+      payloadId,
     }) {
       if (id == null ||
           id.isEmpty ||
@@ -2081,6 +2118,15 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   void _handleNotificationRoute(String route) {
     if (!mounted) return;
+    if (const {'/budgets', '/goals', '/achievements', '/subscriptions', '/settings', '/privacy', '/announcements'}
+        .contains(route) || route.startsWith('/goals/')) {
+      context.push(route);
+      return;
+    }
+    if (route == '/dashboard') {
+      ref.read(shellIndexProvider.notifier).state = 0;
+      return;
+    }
     if (route == '/reports') {
       context.push('/reports');
       return;
@@ -2098,6 +2144,12 @@ class _AppShellState extends ConsumerState<AppShell> {
       ref.read(transactionsPendingFilterProvider.notifier).state = true;
       return;
     }
+    if (route == '/transactions') {
+      ref.read(shellIndexProvider.notifier).state = 1;
+      ref.read(transactionsPageTabProvider.notifier).state = 0;
+      ref.read(transactionsPendingFilterProvider.notifier).state = false;
+      return;
+    }
     if (route == '/') {
       ref.read(shellIndexProvider.notifier).state = 1;
       ref.read(transactionsPageTabProvider.notifier).state = 1;
@@ -2106,6 +2158,10 @@ class _AppShellState extends ConsumerState<AppShell> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(scopedRevisionProvider('budgets,goals,streaks,transactions'),
+        (previous, next) {
+      if (next.hasValue) unawaited(_reconcileAchievements());
+    });
     // A scheduled notification is composed NOW and delivered hours or days
     // later, so it carries the language that was current when it was planned.
     // Re-planning otherwise happens only on cold start and on resume, which
@@ -2322,7 +2378,7 @@ class _BottomNavBar extends StatelessWidget {
           onSelect: (slot) => onSelect(_items[slot].page),
           dark: Theme.of(context).brightness == Brightness.dark,
           rtl: Directionality.of(context) == TextDirection.rtl,
-          tint: context.colors.primary,
+          tint: context.colors.cta,
         );
       },
     );
@@ -2489,7 +2545,7 @@ class _NavTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     // أيقونة بس — الاسم بيفضل في الـ Semantics للقارئ الصوتي.
-    final activeColor = c.textPrimary;
+    final activeColor = c.cta;
     final inactiveColor = c.textMuted;
 
     return Semantics(

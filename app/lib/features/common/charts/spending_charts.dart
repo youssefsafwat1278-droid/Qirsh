@@ -35,6 +35,7 @@ class CategoryDonutChart extends StatelessWidget {
     required this.slices,
     this.height = 210,
     this.centerLabel,
+    this.centerCurrency,
     this.currencyLabel = '',
     this.compactCenter = false,
     this.framed = true,
@@ -48,6 +49,7 @@ class CategoryDonutChart extends StatelessWidget {
   /// be a constructor default: a `const` constructor has no BuildContext, and
   /// the previous Arabic literal was shown in every locale.
   final String? centerLabel;
+  final String? centerCurrency;
   final String currencyLabel;
   final bool compactCenter;
   final bool framed;
@@ -71,7 +73,7 @@ class CategoryDonutChart extends StatelessWidget {
           final compact = constraints.maxWidth < 260;
           final chartSize = math.min(
             height,
-            compact ? constraints.maxWidth.clamp(96.0, 160.0) : height * 0.72,
+            !showLegend || compact ? constraints.maxWidth : height * 0.72,
           );
           final chart = SizedBox(
             height: chartSize,
@@ -82,6 +84,7 @@ class CategoryDonutChart extends StatelessWidget {
               centerLabelColor: c.textPrimary,
               centerCaptionColor: c.textMuted,
               centerLabel: label,
+              centerCurrency: centerCurrency,
               compactCenter: compactCenter,
             ),
           );
@@ -321,6 +324,7 @@ class _Donut extends StatelessWidget {
     required this.centerLabelColor,
     required this.centerCaptionColor,
     required this.centerLabel,
+    required this.centerCurrency,
     required this.compactCenter,
   });
 
@@ -329,6 +333,7 @@ class _Donut extends StatelessWidget {
   final Color centerLabelColor;
   final Color centerCaptionColor;
   final String centerLabel;
+  final String? centerCurrency;
   final bool compactCenter;
 
   @override
@@ -352,28 +357,33 @@ class _Donut extends StatelessWidget {
             ],
           ),
         ),
-        ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: size * 0.52),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                compactCenter
-                    ? centerLabel
-                    : '${(slices.first.percent * 100).round()}%',
-                style: AppTypography.bodyStrong(centerLabelColor).copyWith(
-                  fontSize: compactCenter ? 12 : null,
+        SizedBox(
+          width: size * 0.46,
+          height: size * 0.32,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  compactCenter
+                      ? centerLabel
+                      : '${(slices.first.percent * 100).round()}%',
+                  style: AppTypography.bodyStrong(centerLabelColor).copyWith(
+                    fontSize: compactCenter ? 16 : null,
+                  ),
                 ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                compactCenter ? context.l10n.chartTotal : slices.first.category.name,
-                style: AppTypography.caption(centerCaptionColor),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                if (centerCurrency != null)
+                  Text(centerCurrency!,
+                      style: AppTypography.caption(centerCaptionColor)),
+                Text(
+                  compactCenter
+                      ? context.l10n.chartTotal
+                      : slices.first.category.name,
+                  style: AppTypography.caption(centerCaptionColor),
+                ),
+              ],
+            ),
           ),
         ),
       ],

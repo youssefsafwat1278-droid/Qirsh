@@ -23,6 +23,9 @@ void main() {
     await tester.pumpWidget(ProviderScope(overrides:[appDatabaseProvider.overrideWithValue(db)],child:MaterialApp(theme:dark?AppTheme.dark:AppTheme.light,locale:Locale(lang),supportedLocales:AppL10n.supportedLocales,localizationsDelegates:AppL10n.localizationsDelegates,home:const OnboardingSetupScreen(entry:OnboardingSetupEntry.captureGuide))));
     await tester.runAsync(() async=>Future<void>.delayed(const Duration(milliseconds:100)));await tester.pumpAndSettle();
     final l=AppL10n.of(tester.element(find.byType(OnboardingSetupScreen)));
+    await tester.ensureVisible(find.text(l.shortcutManualSteps));
+    await tester.tap(find.text(l.shortcutManualSteps));
+    await tester.pumpAndSettle();
     final horizontal=find.byWidgetPredicate((w)=>w is Scrollable && w.axisDirection==AxisDirection.right || w is Scrollable && w.axisDirection==AxisDirection.left);
     final state=tester.state<ScrollableState>(horizontal.first);state.position.jumpTo(920);await tester.pumpAndSettle();
     final body=find.text(l.setupShortcutStep5Body);expect(body,findsOneWidget);

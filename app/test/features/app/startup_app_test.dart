@@ -32,13 +32,13 @@ void main() {
     // test binding's locale is en-US, so this is the English copy. The strings
     // came from hardcoded Arabic literals before, which is why this test could
     // not tell the two builds apart.
-    expect(find.text('Getting Qirsh ready…'), findsOneWidget);
+    expect(find.byKey(const Key('qirsh_stable_loader')), findsOneWidget);
     expect(find.text('Qirsh could not start'), findsNothing);
     expect(runner.calls, 1);
 
     await tester.pump();
 
-    expect(find.text('Getting Qirsh ready…'), findsNothing);
+    expect(find.byKey(const Key('qirsh_stable_loader')), findsNothing);
     expect(find.text('Qirsh could not start'), findsOneWidget);
   });
 
@@ -78,7 +78,7 @@ void swapStateTests() {
     await tester.pumpWidget(StartupApp(runner: _SwapRunner()));
     await tester.pump();
     await tester.pump();
-    expect(find.text('Updating your data…'), findsOneWidget);
+    expect(find.byKey(const Key('qirsh_stable_loader')), findsOneWidget);
     expect(find.text('Getting Qirsh ready…'), findsNothing);
   });
 
@@ -88,6 +88,6 @@ void swapStateTests() {
     await tester.pumpWidget(StartupApp(runner: _SwapRunner()));
     await tester.pump();
     await tester.pump();
-    expect(find.text('جارٍ تحديث بياناتك…'), findsOneWidget);
+    expect(find.byKey(const Key('qirsh_stable_loader')), findsOneWidget);
   });
 }

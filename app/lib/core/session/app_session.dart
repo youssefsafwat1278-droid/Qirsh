@@ -18,6 +18,7 @@ import '../backend/supabase_config.dart';
 import '../privacy/cloud_egress_gate.dart';
 import '../auth/auth_coordinator.dart';
 import '../auth/auth_diagnostics.dart';
+import '../auth/email_sign_in_status.dart' show emailSignInReceiptStorageKey;
 import '../auth/session_record.dart' show AdmissionDisposition;
 import '../privacy/consent_authority.dart';
 import '../startup/asr_storage_reads.dart';
@@ -489,6 +490,7 @@ class AppSession extends ValueNotifier<SessionStatus> {
     _kDone,
     _kMethod,
     _kEmail,
+    emailSignInReceiptStorageKey,
     _kWelcomeManifestoSeen,
     _kCoachMarksSeen,
     _kCurrentAccount,
@@ -4238,6 +4240,12 @@ class AppSession extends ValueNotifier<SessionStatus> {
           _explicitAdmissionEpoch != null ||
           actual?.user.id != sdk?.user.id ||
           actual?.accessToken != sdk?.accessToken) {
+        return;
+      }
+      // An expired access token is recoverable. Do not turn the repository's
+      // expiry response into an unknown/revoked-session barrier.
+      if (client != null && actual != null && actual.isExpired) {
+        await _reconcileSupabaseSession(actual, client: client);
         return;
       }
       await handleAuthRequiredFailure();

@@ -74,7 +74,11 @@ function statusReply(st: PublicStatus): Response {
   }
 }
 
-async function challengeReply(port: ChallengePort | undefined, bearerToken: string): Promise<Response> {
+async function challengeReply(
+  port: ChallengePort | undefined,
+  bearerToken: string,
+  emailOnly?: boolean,
+): Promise<Response> {
   if (!port) return reply({ status: 'error', code: 'not_configured', retryable: false }, 503);
   try {
     const user = await port.getUser(bearerToken);
@@ -82,10 +86,13 @@ async function challengeReply(port: ChallengePort | undefined, bearerToken: stri
     if (await port.isAdmin(user.id)) {
       return reply({ status: 'error', code: 'admin_self_delete_blocked', retryable: false }, 403);
     }
-    const r = await port.issue(user.id);
+    const r = await port.issue(user.id, emailOnly === undefined ? undefined : { bearerToken, emailOnly });
     switch (r.outcome) {
       case 'issued':
-        return reply({ status: 'challenge', challenge_id: r.challengeId, nonce: r.nonce, expires_at_ms: r.expiresAtMs }, 200);
+        return reply({
+          status: 'challenge', challenge_id: r.challengeId, nonce: r.nonce, expires_at_ms: r.expiresAtMs,
+          ...(r.proofMethod ? { proof_method: r.proofMethod } : {}),
+        }, 200);
       case 'admin':
         return reply({ status: 'error', code: 'admin_self_delete_blocked', retryable: false }, 403);
       case 'rate_limited':
@@ -132,10 +139,12 @@ export function createDeleteAccountHandler(
         return statusReply(await coordinator.getStatus(b.receipt_secret));
       }
       if (action === 'challenge') {
-        if (Object.keys(b).length !== 1) return reply({ status: 'error', code: 'invalid_request', retryable: false }, 400);
+        const legacy = Object.keys(b).length === 1;
+        const v2 = Object.keys(b).length === 3 && b.proof_version === 2 && typeof b.email_only === 'boolean';
+        if (!legacy && !v2) return reply({ status: 'error', code: 'invalid_request', retryable: false }, 400);
         const token = bearerOf(req);
         if (!token) return reply({ status: 'error', code: 'unauthenticated', retryable: false }, 401);
-        return await challengeReply(deps.challenge, token);
+        return await challengeReply(deps.challenge, token, v2 ? b.email_only as boolean : undefined);
       }
       if (action !== 'request') {
         return reply({ status: 'error', code: 'invalid_request', retryable: false }, 400);

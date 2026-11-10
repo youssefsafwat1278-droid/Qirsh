@@ -110,6 +110,17 @@ void main() {
   }
 
   group('allowed inside their own op, nothing else', () {
+    test('identity linking while Cloud is off requires its current owner', () async {
+      var current = true;
+      await egress.gate.runAccountControl(AccountControlOp.linkIdentity, () async {
+        await client.auth.signInWithOtp(email: 'a@b.c', shouldCreateUser: false);
+        current = false;
+        expect(await expectDenied(() => client.auth.signInWithOtp(email: 'a@b.c')),
+            isNotNull);
+      }, linking: (owner: 'uid-a', current: () => current));
+      expect(spy.calls, ['POST /auth/v1/otp']);
+    });
+
     test('signIn: Google/Apple id_token, email otp and verify', () async {
       await gateRun(
           AccountControlOp.signIn,
@@ -128,12 +139,26 @@ void main() {
       ]);
     });
 
-    test('reauthenticate has the same allowlist as signIn', () async {
+    test('reauthenticate keeps the standard sign-in endpoints', () async {
       await gateRun(
           AccountControlOp.reauthenticate,
           () => client.auth.signInWithIdToken(
               provider: OAuthProvider.apple, idToken: 'x', nonce: 'n'));
       expect(spy.calls, ['POST /auth/v1/token?grant_type=id_token']);
+    });
+
+    test('only the explicit sign-in grant can reach Google enrollment', () async {
+      Future<FunctionResponse> enroll() => client.functions.invoke(
+        'google-enrollment',
+        body: {'id_token': 'synthetic', 'nonce': null},
+      );
+      await expectDenied(enroll);
+      await gateRun(AccountControlOp.signIn, enroll);
+      expect(spy.calls, ['POST /functions/v1/google-enrollment']);
+      await gateRun(AccountControlOp.reauthenticate, () async {
+        await expectDenied(enroll);
+      });
+      expect(spy.calls, ['POST /functions/v1/google-enrollment']);
     });
 
     test('onboarding checks only the exact signed-in UID and one field while OFF',
@@ -372,6 +397,13 @@ void main() {
       final before = (egress.secure.value, egress.file.value);
       for (final op in AccountControlOp.values) {
         await client.auth.setInitialSession(jsonEncode(_sessionJson(expired: false)));
+        if (op == AccountControlOp.linkIdentity) {
+          await egress.gate.runAccountControl(op,
+            () => client.auth.signInWithOtp(email: 'a@b.c'),
+            linking: (owner: 'uid-a', current: () => true),
+          );
+          continue;
+        }
         await gateRun(op, () async {
           if (op == AccountControlOp.deleteAccount) {
             await client.rpc('request_account_deletion');

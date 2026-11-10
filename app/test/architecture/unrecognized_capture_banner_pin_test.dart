@@ -37,8 +37,8 @@ void main() {
         block.split('DarwinNotificationActionOption.foreground').length - 1, 2);
     expect(block, contains("'تفعيل التحليل الذكي'"));
     expect(block, contains("'إضافة يدويًا'"));
-    expect(shortcut, contains('title: "تفعيل التحليل الذكي"'));
-    expect(shortcut, contains('title: "إضافة يدويًا"'));
+    expect(shortcut, contains('"تفعيل التحليل الذكي" : "Enable Smart Analysis"'));
+    expect(shortcut, contains('"إضافة يدويًا" : "Add manually"'));
     expect(kUnrecognizedCaptureCategory, 'QIRSH_UNRECOGNIZED_CAPTURE');
   });
 
@@ -59,7 +59,8 @@ void main() {
     expect(generic,
         contains('categoryIdentifier: QirshNotificationCategories.unrecognizedCaptureId'));
     expect(generic.contains('unparseableFallbackBody'), isFalse);
-    expect(generic, contains('title: "قِرش رصد رسالة بنك"'));
+    expect(generic, contains('SharedCaptureStore.notificationLanguage == "ar"'));
+    expect(generic, contains('"قِرش رصد رسالة بنك" : "Bank message captured"'));
     expect(generic, contains('type: "received"'));
 
     // Backend-failure call site uses the default (backend-failure copy) and is

@@ -58,7 +58,9 @@ void main() {
         await tester.pump();
 
         expect(find.byType(CircularProgressIndicator), findsOneWidget);
-        expect(find.text(c.preparing), findsOneWidget);
+        expect(find.text(c.preparing), findsNothing);
+        expect(find.byType(Text), findsNothing,
+            reason: 'normal loading must not flash between languages');
         expect(find.text(c.retry), findsNothing);
       });
 

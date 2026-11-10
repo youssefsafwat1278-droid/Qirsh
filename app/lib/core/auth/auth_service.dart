@@ -24,8 +24,10 @@ class AuthIdentity {
 /// والتحقق من id_token/identity_token على السيرفر وإصدار JWT.
 abstract class AuthService {
   Future<AuthIdentity> signInWithGoogle();
+  Future<AuthIdentity> signUpWithGoogle();
   Future<AuthIdentity> signInWithApple();
   Future<void> sendEmailCode(String email);
+  Future<void> sendEmailSignupCode(String email);
   Future<AuthIdentity?> verifyEmailCode(
       {required String email, required String code});
 
@@ -44,6 +46,9 @@ class StubAuthService implements AuthService {
   }
 
   @override
+  Future<AuthIdentity> signUpWithGoogle() => signInWithGoogle();
+
+  @override
   Future<AuthIdentity> signInWithApple() async {
     await Future<void>.delayed(const Duration(milliseconds: 400));
     return const AuthIdentity(
@@ -55,6 +60,9 @@ class StubAuthService implements AuthService {
     // stub: لا إرسال فعلي. الكود التجريبي ثابت (123456).
     await Future<void>.delayed(const Duration(milliseconds: 300));
   }
+
+  @override
+  Future<void> sendEmailSignupCode(String email) => sendEmailCode(email);
 
   @override
   Future<AuthIdentity?> verifyEmailCode({

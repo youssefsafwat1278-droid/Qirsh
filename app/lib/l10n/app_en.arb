@@ -1,5 +1,12 @@
 {
   "@@locale": "en",
+  "shortcutAddReady": "Add Qirsh shortcut",
+  "shortcutQuickHelp": "Add the QIRSH template, review the bank-message filter, then enable its Message automation. On older iOS versions, create a Message automation that runs this shortcut with Shortcut Input.",
+  "shortcutTestConnection": "Test connection",
+  "shortcutProbeWaiting": "Run the shortcut, then return to Qirsh. This test does not add a transaction.",
+  "shortcutProbePassed": "Connection verified. Automatic capture still needs the Message automation enabled.",
+  "shortcutOpenFailed": "Couldn’t open Shortcuts. Make sure the Shortcuts app is installed and try again.",
+  "shortcutManualSteps": "Detailed setup instructions",
   "appTitle": "Qirsh",
   "setupHeaderTitle": "Let's set up Qirsh",
   "setupHeaderSubtitle": "A few quick steps and you're ready.",
@@ -40,15 +47,15 @@
   "setupShortcutStep4Title": "No confirmation",
   "setupShortcutStep4Body": "Turn on \"Run Immediately\" and turn off \"Notify When Run\" if it appears, then Next.",
   "setupShortcutStep5Title": "Send to the app",
-  "setupShortcutStep5Body": "Choose New Blank Automation, search for \"Process Bank SMS\", set SMS Text to \"Shortcut Input\", and set Date Received to when the message arrived. Never leave Date Received empty.",
+  "setupShortcutStep5Body": "Choose New Blank Automation, search for “Process Bank SMS”, and set SMS Text to Shortcut Input.",
   "setupShortcutStep6Title": "Save",
   "setupShortcutStep6Body": "Turn off \"Show When Run\" if it appears, and tap Save.",
   "setupShortcutCta": "Installed",
   "setupFinishCta": "Start",
   "brandTagline": "Your money, clearer. Your decisions, smarter.",
   "brandContinueCta": "Let's get started",
-  "authTitle": "Your financial journey, saved",
-  "authSubtitle": "Sign in to protect your data and restore it on your devices.",
+  "authTitle": "Sign in to Qirsh",
+  "authSubtitle": "Choose how you’d like to sign in.",
   "authTrustLocalEncryption": "Local encryption",
   "authTrustOnDevice": "Encrypted on your device, synced securely",
   "authTermsNotice": "By continuing, you agree to the Terms of Service and Privacy Policy.",
@@ -157,7 +164,7 @@
   "sendOtpCode": "Send Secure Login Code",
   "byContinuingAgree": "By continuing, you agree to Qirsh's Terms of Service and Privacy Policy.",
   "enterOtpCode": "Enter Verification Code",
-  "otpSentTo": "We sent a 6-digit verification code to the email:",
+  "otpSentTo": "Enter the code sent to this email. Check Spam too.",
   "verifyCode": "Verify Code",
   "demoOtpCode": "For testing: use code 123456",
   "invalidOtpCode": "Invalid Code",
@@ -1865,7 +1872,13 @@
   "homeNoBudgetsOnAccount": "No budgets on this account.",
   "homeActiveBudget": "active budget",
   "homeAvailableCoupons": "{count, plural, =1{1 coupon available} other{{count} coupons available}}",
-  "@homeAvailableCoupons": {"placeholders": {"count": {"type": "int"}}},
+  "@homeAvailableCoupons": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "homePartnerOffers": "Offers from Qirsh partners",
   "homeAllCoupons": "See all coupons",
   "homeSpentToday": "Spent today",
@@ -2449,7 +2462,7 @@
   "iosStep5": "Pick the Qirsh shortcut",
   "iosStep5Body": "Tap New Blank Automation and search for Process Bank SMS.",
   "iosStep6": "Pass the message text through",
-  "iosStep6Body": "An SMS Text field must appear — set it to Shortcut Input. Open the action’s details and set Date Received to when the message arrived and never leave it empty; that is what stops a transaction being recorded twice if the automation runs twice for the same message.",
+  "iosStep6Body": "Set SMS Text to Shortcut Input. Keep Sender as the message sender. Qirsh records the capture time automatically.",
   "iosStep7": "Match the final shape",
   "iosStep7Body": "It must read: Receive messages as input, then Process Bank SMS with SMS Text = Shortcut Input. Open the action’s details and turn off Show When Run if it appears.",
   "iosStep8": "Save the shortcut",
@@ -3243,10 +3256,10 @@
   "consentWithdrawFailed": "We couldn't confirm turning this off. Sharing stays paused. Please try again.",
   "signOutDataStays": "Your data stays on this device and comes back when you sign in again.",
   "deleteAccountTitle": "Delete account",
-  "deleteAccountIntro": "Permanently and immediately delete your Qirsh account and all the data saved with it. You'll confirm with Apple, and this cannot be undone.",
+  "deleteAccountIntro": "Permanently delete your Qirsh account and the data saved with it. You’ll confirm your identity first.",
   "deleteAccountAction": "Delete account",
   "deleteAccountConfirmTitle": "Delete your account?",
-  "deleteAccountConfirmBody": "This permanently deletes your account and all your data, immediately. You'll be asked to confirm with Apple. It cannot be undone.",
+  "deleteAccountConfirmBody": "This permanently deletes your account and its data. Confirm your identity to continue. This cannot be undone.",
   "deleteAccountConfirmAction": "Delete permanently",
   "deleteAccountProgress": "Deleting your account…",
   "deleteAccountSuccess": "Your account was deleted.",
@@ -3557,9 +3570,23 @@
   "annPreferencesAction": "Notification settings",
   "couponsAvailableLabel": "Available offers",
   "setCategoryIconName": "{icon, select, restaurants{Restaurants} groceries{Groceries} shopping{Shopping} transport{Transport} bills{Bills} cards{Cards} cash{Cash} cafes{Cafés} gifts{Gifts} home{Home} travel{Travel} health{Health} education{Education} transfers{Transfers} other{Other icon}}",
-  "@setCategoryIconName": {"description": "Accessible name for the category picker choice. Stored icon and colour identifiers do not change.", "placeholders": {"icon": {"type": "String"}}},
+  "@setCategoryIconName": {
+    "description": "Accessible name for the category picker choice. Stored icon and colour identifiers do not change.",
+    "placeholders": {
+      "icon": {
+        "type": "String"
+      }
+    }
+  },
   "setCategoryColourName": "{colour, select, grey{Grey} coral{Coral} green{Green} blue{Blue} purple{Purple} brightGreen{Bright green} teal{Teal} pink{Pink} blueGrey{Blue grey} orange{Orange} other{Custom colour}}",
-  "@setCategoryColourName": {"description": "Accessible name for the category picker choice. Stored icon and colour identifiers do not change.", "placeholders": {"colour": {"type": "String"}}},
+  "@setCategoryColourName": {
+    "description": "Accessible name for the category picker choice. Stored icon and colour identifiers do not change.",
+    "placeholders": {
+      "colour": {
+        "type": "String"
+      }
+    }
+  },
   "rptPreviousPeriod": "Previous period",
   "cloudResumeTitle": "Resume Cloud Sync",
   "cloudResumeBody": "Cloud Sync and Smart Analysis are paused after sign-out. Turn them on again to resume.",
@@ -3575,5 +3602,100 @@
   "coachBillsBody": "Tap + to add a subscription or instalment. Set its amount and due date, then record payments from its details.",
   "pasteSavedForAnalysis": "Message saved in Smart Inbox for analysis.",
   "retryBankAnalysis": "Retry smart analysis",
-  "onboardingAccountCheckFailed": "We couldn't check your account setup. Check your connection and try again."
+  "onboardingAccountCheckFailed": "We couldn't check your account setup. Check your connection and try again.",
+  "shortcutVisualInstallTitle": "Add the Qirsh shortcut",
+  "shortcutVisualInstallBody": "Tap Add Qirsh Shortcut, then Add Shortcut in iOS. Keep the new template name QIRSH so the connection test can find it.",
+  "shortcutVisualFilterTitle": "Choose which bank messages to capture",
+  "shortcutVisualFilterBody": "The shared template starts with EGP. Set Message contains to {currencyCode}; keep it if it already matches. Keep Shortcut Input and Sender in Process.",
+  "@shortcutVisualFilterBody": {
+    "placeholders": {
+      "currencyCode": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutVisualAutomationTitle": "Turn on automatic capture",
+  "shortcutVisualAutomationBody": "Tap the arrow beside When I receive a message. Turn Automation ON and Confirm Before Run OFF, then save.\n\nIf your iOS version shows Run Immediately, choose it.",
+  "shortcutVisualTestTitle": "Check the connection",
+  "shortcutVisualTestBody": "Test connection runs QIRSH without adding a transaction. Success confirms the connection.\n\nTo check automatic capture, receive a bank SMS matching your filter.",
+  "shortcutVisualImageCaption": "iOS reference · tap to zoom. The shortcut name for testing is QIRSH.",
+  "shortcutVisualEnlarge": "Enlarge the iOS setup screenshot",
+  "shortcutVisualReviewed": "Steps reviewed. Automatic capture still depends on enabling Automation in Shortcuts.",
+  "shortcutCatalogTitle": "Bank messages",
+  "shortcutCatalogBody": "Choose the word your bank uses. We’ll guide you through the filter and automatic capture, one step at a time.",
+  "shortcutCatalogSearch": "Word or currency",
+  "shortcutCatalogOther": "Other words and currencies",
+  "shortcutCatalogKeyword": "Texts with “{keyword}”",
+  "@shortcutCatalogKeyword": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutCatalogExample": "Purchase of {keyword} 450.00 at Talabat.",
+  "@shortcutCatalogExample": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutCatalogSetUp": "Set up",
+  "shortcutCatalogReviewed": "Steps reviewed",
+  "shortcutCatalogNoMatches": "No matches. Try a currency code such as EGP or USD.",
+  "shortcutCatalogSingleTemplate": "All choices use the same QIRSH template. You’ll change its existing filter in Shortcuts. Reviewing the steps does not confirm that iOS Automation is on.",
+  "shortcutOpenEditor": "Open QIRSH in Shortcuts",
+  "shortcutVisualArrowTitle": "Open the automation controls",
+  "shortcutVisualArrowBody": "Open QIRSH in Shortcuts. Tap the small blue arrow beside “where”, under “When I receive a message”.",
+  "shortcutVisualStep": "Step {current} of {total}",
+  "@shortcutVisualStep": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "shortcutStudioTitle": "Connect your messages",
+  "shortcutStudioBody": "A small bridge between your bank messages and Qirsh. Set your filter, connect it, and check it.",
+  "shortcutRouteMessage": "Message",
+  "shortcutRouteAutomation": "Shortcut",
+  "shortcutStudioCurrency": "1 · Message currency",
+  "shortcutStudioWord": "2 · Word to match",
+  "shortcutStudioPreview": "Your capture filter",
+  "shortcutStudioBegin": "Connect “{keyword}”",
+  "@shortcutStudioBegin": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "authEmailExplanation": "Enter the email on your Qirsh account to receive a one-time login code.",
+  "authEmailLinkExplanation": "Add an email to this account. Your transactions and settings stay in the same account. Changing your email requires confirmation of both addresses.",
+  "authInvalidEmail": "Enter a valid email address.",
+  "authCodeSendFailed": "Could not send the code. Check your connection and try again after a minute.",
+  "authCodeVerifyFailed": "Could not verify the code. Check it and try again.",
+  "authResendCode": "Resend code",
+  "authChangeEmail": "Use a different email",
+  "authConfirmBothEmails": "New email confirmed. Enter the code sent to your current email to finish.",
+  "authCurrentEmailCode": "Code from your current email",
+  "authSignInMethods": "Sign-in methods",
+  "authSignInMethodsDescription": "Add a way to sign in to this account. Your data stays together.",
+  "authLinked": "Connected",
+  "authLinkGoogle": "Connect Google",
+  "authLinkEmail": "Connect email",
+  "authLinkSuccess": "Sign-in method connected to your account.",
+  "authLinkFailed": "Could not connect this sign-in method. If it belongs to another Qirsh account, use a different one.",
+  "authExistingAccountHint": "Already use Apple? Sign in with Apple to link a new method.",
+  "authCreateAccount": "Create an account",
+  "authBackToSignIn": "Already have an account? Sign in",
+  "authCreateAccountSubtitle": "Choose a method for your new Qirsh account.",
+  "authCreateEmailExplanation": "Enter your email. Confirm the code to finish creating your Qirsh account.",
+  "deleteAccountEmailProofTitle": "Email confirmation code",
+  "deleteAccountEmailProofBody": "We sent a one-time code to the verified email on this Qirsh account. Enter it to authorize deletion.",
+  "authGoogleSignupRequired": "This Google account is new to Qirsh. Choose Create an account to register."
 }

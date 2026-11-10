@@ -470,7 +470,7 @@ class _ModeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return Material(
-      color: selected ? c.ctaSoft : c.surfaceCard,
+      color: c.surfaceCard,
       borderRadius: BorderRadius.circular(AppRadius.card),
       child: InkWell(
         onTap: onTap,

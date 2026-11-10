@@ -185,6 +185,13 @@ export type AuthorizationResult =
     appleMaterialRef: string;
   }
   | {
+    ok: true;
+    verified: true;
+    alternateProofMatched: true;
+    challengeExpiresAtMs: number;
+    appleMaterialRef: null;
+  }
+  | {
     ok: false;
     code:
       | 'challenge_invalid'
@@ -228,7 +235,7 @@ export type AcceptInput = {
   challengeId: string;
   challengeExpiresAtMs: number;
   receiptHash: string;
-  appleMaterialRef: string;
+  appleMaterialRef: string | null;
 };
 
 export type AcceptOutcome =
@@ -481,7 +488,8 @@ export function createAccountDeletionCoordinator(deps: CoordinatorDeps) {
   // Requests reference-aware disposal and records ONLY an enumerated outcome.
   // Keep-safe: a throw or malformed answer is 'kept_unconfirmed'. It never throws,
   // never alters the caller's result, and never logs the reference or any error.
-  const releaseMaterial = async (ref: string): Promise<void> => {
+  const releaseMaterial = async (ref: string | null): Promise<void> => {
+    if (ref === null) return;
     let disposition: MaterialDisposition['status'] = 'kept_unconfirmed';
     try {
       const out = await authorizer.disposeIfUnreferenced(ref) as unknown;
@@ -549,13 +557,15 @@ export function createAccountDeletionCoordinator(deps: CoordinatorDeps) {
       return err(code, code === 'authorization_unavailable');
     }
     // Never accept a success the audited adapter did not positively assert.
+    const appleMaterial = a.appleSubjectMatched === true &&
+      typeof a.appleMaterialRef === 'string' && MATERIAL_REF_RE.test(a.appleMaterialRef);
+    const alternateProof = a.alternateProofMatched === true && a.appleMaterialRef === null;
     if (
-      a.verified !== true || a.appleSubjectMatched !== true ||
-      typeof a.challengeExpiresAtMs !== 'number' || !Number.isFinite(a.challengeExpiresAtMs) ||
-      typeof a.appleMaterialRef !== 'string' || !MATERIAL_REF_RE.test(a.appleMaterialRef)
+      a.verified !== true || (!appleMaterial && !alternateProof) ||
+      typeof a.challengeExpiresAtMs !== 'number' || !Number.isFinite(a.challengeExpiresAtMs)
     ) return err('authorization_unavailable', false);
     const challengeExpiresAtMs = a.challengeExpiresAtMs;
-    const appleMaterialRef = a.appleMaterialRef;
+    const appleMaterialRef = a.appleMaterialRef as string | null;
 
     // From here the one-use Apple code may be spent. Any doubt about whether the
     // accept committed is resolved by reconciliation, never by guessing.
@@ -605,7 +615,7 @@ export function createAccountDeletionCoordinator(deps: CoordinatorDeps) {
   async function reconcileAcceptance(
     scopeKey: string,
     receiptHash: string,
-    appleMaterialRef: string,
+    appleMaterialRef: string | null,
   ): Promise<RequestResult> {
     const found = await attempt(() => store.findAccepted(scopeKey));
     // The read itself failed or was malformed: acceptance is UNKNOWN. Retain the

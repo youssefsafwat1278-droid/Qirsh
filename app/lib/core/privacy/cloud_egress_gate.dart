@@ -1311,7 +1311,7 @@ enum EgressGrantKind { accountControl, revoke }
 /// The ONLY operations allowed to reach the network while Cloud is OFF
 /// (Astra H2.1). They never enable Cloud and never widen any consent.
 enum AccountControlOp {
-  signIn, reauthenticate, deleteAccount, cancelDelete, onboardingStatus,
+  signIn, reauthenticate, deleteAccount, cancelDelete, onboardingStatus, linkIdentity,
 }
 
 /// One exact endpoint: method + path (+ the one permitted `grant_type` query).
@@ -1363,8 +1363,19 @@ class AccountControlEndpoint {
 /// token and empty request body in AccountControlGrant.scopeViolation.
 const Map<AccountControlOp, List<AccountControlEndpoint>>
     kAccountControlAllowlist = {
-  AccountControlOp.signIn: _signInEndpoints,
+  AccountControlOp.signIn: [
+    ..._signInEndpoints,
+    AccountControlEndpoint('POST', '/functions/v1/google-enrollment'),
+  ],
   AccountControlOp.reauthenticate: _signInEndpoints,
+  // Explicit authenticated account management, independent of Cloud consent.
+  // No table, sync, storage, logout or arbitrary profile endpoint is admitted.
+  AccountControlOp.linkIdentity: [
+    AccountControlEndpoint('POST', '/auth/v1/token', grantType: 'id_token'),
+    AccountControlEndpoint('POST', '/auth/v1/otp'),
+    AccountControlEndpoint('PUT', '/auth/v1/user'),
+    AccountControlEndpoint('POST', '/auth/v1/verify'),
+  ],
   AccountControlOp.deleteAccount: [
     AccountControlEndpoint('POST', '/rest/v1/rpc/request_account_deletion'),
     AccountControlEndpoint('POST', '/auth/v1/token',
@@ -1398,9 +1409,10 @@ const Duration kAccountControlTtl = Duration(seconds: 30);
 /// expired), the configured Supabase host and an endpoint on the op's list.
 class AccountControlGrant {
   AccountControlGrant._(this.op, this.id, this.ttl, this._now,
-      {this.onboarding}) : _startedAt = _now();
+      {this.onboarding, this.linking}) : _startedAt = _now();
 
   final ({AdmissionAuthority authority, String accessToken})? onboarding;
+  final ({String owner, bool Function() current})? linking;
 
   final AccountControlOp op;
   final int id;
@@ -2282,7 +2294,8 @@ class CloudEgressGate {
     final revoke = grant?.kind == EgressGrantKind.revoke;
     final control = grant?.control;
     final onboarding = control?.op == AccountControlOp.onboardingStatus;
-    final lifecycleRestricted = control == null || onboarding;
+    final linking = control?.op == AccountControlOp.linkIdentity;
+    final lifecycleRestricted = control == null || onboarding || linking;
     // The setup lookup requires an admitted account and cannot recover one.
     if (lifecycleRestricted && _localReadDenies) return 'local_read';
     if (lifecycleRestricted && _terminalDenied) return 'terminal';
@@ -2328,6 +2341,12 @@ class CloudEgressGate {
           identity.authority.uid != owner ||
           request?.authorization != 'Bearer ${identity.accessToken}' ||
           request?.bodyFingerprint != _emptyBodyFingerprint) {
+        return 'grant_identity';
+      }
+    }
+    if (linking) {
+      final identity = control?.linking;
+      if (identity == null || identity.owner != owner || !identity.current()) {
         return 'grant_identity';
       }
     }
@@ -2635,7 +2654,8 @@ class CloudEgressGate {
   Future<T> runAccountControl<T>(
       AccountControlOp op, Future<T> Function() body,
       {bool attempt = false,
-      ({AdmissionAuthority authority, String accessToken})? onboarding}) async {
+      ({AdmissionAuthority authority, String accessToken})? onboarding,
+      ({String owner, bool Function() current})? linking}) async {
     // §11.3: an explicit attempt waits (bounded) until ASR really finished; ASR
     // keeps ownership on a timeout and the attempt fails retryably.
     final quiesced = asrQuiesced;
@@ -2645,7 +2665,7 @@ class CloudEgressGate {
     }
     final control =
         AccountControlGrant._(op, ++_grantSeq, accountControlTtl, _monotonic,
-            onboarding: onboarding);
+            onboarding: onboarding, linking: linking);
     final grant = EgressGrant.accountControl(control);
     try {
       // `() async => await body()` on purpose: a lazily-executed builder (a
@@ -2704,8 +2724,10 @@ class CloudEgressGate {
     try { body = jsonDecode(serializedBody); } catch (_) { body = null; }
     final status = action == ImmediateDeletionAction.status;
     final challenge = action == ImmediateDeletionAction.challenge;
+    final providerChallenge = challenge && body is Map &&
+        body['proof_version'] == 2 && body['email_only'] is bool;
     final keys = challenge
-        ? {'action'}
+        ? {'action', if (providerChallenge) ...{'proof_version', 'email_only'}}
         : status
             ? {'action', 'receipt_secret'}
             : {'challenge_id', 'challenge_response', 'receipt_secret',

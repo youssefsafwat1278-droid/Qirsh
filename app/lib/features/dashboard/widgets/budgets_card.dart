@@ -6,21 +6,12 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/mali_tokens.dart';
 import '../../../core/theme/widgets/mali_card.dart';
-import '../../../core/theme/widgets/ring_progress.dart';
+import '../../../core/utils/app_lucide_icons.dart';
 import '../../../domain/entities/budget_entity.dart';
 import '../../../domain/finance/money_format.dart';
 import '../dashboard_providers.dart';
 
-/// Home's «الميزانيات» section: one row per budget, with the state ring, the
-/// spent/limit pair, and what is left — or what was exceeded.
-///
-/// The list scrolls inside a fixed box (~3 rows) rather than growing the page,
-/// matching the pattern Home already uses for its budget box today, so a user
-/// with twelve budgets does not get a twelve-screen dashboard.
-///
-/// All-expenses roll-up budgets are shown separately from category budgets by
-/// their own label — they are the total, not another category, and stacking
-/// them in one list invites reading the sum as double what it is.
+/// Compact account-scoped budget overview on Home.
 class BudgetsCard extends StatelessWidget {
   const BudgetsCard({
     super.key,
@@ -35,21 +26,8 @@ class BudgetsCard extends StatelessWidget {
   final double maxHeight;
   final VoidCallback? onTap;
 
-  int get _overCount => entries.where((e) => e.ratio >= 1.0).length;
-
-  /// Consumption across the listed budgets. Only meaningful when they share a
-  /// currency, which they do here: the dashboard is single-currency by
-  /// construction (the selected account decides).
-  int get _usedRatioPercent {
-    var spent = 0;
-    var limit = 0;
-    for (final e in entries) {
-      spent += e.spent.minorUnits;
-      limit += e.limit.minorUnits;
-    }
-    if (limit <= 0) return 0;
-    return (spent / limit * 100).round();
-  }
+  int get _overCount =>
+      entries.where((e) => e.spent.compareTo(e.limit) > 0).length;
 
   @override
   Widget build(BuildContext context) {
@@ -69,8 +47,30 @@ class BudgetsCard extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _metrics(context, t),
-          Divider(height: 1, color: t.strokeSoft),
+          Padding(
+            padding: const EdgeInsetsDirectional.fromSTEB(14, 12, 14, 8),
+            child: Wrap(
+              spacing: AppSpacing.s3,
+              runSpacing: AppSpacing.s1,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                _summary(
+                  icon: AppLucideIcons.wallet,
+                  count: entries.length,
+                  label: context.l10n.helpBudgetsTitle,
+                  color: t.textOnCanvasSecondary,
+                ),
+                _summary(
+                  icon: AppLucideIcons.flag,
+                  count: _overCount,
+                  label: context.l10n.bdgStateOverF,
+                  color: _overCount > 0
+                      ? context.colors.danger
+                      : t.textOnCanvasMuted,
+                ),
+              ],
+            ),
+          ),
           ConstrainedBox(
             constraints: BoxConstraints(maxHeight: maxHeight),
             child: ListView.separated(
@@ -89,60 +89,27 @@ class BudgetsCard extends StatelessWidget {
     );
   }
 
-  Widget _metrics(BuildContext context, MaliTokens t) {
-    final c = context.colors;
-    final over = _overCount;
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.s2, vertical: AppSpacing.s3),
-      child: Row(
+  Widget _summary({
+    required IconData icon,
+    required int count,
+    required String label,
+    required Color color,
+  }) =>
+      Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _metric(t, '${entries.length}', context.l10n.homeActiveBudget),
-          _sep(t),
-          _metric(t, '$_usedRatioPercent%', context.l10n.bdgUsageRate),
-          _sep(t),
-          _metric(t, '$over', context.l10n.bdgStateOverF,
-              valueColor: over > 0 ? c.danger : null),
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: AppSpacing.s1),
+          Text('$count · $label', style: AppTypography.caption(color)),
         ],
-      ),
-    );
-  }
-
-  Widget _metric(MaliTokens t, String value, String label,
-          {Color? valueColor}) =>
-      Expanded(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              value,
-              maxLines: 1,
-              style: AppTypography.custom(
-                size: 15,
-                weight: FontWeight.w600,
-                height: 1.2,
-                tabular: true,
-                color: valueColor ?? t.textOnCanvasPrimary,
-              ),
-            ),
-            const SizedBox(height: 3),
-            Text(label,
-                textAlign: TextAlign.center,
-                style: AppTypography.micro(t.textOnCanvasMuted)),
-          ],
-        ),
       );
-
-  Widget _sep(MaliTokens t) =>
-      Container(width: 1, height: 28, color: t.cardBorder);
 
   Widget _row(BuildContext context, MaliTokens t, DashboardBudgetEntry entry) {
     final c = context.colors;
     final hasLimit = !entry.limit.isZero && !entry.limit.isNegative;
     final ratio = hasLimit ? entry.ratio : null;
     final tone = hasLimit
-        ? c.budgetState(entry.ratio,
-            warnAtPercent: entry.alertThresholdPercent)
+        ? c.budgetState(entry.ratio, warnAtPercent: entry.alertThresholdPercent)
         : t.textOnCanvasMuted;
     final over = entry.spent.minorUnits > entry.limit.minorUnits;
     final left = over ? entry.spent - entry.limit : entry.limit - entry.spent;
@@ -153,75 +120,63 @@ class BudgetsCard extends StatelessWidget {
       BudgetPeriod.yearly => context.l10n.txnCycleYearly,
     };
 
-    return Semantics(
-      button: onTap != null,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            child: Row(
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
               children: [
-                RingProgress(
-                  value: ratio?.clamp(0.0, 1.0),
-                  size: 40,
-                  strokeWidth: 4,
-                  trackColor: t.ringTrackNeutral,
-                  color: tone,
-                  child: Text(
-                    ratio == null ? '—' : '${(ratio * 100).round()}%',
-                    style: AppTypography.caption(t.textOnCanvasPrimary),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.s3),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(entry.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.bodyStrong(
-                              t.textOnCanvasPrimary)),
-                      const SizedBox(height: 3),
-                      Text(
-                        privacyMode
-                            ? '•••• / ••••'
-                            : '${formatMoney(entry.spent)} / '
-                                '${formatMoney(entry.limit)} · $periodLabel',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.custom(
-                          size: 11.5,
-                          weight: FontWeight.w500,
-                          height: 1.3,
-                          tabular: true,
-                          color: t.textOnCanvasMuted,
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    entry.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodyStrong(t.textOnCanvasPrimary),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.s2),
+                Text(
+                    privacyMode || ratio == null
+                        ? periodLabel
+                        : '$periodLabel · ${(ratio * 100).round()}%',
+                    style: AppTypography.caption(t.textOnCanvasMuted)),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.s2),
+            if (ratio != null && !privacyMode)
+              LinearProgressIndicator(
+                value: ratio.clamp(0, 1),
+                minHeight: 5,
+                borderRadius: BorderRadius.circular(4),
+                backgroundColor: t.ringTrackNeutral,
+                color: tone,
+                semanticsLabel: entry.label,
+              ),
+            const SizedBox(height: AppSpacing.s1),
+            Wrap(
+              spacing: AppSpacing.s2,
+              runSpacing: AppSpacing.s1,
+              alignment: WrapAlignment.spaceBetween,
+              children: [
+                Text(
+                  privacyMode
+                      ? '•••• / ••••'
+                      : '${formatMoney(entry.spent)} / ${formatMoney(entry.limit)}',
+                  style: AppTypography.caption(t.textOnCanvasMuted),
+                ),
                 if (hasLimit)
                   Text(
                     privacyMode
                         ? '••••'
                         : '${over ? context.l10n.bdgOver : context.l10n.bdgRemaining} ${formatMoney(left)}',
-                    style: AppTypography.custom(
-                      size: 12,
-                      weight: FontWeight.w600,
-                      height: 1.3,
-                      tabular: true,
-                      color: over ? c.danger : c.income,
-                    ),
+                    style: AppTypography.caption(over ? c.danger : c.income),
                   ),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );

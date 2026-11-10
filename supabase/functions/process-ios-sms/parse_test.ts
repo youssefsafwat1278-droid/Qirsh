@@ -3,6 +3,36 @@ import { deterministicParse, isResolved, parseSms } from './parse.ts';
 
 const RECEIVED = '2026-09-07T19:30:00.000Z';
 
+Deno.test('AI primary: literal bank clock wins over an AI timestamp mislabeled UTC', async () => {
+  const text = 'IPN transfer sent with amount of EGP 1.00 from 1938 on 09/11 at 06:45 PM. Ref# abc123.';
+  const stub = stubGemini({ is_transaction: true, amount: 1, amount_text: '1.00',
+    currency: 'EGP', type: 'transfer', direction: 'debit', category: 'transfers',
+    occurredAt: '2026-11-09T18:45:00Z' });
+  try {
+    const r = await parseSms({ text, rawText: text, sender: 'BANK',
+      receivedAt: '2026-11-09T16:45:48Z', tzOffsetMinutes: 120,
+      locale: 'en', allowAi: true, aiPrimary: true });
+    assertEquals(r.accepted, true);
+    assertEquals(r.parsed.parserSource, 'ai');
+    assertEquals(r.parsed.occurredAt, '2026-11-09T16:45:00.000Z');
+    assertEquals(r.parsed.comparisonTimestampSource, 'sms_body');
+  } finally { stub.restore(); }
+});
+
+Deno.test('AI primary: local midnight uses the SMS date across the UTC day boundary', async () => {
+  const text = 'IPN transfer sent with amount of EGP 1.00 on 10/11 at 12:05 AM.';
+  const stub = stubGemini({ is_transaction: true, amount: 1, amount_text: '1.00',
+    currency: 'EGP', type: 'transfer', direction: 'debit', category: 'transfers',
+    occurredAt: '2026-11-10T00:05:00' });
+  try {
+    const r = await parseSms({ text, rawText: text, sender: 'BANK',
+      receivedAt: '2026-11-09T22:05:48Z', tzOffsetMinutes: 120,
+      locale: 'en', allowAi: true, aiPrimary: true });
+    assertEquals(r.accepted, true);
+    assertEquals(r.parsed.occurredAt, '2026-11-09T22:05:00.000Z');
+  } finally { stub.restore(); }
+});
+
 const RESOLVED_SMS = 'Purchase of EGP 250.00 at CARREFOUR with card ending 1234 on 2026-09-07';
 const IGNORED_SMS = 'Your OTP is 123456 for EGP 10.00 purchase';
 // Clean card/ATM SMS: amount+currency+direction, NO merchant -> RESOLVED (merchant optional)

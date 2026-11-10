@@ -59,11 +59,18 @@ import '../../core/theme/widgets/glass_dialog.dart';
 import '../../core/theme/widgets/glass_pickers.dart';
 import '../common/app_error_state.dart';
 
-class TransactionsScreen extends ConsumerWidget {
+class TransactionsScreen extends ConsumerStatefulWidget {
   const TransactionsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TransactionsScreen> createState() => _TransactionsScreenState();
+}
+
+class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
+  BillType _billType = BillType.subscription;
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(transactionsListProvider);
     final billsAsync = ref.watch(billsViewProvider);
     final tab = ref.watch(transactionsPageTabProvider);
@@ -139,6 +146,47 @@ class TransactionsScreen extends ConsumerWidget {
                                 hasMoreTransactions: view.hasMore,
                                 transactionsCount: view.transactions.length,
                                 pendingCount: view.pendingCount,
+                                controls: Column(
+                                  children: [
+                                    AppPillTabBar(
+                                      onPhoto: true,
+                                      tabs: [
+                                        context.l10n.txnTabTransactions,
+                                        context.l10n.txnTabBills,
+                                      ],
+                                      selectedIndex: tab,
+                                      onSelected: (value) {
+                                        if (tab == value) return;
+                                        setState(() => _billType = BillType.subscription);
+                                        ref.read(transactionsPageTabProvider.notifier).state = value;
+                                      },
+                                    ),
+                                    const SizedBox(height: AppSpacing.s2),
+                                    if (tab == 0) ...[
+                                      const TransactionSearchField(onPhoto: true),
+                                      const SizedBox(height: AppSpacing.s2),
+                                    ],
+                                    if (tab == 0 && !pendingOnly)
+                                      Row(children: [
+                                        const Expanded(child: _ActiveAccountPicker()),
+                                        const SizedBox(width: AppSpacing.s2),
+                                        Expanded(child: _DateRangeChips(range: view.range)),
+                                      ])
+                                    else
+                                      const _ActiveAccountPicker(),
+                                    if (tab != 0) ...[
+                                      const SizedBox(height: AppSpacing.s2),
+                                      AppPillTabBar(
+                                        onPhoto: true,
+                                        tabs: [context.l10n.txnBillsSubs, context.l10n.txnBillsInstalments],
+                                        selectedIndex: _billType == BillType.subscription ? 0 : 1,
+                                        onSelected: (index) => setState(() {
+                                          _billType = index == 0 ? BillType.subscription : BillType.installment;
+                                        }),
+                                      ),
+                                    ],
+                                  ],
+                                ),
                                 onAdd: () {
                                   if (tab == 0) {
                                     showCaptureEntrySheet(context);
@@ -157,34 +205,12 @@ class TransactionsScreen extends ConsumerWidget {
                                 ),
                                 const SizedBox(height: AppSpacing.s3),
                               ],
-                              // صفّ الفلاتر واقع بين الهيدر وشريط التبويبات —
-                              // من غير خلفية كانت بتبان شريحة بيضا وسط الأزرق.
-                              // الذوبان لسه ما بدأش هنا، فاللون هو نفس حافة
-                              // الهيدر بالظبط والشريط اللي بعده بيكمّل منه.
-                              ColoredBox(
-                                color: CalmPageHeader.meltEdgeColor(
-                                    Theme.of(context).brightness ==
-                                        Brightness.dark),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: AppSpacing.gutter),
-                                  child: Column(
-                                    children: [
-                                      if (tab == 0 && !pendingOnly)
-                                        Row(
-                                          children: [
-                                            const Expanded(
-                                                child: _ActiveAccountPicker()),
-                                            const SizedBox(
-                                                width: AppSpacing.s3),
-                                            Expanded(
-                                                child: _DateRangeChips(
-                                                    range: view.range)),
-                                          ],
-                                        )
-                                      else
-                                        const _ActiveAccountPicker(),
-                                      const SizedBox(height: AppSpacing.s3),
+                              Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: AppSpacing.gutter,
+                                ),
+                                child: Column(
+                                  children: [
                                       if (tab == 0) ...[
                                         const _SuspectedDuplicatesBanner(),
                                         const _SmartInboxBanner(),
@@ -277,38 +303,10 @@ class TransactionsScreen extends ConsumerWidget {
                                           const SizedBox(height: AppSpacing.s3),
                                         ],
                                       ],
-                                    ],
-                                  ),
+                                  ],
                                 ),
                               ),
                             ],
-                          ),
-                        ),
-                        SliverPersistentHeader(
-                          pinned: true,
-                          delegate: _TabBarDelegate(
-                            // كبسولات عايمة من غير صندوق — ومن غير زجاج.
-                            child: MeltSlice(
-                              height: 64.0,
-                              child: Container(
-                                height: 64.0,
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.gutter,
-                                ),
-                                alignment: Alignment.center,
-                                child: AppPillTabBar(
-                                  tabs: [
-                                    context.l10n.txnTabTransactions,
-                                    context.l10n.txnTabBills
-                                  ],
-                                  selectedIndex: tab,
-                                  onSelected: (value) => ref
-                                      .read(
-                                          transactionsPageTabProvider.notifier)
-                                      .state = value,
-                                ),
-                              ),
-                            ),
                           ),
                         ),
                       ];
@@ -471,6 +469,7 @@ class TransactionsScreen extends ConsumerWidget {
                                   error: (error, _) =>
                                       Text(context.l10n.txnError),
                                   data: (bills) => _BillsTab(
+                                    type: _billType,
                                     view: bills,
                                     currencyLabel: currencyLabel,
                                     // F-027 — the display currency must come from
@@ -549,6 +548,7 @@ class _ActiveAccountPicker extends ConsumerWidget {
           orElse: () => defaultAccount,
         );
         return GlassSelector(
+          onBlue: true,
           icon: AppLucideIcons.walletCards,
           label:
               '${account.name} · ${Currency.label(context, account.currency)}',
@@ -743,6 +743,7 @@ class _DateRangeChips extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GlassSelector(
+          onBlue: true,
       icon: AppLucideIcons.calendarDays,
       label: range.labelIn(Localizations.localeOf(context).languageCode),
       onTap: () {
@@ -801,7 +802,6 @@ class _DateRangeChips extends ConsumerWidget {
                         ChoiceChip(
                           label: Text(_presetLabel(context, preset)),
                           selected: current.preset == preset,
-                          selectedColor: c.primary.withValues(alpha: 0.16),
                           onSelected: (_) {
                             if (preset == TransactionsDatePreset.custom) {
                               setState(() {});
@@ -992,30 +992,24 @@ class _CategoryFilterButton extends ConsumerWidget {
     final active = selectedId != null;
 
     return Material(
-      color: active ? c.cta.withValues(alpha: 0.12) : c.surfaceElevated,
+      color: active ? c.cta : c.surfaceElevated,
       borderRadius: BorderRadius.circular(AppRadius.pill),
       child: InkWell(
         onTap: () => _showCategoryFilterSheet(context, ref),
         borderRadius: BorderRadius.circular(AppRadius.pill),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(
-              color: active ? c.cta.withValues(alpha: 0.3) : Colors.transparent,
-            ),
-          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               CategoryGlyph(
                   name: selected?.iconName ?? 'shapes',
                   size: 15,
-                  color: active ? c.cta : c.textSecondary),
+                  color: active ? c.onCta : c.textSecondary),
               const SizedBox(width: 6),
               Text(
                 selected?.name ?? context.l10n.txnCategory,
-                style: AppTypography.caption(active ? c.cta : c.textSecondary)
+                style: AppTypography.caption(active ? c.onCta : c.textSecondary)
                     .copyWith(fontWeight: FontWeight.bold),
               ),
               if (active) ...[
@@ -1024,7 +1018,7 @@ class _CategoryFilterButton extends ConsumerWidget {
                   onTap: () => ref
                       .read(transactionCategoryFilterProvider.notifier)
                       .state = null,
-                  child: Icon(AppLucideIcons.x, size: 14, color: c.cta),
+                  child: Icon(AppLucideIcons.x, size: 14, color: c.onCta),
                 ),
               ],
             ],
@@ -1157,28 +1151,23 @@ class _CategoryFilterRow extends StatelessWidget {
   }
 }
 
-class _BillsTab extends StatefulWidget {
+class _BillsTab extends StatelessWidget {
   const _BillsTab({
+    required this.type,
     required this.view,
     required this.currencyLabel,
     required this.baseCurrency,
   });
 
+  final BillType type;
   final BillsView view;
   final String currencyLabel;
   final String baseCurrency;
 
   @override
-  State<_BillsTab> createState() => _BillsTabState();
-}
-
-class _BillsTabState extends State<_BillsTab> {
-  BillType _type = BillType.subscription;
-
-  @override
   Widget build(BuildContext context) {
-    final bills = widget.view.bills
-        .where((bill) => bill.type == _type)
+    final bills = view.bills
+        .where((bill) => bill.type == type)
         .toList(growable: false)
       ..sort((a, b) {
         final active = (a.status == BillStatus.active ? 0 : 1)
@@ -1197,11 +1186,11 @@ class _BillsTabState extends State<_BillsTab> {
     // depended on list ORDER and every bill in a different currency was silently
     // dropped from it — with no indication to the user. The base currency is now
     // passed in explicitly.
-    final monthlyTotal = _type == BillType.subscription
-        ? subscriptionMonthlyTotalMoney(bills, widget.baseCurrency)
+    final monthlyTotal = type == BillType.subscription
+        ? subscriptionMonthlyTotalMoney(bills, baseCurrency)
         : monthlyEquivalentsTotalMoney(
             bills.where((b) => b.status == BillStatus.active),
-            widget.baseCurrency,
+            baseCurrency,
           );
     final nextThisWeek = bills.where((bill) {
       final now = DateTime.now();
@@ -1212,41 +1201,33 @@ class _BillsTabState extends State<_BillsTab> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppPillTabBar(
-          tabs: [context.l10n.txnBillsSubs, context.l10n.txnBillsInstalments],
-          selectedIndex: _type == BillType.subscription ? 0 : 1,
-          onSelected: (index) => setState(() {
-            _type = index == 0 ? BillType.subscription : BillType.installment;
-          }),
-        ),
-        const SizedBox(height: AppSpacing.s3),
         _BillsHero(
-          type: _type,
+          type: type,
           monthlyTotal: monthlyTotal,
           activeCount: activeCount,
           nextThisWeek: nextThisWeek,
-          currencyLabel: widget.currencyLabel,
+          currencyLabel: currencyLabel,
         ),
         const SizedBox(height: AppSpacing.s4),
         if (bills.isEmpty)
           AppEmptyState(
             illustration:
                 const QirshIllustration(name: 'bills', width: 210, height: 158),
-            icon: _type == BillType.subscription
+            icon: type == BillType.subscription
                 ? AppLucideIcons.repeat
                 : AppLucideIcons.receipt,
-            title: _type == BillType.subscription
+            title: type == BillType.subscription
                 ? context.l10n.txnSubsEmptyTitle
                 : context.l10n.txnInstEmptyTitle,
-            subtitle: _type == BillType.subscription
+            subtitle: type == BillType.subscription
                 ? context.l10n.txnSubsEmptyBody
                 : context.l10n.txnInstEmptyBody,
-            primaryLabel: _type == BillType.subscription
+            primaryLabel: type == BillType.subscription
                 ? context.l10n.txnAddSub
                 : context.l10n.txnAddInstalment,
             onPrimary: () => BillFormSheet.show(
               context,
-              initialType: _type,
+              initialType: type,
             ),
           )
         else
@@ -1255,19 +1236,19 @@ class _BillsTabState extends State<_BillsTab> {
             const SizedBox(height: AppSpacing.s3),
           ],
         TextButton.icon(
-          onPressed: () => _showBillsHelp(context, _type),
+          onPressed: () => _showBillsHelp(context, type),
           icon: const Icon(AppLucideIcons.helpCircle, size: 18),
           label: Text(context.l10n.txnLearnBills),
         ),
         const SizedBox(height: AppSpacing.s3),
-        if (_type == BillType.subscription &&
-            widget.view.suggestions.isNotEmpty) ...[
+        if (type == BillType.subscription &&
+            view.suggestions.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.s4),
           _DateHeader(label: context.l10n.txnSuggestionsTitle),
-          for (final suggestion in widget.view.suggestions.take(3)) ...[
+          for (final suggestion in view.suggestions.take(3)) ...[
             _SuggestionCard(
               suggestion: suggestion,
-              currencyLabel: widget.currencyLabel,
+              currencyLabel: currencyLabel,
               onAdd: () => BillFormSheet.show(
                 context,
                 initialType: BillType.subscription,
@@ -1917,27 +1898,6 @@ class _DateHeader extends StatelessWidget {
   }
 }
 
-class _TabBarDelegate extends SliverPersistentHeaderDelegate {
-  _TabBarDelegate({required this.child});
-  final Widget child;
-
-  @override
-  double get minExtent => 64.0;
-  @override
-  double get maxExtent => 64.0;
-
-  @override
-  Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return child;
-  }
-
-  @override
-  bool shouldRebuild(covariant _TabBarDelegate oldDelegate) {
-    return oldDelegate.child != child;
-  }
-}
-
 class _AddButton extends StatelessWidget {
   const _AddButton({required this.onTap});
   final VoidCallback onTap;
@@ -1979,76 +1939,72 @@ class _TransactionFlowTotals extends StatelessWidget {
     final c = context.colors;
     Widget metric(String key, String label, String amount, bool incoming) {
       final accent = incoming ? c.income : c.danger;
-      return DecoratedBox(
+      return Padding(
         key: ValueKey(key),
-        decoration: BoxDecoration(
-          color: c.surface,
-          border: Border.all(color: c.border),
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.s3),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: accent.withValues(alpha: .12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(incoming ? Icons.south_west : Icons.north_east,
-                        size: 14, color: accent),
+        padding: const EdgeInsets.all(AppSpacing.s3),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: .12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(width: 7),
-                  Expanded(
-                      child: Text(label,
-                          style: AppTypography.caption(c.textSecondary))),
-                ],
-              ),
-              const SizedBox(height: 8),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: AlignmentDirectional.centerStart,
-                child: Text(amount,
-                    textDirection: TextDirection.ltr,
-                    style: AppTypography.custom(
-                        size: 19,
-                        height: 1.25,
-                        weight: FontWeight.w700,
-                        tabular: true,
-                        color: c.textPrimary)),
-              ),
-            ],
-          ),
+                  child: Icon(incoming ? Icons.south_west : Icons.north_east,
+                      size: 14, color: accent),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                    child: Text(label,
+                        style: AppTypography.caption(c.textSecondary))),
+              ],
+            ),
+            const SizedBox(height: 8),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(amount,
+                  textDirection: TextDirection.ltr,
+                  style: AppTypography.custom(
+                      size: 19,
+                      height: 1.25,
+                      weight: FontWeight.w700,
+                      tabular: true,
+                      color: incoming ? c.income : c.textPrimary)),
+            ),
+          ],
         ),
       );
     }
 
-    return LayoutBuilder(builder: (context, constraints) {
-      final out =
-          metric('activity-period-out', context.l10n.cardOut, expense, false);
-      final incoming =
-          metric('activity-period-in', context.l10n.cardIn, income, true);
-      if (constraints.maxWidth < 250 ||
-          MediaQuery.textScalerOf(context).scale(19) > 27) {
-        return Column(
+    return MaliCard(
+      padding: EdgeInsets.zero,
+      child: LayoutBuilder(builder: (context, constraints) {
+        final out =
+            metric('activity-period-out', context.l10n.cardOut, expense, false);
+        final incoming =
+            metric('activity-period-in', context.l10n.cardIn, income, true);
+        if (constraints.maxWidth < 250 ||
+            MediaQuery.textScalerOf(context).scale(19) > 27) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [out, const SizedBox(height: 8), incoming],
+          );
+        }
+        return IntrinsicHeight(
+            child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [out, const SizedBox(height: 8), incoming],
-        );
-      }
-      return IntrinsicHeight(
-          child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: out),
-          const SizedBox(width: 8),
-          Expanded(child: incoming)
-        ],
-      ));
-    });
+          children: [
+            Expanded(child: out),
+            VerticalDivider(width: 1, thickness: 1, color: c.border),
+            Expanded(child: incoming)
+          ],
+        ));
+      }),
+    );
   }
 }
 
@@ -2059,6 +2015,7 @@ class _TransactionsHeader extends StatelessWidget {
     required this.hasMoreTransactions,
     required this.transactionsCount,
     required this.pendingCount,
+    required this.controls,
     required this.onAdd,
   });
 
@@ -2067,6 +2024,7 @@ class _TransactionsHeader extends StatelessWidget {
   final bool hasMoreTransactions;
   final int transactionsCount;
   final int pendingCount;
+  final Widget controls;
   final VoidCallback onAdd;
 
   @override
@@ -2078,8 +2036,7 @@ class _TransactionsHeader extends StatelessWidget {
       meltOverflow: 0,
       sectionPhoto:
           tab == 0 ? QirshSectionPhoto.transactions : QirshSectionPhoto.bills,
-      coverBottom:
-          tab == 0 ? const TransactionSearchField(onPhoto: true) : null,
+      coverBottom: controls,
       title: tab == 0
           ? context.l10n.txnTabTransactions
           : context.l10n.txnBillsAndSubs,
@@ -2090,7 +2047,7 @@ class _TransactionsHeader extends StatelessWidget {
       trailing: _AddButton(onTap: onAdd),
       // Bills already have one exact summary directly above their list.
       // Keep the photo compact so the first bill is visible on arrival.
-      sectionHeight: tab == 0 ? 220 : 120,
+      sectionHeight: tab == 0 ? 245 : 220,
     );
   }
 }

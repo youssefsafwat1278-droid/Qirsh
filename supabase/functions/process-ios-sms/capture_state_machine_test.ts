@@ -445,8 +445,26 @@ Deno.test('CAP-3: APNs alert is generic, with no amount, merchant, card or sende
     }
     assertEquals((sent[0].body.aps as { alert: Record<string, string> }).alert, { body: 'New transaction captured' });
     // The stored relay row (pulled by the app after the tap) still carries the detail.
-    assert(String((fake.state.rows.get('p')!.notification as Record<string, string>).body).includes('250'));
+    const stored = fake.state.rows.get('p')!.notification as Record<string, string>;
+    assert(`${stored.title}\n${stored.body}`.includes('250'));
   });
+});
+
+Deno.test('capture details opt-in sends amount and merchant without card or SMS; hidden stays generic', async () => {
+  for (const details of [true, false]) {
+    const fake = fakeCapture({ device: { ...linkedA, apns_token: 'tok' } });
+    await withApns(ok200, async (sent) => {
+      await post(fake, v2({ payloadId: 'p', sanitizedText: RESOLVED,
+        notificationDetails: details, locale: 'en_EG' }));
+      const alert = (sent[0].body.aps as { alert: Record<string, string> }).alert;
+      if (details) {
+        assert(alert.title.includes('250.00 EGP'));
+        assert(alert.body.includes('CARREFOUR'));
+        assert(!alert.body.includes('1234'));
+        assert(!alert.body.includes('Purchase of'));
+      } else assertEquals(alert, { body: 'New transaction captured' });
+    });
+  }
 });
 
 Deno.test('CAP-3: replay after a handed-off push never re-pushes (unconfirmed or confirmed)', async () => {

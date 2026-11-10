@@ -202,6 +202,10 @@ abstract class AsrSessionHost {
   /// E9: the app is in the foreground (`resumed`).
   bool get resumed;
 
+  /// An accepted refresh can finish adoption while iOS is foreground-inactive
+  /// (for example Face ID or a view-controller transition). Never background.
+  bool get foreground => resumed;
+
   /// The owner the active, verified local-read scope belongs to, or null.
   String? get localReadOwner;
 
@@ -226,6 +230,7 @@ class AutomaticSessionRecovery {
     required this.capture,
     this.native = const BridgeAsrNativePort(),
     this.foregroundDeadline = const Duration(seconds: 5),
+    this.presentationDeadline = const Duration(seconds: 30),
   });
 
   final AuthCoordinator coordinator;
@@ -234,6 +239,7 @@ class AutomaticSessionRecovery {
   final AsrCapturePort capture;
   final AsrNativePort native;
   final Duration foregroundDeadline;
+  final Duration presentationDeadline;
 
   static const Duration installMinimum = Duration(seconds: 120);
   static const Duration publishMinimum = Duration(seconds: 30);
@@ -246,9 +252,13 @@ class AutomaticSessionRecovery {
   /// writable-scope publication and final recovery settlement. It grants no
   /// session, database or Cloud authority.
   static final ValueNotifier<bool> restoringSession = ValueNotifier<bool>(false);
+  static final ValueNotifier<bool> recoveryTimedOut = ValueNotifier<bool>(false);
   static AutomaticSessionRecovery? _presenting;
+  Timer? _presentationTimer;
 
   void _finishPresentation() {
+    _presentationTimer?.cancel();
+    _presentationTimer = null;
     if (!identical(_presenting, this)) return;
     _presenting = null;
     restoringSession.value = false;
@@ -271,6 +281,7 @@ class AutomaticSessionRecovery {
 
   /// §11.3: an explicit attempt clears continuation; cleanup ownership stays.
   void yieldToExplicitAttempt() {
+    recoveryTimedOut.value = false;
     _retry?.cancel();
     _retry = null;
     _authority?.mayContinue = false;
@@ -295,8 +306,18 @@ class AutomaticSessionRecovery {
     });
     _running = run;
     if (present) {
+      recoveryTimedOut.value = false;
       _presenting = this;
       restoringSession.value = true;
+      // End only the loading presentation. Keep custody, holds and cleanup
+      // with the original operation until its I/O actually settles.
+      _presentationTimer = Timer(presentationDeadline, () {
+        _authority?.mayContinue = false;
+        coordinator.cancelActive('presentation_timeout');
+        AuthDiagnostics.add('asr_presentation_timeout');
+        recoveryTimedOut.value = true;
+        _finishPresentation();
+      });
     }
     return run;
   }
@@ -390,6 +411,7 @@ class AutomaticSessionRecovery {
         ? await _sessionOnlyEvidence(owner)
         : await _evidence(owner, lifecycle);
     if (evidence == null) return _stop('native_evidence', AsrOutcome.skipped);
+    if (recoveryTimedOut.value) return _stop('presentation_timeout');
 
     final authority = AsrAuthority();
     _authority = authority;
@@ -478,9 +500,10 @@ class AutomaticSessionRecovery {
     // The op starts after our own evidence writes (§9.1 causeLogPosition).
     final start = gate.causePosition;
     var installed = false;
+    var accepted = false;
     bool liveSync() =>
         authority.mayContinue &&
-        host.resumed &&
+        (accepted ? host.foreground : host.resumed) &&
         host.processDenial(owner, adopting: installed) == null &&
         !gate.foreignCauseSince(start,
             kind: RefreshOpKind.asr, authority: authority);
@@ -510,6 +533,7 @@ class AutomaticSessionRecovery {
       receipt = out.receipt;
     }
     final r = receipt!;
+    accepted = true;
 
     // ── P_install (§9.6; foreground only) ─────────────────────────────────
     if (!liveSync() || !await native.confirm(evidence.counter)) {
@@ -851,7 +875,10 @@ class AutomaticSessionRecovery {
   }
 
   void _afterRun(AsrOutcome outcome) {
-    if ((outcome != AsrOutcome.stayedLocalRead &&
+    final transientSkip = outcome == AsrOutcome.skipped &&
+        host.localReadOwner != null &&
+        const {'native_evidence', 'cloud', 'elig', 'indeterminate'}.contains(lastStop);
+    if ((outcome != AsrOutcome.stayedLocalRead && !transientSkip &&
             unsettledFinalizationOwner == null &&
             _unresolvedAdoption == null) ||
         !host.resumed) {
@@ -896,6 +923,9 @@ class AppSessionAsrHost implements AsrSessionHost {
   @override
   bool get resumed =>
       WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+  @override
+  bool get foreground => resumed ||
+      WidgetsBinding.instance.lifecycleState == AppLifecycleState.inactive;
   @override
   String? get localReadOwner => session.asrLocalReadOwner;
   @override

@@ -48,11 +48,11 @@ void main() {
   test('the button is rendered behind the gate, not unconditionally', () {
     // The defect this replaces: `_appleButton(c)` sat directly in the column
     // with no platform check and no dart:io import, so Android showed it.
-    final src = File('lib/features/onboarding/auth_screen.dart')
-        .readAsStringSync();
+    final src =
+        File('lib/features/onboarding/auth_screen.dart').readAsStringSync();
     expect(
       src,
-      contains('if (appleSignInSupported) _appleButton()'),
+      matches(r'if \(appleSignInSupported\)\s+FilledButton\.icon\('),
       reason: 'the Apple button must stay behind the platform gate',
     );
     // A dart:io gate would work at runtime but could not be driven by

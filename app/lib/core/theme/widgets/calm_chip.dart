@@ -4,8 +4,7 @@ import '../app_colors.dart';
 import '../app_typography.dart';
 import '../mali_tokens.dart';
 
-/// CalmChip — the shared filter/choice pill (Calm Capital). Selected → ink
-/// (black in light, near-white in dark); unselected → raised surface +
+/// CalmChip — the shared filter/choice pill (Calm Capital). Selected → brand blue; unselected → raised surface +
 /// secondary text. Used for filter rows across the app; edit here to change
 /// every chip.
 class CalmChip extends StatelessWidget {
@@ -26,7 +25,7 @@ class CalmChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = MaliTokens.of(context);
-    final fg = selected ? c.onInk : c.textSecondary;
+    final fg = selected ? c.onCta : c.textSecondary;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
@@ -35,7 +34,7 @@ class CalmChip extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
         decoration: BoxDecoration(
-          color: selected ? c.ink : t.surfaceRaised,
+          color: selected ? c.cta : t.surfaceRaised,
           borderRadius: BorderRadius.circular(999),
         ),
         child: Row(

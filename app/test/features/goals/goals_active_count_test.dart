@@ -72,12 +72,19 @@ void main() {
         await tester.runAsync(() async => Future<void>.delayed(const Duration(milliseconds: 100)));
         await tester.pumpAndSettle();
         final l10n = AppL10n.of(tester.element(find.byType(GoalsScreen)));
-        final header = tester.widget<CalmPageHeader>(find.byType(CalmPageHeader));
+        final summary = find.byType(CalmFinancialSummary);
+        final header = tester.widget<CalmFinancialSummary>(summary);
+        final hero = find.byKey(const ValueKey('section-hero-goals'));
+        expect(find.descendant(of: hero, matching: find.text(l10n.bdgTabHistory)),
+            findsOneWidget);
         // Only the active count changes: all four EGP goals still enter totals.
-        expect(header.amount, formatMoney(Money(9007199260840995, 'EGP')));
-        expect(header.metrics!.singleWhere((m) => m.label == l10n.goalTargetLabel).value,
+        final saved = formatMoney(Money(9007199260840995, 'EGP'));
+        expect(header.amount, saved);
+        expect(find.descendant(of: summary, matching: find.text(saved)),
+            findsOneWidget);
+        expect(header.metrics.singleWhere((m) => m.label == l10n.goalTargetLabel).value,
             formatMoney(Money(9007199261240996, 'EGP')));
-        expect(header.metrics!.singleWhere((m) => m.label == l10n.bdgStatActiveGoals).value, '2');
+        expect(header.metrics.singleWhere((m) => m.label == l10n.bdgStatActiveGoals).value, '2');
         final scrollable = find.byType(Scrollable).first;
         for (final name in ['QA active', 'QA exact target', 'QA above target', 'QA exact minor active']) {
           await tester.scrollUntilVisible(find.text(name), 200, scrollable: scrollable);

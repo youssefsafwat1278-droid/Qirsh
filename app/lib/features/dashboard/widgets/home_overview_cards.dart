@@ -6,7 +6,6 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/mali_tokens.dart';
 import '../../../core/theme/widgets/mali_card.dart';
-import '../../../core/theme/widgets/ring_progress.dart';
 import '../../../core/utils/app_lucide_icons.dart';
 import '../../../core/utils/currency.dart';
 import '../../../core/utils/formatters.dart';
@@ -52,7 +51,8 @@ class CategorySpendCard extends StatelessWidget {
                   for (var i = 0; i < categories.length; i++) ...[
                     if (i > 0) const SizedBox(width: 3),
                     Expanded(
-                      flex: (categories[i].percent * 1000).round().clamp(8, 1000),
+                      flex:
+                          (categories[i].percent * 1000).round().clamp(8, 1000),
                       child: Container(
                         decoration: BoxDecoration(
                           color: categories[i].category.color,
@@ -73,8 +73,8 @@ class CategorySpendCard extends StatelessWidget {
     );
   }
 
-  Widget _row(BuildContext context, AppColors c, MaliTokens t,
-      CategorySlice slice,
+  Widget _row(
+      BuildContext context, AppColors c, MaliTokens t, CategorySlice slice,
       {required bool first}) {
     final prev = slice.previousTotal;
     String? delta;
@@ -90,9 +90,7 @@ class CategorySpendCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
-        border: first
-            ? null
-            : Border(top: BorderSide(color: t.cardBorder)),
+        border: first ? null : Border(top: BorderSide(color: t.cardBorder)),
       ),
       child: Row(
         children: [
@@ -154,7 +152,8 @@ class UpcomingPaymentsCard extends StatelessWidget {
     final t = MaliTokens.of(context);
     final today = _day(now);
     final dueDays = {for (final b in bills) _day(b.nextDueDate)};
-    final next = [...bills]..sort((a, b) => a.nextDueDate.compareTo(b.nextDueDate));
+    final next = [...bills]
+      ..sort((a, b) => a.nextDueDate.compareTo(b.nextDueDate));
 
     // Preserve the compact strip at ordinary size; grow only when the actual
     // localized, platform-scaled labels need more room. Reserve the due dot's
@@ -170,16 +169,21 @@ class UpcomingPaymentsCard extends StatelessWidget {
       painter.dispose();
       return size;
     }
+
     var stripHeight = 64.0;
     var dayWidth = 46.0;
     for (var i = 0; i < 14; i++) {
       final date = DateTime(today.year, today.month, today.day + i);
-      final weekday = labelSize(MaterialLocalizations.of(context)
-          .narrowWeekdays[date.weekday % 7], AppTypography.micro(t.textOnCanvasMuted));
-      final day = labelSize('${date.day}', AppTypography.subhead(t.textOnCanvasPrimary));
+      final weekday = labelSize(
+          MaterialLocalizations.of(context).narrowWeekdays[date.weekday % 7],
+          AppTypography.micro(t.textOnCanvasMuted));
+      final day = labelSize(
+          '${date.day}', AppTypography.subhead(t.textOnCanvasPrimary));
       final neededHeight = (weekday.height + day.height + 26).ceilToDouble();
-      final neededWidth = (weekday.width > day.width ? weekday.width : day.width)
-          .ceilToDouble() + 12;
+      final neededWidth =
+          (weekday.width > day.width ? weekday.width : day.width)
+                  .ceilToDouble() +
+              12;
       if (neededHeight > stripHeight) stripHeight = neededHeight;
       if (neededWidth > dayWidth) dayWidth = neededWidth;
     }
@@ -290,11 +294,14 @@ class UpcomingPaymentsCard extends StatelessWidget {
               children: [
                 AppAvatar.brand(name: b.lenderName ?? b.name),
                 const SizedBox(width: 12),
-                Expanded(child: Column(
+                Expanded(
+                    child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(b.name, style: AppTypography.bodyStrong(t.textOnCanvasPrimary)),
-                    Text(subtitle, style: AppTypography.caption(t.textOnCanvasMuted)),
+                    Text(b.name,
+                        style: AppTypography.bodyStrong(t.textOnCanvasPrimary)),
+                    Text(subtitle,
+                        style: AppTypography.caption(t.textOnCanvasMuted)),
                   ],
                 )),
               ],
@@ -306,16 +313,20 @@ class UpcomingPaymentsCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 6,
               children: [
-                Text(privacyMode ? '••••'
-                    : '\u2066−${formatMoney(b.amountMoney)}\u2069 ${Currency.label(context, b.currency.toUpperCase())}',
+                Text(
+                    privacyMode
+                        ? '••••'
+                        : '\u2066−${formatMoney(b.amountMoney)}\u2069 ${Currency.label(context, b.currency.toUpperCase())}',
                     style: AppTypography.bodyStrong(t.textOnCanvasPrimary)),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: (soon ? c.warning : c.cta).withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(AppRadius.pill),
                   ),
-                  child: Text(when, style: AppTypography.micro(soon ? c.warning : c.cta)),
+                  child: Text(when,
+                      style: AppTypography.micro(soon ? c.warning : c.cta)),
                 ),
               ],
             ),
@@ -378,8 +389,7 @@ class UpcomingPaymentsCard extends StatelessWidget {
   }
 }
 
-/// «أهدافي وخططي» — goals and plans as rings in one horizontal rail, ending
-/// with a "new goal" card.
+/// Compact goal and plan cards with a separate action to create a goal.
 class GoalsPlansRail extends StatelessWidget {
   const GoalsPlansRail({
     super.key,
@@ -399,19 +409,26 @@ class GoalsPlansRail extends StatelessWidget {
   final VoidCallback onNewGoal;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) =>
+            _buildRail(context, constraints.maxWidth),
+      );
+
+  Widget _buildRail(BuildContext context, double availableWidth) {
     final c = context.colors;
-    final t = MaliTokens.of(context);
+    final count = goals.length + plans.length;
+    final width = count == 1
+        ? availableWidth
+        : ((availableWidth - AppSpacing.s2) / 2).clamp(148.0, 220.0);
     final cards = <Widget>[
       for (final g in goals)
         _card(
           context,
-          t,
+          width: width,
           name: g.name,
+          label: context.l10n.homeTileGoal,
           photo: qirshGoalPhoto(g.vaultSkin),
-          ratio: g.targetAmount > 0
-              ? (g.savedAmount / g.targetAmount).clamp(0.0, 1.0)
-              : 0.0,
+          ratio: g.targetAmount > 0 ? g.savedAmount / g.targetAmount : 0,
           color: c.income,
           line: privacyMode
               ? '•••• / ••••'
@@ -421,89 +438,111 @@ class GoalsPlansRail extends StatelessWidget {
       for (final p in plans)
         _card(
           context,
-          t,
+          width: width,
           name: p.plan.name,
-          ratio: p.ratio.clamp(0.0, 1.0),
+          label: context.l10n.homeTilePlan,
+          ratio: p.ratio,
           color: p.isOver ? c.danger : c.cta,
           line: p.perDayLeft.isZero
-              ? context.l10n.planSpent(privacyMode ? '••••' : formatMoney(p.spent))
-              : context.l10n.planPerDayLeft(privacyMode ? '••••' : formatMoney(p.perDayLeft)),
+              ? context.l10n
+                  .planSpent(privacyMode ? '••••' : formatMoney(p.spent))
+              : context.l10n.planPerDayLeft(
+                  privacyMode ? '••••' : formatMoney(p.perDayLeft)),
           onTap: onPlanTap,
         ),
-      SizedBox(
-        width: 120,
-        child: InkWell(
-          onTap: onNewGoal,
-          borderRadius: BorderRadius.circular(AppRadius.xxl),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.xxl),
-              border: Border.all(color: c.cta.withValues(alpha: 0.4)),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(bottom: 6),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(AppLucideIcons.plus, color: c.cta),
-                const SizedBox(height: 6),
-                Text(context.l10n.homeNewGoal,
-                    style: AppTypography.footnote(c.cta)),
+                for (var i = 0; i < cards.length; i++) ...[
+                  if (i > 0) const SizedBox(width: AppSpacing.s2),
+                  cards[i],
+                ],
               ],
             ),
           ),
         ),
-      ),
-    ];
-    return SizedBox(
-      height: 222,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        itemCount: cards.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
-        itemBuilder: (_, i) => cards[i],
-      ),
+        TextButton.icon(
+          onPressed: onNewGoal,
+          icon: const Icon(AppLucideIcons.plus, size: 16),
+          label: Text(context.l10n.homeNewGoal),
+        ),
+      ],
     );
   }
 
   Widget _card(
-    BuildContext context,
-    MaliTokens t, {
+    BuildContext context, {
+    required double width,
     required String name,
+    required String label,
     QirshPhoto? photo,
     required double ratio,
     required Color color,
     required String line,
     required VoidCallback onTap,
   }) {
+    final t = MaliTokens.of(context);
     return SizedBox(
-      width: 156,
+      width: width,
       child: MaliCard(
+        style: MaliSurfaceStyle.raised,
         onTap: onTap,
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            if (photo != null)
-              ClipRRect(borderRadius: BorderRadius.circular(14),
-                child: QirshPhotoFrame(photo: photo, height: 86, width: double.infinity))
-            else RingProgress(
-              value: ratio,
-              size: 56,
-              strokeWidth: 6,
-              color: color,
-              child: Text('${(ratio * 100).round()}%',
-                  style: AppTypography.label(t.textOnCanvasPrimary)),
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: photo == null
+                      ? Container(
+                          width: 38,
+                          height: 38,
+                          color: color.withValues(alpha: 0.12),
+                          child: Icon(AppLucideIcons.calendar,
+                              color: color, size: 18),
+                        )
+                      : QirshPhotoFrame(photo: photo, height: 38, width: 38),
+                ),
+                const SizedBox(width: AppSpacing.s2),
+                Expanded(
+                  child: Text(label,
+                      style: AppTypography.caption(t.textOnCanvasMuted)),
+                ),
+              ],
             ),
-            const Spacer(),
+            const SizedBox(height: AppSpacing.s2),
             Text(name,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.bodyStrong(t.textOnCanvasPrimary)),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Text(line,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: AppTypography.micro(t.textOnCanvasMuted)),
+                style: AppTypography.caption(t.textOnCanvasSecondary)),
+            if (!privacyMode) ...[
+              const Spacer(),
+              const SizedBox(height: AppSpacing.s2),
+              LinearProgressIndicator(
+                value: ratio.clamp(0, 1),
+                minHeight: 5,
+                borderRadius: BorderRadius.circular(4),
+                backgroundColor: t.ringTrackNeutral,
+                color: color,
+                semanticsLabel: name,
+              ),
+            ],
           ],
         ),
       ),

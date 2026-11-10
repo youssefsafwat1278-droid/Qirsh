@@ -37,7 +37,11 @@ void main() {
               'receivedAt': '2026-04-08T09:45:00.000Z',
               'createdAt': '2026-04-09T00:00:00.000Z',
             },
-            {'id': 'b', 'text': 'raw b', 'createdAt': '2026-04-09T00:00:00.000Z'},
+            {
+              'id': 'b',
+              'text': 'raw b',
+              'createdAt': '2026-04-09T00:00:00.000Z'
+            },
             {'id': 'c', 'text': 'raw c'},
             {'id': 7, 'text': 'bad'},
             'junk',
@@ -66,6 +70,24 @@ void main() {
   });
 
   group('CAP-7 channel calls', () {
+    test(
+        'notification language uses the app choice and defaults unsupported languages to English',
+        () async {
+      fake((_) async => null);
+      await NativeCaptureBridge.setNotificationLanguage('ar_EG');
+      await NativeCaptureBridge.setNotificationLanguage('en');
+      await NativeCaptureBridge.setNotificationLanguage('fr');
+      expect(
+          calls.map((c) => c.method), everyElement('setNotificationLanguage'));
+      expect(calls.map((c) => c.arguments), [
+        {'language': 'ar'},
+        {'language': 'en'},
+        {'language': 'en'},
+      ]);
+      fake((_) async => throw PlatformException(code: 'unavailable'));
+      await NativeCaptureBridge.setNotificationLanguage('ar');
+    });
+
     test('setCaptureNotifyV2 passes the flag; a failure is swallowed',
         () async {
       fake((_) async => null);

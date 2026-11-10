@@ -4,10 +4,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildAccountDeletionCoordinator } from './account_deletion_adapter.ts';
 import { createChallengePort, resolveDeletionCollaborators } from './account_deletion_wiring.ts';
+import { createAlternateDeletionProof } from './account_deletion_alternate_proof.ts';
+import { verifyGoogleProof } from './google_identity_proof.ts';
 
 export async function buildDeletionRuntime() {
   const url = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const db = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
   const rpc = { rpc: (fn: string, args: Record<string, unknown>) => db.rpc(fn, args) as never };
   const getUser = async (jwt: string) => {
@@ -24,6 +27,7 @@ export async function buildDeletionRuntime() {
     rpc,
     identity: { getUser },
     apple,
+    alternateProof: createAlternateDeletionProof({ rpc, now: Date.now, verifyGoogle: verifyGoogleProof }),
     sealer,
     storage: db.storage as never,
     authAdmin: {
@@ -46,6 +50,15 @@ export async function buildDeletionRuntime() {
     ? createChallengePort({
       rpc,
       getUser,
+      sendEmailCode: async (bearerToken) => {
+        if (!anonKey) throw new Error('email_proof_unconfigured');
+        const response = await fetch(`${url}/auth/v1/reauthenticate`, {
+          headers: { apikey: anonKey, authorization: `Bearer ${bearerToken}` },
+          signal: AbortSignal.timeout(10_000),
+        });
+        await response.body?.cancel().catch(() => {});
+        if (!response.ok) throw new Error('deletion_email_send_failed');
+      },
       isAdmin: async (uid) => {
         const { data, error } = await db.from('admin_users').select('id').eq('id', uid).maybeSingle();
         if (error) throw new Error('admin_check_failed');

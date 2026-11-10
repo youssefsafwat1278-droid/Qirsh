@@ -94,6 +94,16 @@ class BudgetAlertPlanner {
       if (ratio >= thresholds[i] / 100) crossed = i;
     }
     if (crossed < 0) return null;
+    final budget = entry.budget;
+    if (budget.lastNotifiedPeriodStart.isAtSameMomentAs(entry.periodStart)) {
+      final previous = BigInt.from(budget.lastNotifiedSpentMoney.minorUnits);
+      final limit = BigInt.from(budget.amountMoney.minorUnits);
+      final alreadyReached = previous * BigInt.from(100) >=
+          limit * BigInt.from(thresholds[crossed]);
+      final furtherOver = thresholds[crossed] == 100 &&
+          (BigInt.from(entry.spent.minorUnits) - previous) * BigInt.from(10) >= limit;
+      if (alreadyReached && !furtherOver) return null;
+    }
     final percent = thresholds[crossed];
     // The dedup bucket is the PERCENTAGE, not the index. Two budgets with
     // different thresholds then never share a notification id, and a user who
@@ -110,7 +120,6 @@ class BudgetAlertPlanner {
         percent != BudgetEntity.normalizeAlertThreshold(
             entry.budget.alertThresholdPercent);
 
-    final budget = entry.budget;
     final daysTotal =
         entry.periodEnd.difference(entry.periodStart).inDays.clamp(1, 3660);
     final daysPassed =

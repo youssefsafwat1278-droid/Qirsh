@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/capture/services/local_notification_service.dart';
+import '../../features/capture/services/native_capture_bridge.dart';
 import '../../features/settings/settings_providers.dart';
+import '../security/lock_prompt_language.dart';
 
 /// The app's language, held across a settings reload.
 ///
@@ -26,7 +30,8 @@ final localeProvider = Provider<Locale>((ref) {
   final chosen = ref.watch(preSignInLanguageProvider);
   if (chosen != null) return Locale(chosen);
   final settings = ref.watch(userSettingsProvider).valueOrNull;
-  return settings?.language == 'ar' ? const Locale('ar') : const Locale('en');
+  final language = settings?.language ?? LockPromptLanguage.initialSettingsLanguage;
+  return language == 'ar' ? const Locale('ar') : const Locale('en');
 });
 
 /// A language picked on the sign-in screen when the settings row cannot be
@@ -47,5 +52,11 @@ final preSignInLanguageProvider = StateProvider<String?>((ref) => null);
 final notificationLanguageSyncProvider = Provider<String>((ref) {
   final code = ref.watch(localeProvider).languageCode;
   LocalNotificationService.instance.notificationLanguage = code;
+  // Keep the saved choice available to Shortcuts when Flutter is closed. Do
+  // not replace it with the temporary first-frame default while settings load.
+  if (ref.watch(preSignInLanguageProvider) != null ||
+      ref.watch(userSettingsProvider).valueOrNull != null) {
+    unawaited(NativeCaptureBridge.setNotificationLanguage(code));
+  }
   return code;
 });

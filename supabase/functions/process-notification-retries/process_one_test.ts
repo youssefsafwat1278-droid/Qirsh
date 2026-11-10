@@ -26,7 +26,7 @@ const allowed: Fence = {
 };
 
 // deno-lint-ignore no-explicit-any
-function fakeSupabase(fence: Fence | null, rpcError = false): { client: any; updates: RecordedUpdate[]; rpcs: unknown[] } {
+function fakeSupabase(fence: Fence | null, rpcError = false, notification: unknown = null): { client: any; updates: RecordedUpdate[]; rpcs: unknown[] } {
   const updates: RecordedUpdate[] = [];
   const rpcs: unknown[] = [];
   const client = {
@@ -39,6 +39,8 @@ function fakeSupabase(fence: Fence | null, rpcError = false): { client: any; upd
       const filters: Array<[string, unknown]> = [];
       let recorded = false;
       const builder = {
+        select(_columns: string) { return builder; },
+        maybeSingle() { return Promise.resolve({ data: { notification }, error: null }); },
         update(values: Record<string, unknown>) {
           updateValues = values;
           return builder;
@@ -130,6 +132,29 @@ Deno.test('allowed retry sends a GENERIC alert to the fence-returned (current) t
   assertEquals(sent[0].notificationType, 'needs_review');
   assert(fake.updates.some((u) => u.table === 'processed_captures' && typeof u.values.apns_push_sent_at === 'string'));
   assert(resolved(fake.updates));
+});
+
+Deno.test('retry preserves the opted-in summary instead of replacing it with generic text', async () => {
+  const alert = { title: 'New purchase 🛒', body: '250.00 EGP · CARREFOUR' };
+  const fake = fakeSupabase(allowed, false, { pushAlert: alert });
+  const sent: Array<Record<string, unknown>> = [];
+  assertEquals(await processOne(fake.client, row, (message) => {
+    sent.push({ ...message });
+    return Promise.resolve({ ok: true, apnsId: 'a' } as const);
+  }), 'sent');
+  assertEquals(sent[0].body, alert.body);
+  assertEquals(sent[0].title, alert.title);
+});
+
+Deno.test('a hidden Arabic notification keeps its language on retry', async () => {
+  const fake = fakeSupabase(allowed, false, { pushLanguage: 'ar' });
+  const sent: Array<Record<string, unknown>> = [];
+  assertEquals(await processOne(fake.client, row, (message) => {
+    sent.push({ ...message });
+    return Promise.resolve({ ok: true, apnsId: 'a' } as const);
+  }), 'sent');
+  assertEquals(sent[0].title, '');
+  assertEquals(sent[0].body, 'تم رصد عملية جديدة');
 });
 
 Deno.test('dead token (410 Unregistered) is cleared by compare-and-swap and the retry ends', async () => {

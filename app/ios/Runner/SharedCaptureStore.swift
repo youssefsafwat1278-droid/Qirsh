@@ -34,6 +34,7 @@ enum SharedCaptureStore {
   private static let contractV2Key = "capture_contract_v2"
   private static let notifyV2Key = "capture_notify_v2"
   private static let hideCaptureDetailsKey = "capture_hide_details"
+  private static let notificationLanguageKey = "capture_notification_language"
   private static let expiredUnboundCountKey = "capture_unbound_expired_count_v1"
   private static let expiredUnboundLastKey = "capture_unbound_expired_last_v1"
   private static let legacyKey = "pending_bank_message_text"
@@ -254,10 +255,10 @@ enum SharedCaptureStore {
       }
     }
 
-    /// User-facing copy (approved, R9). Arabic when the device's preferred
+    /// User-facing copy (approved, R9). Arabic when the app's selected
     /// language is Arabic, English otherwise. Never carries technical text.
     var userMessage: String {
-      let arabic = Locale.preferredLanguages.first?.lowercased().hasPrefix("ar") == true
+      let arabic = notificationLanguage == "ar"
       switch self {
       case .emptyText:
         return arabic
@@ -404,7 +405,7 @@ enum SharedCaptureStore {
     let cleanSource = clean(source)
     let receivedAtString = isoFormatter.string(from: receivedAt)
     let createdAtString = isoFormatter.string(from: Date())
-    let locale = clean(localeIdentifier) ?? Locale.autoupdatingCurrent.identifier
+    let locale = clean(localeIdentifier) ?? notificationLanguage
     // A caller-supplied ID (the App Intent's backend payload ID) wins so the
     // queue entry and the processed_captures row always share one identity.
     let payloadID = payloadID ?? makePayloadID(
@@ -638,6 +639,29 @@ enum SharedCaptureStore {
       captureContractV2: defaults?.bool(forKey: contractV2Key) ?? false,
       captureNotifyV2: defaults?.bool(forKey: notifyV2Key) ?? false
     )
+  }
+
+  /// Presentation only: does not grant capture ownership or cloud consent.
+  static let shortcutSetupProbe = "QIRSH_SETUP_CHECK_V1"
+
+  static func recordShortcutSetupProbe() {
+    defaults?.set(Date().timeIntervalSince1970 * 1000, forKey: "shortcut_setup_probe_ms")
+    defaults?.synchronize()
+  }
+
+  static var shortcutSetupProbeMilliseconds: Double {
+    defaults?.synchronize()
+    return defaults?.double(forKey: "shortcut_setup_probe_ms") ?? 0
+  }
+
+  static func setNotificationLanguage(_ code: String) {
+    let language = code.lowercased().components(separatedBy: CharacterSet(charactersIn: "-_")).first == "ar" ? "ar" : "en"
+    defaults?.set(language, forKey: notificationLanguageKey)
+    defaults?.synchronize()
+  }
+
+  static var notificationLanguage: String {
+    defaults?.string(forKey: notificationLanguageKey) == "ar" ? "ar" : "en"
   }
 
   /// CAP-7: mirrors the `capture_notify_v2` flag for the App Intent.
@@ -978,7 +1002,7 @@ enum SharedCaptureStore {
       senderId: nil,
       source: "legacy",
       receivedAt: receivedAt,
-      locale: Locale.autoupdatingCurrent.identifier,
+      locale: notificationLanguage,
       status: CaptureStatus.pending.rawValue,
       failureReason: nil,
       sentAt: nil,

@@ -95,17 +95,21 @@ sealed class ImmediateChallengeResult {
   const ImmediateChallengeResult();
 }
 
+enum DeletionProofMethod { apple, google, email }
+
 final class ImmediateChallengeIssued extends ImmediateChallengeResult {
   const ImmediateChallengeIssued({
     required this.challengeId,
     required this.nonce,
     required this.expiresAtMs,
+    this.method = DeletionProofMethod.apple,
   });
   final String challengeId;
 
   /// Raw nonce, returned once. Never log or persist it.
   final String nonce;
   final int expiresAtMs;
+  final DeletionProofMethod method;
   @override
   String toString() => 'ImmediateChallengeIssued';
 }
@@ -158,14 +162,20 @@ ImmediateChallengeResult _interpretChallenge(http.Response r) {
     final id = json?['challenge_id'];
     final nonce = json?['nonce'];
     final expires = json?['expires_at_ms'];
+    final method = switch (json?['proof_method']) {
+      null || 'apple' => DeletionProofMethod.apple,
+      'google' => DeletionProofMethod.google,
+      'email' => DeletionProofMethod.email,
+      _ => null,
+    };
     if (id is String &&
         _challengeTokenRe.hasMatch(id) &&
         nonce is String &&
         _challengeTokenRe.hasMatch(nonce) &&
         expires is num &&
-        expires > 0) {
+        expires > 0 && method != null) {
       return ImmediateChallengeIssued(
-          challengeId: id, nonce: nonce, expiresAtMs: expires.toInt());
+          challengeId: id, nonce: nonce, expiresAtMs: expires.toInt(), method: method);
     }
     return const ImmediateChallengeFailed(
         retryable: true, code: 'invalid_response');
@@ -510,7 +520,7 @@ class ImmediateAccountDeletionRecovery {
 
   /// Challenge issuance for the captured, still-current binding. Not a deletion
   /// request: it touches no receipt and never retries.
-  Future<ImmediateChallengeResult> challenge() async {
+  Future<ImmediateChallengeResult> challenge({bool? emailOnly}) async {
     final epoch = gate.epoch;
     ImmediateDeletionBinding binding;
     try {
@@ -529,7 +539,10 @@ class ImmediateAccountDeletionRecovery {
       return const ImmediateChallengeFailed(
           retryable: true, code: 'stale_context');
     }
-    final serialized = jsonEncode(<String, Object>{'action': 'challenge'});
+    final serialized = jsonEncode(<String, Object>{
+      'action': 'challenge',
+      if (emailOnly != null) ...{'proof_version': 2, 'email_only': emailOnly},
+    });
     ImmediateChallengeResult result;
     try {
       result = await gate.runImmediateDeletion(

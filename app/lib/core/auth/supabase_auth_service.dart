@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
@@ -44,6 +45,15 @@ String appleHashedNonce(String rawNonce) =>
 /// could never complete a callback.
 const String kGoogleIosClientId =
     '881903820931-c4cttgekf9d3tcv3j2lt10ao2upk4b1m.apps.googleusercontent.com';
+
+/// Requests a Google credential bound to the caller's nonce without replacing
+/// the Qirsh session. Also used by account deletion to prove the linked subject.
+Future<Map<String, String>?> authorizeIosGoogle(String nonce) =>
+    const MethodChannel('mali/google_authorization')
+        .invokeMapMethod<String, String>('authorize', {
+      'clientId': kGoogleIosClientId,
+      'nonce': appleHashedNonce(nonce),
+    });
 
 /// The WEB/server OAuth client, supplied at build time.
 ///
@@ -170,12 +180,55 @@ class SupabaseAuthService implements AuthService {
   }
 
   @override
-  Future<AuthIdentity> signInWithGoogle() async {
+  Future<AuthIdentity> signInWithGoogle() => _exchangeGoogle(create: false);
+
+  @override
+  Future<AuthIdentity> signUpWithGoogle() => _exchangeGoogle(create: true);
+
+  Future<AuthIdentity> _exchangeGoogle({required bool create}) async {
+    final tokens = await _googleTokens();
+    final response = await _accountControl(() async {
+      if (create) {
+        final permit = await _client.functions.invoke('google-enrollment', body: {
+          'id_token': tokens.idToken,
+          'nonce': tokens.nonce == null ? null : appleHashedNonce(tokens.nonce!),
+        });
+        final result = permit.data;
+        if (permit.status != 200 || result is! Map || result['allowed'] != true) {
+          throw const AuthException('google_enrollment_unavailable');
+        }
+      }
+      return _client.auth.signInWithIdToken(
+        provider: supabase.OAuthProvider.google,
+        idToken: tokens.idToken,
+        accessToken: tokens.accessToken,
+        nonce: tokens.nonce,
+      );
+    });
+    return AuthIdentity(isCurrent: _responseCurrent(response), method: 'google',
+      email: response.user?.email ?? tokens.email, userId: response.user?.id);
+  }
+
+  Future<({String idToken, String? accessToken, String? email, String? nonce})>
+      _googleTokens() async {
     if (!googleSignInConfigured(platform: _platform)) {
       // Honest failure: nothing about the user's action was wrong.
       throw const AuthConfigurationException(
         'تسجيل الدخول بجوجل غير متاح في هذه النسخة. استخدم طريقة أخرى.',
       );
+    }
+    if (_platform == TargetPlatform.iOS) {
+      final nonce = generateAppleRawNonce();
+      final tokens = await authorizeIosGoogle(nonce);
+      if (tokens == null) {
+        throw const AuthCancelledException('تم إلغاء تسجيل الدخول بجوجل.');
+      }
+      final idToken = tokens['idToken'];
+      final accessToken = tokens['accessToken'];
+      if (idToken == null || idToken.isEmpty || accessToken == null || accessToken.isEmpty) {
+        throw const AuthException('لم نستطع قراءة رمز دخول جوجل.');
+      }
+      return (idToken: idToken, accessToken: accessToken, email: null, nonce: nonce);
     }
     final account = await _googleSignIn.signIn();
     if (account == null) {
@@ -186,23 +239,69 @@ class SupabaseAuthService implements AuthService {
     if (idToken == null || idToken.isEmpty) {
       throw const AuthException('لم نستطع قراءة رمز دخول جوجل.');
     }
-    // The native iOS Google Sign-In SDK generates and hashes its own nonce
-    // inside the id_token without exposing the raw value, so we can't pass a
-    // matching nonce here. Supabase's Google provider must have "Skip nonce
-    // checks" enabled for this native flow to be accepted.
-    final response = await _accountControl(() => _client.auth.signInWithIdToken(
-          provider: supabase.OAuthProvider.google,
-          idToken: idToken,
-          accessToken: auth.accessToken,
-        ));
-    final email = response.user?.email ?? account.email;
-    return AuthIdentity(
-      isCurrent: _responseCurrent(response),
-      method: 'google',
-      email: email,
-      userId: response.user?.id,
+    return (idToken: idToken, accessToken: auth.accessToken, email: account.email, nonce: null);
+  }
+
+  Future<T> _identityControl<T>(String owner, bool Function() current,
+      Future<T> Function() exchange) {
+    final coordinator = AuthCoordinator.active;
+    if (coordinator == null || !current() || _client.auth.currentUser?.id != owner) {
+      throw const AuthException('identity_not_current');
+    }
+    return CloudEgressGate.instance.runAccountControl(
+      AccountControlOp.linkIdentity,
+      () => coordinator.updateLinkedIdentity(
+          owner: owner, current: current, exchange: exchange),
+      linking: (owner: owner, current: current),
     );
   }
+
+  Future<void> linkGoogleIdentity({required String owner, required bool Function() current}) async {
+    final tokens = await _googleTokens();
+    await _identityControl(owner, current, () async {
+      final response = await _client.auth.linkIdentityWithIdToken(
+        provider: supabase.OAuthProvider.google, idToken: tokens.idToken,
+        accessToken: tokens.accessToken, nonce: tokens.nonce);
+      if (response.user?.id != owner) throw const AuthException('identity_owner_changed');
+    });
+  }
+
+  Future<void> sendEmailLink({required String owner, required String email,
+      required bool Function() current}) => _identityControl(owner, current, () async {
+    if (_client.auth.currentUser?.email?.toLowerCase() == email.trim().toLowerCase()) {
+      await _client.auth.signInWithOtp(email: email.trim(), shouldCreateUser: false);
+    } else {
+      await _client.auth.updateUser(supabase.UserAttributes(email: email.trim()));
+    }
+  });
+
+  /// Returns false when secure email change still needs the old address's code.
+  Future<bool> verifyEmailLink({required String owner, required String email,
+      required String code, required bool confirmingCurrentEmail, required String currentEmail,
+      required bool Function() current}) => _identityControl(owner, current, () async {
+    try {
+      final sameEmail = currentEmail.toLowerCase() == email.trim().toLowerCase();
+      await _client.auth.verifyOTP(email: confirmingCurrentEmail ? currentEmail : email.trim(), token: code.trim(),
+        type: sameEmail ? supabase.OtpType.email : supabase.OtpType.emailChange);
+    } on supabase.AuthException catch (error) {
+      // Secure email change returns HTTP 200 without a session after the first
+      // confirmation. The pinned SDK reports this precise local error.
+      // The next step must still establish the same owner's session with the
+      // requested verified email. API errors are never swallowed.
+      if (confirmingCurrentEmail || currentEmail.isEmpty ||
+          currentEmail.toLowerCase() == email.trim().toLowerCase() ||
+          error.runtimeType != supabase.AuthException ||
+          error.message != 'An error occurred on token verification.') {
+        rethrow;
+      }
+      return false;
+    }
+    final user = _client.auth.currentUser;
+    if (user?.id != owner || user?.email?.toLowerCase() != email.trim().toLowerCase()) {
+      throw const AuthException('email_confirmation_incomplete');
+    }
+    return true;
+  });
 
   /// Monotonic per-attempt marker. Each Apple sign-in owns its nonce as a LOCAL
   /// value (so two concurrent attempts can never share or overwrite one), and
@@ -269,10 +368,16 @@ class SupabaseAuthService implements AuthService {
   }
 
   @override
-  Future<void> sendEmailCode(String email) async {
-    await _accountControl(() => _client.auth.signInWithOtp(email: email),
-        establishesSession: false);
-  }
+  Future<void> sendEmailCode(String email) => _sendEmailCode(email, create: false);
+
+  @override
+  Future<void> sendEmailSignupCode(String email) => _sendEmailCode(email, create: true);
+
+  Future<void> _sendEmailCode(String email, {required bool create}) =>
+      _accountControl(
+        () => _client.auth.signInWithOtp(email: email.trim(), shouldCreateUser: create),
+        establishesSession: false,
+      );
 
   @override
   Future<AuthIdentity?> verifyEmailCode({

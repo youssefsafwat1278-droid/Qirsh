@@ -22,6 +22,7 @@ import 'package:money_companion/core/session/app_session.dart';
 import 'package:money_companion/core/session/capture_queue.dart';
 import 'package:money_companion/core/session/local_read_authority.dart';
 import 'package:money_companion/core/startup/bootstrap_runner.dart';
+import 'package:money_companion/core/startup/automatic_session_recovery.dart';
 import 'package:money_companion/features/app/app_boot_loader.dart';
 import 'package:money_companion/features/app/app_shell.dart';
 import 'package:money_companion/features/app/local_read_shell.dart';
@@ -370,6 +371,25 @@ void main() {
             .evaluate()
             .isNotEmpty);
   }
+
+  caseWidgets('home route removes recovery loader without changing its URI', (tester) async {
+    final (_, _, client) = await world(tester);
+    await pumpShell(tester, client);
+    try {
+      AutomaticSessionRecovery.restoringSession.value = true;
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(AppBootLoader), findsWidgets);
+      AutomaticSessionRecovery.restoringSession.value = false;
+      await tester.pump();
+      await tester.pump();
+      expect(appRouter.routeInformationProvider.value.uri.path, '/');
+      expect(find.byType(AppBootLoader), findsNothing);
+      expect(find.byType(LocalReadShell), findsOneWidget);
+    } finally {
+      AutomaticSessionRecovery.restoringSession.value = false;
+    }
+  });
 
   caseWidgets(
       'expired SDK: recovery prompt preserves existing data and offers sign-in/logout, with '

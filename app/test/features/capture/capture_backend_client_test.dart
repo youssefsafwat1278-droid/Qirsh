@@ -7,6 +7,25 @@ import 'package:http/testing.dart';
 import 'package:money_companion/features/capture/services/capture_backend_client.dart';
 
 void main() {
+  for (final showDetails in [true, false]) {
+    test('replayed capture preserves notification details preference: $showDetails', () async {
+      late Request sent;
+      final client = CaptureBackendClient(
+        supabaseUrl: 'https://example.supabase.co', anonKey: 'anon',
+        notificationDetails: showDetails,
+        httpClient: MockClient((request) async {
+          sent = request;
+          return Response('{}', 200);
+        }),
+      );
+      await client.processIosSms(
+        installId: 'i', deviceSecret: 's', payloadId: 'p', smsText: 'sanitized',
+        receivedAt: DateTime.utc(2026), allowAi: true, ownerUid: 'u', ownerGeneration: 1,
+      );
+      expect((jsonDecode(sent.body) as Map)['notificationDetails'], showDetails);
+    });
+  }
+
   test('pending-send retry preserves payload id and AI consent', () async {
     late Request sent;
     final client = CaptureBackendClient(

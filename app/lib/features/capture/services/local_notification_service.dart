@@ -605,7 +605,7 @@ class LocalNotificationService {
     );
   }
 
-  Future<void> showBudgetAlert({
+  Future<bool> showBudgetAlert({
     required String title,
     required String body,
     required NotificationType type,
@@ -613,7 +613,7 @@ class LocalNotificationService {
     Future<void> Function(NotificationHistoryEntry)? storeHistory,
     required int notifId,
   }) async {
-    await _show(
+    return _show(
       storeHistory: storeHistory,
       // MALI-061n §3 — the caller always supplies a stable
       // budgetAlertNotificationId(budgetId, periodStart, bucket); no display-text
@@ -878,9 +878,9 @@ class LocalNotificationService {
           presentSound: true,
         ),
       ),
-      payload: const CaptureNotificationPayload(
+      payload: CaptureNotificationPayload(
         kind: 'goals',
-        route: '/budgets',
+        route: '/goals/${Uri.encodeComponent(notification.goalId)}',
       ).encode(),
     );
   }
@@ -914,7 +914,7 @@ class LocalNotificationService {
     return (title, body);
   }
 
-  Future<void> _show({
+  Future<bool> _show({
     required int id,
     required String title,
     required String body,
@@ -928,7 +928,7 @@ class LocalNotificationService {
     debugPrint(
         '[Notif] _show type=$notificationType enabled=${preferences.isEnabled(notificationType)}');
     if (!preferences.isEnabled(notificationType)) {
-      return;
+      return false;
     }
 
     // A send that finishes after an account switch keeps its original store.
@@ -984,7 +984,7 @@ class LocalNotificationService {
         await _recordSent(logId, notificationType);
         await _recordHistory(
             id, title, body, notificationType, effectivePayload, store);
-        return;
+        return true;
       }
 
       // MALI-019 §9 — never log the rendered title/body (may hold merchant/
@@ -1000,12 +1000,14 @@ class LocalNotificationService {
       debugPrint('[Notif] plugin.show done');
       await _recordSent(logId, notificationType);
       await _recordHistory(id, title, body, notificationType, effectivePayload, store);
+      return true;
     } catch (error, stackTrace) {
       // A show/schedule failure must never crash the caller (many call sites
       // are unawaited fire-and-forget) — record it and stop here instead of
       // rethrowing. See docs/NOTIFICATION_PIPELINE_AUDIT.md.
       debugPrint('[Notif] show/schedule failed: $error');
       await _recordFailed(logId, notificationType, error, stackTrace);
+      return false;
     }
   }
 
@@ -1063,12 +1065,13 @@ class LocalNotificationService {
     String? logId,
     NotificationType notificationType,
   ) {
-    if (logId == null) return originalPayload;
+    final section = notificationSectionRoute(notificationType.name);
+    if (logId == null && section == null) return originalPayload;
     final base = decoded ?? const CaptureNotificationPayload(kind: '');
     return CaptureNotificationPayload(
       kind: base.kind,
       transactionId: base.transactionId,
-      route: base.route,
+      route: base.route ?? section,
       notificationLogId: logId,
       notificationType: notificationType.name,
     ).encode();
@@ -1177,8 +1180,11 @@ class LocalNotificationService {
   String? _extractTransactionId(String? payload) =>
       CaptureNotificationPayload.tryDecode(payload)?.transactionId;
 
-  String? _extractRoute(String? payload) =>
-      CaptureNotificationPayload.tryDecode(payload)?.route;
+  String? _extractRoute(String? payload) {
+    final decoded = CaptureNotificationPayload.tryDecode(payload);
+    if (decoded?.kind == 'goals' && decoded?.route == '/budgets') return '/goals';
+    return decoded?.route ?? notificationSectionRoute(decoded?.notificationType);
+  }
 
   /// Records the 'opened' lifecycle event for a foreground tap or
   /// Confirm/Dismiss quick action — both are `didReceive response:` on iOS,
@@ -1336,8 +1342,9 @@ class LocalNotificationService {
 
   String? _routeFor(String? payload) {
     return switch (payload) {
+      'transactions' => '/transactions',
       'reports' => '/reports',
-      'bills' => '/',
+      'bills' => '/subscriptions',
       _ => null,
     };
   }

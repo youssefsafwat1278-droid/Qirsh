@@ -21,6 +21,7 @@ import 'core/theme/font_licenses.dart';
 import 'data/db/planning_canonical_invariants.dart';
 import 'data/db/planning_cutover.dart';
 import 'features/app/startup_loading_screen.dart';
+import 'core/startup/automatic_session_recovery.dart';
 import 'core/utils/app_lucide_icons.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
@@ -96,6 +97,7 @@ class _StartupAppState extends State<StartupApp> {
   void initState() {
     super.initState();
     _runner = widget.runner ?? BootstrapRunner();
+    AutomaticSessionRecovery.recoveryTimedOut.addListener(_onAccountScopeChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _attempt();
     });
@@ -122,6 +124,7 @@ class _StartupAppState extends State<StartupApp> {
   @override
   void dispose() {
     _accountScope?.removeListener(_onAccountScopeChanged);
+    AutomaticSessionRecovery.recoveryTimedOut.removeListener(_onAccountScopeChanged);
     _clearDeferredRetry();
     super.dispose();
   }
@@ -232,12 +235,11 @@ class _StartupAppState extends State<StartupApp> {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      // The bootstrap app carried no localizations at all, so everything it
-      // shows — the loading screen, the timeout, the database-recovery view —
-      // was necessarily a hardcoded Arabic literal. The saved language cannot
-      // be read yet (the database is exactly what has not opened), so resolve
-      // against the DEVICE locale, which is the only signal that exists this
-      // early. `MoneyApp` takes over with the user's saved choice.
+      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.system,
+      locale: Locale(LockPromptLanguage.initialSettingsLanguage),
+      // Loading uses the same language-independent branded view as MoneyApp.
+      // Retry/error copy uses the saved language mirror once bootstrap reads it.
       supportedLocales: AppL10n.supportedLocales,
       localizationsDelegates: const [
         ...AppL10n.localizationsDelegates,
@@ -249,7 +251,13 @@ class _StartupAppState extends State<StartupApp> {
       // simply the slowest step, e.g. first-run key generation) without the
       // database itself being corrupt — only route to the destructive
       // reset flow for a real database_open failure, never for a timeout.
-      home: _error is BootstrapCoordinatorUnavailable
+      home: AutomaticSessionRecovery.recoveryTimedOut.value
+          ? StartupLoadingScreen(
+              error: const BootstrapTimeoutException('session_recovery'),
+              lastStep: 'session_recovery',
+              onRetry: () => AutomaticSessionRecovery.active?.trigger(),
+            )
+          : _error is BootstrapCoordinatorUnavailable
           // C1: fail closed. No database is involved in this screen and nothing
           // behind it can open; Retry re-runs bootstrap from the start.
           ? _CoordinatorUnavailableView(onRetry: _attempt)

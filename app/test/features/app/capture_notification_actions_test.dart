@@ -3,6 +3,22 @@ import 'package:money_companion/features/app/capture_notification_actions.dart';
 
 void main() {
   group('captureRouteFor', () {
+    for (final entry in {
+      'budget_alert': '/budgets', 'budgetWarning': '/budgets', 'budgetOver': '/budgets',
+      'goal_milestone': '/goals', 'goalMilestone': '/goals',
+      'gamification_alert': '/achievements', 'achievements': '/achievements',
+      'subscriptionReminder': '/subscriptions', 'bill_reminder': '/subscriptions',
+      'weeklyReport': '/reports', 'dailyReminder': '/transactions',
+    }.entries) {
+      test('${entry.key} opens its own section even with an APNs payload id', () {
+        expect(captureRouteFor(type: entry.key, transactionId: 'opaque-event'), entry.value);
+      });
+    }
+    test('successful capture awaiting import opens all transactions, not Pending', () {
+      expect(captureRouteFor(type: 'new_transaction'), '/transactions');
+      expect(captureRouteFor(type: 'new_transaction', confirmedTransactionId: 'tx1'),
+          '/transaction/tx1');
+    });
     test('smart_inbox: marker never becomes a transaction route', () {
       expect(captureRouteFor(transactionId: 'smart_inbox:local_capture:p1'),
           '/smart-inbox');

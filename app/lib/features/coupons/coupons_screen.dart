@@ -383,13 +383,13 @@ class _Chip extends StatelessWidget {
             alignment: Alignment.center,
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: selected ? c.ctaSoft : c.surfaceCard,
+              color: selected ? c.cta : c.surfaceCard,
               borderRadius: BorderRadius.circular(AppRadius.pill),
               border: Border.all(color: selected ? c.cta : c.border),
             ),
             child: Text(
               label,
-              style: AppTypography.caption(selected ? c.cta : c.textSecondary)
+              style: AppTypography.caption(selected ? c.onCta : c.textSecondary)
                   .copyWith(fontWeight: FontWeight.w700),
             ),
           ),

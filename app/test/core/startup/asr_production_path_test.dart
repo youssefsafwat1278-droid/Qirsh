@@ -1213,6 +1213,25 @@ void main() {
         reason: 'native is restrictive: no ordinary egress');
   }, timeout: const Timeout(Duration(minutes: 1)));
 
+  test('foreground inactive after accepted refresh finishes adoption without signing out', () async {
+    final r = await coldLocalRead();
+    final replica = await replicaId(r);
+    sim.onCall = (method) {
+      if (method == 'beginCloudEgressEnable') {
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      }
+    };
+    await resume();
+    expect(binding.lifecycleState, AppLifecycleState.inactive);
+    expect(AutomaticSessionRecovery.active!.lastStop, 'recovered', reason: diag());
+    expect(session.status, SessionStatus.authenticated);
+    expect(await replicaId(r), replica);
+    expect(sim.egress!.state, 'ON');
+    expect(signIns, isEmpty);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await AutomaticSessionRecovery.active!.quiesced();
+  });
+
   test('foreground loss after withdrawal (decision c): compensated exactly, '
       'sign-in screen, terminal denial, data preserved', () async {
     final r = await coldLocalRead();

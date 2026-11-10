@@ -18,14 +18,14 @@ const unconfiguredSealer: MaterialSealer = {
 
 /** Ports for the challenge route; absent (undefined) means "not configured" and fails closed. */
 export type ChallengeIssue =
-  | { outcome: 'issued'; challengeId: string; nonce: string; expiresAtMs: number }
+  | { outcome: 'issued'; challengeId: string; nonce: string; expiresAtMs: number; proofMethod?: 'apple' | 'google' | 'email' }
   | { outcome: 'admin' | 'rate_limited' | 'already_pending' | 'unauthenticated' };
 
 export interface ChallengePort {
   /** null = not a live user. */
   getUser(bearerToken: string): Promise<{ id: string } | null>;
   isAdmin(uid: string): Promise<boolean>;
-  issue(uid: string): Promise<ChallengeIssue>;
+  issue(uid: string, request?: { bearerToken: string; emailOnly: boolean }): Promise<ChallengeIssue>;
 }
 
 export interface DeletionCollaborators {
@@ -65,12 +65,17 @@ export function createChallengePort(deps: {
   rpc: RpcClient;
   getUser: (bearerToken: string) => Promise<{ id: string } | null>;
   isAdmin: (uid: string) => Promise<boolean>;
+  sendEmailCode?: (bearerToken: string) => Promise<void>;
 }): ChallengePort {
   return {
     getUser: deps.getUser,
     isAdmin: deps.isAdmin,
-    async issue(uid) {
-      const res = await deps.rpc.rpc('account_deletion_issue_challenge', { p_uid: uid });
+    async issue(uid, request) {
+      const supportsMethods = request && deps.sendEmailCode;
+      const res = await deps.rpc.rpc(
+        supportsMethods ? 'account_deletion_issue_challenge_v2' : 'account_deletion_issue_challenge',
+        supportsMethods ? { p_uid: uid, p_email_only: request.emailOnly } : { p_uid: uid },
+      );
       if (res.error) {
         const code = res.error.code;
         if (code === 'QD031') return { outcome: 'admin' };
@@ -88,7 +93,21 @@ export function createChallengePort(deps: {
       ) throw new Error('challenge_rpc_malformed');
       const ms = typeof d.expires_at_ms === 'number' ? d.expires_at_ms : Date.parse(String(d.expires_at));
       if (!Number.isFinite(ms)) throw new Error('challenge_rpc_malformed');
-      return { outcome: 'issued', challengeId: d.challenge_id, nonce: d.nonce, expiresAtMs: ms };
+      const proofMethod = supportsMethods ? d.proof_method : undefined;
+      if (supportsMethods && proofMethod !== 'apple' && proofMethod !== 'google' && proofMethod !== 'email') {
+        throw new Error('challenge_method_malformed');
+      }
+      if (proofMethod === 'email' && request && deps.sendEmailCode) {
+        await deps.sendEmailCode(request.bearerToken);
+        const binding = await deps.rpc.rpc('account_deletion_bind_email_code', {
+          p_uid: uid, p_challenge_id: d.challenge_id,
+        });
+        if (binding.error || binding.data !== true) throw new Error('challenge_email_unbound');
+      }
+      return {
+        outcome: 'issued', challengeId: d.challenge_id, nonce: d.nonce, expiresAtMs: ms,
+        ...(proofMethod === 'apple' || proofMethod === 'google' || proofMethod === 'email' ? { proofMethod } : {}),
+      };
     },
   };
 }

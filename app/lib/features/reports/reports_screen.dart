@@ -9,11 +9,9 @@ import '../../core/di/app_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../ads/ad_placement.dart';
-import '../ads/banner_ads_providers.dart';
 import '../ads/qirsh_ad_banner.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/widgets/calm_page_header.dart';
-import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../core/theme/widgets/mali_card.dart';
 import '../common/app_pill_tab_bar.dart';
 import '../../core/utils/app_lucide_icons.dart';
@@ -31,23 +29,6 @@ import '../report_ads/report_ad_notice.dart';
 import '../reporting/ui/report_config_page.dart';
 import '../report_ads/report_ads_providers.dart';
 import 'reports_providers.dart';
-
-/// How much of the header's melt the ad band is allowed to consume.
-///
-/// NOT the band's real height. `CalmPageHeader.meltLength` is 220 and the band
-/// is about 230 tall, so charging it its full height spends the entire melt and
-/// leaves the pinned tab bar on the raw page background — continuous, but it
-/// costs the tabs the blue they are designed to sit on.
-///
-/// Giving the band a smaller share keeps the gradient running through it AND
-/// keeps the tabs where they were. The seam this leaves is a few percent of the
-/// fade, which is not visible; the one it replaces was a hard edge.
-///
-/// Local to this screen on purpose — raising `meltLength` globally would
-/// restyle every screen with a calm header.
-/// The pinned tab row's height. Also how much melt it consumes.
-const double _tabBarHeight = 64.0;
-
 
 Future<void> _openReport(BuildContext context, WidgetRef ref) async {
   final request = await showReportConfigPage(context);
@@ -69,8 +50,8 @@ class ReportsScreen extends ConsumerWidget {
           data: (settings) => settings.privacyModeEnabled,
           orElse: () => false,
         );
-    final currencyLabel = Currency.label(context, 
-        ref.watch(baseCurrencyProvider).valueOrNull ?? 'SAR');
+    final currencyLabel = Currency.label(
+        context, ref.watch(baseCurrencyProvider).valueOrNull ?? 'SAR');
 
     return DefaultTabController(
       length: 3,
@@ -78,7 +59,9 @@ class ReportsScreen extends ConsumerWidget {
         body: async.when(
           skipLoadingOnReload: true,
           loading: () => const SkeletonList(rows: 4),
-          error: (e, _) => SafeArea(child: SingleChildScrollView(child: AppErrorState(
+          error: (e, _) => SafeArea(
+              child: SingleChildScrollView(
+                  child: AppErrorState(
             title: context.l10n.txnError,
             description: context.l10n.annTryAgainSoon,
             retryLabel: context.l10n.startRetry,
@@ -86,154 +69,136 @@ class ReportsScreen extends ConsumerWidget {
           ))),
           data: (bundle) {
             final section = bundle.monthly;
-            // The ad band's REAL pixel height, or zero when no ad is showing.
-            //
-            // `MeltSlice.height` sets the gradient RANGE, not the box height —
-            // the box is sized by its child. Feeding it a fixed 80 "share"
-            // while the band actually rendered ~160px made the melt advance at
-            // HALF rate through the ad and then at full rate through the tabs,
-            // and that rate change is the hard blue crease above the tab row.
-            // Passing the true extent makes one uniform melt from the header
-            // all the way down.
-            final adExtent =
-                ref.watch(headerAdExtentProvider(AdPlacement.reports));
-            final meltBelowTabs = adExtent + _tabBarHeight;
-            return QirshSectionBackdrop(child: SafeArea(
-                // Keep pinned report tabs below the status bar; the compact
-                // photographic header scrolls above the existing controls.
-                bottom: false,
-                child: NestedScrollView(
-                  headerSliverBuilder: (context, innerBoxIsScrolled) {
-                    return [
-                      SliverToBoxAdapter(
-                        child: Column(
-                          children: [
-                            _ReportsHeader(
-                              section: section,
-                              currencyLabel: currencyLabel,
-                              privacyMode: privacyMode,
-                              onReport: () => _openReport(context, ref),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-                              child: Wrap(spacing: 8, runSpacing: 6, children: [
-                                for (final preset in [TransactionsDatePreset.thisMonth,
-                                  TransactionsDatePreset.previousMonth, TransactionsDatePreset.last90Days])
-                                  ChoiceChip(
-                                    label: Text(transactionsRangeForPreset(preset).labelIn(Localizations.localeOf(context).languageCode)),
-                                    selected: ref.watch(transactionsDateRangeProvider).preset == preset,
-                                    onSelected: (_) => ref.read(transactionsDateRangeProvider.notifier).state = transactionsRangeForPreset(preset),
+            const presets = [
+              TransactionsDatePreset.thisMonth,
+              TransactionsDatePreset.previousMonth,
+              TransactionsDatePreset.last90Days,
+            ];
+            final preset = effectiveTransactionsRange(
+              ref.watch(transactionsDateRangeProvider),
+            ).preset;
+            return QirshSectionBackdrop(
+                child: SafeArea(
+                    bottom: false,
+                    child: NestedScrollView(
+                      headerSliverBuilder: (context, innerBoxIsScrolled) {
+                        return [
+                          SliverToBoxAdapter(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                CalmPageHeader(
+                                  sectionPhoto: QirshSectionPhoto.reports,
+                                  sectionHeight: 225,
+                                  useSafeAreaTop: false,
+                                  title: context.l10n.rptInsightsTitle,
+                                  subtitle: context.l10n.rptInsightsSub,
+                                  leading: Navigator.of(context).canPop()
+                                      ? const BackButton()
+                                      : null,
+                                  coverBottom: Builder(builder: (context) {
+                                    final controller =
+                                        DefaultTabController.of(context);
+                                    final language =
+                                        Localizations.localeOf(context)
+                                            .languageCode;
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        FilledButton.icon(
+                                          onPressed: () =>
+                                              _openReport(context, ref),
+                                          icon: const Icon(
+                                              AppLucideIcons.fileText,
+                                              size: 17),
+                                          label:
+                                              Text(context.l10n.rcCreateReport),
+                                        ),
+                                        const SizedBox(height: AppSpacing.s2),
+                                        AppPillTabBar(
+                                          onPhoto: true,
+                                          tabs: [
+                                            for (final datePreset in presets)
+                                              transactionsRangeForPreset(
+                                                      datePreset)
+                                                  .labelIn(language),
+                                          ],
+                                          selectedIndex: presets.indexWhere(
+                                              (value) => value == preset),
+                                          onSelected: (index) => ref
+                                                  .read(
+                                                      transactionsDateRangeProvider
+                                                          .notifier)
+                                                  .state =
+                                              transactionsRangeForPreset(
+                                                  presets[index]),
+                                        ),
+                                        const SizedBox(height: AppSpacing.s2),
+                                        AnimatedBuilder(
+                                          animation: controller,
+                                          builder: (context, _) =>
+                                              AppPillTabBar(
+                                            onPhoto: true,
+                                            tabs: [
+                                              context.l10n.rptTabOverview,
+                                              context.l10n.rptTabTrends,
+                                              context.l10n.rptTabDetails,
+                                            ],
+                                            selectedIndex: controller.index,
+                                            onSelected: controller.animateTo,
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    AppSpacing.gutter,
+                                    AppSpacing.s2,
+                                    AppSpacing.gutter,
+                                    0,
                                   ),
-                              ]),
-                            ),
-                            // IN THE HEADER, not in the tabs.
-                            //
-                            // Three tab bodies, each its own ListView: a banner
-                            // inside them would be three, and the second tab the
-                            // user opens would request, meet the static
-                            // 30-second per-placement throttle, and show an
-                            // empty slot for the rest of the visit. One shared
-                            // instance here survives both a tab switch and the
-                            // header scrolling away.
-                            //
-                            // This is also the surface D-19 approved for TWO
-                            // formats. They can never be on screen together —
-                            // the export config page is a pushed full-screen
-                            // route, which makes `ModalRoute.isCurrent` false
-                            // and tears this down before it appears — and
-                            // `ReportBannerSuppression` keeps them from being
-                            // back-to-back afterwards.
-                            //
-                            // No content gate. It used to require at least one
-                            // category; availability may no longer depend on
-                            // that. `ReportBannerSuppression` is UNTOUCHED and
-                            // still applies — it lives in
-                            // `bannerEligibilityProvider`, is about not stacking
-                            // two ad formats back to back, and is not a content
-                            // rule.
-                              // FULL BLEED melt behind the ad band. The banner
-                              // itself sits inside the gutter, so wrapping it
-                              // there left the page background showing down
-                              // both edges of the band.
-                              MeltSlice(
-                                height: adExtent,
-                                child: const Padding(
+                                  child: _PeriodCard(
+                                    section: section,
+                                    currencyLabel: currencyLabel,
+                                    privacyMode: privacyMode,
+                                  ),
+                                ),
+                                const Padding(
                                   padding: EdgeInsets.symmetric(
                                       horizontal: AppSpacing.gutter),
                                   child: QirshAdBanner(
                                       placement: AdPlacement.reports),
                                 ),
-                              ),
-                          ],
-                        ),
-                      ),
-                      SliverPersistentHeader(
-                        pinned: true,
-                        delegate: _TabBarDelegate(
-                          // iOS 26 style: floating glass capsules, no bar box.
-                          child: MeltSlice(
-                            height: _tabBarHeight,
-                          // Resumes where the ad band above it ended, so the
-                          // melt runs header → ad → tabs without a seam. Zero
-                          // when no ad is showing, which is the original
-                          // geometry exactly.
-                          startAt: adExtent,
-                            child: Container(
-                              height: 64.0,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: AppSpacing.gutter,
-                              ),
-                              alignment: Alignment.center,
-                              child: Builder(
-                                builder: (context) {
-                                  final controller =
-                                      DefaultTabController.of(context);
-                                  return AnimatedBuilder(
-                                    animation: controller,
-                                    builder: (context, _) => AppPillTabBar(
-                                      tabs: [
-                                        context.l10n.rptTabOverview,
-                                        context.l10n.rptTabTrends,
-                                        context.l10n.rptTabDetails,
-                                      ],
-                                      selectedIndex: controller.index,
-                                      onSelected: controller.animateTo,
-                                    ),
-                                  );
-                                },
-                              ),
+                              ],
                             ),
                           ),
-                        ),
+                        ];
+                      },
+                      body: TabBarView(
+                        children: [
+                          _OverviewTab(
+                            section: section,
+                            weekly: bundle.weekly,
+                            currencyLabel: currencyLabel,
+                            privacyMode: privacyMode,
+                          ),
+                          _TrendsTab(
+                            section: section,
+                            weekly: bundle.weekly,
+                            currencyLabel: currencyLabel,
+                            privacyMode: privacyMode,
+                          ),
+                          _DetailsTab(
+                            section: section,
+                            currencyLabel: currencyLabel,
+                            privacyMode: privacyMode,
+                          ),
+                        ],
                       ),
-                    ];
-                  },
-                  body: TabBarView(
-                    children: [
-                      _OverviewTab(
-                        onExport: () => _openReport(context, ref),
-                        meltStartAt: meltBelowTabs,
-                        section: section,
-                        weekly: bundle.weekly,
-                        currencyLabel: currencyLabel,
-                        privacyMode: privacyMode,
-                      ),
-                      _TrendsTab(
-                        meltStartAt: meltBelowTabs,
-                        section: section,
-                        weekly: bundle.weekly,
-                        currencyLabel: currencyLabel,
-                        privacyMode: privacyMode,
-                      ),
-                      _DetailsTab(
-                        meltStartAt: meltBelowTabs,
-                        section: section,
-                        currencyLabel: currencyLabel,
-                        privacyMode: privacyMode,
-                      ),
-                    ],
-                  ),
-                )));
+                    )));
           },
         ),
       ),
@@ -257,17 +222,12 @@ String _dateLabel(DateTime day) => '${day.day}/${day.month}';
 
 class _OverviewTab extends StatelessWidget {
   const _OverviewTab({
-    required this.onExport,
-    required this.meltStartAt,
     required this.section,
     required this.weekly,
     required this.currencyLabel,
     required this.privacyMode,
   });
 
-  /// Melt already consumed by the header, the ad band and the tab row.
-  final VoidCallback onExport;
-  final double meltStartAt;
 
   final ReportSection section;
   final ReportSection weekly;
@@ -277,49 +237,15 @@ class _OverviewTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MeltTail(
-        startAt: meltStartAt,
+        startAt: 0,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.gutter,
             AppSpacing.s4,
             AppSpacing.gutter,
-            AppSpacing.gutter,
+            120,
           ),
           children: [
-            QirshPhotoCard(
-              photo: QirshPhoto.analytics,
-              margin: EdgeInsets.zero,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(context.l10n.rptPhotoKicker, textAlign: TextAlign.right,
-                    style: AppTypography.custom(size: 11, weight: FontWeight.w500,
-                      height: 1.4, color: Colors.white.withValues(alpha: .72))),
-                  const SizedBox(height: 6),
-                  Text(context.l10n.rptPhotoTitle, textAlign: TextAlign.right,
-                    style: AppTypography.custom(size: 17, weight: FontWeight.w700,
-                      height: 1.4, color: Colors.white)),
-                  const SizedBox(height: 14),
-                  FilledButton(onPressed: onExport,
-                    style: FilledButton.styleFrom(backgroundColor: Colors.white,
-                      foregroundColor: const Color(0xFF0C1330)),
-                    child: Text(context.l10n.rcCreateReport)),
-                ],
-              ),
-            ),
-            const SizedBox(height: AppSpacing.s4),
-            // The reference places the period figure below its editorial card.
-            ...[
-              PremiumMotion(
-                child: _PeriodCard(
-                  section: section,
-                  currencyLabel: currencyLabel,
-                  privacyMode: privacyMode,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.s4),
-            ],
             CalmKpiTiles(margin: EdgeInsets.zero, metrics: [
               CalmMetric(label: context.l10n.rptDailyAverage,
                 value: _money(section.averageDaily, currencyLabel: currencyLabel, privacyMode: privacyMode)),
@@ -343,7 +269,6 @@ class _OverviewTab extends StatelessWidget {
             if (section.anomaly case final SpendingAnomaly anomaly) ...[
               _InsightCard(
                 icon: AppLucideIcons.alertTriangle,
-                art: const QirshIllustration(name: 'reports', width: 100, height: 90),
                 title: context.l10n.rptUnusualSpend,
                 body: privacyMode ? context.l10n.rptAnomalyPrivate(_dateLabel(anomaly.day))
                   : context.l10n.rptAnomalyDetail(_dateLabel(anomaly.day),
@@ -381,15 +306,12 @@ class _OverviewTab extends StatelessWidget {
 
 class _TrendsTab extends StatelessWidget {
   const _TrendsTab({
-    required this.meltStartAt,
     required this.section,
     required this.weekly,
     required this.currencyLabel,
     required this.privacyMode,
   });
 
-  /// Melt already consumed by the header, the ad band and the tab row.
-  final double meltStartAt;
 
   final ReportSection section;
   final ReportSection weekly;
@@ -402,13 +324,13 @@ class _TrendsTab extends StatelessWidget {
     final delta = section.deltaPercent;
     final anomaly = section.anomaly;
     return MeltTail(
-        startAt: meltStartAt,
+        startAt: 0,
         child: ListView(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.gutter,
             AppSpacing.s4,
             AppSpacing.gutter,
-            AppSpacing.gutter,
+            120,
           ),
           children: [
             Text(context.l10n.rptDailySpending,
@@ -606,14 +528,11 @@ class _CategoryComparisonRow extends StatelessWidget {
 
 class _DetailsTab extends StatelessWidget {
   const _DetailsTab({
-    required this.meltStartAt,
     required this.section,
     required this.currencyLabel,
     required this.privacyMode,
   });
 
-  /// Melt already consumed by the header, the ad band and the tab row.
-  final double meltStartAt;
 
   final ReportSection section;
   final String currencyLabel;
@@ -622,9 +541,9 @@ class _DetailsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MeltTail(
-        startAt: meltStartAt,
+        startAt: 0,
         child: ListView(
-          padding: const EdgeInsets.all(AppSpacing.gutter),
+          padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.s4, AppSpacing.gutter, 120),
           children: [
             _CategoryRankingCard(
               section: section,
@@ -827,37 +746,37 @@ class _CategoryDistributionCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.s3),
           CategoryDonutChart(
-            slices: slices.take(6).toList(),
+            slices: slices,
             currencyLabel: currencyLabel,
-            centerLabel: _money(section.total,
-                currencyLabel: currencyLabel, privacyMode: privacyMode),
+            centerLabel: privacyMode ? '••••' : formatMoney(section.total),
+            centerCurrency: currencyLabel,
             compactCenter: true,
             framed: false,
             showLegend: false,
-            height: 142,
+            height: 174,
           ),
           const SizedBox(height: AppSpacing.s3),
-          Wrap(
-            spacing: AppSpacing.s3,
-            runSpacing: AppSpacing.s3,
-            children: [
-              for (final slice in section.topCategories.take(8))
-                SizedBox(
-                  width: MediaQuery.sizeOf(context).width >= 430
-                      ? (MediaQuery.sizeOf(context).width -
-                              AppSpacing.gutter * 2 -
-                              AppSpacing.s3 * 3 -
-                              AppSpacing.s4 * 2) /
-                          2
-                      : double.infinity,
-                  child: _CategoryLegendTile(
-                    slice: slice,
-                    currencyLabel: currencyLabel,
-                    privacyMode: privacyMode,
+          LayoutBuilder(builder: (context, constraints) {
+            final twoColumns = constraints.maxWidth >= 385 &&
+                MediaQuery.textScalerOf(context).scale(14) <= 17;
+            return Wrap(
+              spacing: AppSpacing.s3,
+              runSpacing: AppSpacing.s3,
+              children: [
+                for (final slice in section.topCategories)
+                  SizedBox(
+                    width: twoColumns
+                        ? (constraints.maxWidth - AppSpacing.s3) / 2
+                        : constraints.maxWidth,
+                    child: _CategoryLegendTile(
+                      slice: slice,
+                      currencyLabel: currencyLabel,
+                      privacyMode: privacyMode,
+                    ),
                   ),
-                ),
-            ],
-          ),
+              ],
+            );
+          }),
         ],
       ),
     );
@@ -1061,8 +980,6 @@ class _VisualSectionTitle extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: AppTypography.caption(c.textLight),
               ),
             ],
@@ -1099,8 +1016,6 @@ class _CategoryLegendTile extends StatelessWidget {
                 Localizations.localeOf(context).languageCode == 'en'
                     ? '${(slice.percent * 100).round()}% ${slice.category.name}'
                     : '%${(slice.percent * 100).round()} ${slice.category.name}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: AppTypography.subhead(c.textMain),
               ),
               // UX-022 item 2 — «تسوق 1,700.00» matched no transaction: an
@@ -1111,8 +1026,6 @@ class _CategoryLegendTile extends StatelessWidget {
                 '${_money(slice.total, currencyLabel: currencyLabel, privacyMode: privacyMode)}'
                 '${slice.count > 0 ? ' · ${context.l10n.rptMerchantTxCount(slice.count)}' : ''}'
                 '${slice.hasRefunds && !privacyMode ? '${context.l10n.rptIncludesRefund}${formatMoney(slice.refunds!)}' : ''}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: AppTypography.caption(c.textLight),
               ),
             ],
@@ -1216,10 +1129,8 @@ class _InsightCard extends StatelessWidget {
     required this.title,
     required this.body,
     required this.color,
-    this.art,
   });
 
-  final Widget? art;
   final IconData icon;
   final String title;
   final String body;
@@ -1233,7 +1144,7 @@ class _InsightCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.s4),
       child: Row(
         children: [
-          if (art != null) art! else Container(
+          Container(
             width: 44,
             height: 44,
             decoration: BoxDecoration(
@@ -1255,51 +1166,6 @@ class _InsightCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Raised-disc action button (matches the transactions "+" style) that opens
-/// the PDF report flow from the reports header.
-class _ReportButton extends StatelessWidget {
-  const _ReportButton({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return CalmHeaderAction(icon: AppLucideIcons.fileText, onTap: onTap);
-  }
-}
-
-class _ReportsHeader extends StatelessWidget {
-  const _ReportsHeader({
-    required this.section,
-    required this.currencyLabel,
-    required this.privacyMode,
-    required this.onReport,
-  });
-
-  final ReportSection section;
-  final String currencyLabel;
-  final bool privacyMode;
-  final VoidCallback onReport;
-
-  @override
-  Widget build(BuildContext context) {
-    return CalmPageHeader(
-      sectionPhoto: QirshSectionPhoto.reports,
-      sectionHeight: 156,
-      useSafeAreaTop: false,
-      // شرائح متعددة: الأزرق ميمتدّش تحت (هيغطّي المحتوى) — الذوبان جوّه.
-      meltOverflow: 0,
-      title: context.l10n.rptInsightsTitle,
-      subtitle: context.l10n.rptInsightsSub,
-      leading: Navigator.of(context).canPop()
-          ? const BackButton()
-          : null,
-      trailing: _ReportButton(onTap: onReport),
-
     );
   }
 }
@@ -1392,28 +1258,6 @@ class _WeeklyInsightCard extends StatelessWidget {
     );
   }
 }
-
-class _TabBarDelegate extends SliverPersistentHeaderDelegate {
-  _TabBarDelegate({required this.child});
-  final Widget child;
-
-  @override
-  double get minExtent => _tabBarHeight;
-  @override
-  double get maxExtent => _tabBarHeight;
-
-  @override
-  Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
-    return child;
-  }
-
-  @override
-  bool shouldRebuild(covariant _TabBarDelegate oldDelegate) {
-    return oldDelegate.child != child;
-  }
-}
-
 
 /// One line of the UX-022 refund breakdown. Amounts render through [MoneyText]
 /// so the three figures are exact and therefore always reconcile on screen.

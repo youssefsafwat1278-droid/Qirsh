@@ -6,6 +6,29 @@ const kActionEnableSmartAnalysis = 'qirsh.enable_smart_analysis';
 
 const _smartInboxMarkerPrefix = 'smart_inbox:';
 
+/// Both APNs worker names and local NotificationType names share destinations.
+String? notificationSectionRoute(String? type) => switch (type) {
+      'budget_alert' ||
+      'budget_warning' ||
+      'budget_over' ||
+      'budgetWarning' ||
+      'budgetOver' =>
+        '/budgets',
+      'goal_milestone' || 'goalMilestone' => '/goals',
+      'gamification_alert' ||
+      'achievement' ||
+      'achievements' =>
+        '/achievements',
+      'bill_reminder' || 'subscriptionReminder' => '/subscriptions',
+      'weekly_report' || 'weeklyReport' => '/reports',
+      'daily_reminder' ||
+      'streak_reminder' ||
+      'dailyReminder' =>
+        '/transactions',
+      'marketing' => '/dashboard',
+      _ => null,
+    };
+
 /// Route for a tapped capture banner. Pure. [payloadTransactionId] is the
 /// transaction id (or `smart_inbox:<itemId>` / `rejected:` marker) recorded for
 /// the route's payload; it is only consulted when the route itself carries no
@@ -19,6 +42,8 @@ String captureRouteFor({
   String? payloadTransactionId,
   String? confirmedTransactionId,
 }) {
+  final section = notificationSectionRoute(type);
+  if (section != null) return section;
   // The local ledger is newer than the notification delivered in the past.
   // Only a verified confirmed row can override the old review destination.
   if (confirmedTransactionId != null &&
@@ -36,7 +61,9 @@ String captureRouteFor({
     if (id.startsWith('rejected:')) continue;
     return '/transaction/$id';
   }
-  return '/smart-inbox';
+  // Successful capture notifications can arrive before their local import.
+  // Absence of a row is not evidence that the transaction needs review.
+  return type == 'new_transaction' ? '/transactions' : '/smart-inbox';
 }
 
 /// The Smart Inbox item id behind a `smart_inbox:<itemId>` payload marker.

@@ -185,7 +185,7 @@ class MemStore implements DeletionStore {
         throw new Error('db unavailable');
       }
       // A new job may only reference material that is held and not disposed.
-      if (!existing && !this.vault.canCommit(i.appleMaterialRef)) throw new Error('material unavailable');
+      if (!existing && i.appleMaterialRef !== null && !this.vault.canCommit(i.appleMaterialRef)) throw new Error('material unavailable');
       if (existing) {
         this.scopes.set(i.scopeKey, { jobId: existing, receiptHash: i.receiptHash });
         this.receipts.set(i.receiptHash, { jobId: existing, expiresAtMs: null });
@@ -197,7 +197,7 @@ class MemStore implements DeletionStore {
         uid: i.uid,
         seq: this.seq,
         state: 'accepted',
-        completed: [],
+        completed: i.appleMaterialRef === null ? ['apple_revoke'] : [],
         started: null,
         ref: i.appleMaterialRef,
         attempts: 0,
@@ -208,7 +208,7 @@ class MemStore implements DeletionStore {
         lastCode: null,
       });
       this.uidJob.set(i.uid, jobId);
-      this.vault.commit(i.appleMaterialRef);
+      if (i.appleMaterialRef !== null) this.vault.commit(i.appleMaterialRef);
       this.frozen.add(i.uid); // immutable: no method ever removes it
       this.scopes.set(i.scopeKey, { jobId, receiptHash: i.receiptHash });
       this.receipts.set(i.receiptHash, { jobId, expiresAtMs: null });
@@ -438,6 +438,7 @@ class FakeAuthorizer implements DeletionAuthorizer {
   discardThrows = false;
   disposeOverride: (() => unknown) | null = null;
   disposeGate: Deferred | null = null; // one-shot: pauses a disposal request before it reaches the registry
+  disposeStarted: Deferred | null = null;
   // 'unique': every exchange yields new material (the original fixture).
   // 'by_challenge' / 'by_uid': an IDEMPOTENT authorizer that returns the SAME reference
   // again for the same challenge / account. The coordinator must not assume otherwise.
@@ -451,6 +452,7 @@ class FakeAuthorizer implements DeletionAuthorizer {
     const gate = this.disposeGate;
     if (gate) {
       this.disposeGate = null;
+      this.disposeStarted?.resolve();
       await gate.promise;
     }
     if (this.discardThrows) throw new Error('discard failed SECRET-PROVIDER-TEXT');
@@ -1996,10 +1998,12 @@ Deno.test('a stale cleanup request cannot destroy material a newer acceptance no
   const req = h.issue(UID_A);
   h.store.fault = { op: 'accept', when: 'before' }; // attempt A never commits
   const gate = deferred();
+  const disposalStarted = deferred();
+  h.authz.disposeStarted = disposalStarted;
   h.authz.disposeGate = gate; // A's disposal request is delayed on its way to the registry
 
   const a = h.coord.requestDeletion(req);
-  await tick();
+  await disposalStarted.promise;
   assertEquals(h.authz.dispositions, []); // still in flight
 
   const b = await h.coord.requestDeletion(req); // a newer attempt gets the same reference and commits

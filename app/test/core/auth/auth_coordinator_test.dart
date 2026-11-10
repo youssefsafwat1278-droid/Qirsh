@@ -205,6 +205,60 @@ void main() {
   RefreshOpSpec routine() => const RefreshOpSpec(
       kind: RefreshOpKind.routine, deadline: Duration(seconds: 30));
 
+  group('same-owner identity linking', () {
+    test('persists updated identity without changing lifecycle or dispatch limits', () async {
+      final original = await seed(expIn: 3600);
+      final limited = original.copyWith(seq: original.seq + 1, tokenDispatches: () =>
+          const TokenDispatches(digest: 'previous-token', count: 3));
+      await store.write(limited);
+      sdk.current = limited.sdkSession;
+      coord.endInit(served: limited);
+      coord.ordinaryAdmissionHeld = () => true;
+      await coord.updateLinkedIdentity(owner: _uid, current: () => true, exchange: () async {
+        final json = sdk.current!.toJson();
+        json['user'] = {...(json['user'] as Map<String, dynamic>), 'email': 'linked@example.test'};
+        sdk.current = Session.fromJson(json);
+        sdk.emit(AuthChangeEvent.userUpdated);
+      });
+      expect(store.committed!.owner, _uid);
+      expect(store.committed!.sdkSession!.user.email, 'linked@example.test');
+      expect(store.committed!.lifecycle, original.lifecycle);
+      expect(store.committed!.tokenDispatches!.count, 3);
+      expect(coord.automaticAdmissionDenial(), isNull);
+    });
+
+    test('refuses a linked response for another owner and restores SDK memory', () async {
+      final original = await seed(expIn: 3600);
+      coord.ordinaryAdmissionHeld = () => true;
+      await expectLater(coord.updateLinkedIdentity(owner: _uid, current: () => true,
+        exchange: () async {
+          sdk.current = Session.fromJson(sessionJson(uid: 'uid-b', exp: _now() + 3600));
+          sdk.emit(AuthChangeEvent.signedIn);
+        }), throwsA(isA<ExplicitRefused>()));
+      expect(store.committed!.digest, original.digest);
+      expect(sdk.current!.user.id, _uid);
+    });
+
+    test('removal during linking cannot commit the returned identity', () async {
+      final original = await seed(expIn: 3600);
+      coord.ordinaryAdmissionHeld = () => true;
+      await expectLater(coord.updateLinkedIdentity(owner: _uid, current: () => true,
+        exchange: () async {
+          coord.beginRemovalIntent();
+          sdk.emit(AuthChangeEvent.userUpdated);
+        }), throwsA(isA<ExplicitRefused>()));
+      expect(store.committed!.digest, original.digest);
+    });
+
+    test('no admitted account means no network exchange', () async {
+      await seed(expIn: 3600);
+      var called = false;
+      await expectLater(coord.updateLinkedIdentity(owner: _uid, current: () => true,
+        exchange: () async { called = true; }), throwsA(isA<ExplicitRefused>()));
+      expect(called, isFalse);
+    });
+  });
+
   group('routine refresh (§10.3)', () {
     test('reserve → mark → send → commit → silent install', () async {
       await seed();

@@ -1,5 +1,7 @@
+import 'dart:convert';
+
 import 'apple_deletion_reauth.dart';
-import 'immediate_account_deletion.dart' show ImmediateChallengeRefusal;
+import 'immediate_account_deletion.dart';
 import 'prepared_immediate_deletion_gateway.dart';
 
 /// What the Delete Account screen may honestly say. Only [DeletionFlowCompleted]
@@ -118,38 +120,48 @@ class UnavailableDeletionFlow implements ImmediateDeletionFlow {
   Future<DeletionFlowSession?> resumeLocalCleanup() async => null;
 }
 
+abstract interface class EmailProofDeletionSession
+    implements DeletionFlowSession {
+  Future<DeletionFlowResult> confirmWithEmailProof(
+      Future<String?> Function() readCode);
+}
+
 class GatewayDeletionFlow implements ImmediateDeletionFlow {
   GatewayDeletionFlow(
       {required PreparedImmediateDeletionGateway gateway,
-      required AppleDeletionReauth apple})
+      required AppleDeletionReauth apple,
+      this.emailOnly,
+      this.googleProof})
       : _gateway = gateway,
         _apple = apple;
   final PreparedImmediateDeletionGateway _gateway;
   final AppleDeletionReauth _apple;
+  final bool? emailOnly;
+  final Future<AppleReauthResult> Function(String nonce)? googleProof;
 
   @override
   Future<DeletionFlowSession?> begin() async {
     final op = await _gateway.prepare();
-    return op == null ? null : _GatewaySession(_gateway, _apple, op, false);
+    return op == null ? null : _GatewaySession(this, op, false);
   }
 
   @override
   Future<DeletionFlowSession?> resume() async {
     final op = await _gateway.resumePending();
-    return op == null ? null : _GatewaySession(_gateway, _apple, op, true);
+    return op == null ? null : _GatewaySession(this, op, true);
   }
 
   @override
   Future<DeletionFlowSession?> resumeLocalCleanup() async {
     final op = await _gateway.resumeLocalCleanup();
-    return op == null ? null : _GatewaySession(_gateway, _apple, op, true);
+    return op == null ? null : _GatewaySession(this, op, true);
   }
 }
 
-final class _GatewaySession implements DeletionFlowSession {
-  _GatewaySession(this._gateway, this._apple, this._op, this._requested);
-  final PreparedImmediateDeletionGateway _gateway;
-  final AppleDeletionReauth _apple;
+final class _GatewaySession implements EmailProofDeletionSession {
+  _GatewaySession(this._flow, this._op, this._requested);
+  final GatewayDeletionFlow _flow;
+  PreparedImmediateDeletionGateway get _gateway => _flow._gateway;
   final PreparedDeletionOperation _op;
 
   /// True once a deletion request was (or may have been) sent, or restored.
@@ -158,12 +170,21 @@ final class _GatewaySession implements DeletionFlowSession {
   bool _cleanupUsed = false;
 
   @override
-  Future<DeletionFlowResult> confirm() async {
+  Future<DeletionFlowResult> confirm() => _confirm(null);
+
+  @override
+  Future<DeletionFlowResult> confirmWithEmailProof(
+          Future<String?> Function() readCode) =>
+      _confirm(readCode);
+
+  Future<DeletionFlowResult> _confirm(
+      Future<String?> Function()? readCode) async {
     if (_requested) return checkStatus();
     if (_busy) return const DeletionFlowFailed(retryable: true);
     _busy = true;
     try {
-      final challenge = await _gateway.challenge(_op);
+      final challenge =
+          await _gateway.challenge(_op, emailOnly: _flow.emailOnly);
       switch (challenge) {
         case PreparedChallengeUnavailable():
           return const DeletionFlowFailed(retryable: false);
@@ -179,7 +200,14 @@ final class _GatewaySession implements DeletionFlowSession {
               const DeletionFlowPending(),
           };
         case PreparedChallengeIssued():
-          final reauth = await _apple.reauthenticate(nonce: challenge.nonce);
+          final reauth = await switch (challenge.method) {
+            DeletionProofMethod.apple =>
+              _flow._apple.reauthenticate(nonce: challenge.nonce),
+            DeletionProofMethod.google =>
+              _flow.googleProof?.call(challenge.nonce) ??
+                  Future.value(const AppleReauthFailed()),
+            DeletionProofMethod.email => _emailProof(readCode),
+          };
           switch (reauth) {
             case AppleReauthCancelled():
               _gateway.close(_op);
@@ -196,6 +224,15 @@ final class _GatewaySession implements DeletionFlowSession {
     } finally {
       _busy = false;
     }
+  }
+
+  Future<AppleReauthResult> _emailProof(
+      Future<String?> Function()? readCode) async {
+    if (readCode == null) return const AppleReauthFailed();
+    final code = await readCode();
+    return code == null
+        ? const AppleReauthCancelled()
+        : AppleReauthGranted(jsonEncode({'proof': 'email', 'code': code}));
   }
 
   @override
@@ -241,7 +278,8 @@ final class _GatewaySession implements DeletionFlowSession {
         // The exact evidence, once; local removal is bound to the ORIGINAL
         // owner, so an account switched in the meantime is never touched.
         final local = await _gateway.removeOriginalLocalReplica(outcome);
-        return local == PreparedLocalRemovalOutcome.originalLocalRemovalConfirmed
+        return local ==
+                PreparedLocalRemovalOutcome.originalLocalRemovalConfirmed
             ? const DeletionFlowCompleted()
             : const DeletionFlowLocalCleanupPending();
       case PreparedDeletionRejected(:final code):

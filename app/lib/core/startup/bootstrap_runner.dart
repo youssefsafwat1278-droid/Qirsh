@@ -1,5 +1,7 @@
 import 'package:drift/native.dart';
 import '../security/lock_prompt_language.dart';
+import '../theme/theme_mode_controller.dart';
+import '../../features/dashboard/home_hero_period_controller.dart';
 import '../sync/pending_sync_reconciler.dart';
 import '../sync/sync_health.dart';
 import '../sync/outbox_failure.dart';
@@ -1286,7 +1288,11 @@ class BootstrapRunner {
 
   Future<void> _loadInitialSettingsLanguage() async {
     try {
-      await LockPromptLanguage.read();
+      await Future.wait([
+        LockPromptLanguage.read(),
+        ThemeModeController.preload(),
+        HomeHeroPeriodController.preload(),
+      ]);
     } catch (_) {
       // An optional preference cannot block startup. Keep the last loaded
       // choice, or English if no choice has been loaded in this process.
@@ -2104,8 +2110,11 @@ class _AsrLifecycleObserver with WidgetsBindingObserver {
     switch (state) {
       case AppLifecycleState.resumed:
         asr.trigger();
-      // B5: every non-resumed state latches loss for a running op.
       case AppLifecycleState.inactive:
+        // Still visible on iOS (Face ID / native view transitions). The ASR
+        // host refuses new exchanges here but can finish an accepted adoption.
+        break;
+      // Actual backgrounding always cancels continuation.
       case AppLifecycleState.paused:
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:

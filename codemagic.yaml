@@ -100,6 +100,9 @@ workflows:
             --dart-define=SENTRY_DSN="${SENTRY_DSN:-}" \
             --dart-define=LEGAL_BASE_URL="${LEGAL_BASE_URL:-}" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="${GOOGLE_SERVER_CLIENT_ID:-}" \
+            --dart-define=QIRSH_GOOGLE_AUTH_ENABLED="${QIRSH_GOOGLE_AUTH_ENABLED:-false}" \
+            --dart-define=QIRSH_EMAIL_AUTH_ENABLED="${QIRSH_EMAIL_AUTH_ENABLED:-false}" \
+            --dart-define=QIRSH_ALTERNATE_SIGNUP_ENABLED="${QIRSH_ALTERNATE_SIGNUP_ENABLED:-true}" \
             --dart-define=APP_VERSION="$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' app/pubspec.yaml)"
 
       - name: Package .app into unsigned .ipa
@@ -312,6 +315,9 @@ workflows:
             --dart-define=SENTRY_DSN="${SENTRY_DSN:-}" \
             --dart-define=LEGAL_BASE_URL="${LEGAL_BASE_URL:-}" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="${GOOGLE_SERVER_CLIENT_ID:-}" \
+            --dart-define=QIRSH_GOOGLE_AUTH_ENABLED="${QIRSH_GOOGLE_AUTH_ENABLED:-false}" \
+            --dart-define=QIRSH_EMAIL_AUTH_ENABLED="${QIRSH_EMAIL_AUTH_ENABLED:-false}" \
+            --dart-define=QIRSH_ALTERNATE_SIGNUP_ENABLED="${QIRSH_ALTERNATE_SIGNUP_ENABLED:-true}" \
             --dart-define=APP_VERSION="$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' app/pubspec.yaml)" \
             --dart-define=ADMOB_APP_ID_IOS="${ADMOB_APP_ID_IOS:-}" \
             --dart-define=ADMOB_INTERSTITIAL_IOS="${ADMOB_INTERSTITIAL_IOS:-}" \
@@ -719,7 +725,10 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        IOS_BUILD_NUMBER_FLOOR: "101"
+        IOS_BUILD_NUMBER_FLOOR: "134"
+        QIRSH_GOOGLE_AUTH_ENABLED: "true"
+        QIRSH_EMAIL_AUTH_ENABLED: "true"
+        QIRSH_ALTERNATE_SIGNUP_ENABLED: "true"
         IOS_RELEASE_IPA: "app/build/ios/ipa/money_companion-signed.ipa"
     scripts:
       - name: Verify approved immutable CI revision
@@ -860,6 +869,10 @@ workflows:
             --dart-define=SUPABASE_ENV=production \
             --dart-define=SENTRY_DSN="${SENTRY_DSN:-}" \
             --dart-define=LEGAL_BASE_URL="${LEGAL_BASE_URL:-}" \
+            --dart-define=GOOGLE_SERVER_CLIENT_ID="${GOOGLE_SERVER_CLIENT_ID:-}" \
+            --dart-define=QIRSH_GOOGLE_AUTH_ENABLED="${QIRSH_GOOGLE_AUTH_ENABLED:-false}" \
+            --dart-define=QIRSH_EMAIL_AUTH_ENABLED="${QIRSH_EMAIL_AUTH_ENABLED:-false}" \
+            --dart-define=QIRSH_ALTERNATE_SIGNUP_ENABLED="${QIRSH_ALTERNATE_SIGNUP_ENABLED:-true}" \
             --dart-define=APP_VERSION="$IOS_MARKETING_VERSION" \
             --dart-define=ADMOB_APP_ID_IOS="${ADMOB_APP_ID_IOS:-}" \
             --dart-define=ADMOB_INTERSTITIAL_IOS="${ADMOB_INTERSTITIAL_IOS:-}" \

@@ -1190,6 +1190,8 @@ class PlanningPushService {
           // §7/§30: canonical push carries the row currency (server column 0077).
           // Legacy payloads omit it, so it is only sent when present.
           if (payload['currency'] != null) 'currency': payload['currency'],
+          if (payload['alert_threshold_percent'] != null)
+            'alert_threshold_percent': payload['alert_threshold_percent'],
           'period': payload['period'],
           'start_date': payload['start_date'],
           'is_active': payload['is_active'] == true,

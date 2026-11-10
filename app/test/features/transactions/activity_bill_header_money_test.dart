@@ -126,17 +126,19 @@ void main() {
               reason: 'the duplicate aggregate no longer delays the bills list');
           for (final installment in [false, true]) {
             if (installment) {
-              final tab = find.text(l10n.txnBillsInstalments);
-              // NestedScrollView.ensureVisible may align the inner tab under
-              // the pinned outer tab bar. Reveal it with real drags first.
-              for (var scroll = 0; scroll < 12; scroll++) {
-                final bounds = tester.getRect(tab);
-                if (bounds.top >= 80 && bounds.bottom <= 790 &&
-                    tab.hitTestable().evaluate().isNotEmpty) {
-                  break;
-                }
-                await tester.drag(find.byType(Scrollable).last,
-                    Offset(0, bounds.top < 80 ? 180 : -180));
+              final tab = find.descendant(
+                of: find.byKey(const ValueKey('section-hero-bills')),
+                matching: find.text(l10n.txnBillsInstalments),
+              );
+              // The subtype control now scrolls with the photo. Bring the
+              // photo back before exercising the same canonical money checks.
+              for (var scroll = 0;
+                  scroll < 12 && tab.hitTestable().evaluate().isEmpty;
+                  scroll++) {
+                await tester.drag(
+                  find.byType(Scrollable).last,
+                  const Offset(0, 220),
+                );
                 await tester.pumpAndSettle();
               }
               expect(tab.hitTestable(), findsOneWidget);

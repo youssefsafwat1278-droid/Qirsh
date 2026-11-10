@@ -1,3 +1,4 @@
+import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
 import '../common/money_text.dart';
 import '../../domain/finance/goal_pacing.dart';
@@ -22,7 +23,8 @@ import '../ads/qirsh_ad_banner.dart';
 import '../common/planning_repair_gate.dart';
 import '../common/premium_loading.dart';
 import '../common/app_error_state.dart';
-import '../common/app_header.dart';
+import '../budgets/budgets_providers.dart';
+import '../budgets/widgets/planning_hero_tabs.dart';
 import 'goal_details_screen.dart';
 import 'goal_form_screen.dart';
 import 'goals_providers.dart';
@@ -41,136 +43,162 @@ class GoalsScreen extends ConsumerWidget {
         ref.watch(baseCurrencyProvider).valueOrNull ?? 'SAR';
     final currencyLabel = Currency.label(context, displayCurrency);
 
+    final hero = CalmPageHeader(
+      sectionPhoto: QirshSectionPhoto.goals,
+      sectionHeight: 174,
+      useSafeAreaTop: false,
+      title: context.l10n.bdgTabGoals,
+      leading: Navigator.of(context).canPop() ? const BackButton() : null,
+      trailing: IconButton(
+        tooltip: context.l10n.bdgAddGoal,
+        icon: const Icon(AppLucideIcons.plus, color: Colors.white),
+        onPressed: () => GoalFormScreen.showSheet(context),
+      ),
+      coverBottom: PlanningHeroTabs(
+        tab: 2,
+        onSelected: (tab) {
+          if (tab == 2) return;
+          ref.read(budgetsPageTabProvider.notifier).state = tab;
+          context.push('/budgets');
+        },
+      ),
+    );
     return Scaffold(
       backgroundColor: context.colors.bg,
-      appBar: AppHeader(
-        sectionPhoto: QirshSectionPhoto.goals,
-        title: context.l10n.bdgTabGoals,
-        action: IconButton(
-          tooltip: context.l10n.bdgAddGoal,
-          icon: const Icon(AppLucideIcons.plus, color: Colors.white),
-          onPressed: () => GoalFormScreen.showSheet(context),
-        ),
-      ),
-      body: async.when(
-        skipLoadingOnReload: true,
-        loading: () => const SkeletonList(rows: 4),
-        error: (error, _) => SingleChildScrollView(child: AppErrorState(
-          title: context.l10n.txnError,
-          description: context.l10n.annTryAgainSoon,
-          retryLabel: context.l10n.startRetry,
-          onRetry: () => ref.invalidate(goalsListProvider),
-        )),
-        data: (goals) {
-          final visibleGoals = goals
-              .where((goal) =>
-                  goal.currency.toUpperCase() == displayCurrency.toUpperCase())
-              .toList(growable: false);
-          final saved = Money.sum(
-              visibleGoals.map((goal) => goal.savedMoney), displayCurrency);
-          final target = Money.sum(
-              visibleGoals.map((goal) => goal.targetMoney), displayCurrency);
-          if (visibleGoals.isEmpty) {
-            return ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                _GoalsHeader(
-                  count: 0,
-                  saved: Money.zero(displayCurrency),
-                  target: Money.zero(displayCurrency),
-                  currencyLabel: currencyLabel,
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.gutter),
-                  child: _EmptyGoalsCard(
-                    onAdd: () => GoalFormScreen.showSheet(context),
-                  ),
-                ),
-                // BELOW the create-your-first-goal card, never beside it: the
-                // card is the screen's call to action and an ad flush against it
-                // reads as part of it. A placement may not depend on the user
-                // having goals, but it must not compete with the prompt either.
-                const Padding(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-                  child: QirshAdBanner(placement: AdPlacement.goals),
-                ),
-                const SizedBox(height: 120),
-              ],
-            );
-          }
-          return RefreshIndicator(
-            onRefresh: () async => refreshGoals(ref),
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                _GoalsHeader(
-                  count: visibleGoals.where((goal) =>
-                      goal.savedMoney.compareTo(goal.targetMoney) < 0).length,
-                  saved: saved,
-                  target: target,
-                  currencyLabel: currencyLabel,
-                ),
-                // The FIRST goal card, on its own, so the banner can follow
-                // it. Splitting the list this way is what lets the ad sit after
-                // the first meaningful content block instead of at the foot of
-                // the page, while every card keeps the same gutter and rhythm.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
-                      AppSpacing.gutter, AppSpacing.gutter, 0),
-                  child: _GoalCard(
-                    goal: visibleGoals.first,
-                    currencyLabel:
-                        Currency.label(context, visibleGoals.first.currency),
-                  ),
-                ),
-                // A DIRECT child of the ListView, bracketed by real content:
-                // one card above, the rest below. The old position was after
-                // ALL the cards and required scrolling to the bottom.
-                //
-                // The `visibleGoals.length >= 2` gate is gone — availability no
-                // longer depends on how many goals exist.
-                const Padding(
-                  padding: EdgeInsets.symmetric(
-                      horizontal: AppSpacing.gutter,
-                      vertical: AppSpacing.s4),
-                  child: QirshAdBanner(placement: AdPlacement.goals),
-                ),
-                if (visibleGoals.length > 1)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.gutter),
-                    child: Column(
-                      children: [
-                        for (final goal in visibleGoals.skip(1)) ...[
-                          _GoalCard(
-                            goal: goal,
-                            currencyLabel:
-                                Currency.label(context, goal.currency),
-                          ),
-                          const SizedBox(height: AppSpacing.s4),
-                        ],
-                      ],
+      body: QirshSectionBackdrop(
+        child: SafeArea(
+          bottom: false,
+          child: async.when(
+            skipLoadingOnReload: true,
+            loading: () => Column(
+                children: [hero, const Expanded(child: SkeletonList(rows: 4))]),
+            error: (error, _) => ListView(padding: EdgeInsets.zero, children: [
+              hero,
+              AppErrorState(
+                title: context.l10n.txnError,
+                description: context.l10n.annTryAgainSoon,
+                retryLabel: context.l10n.startRetry,
+                onRetry: () => ref.invalidate(goalsListProvider),
+              )
+            ]),
+            data: (goals) {
+              final visibleGoals = goals
+                  .where((goal) =>
+                      goal.currency.toUpperCase() ==
+                      displayCurrency.toUpperCase())
+                  .toList(growable: false);
+              final saved = Money.sum(
+                  visibleGoals.map((goal) => goal.savedMoney), displayCurrency);
+              final target = Money.sum(
+                  visibleGoals.map((goal) => goal.targetMoney),
+                  displayCurrency);
+              if (visibleGoals.isEmpty) {
+                return ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    hero,
+                    _GoalsHeader(
+                      count: 0,
+                      saved: Money.zero(displayCurrency),
+                      target: Money.zero(displayCurrency),
+                      currencyLabel: currencyLabel,
                     ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.s4),
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => GoalFormScreen.showSheet(context),
-                    icon: const Icon(AppLucideIcons.plus, size: 18),
-                    label: Text(context.l10n.bdgAddGoal),
-                  ),
+                    Padding(
+                      padding: const EdgeInsets.all(AppSpacing.gutter),
+                      child: _EmptyGoalsCard(
+                        onAdd: () => GoalFormScreen.showSheet(context),
+                      ),
+                    ),
+                    // BELOW the create-your-first-goal card, never beside it: the
+                    // card is the screen's call to action and an ad flush against it
+                    // reads as part of it. A placement may not depend on the user
+                    // having goals, but it must not compete with the prompt either.
+                    const Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+                      child: QirshAdBanner(placement: AdPlacement.goals),
+                    ),
+                    const SizedBox(height: 120),
+                  ],
+                );
+              }
+              return RefreshIndicator(
+                onRefresh: () async => refreshGoals(ref),
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    hero,
+                    _GoalsHeader(
+                      count: visibleGoals
+                          .where((goal) =>
+                              goal.savedMoney.compareTo(goal.targetMoney) < 0)
+                          .length,
+                      saved: saved,
+                      target: target,
+                      currencyLabel: currencyLabel,
+                    ),
+                    // The FIRST goal card, on its own, so the banner can follow
+                    // it. Splitting the list this way is what lets the ad sit after
+                    // the first meaningful content block instead of at the foot of
+                    // the page, while every card keeps the same gutter and rhythm.
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                          AppSpacing.gutter, AppSpacing.gutter, 0),
+                      child: _GoalCard(
+                        goal: visibleGoals.first,
+                        currencyLabel: Currency.label(
+                            context, visibleGoals.first.currency),
+                      ),
+                    ),
+                    // A DIRECT child of the ListView, bracketed by real content:
+                    // one card above, the rest below. The old position was after
+                    // ALL the cards and required scrolling to the bottom.
+                    //
+                    // The `visibleGoals.length >= 2` gate is gone — availability no
+                    // longer depends on how many goals exist.
+                    const Padding(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: AppSpacing.gutter,
+                          vertical: AppSpacing.s4),
+                      child: QirshAdBanner(placement: AdPlacement.goals),
+                    ),
+                    if (visibleGoals.length > 1)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.gutter),
+                        child: Column(
+                          children: [
+                            for (final goal in visibleGoals.skip(1)) ...[
+                              _GoalCard(
+                                goal: goal,
+                                currencyLabel:
+                                    Currency.label(context, goal.currency),
+                              ),
+                              const SizedBox(height: AppSpacing.s4),
+                            ],
+                          ],
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, 0,
+                          AppSpacing.gutter, AppSpacing.s4),
+                      child: FilledButton.tonalIcon(
+                        onPressed: () => GoalFormScreen.showSheet(context),
+                        icon: const Icon(AppLucideIcons.plus, size: 18),
+                        label: Text(context.l10n.bdgAddGoal),
+                      ),
+                    ),
+                    // The nav-bar clearance that used to close the Column above.
+                    // Moved out so it sits BELOW the banner rather than between the
+                    // last goal and it — an ad the floating bar covers is an
+                    // obscured ad.
+                    const SizedBox(height: 120),
+                  ],
                 ),
-                // The nav-bar clearance that used to close the Column above.
-                // Moved out so it sits BELOW the banner rather than between the
-                // last goal and it — an ad the floating bar covers is an
-                // obscured ad.
-                const SizedBox(height: 120),
-              ],
-            ),
-          );
-        },
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -199,7 +227,7 @@ class _GoalCard extends StatelessWidget {
       now: DateTime.now(),
     );
     final remaining = pacing.remaining;
-    final tone = remaining.isZero ? c.success : c.income;
+    final tone = remaining.isZero ? c.success : c.cta;
     return MaliCard(
       style: MaliSurfaceStyle.floating,
       padding: EdgeInsets.zero,
@@ -223,10 +251,7 @@ class _GoalCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(goal.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.cardTitle(c.textMain)),
+                    Text(goal.name, style: AppTypography.cardTitle(c.textMain)),
                     const SizedBox(height: 3),
                     if (pacing.requiredPerMonth case final rate?)
                       Wrap(
@@ -242,18 +267,18 @@ class _GoalCard extends StatelessWidget {
                           Text(context.l10n.goalPerMonth,
                               style: AppTypography.caption(c.textLight)),
                         ],
-                      )
-                    else
-                      Text(
-                        remaining.isZero
-                            ? context.l10n.bdgGoalDone
-                            : pacing.isOverdue
-                                ? context.l10n.goalOverdue
-                                : context.l10n.goalRemainingToReach(
-                                    formatMoney(remaining), currencyLabel),
-                        style: AppTypography.caption(
-                            pacing.isOverdue ? c.warning : c.textLight),
                       ),
+                    Text(
+                      remaining.isZero
+                          ? context.l10n.bdgGoalDone
+                          : context.l10n.goalRemainingToReach(
+                              formatMoney(remaining), currencyLabel),
+                      style: AppTypography.caption(
+                          pacing.isOverdue ? c.warning : c.textLight),
+                    ),
+                    if (pacing.isOverdue && !remaining.isZero)
+                      Text(context.l10n.goalOverdue,
+                          style: AppTypography.caption(c.warning)),
                     const SizedBox(height: 9),
                     LiquidBar(value: clampedProgress, color: tone, height: 6),
                     const SizedBox(height: 6),
@@ -308,19 +333,18 @@ class _GoalsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ratio = target.isZero ? 0 : (saved.toDouble() / target.toDouble() * 100).round();
-    return CalmPageHeader(
-      title: context.l10n.bdgTabGoals,
-      subtitle: context.l10n.goalTotalSavedAll,
-      showTitle: false,
-      useSafeAreaTop: false,
-      photo: QirshPhoto.goals,
+    final ratio = target.isZero
+        ? 0
+        : (saved.toDouble() / target.toDouble() * 100).round();
+    return CalmFinancialSummary(
+      label: context.l10n.goalTotalSavedAll,
       amount: formatMoney(saved),
       currency: currencyLabel,
       metrics: [
         CalmMetric(label: context.l10n.bdgStatActiveGoals, value: '$count'),
         CalmMetric(label: context.l10n.bdgStatProgress, value: '$ratio%'),
-        CalmMetric(label: context.l10n.goalTargetLabel, value: formatMoney(target)),
+        CalmMetric(
+            label: context.l10n.goalTargetLabel, value: formatMoney(target)),
       ],
     );
   }

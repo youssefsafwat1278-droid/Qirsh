@@ -5,6 +5,7 @@ import '../session/consent_capability.dart';
 import '../session/merchant_preference_writer.dart';
 import '../sync/pending_sync_reconciler.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:http/http.dart' as http;
@@ -15,6 +16,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../auth/account_deletion_gateway.dart';
 import '../auth/account_deletion_service.dart';
 import '../auth/apple_deletion_reauth.dart';
+import '../auth/supabase_auth_service.dart' show authorizeIosGoogle;
 import '../auth/immediate_deletion_flow.dart';
 import '../auth/immediate_deletion_receipt_store.dart';
 import '../auth/prepared_immediate_deletion_gateway.dart';
@@ -29,6 +31,7 @@ import '../sync/sync_health.dart';
 import '../sync/sync_recovery.dart';
 import '../sync/sync_wakeup.dart';
 import '../session/app_session.dart';
+import '../../features/gamification/services/achievement_unlocks.dart';
 import '../../features/planning_sync/services/outbox_queue_factory.dart'
     show localDataOwnerUid;
 import '../session/unsynced_inventory.dart';
@@ -484,6 +487,18 @@ final immediateDeletionFlowProvider = writerProvider<ImmediateDeletionFlow>((ref
       retainReceiptUntilLocalRemoval: true,
     ),
     apple: ref.watch(appleDeletionReauthProvider),
+    emailOnly: !Platform.isIOS,
+    googleProof: (nonce) async {
+      try {
+        final credential = await authorizeIosGoogle(nonce);
+        if (credential == null) return const AppleReauthCancelled();
+        final token = credential['idToken'];
+        if (token == null || token.isEmpty) return const AppleReauthFailed();
+        return AppleReauthGranted(jsonEncode({'proof': 'google', 'identity_token': token}));
+      } catch (_) {
+        return const AppleReauthFailed();
+      }
+    },
   );
 });
 
@@ -1966,10 +1981,12 @@ final budgetProgressUseCaseProvider = writerProvider<BudgetProgressUseCase>((ref
   // MALI-063n: the dormant Supabase budget-summary batch-fetch (pre-canonical
   // semantics) is retired — budget consumption is always the canonical Drift
   // path.
+  final db = ref.watch(appDatabaseProvider);
   return BudgetProgressUseCase(
     budgetRepository: ref.watch(budgetRepositoryProvider),
     transactionRepository: ref.watch(transactionRepositoryProvider),
     recordEngagementUseCase: ref.watch(recordEngagementUseCaseProvider),
+    onMonthUnderBudget: (at) => recordMonthUnderBudget(db, at),
   );
 });
 

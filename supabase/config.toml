@@ -485,3 +485,7 @@ verify_jwt = false
 # its own ACCOUNT_DELETION_WORKER_SECRET (a dedicated secret, not shared with
 # any other worker); raw secret rather than a JWT.
 verify_jwt = false
+
+[functions.google-enrollment]
+# The Google-signed ID token in the request is verified by the function.
+verify_jwt = false

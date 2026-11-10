@@ -47,14 +47,15 @@ class _LocalReadShellState extends State<LocalReadShell> {
   void initState() {
     super.initState();
     final recovery = AutomaticSessionRecovery.active;
-    if (recovery == null) return;
+    if (recovery == null || AutomaticSessionRecovery.recoveryTimedOut.value) return;
     _initialRecoveryPending = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // Bootstrap triggers after the first frame. Wait one event-loop turn,
       // then wait for the actual attempt rather than a fixed display timeout.
       unawaited(Future<void>(() async {
         if (!mounted) return;
-        await recovery.quiesced();
+        await recovery.quiesced().timeout(recovery.presentationDeadline,
+            onTimeout: () {});
         if (mounted) setState(() => _initialRecoveryPending = false);
       }));
     });

@@ -18,6 +18,7 @@ class BudgetProgressUseCase {
     required TransactionRepository transactionRepository,
     RecordEngagementUseCase? recordEngagementUseCase,
     FetchBudgetBatchSpent? fetchBatchSpent,
+    this.onMonthUnderBudget,
   })  : _budgetRepository = budgetRepository,
         _transactionRepository = transactionRepository,
         _recordEngagementUseCase = recordEngagementUseCase,
@@ -27,6 +28,7 @@ class BudgetProgressUseCase {
   final TransactionRepository _transactionRepository;
   final RecordEngagementUseCase? _recordEngagementUseCase;
   final FetchBudgetBatchSpent? _fetchBatchSpent;
+  final Future<void> Function(DateTime completedAt)? onMonthUnderBudget;
   Future<BudgetProgressSnapshot>? _inFlight;
 
   Future<BudgetProgressSnapshot> call({DateTime? now}) async {
@@ -125,12 +127,20 @@ class BudgetProgressUseCase {
     DateTime now,
   ) async {
     final expectedStart = _currentPeriodFor(budget.period, now).$1;
-    if (budget.startDate == expectedStart) {
+    if (budget.startDate.isAtSameMomentAs(expectedStart)) {
       return budget;
     }
 
     final previousPeriod = _periodForStart(budget.period, budget.startDate);
     final previousSpent = await _spentForBudget(budget, previousPeriod);
+
+    if (budget.period == BudgetPeriod.monthly &&
+        !previousPeriod.$2.isAfter(now) &&
+        !budget.startDate.isAfter(previousPeriod.$1) &&
+        previousSpent.minorUnits > 0 &&
+        previousSpent.compareTo(budget.amountMoney) <= 0) {
+      await onMonthUnderBudget?.call(previousPeriod.$2);
+    }
 
     if (budget.period == BudgetPeriod.daily &&
         previousSpent.compareTo(budget.amountMoney) <= 0 &&

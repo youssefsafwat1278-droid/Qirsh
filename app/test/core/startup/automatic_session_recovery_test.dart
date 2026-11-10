@@ -47,9 +47,11 @@ class FakeNative implements AsrNativePort {
 
   /// Simulates another protected writer right after P_elig's inspection.
   bool bumpAfterInspect = false;
+  Completer<void>? inspectionGate;
 
   @override
   Future<RecoveryEvidenceSnapshot?> inspect(String owner) async {
+    await inspectionGate?.future;
     final s = _snapshot();
     if (bumpAfterInspect) counter++;
     return s;
@@ -194,6 +196,8 @@ class FakeHost implements AsrSessionHost {
   @override
   bool get resumed => isResumed;
   @override
+  bool get foreground => isResumed;
+  @override
   String? get localReadOwner => owner;
   @override
   Future<String?> eligibilityDenial(String o) async => eligibility;
@@ -309,6 +313,7 @@ void main() {
 
   tearDown(() async {
     asr.dispose();
+    AutomaticSessionRecovery.recoveryTimedOut.value = false;
     coord.dispose();
     await dir.delete(recursive: true);
   });
@@ -630,6 +635,42 @@ void main() {
       finish.complete();
       await run;
     }
+  });
+
+  test('stalled native inspection ends the loader without releasing operation custody', () async {
+    await seed();
+    asr.dispose();
+    asr = AutomaticSessionRecovery(
+        coordinator: coord, gate: egress.gate, host: host, capture: capture,
+        native: native, presentationDeadline: const Duration(milliseconds: 40));
+    final hold = native.inspectionGate = Completer<void>();
+    final attempt = asr.run();
+    try {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(AutomaticSessionRecovery.restoringSession.value, isFalse);
+      expect(AutomaticSessionRecovery.recoveryTimedOut.value, isTrue);
+      expect(asr.running, isTrue);
+      expect(host.adopts, 0);
+      hold.complete();
+      await attempt;
+      expect(host.adopts, 0, reason: 'late evidence cannot admit after the UI deadline');
+    } finally {
+      if (!hold.isCompleted) hold.complete();
+      await attempt;
+    }
+  });
+
+  test('temporarily missing native evidence is retried without another resume', () async {
+    await seed();
+    native.kind = RecoveryEvidenceKind.none;
+    asr.trigger();
+    await asr.quiesced();
+    expect(asr.lastStop, 'native_evidence');
+    native.kind = RecoveryEvidenceKind.expiryEvidence;
+    await Future<void>.delayed(const Duration(milliseconds: 2300));
+    await asr.quiesced();
+    expect(asr.lastStop, 'recovered');
+    expect(host.adopts, 1);
   });
 
   test('ordinary resume without local read does not cover the current page', () async {

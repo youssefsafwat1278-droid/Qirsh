@@ -25,7 +25,7 @@ function parsed(over: Partial<ParsedCapture> = {}): ParsedCapture {
 }
 
 function body(status: CaptureStatus, over: Partial<ParsedCapture> = {}): string {
-  return buildNotification(status, parsed(over), 'SNB', RECEIVED, 180).body;
+  return buildNotification(status, parsed(over), 'SNB', RECEIVED, 180, 'ar').body;
 }
 
 Deno.test('processed notification states the nature', () => {
@@ -37,7 +37,7 @@ Deno.test('needs_review notification states the nature', () => {
 });
 
 Deno.test('duplicate notification states the nature — the reported defect', () => {
-  const n = buildNotification('duplicate', parsed(), 'SNB', RECEIVED, 180);
+  const n = buildNotification('duplicate', parsed(), 'SNB', RECEIVED, 180, 'ar');
   assertEquals(n.type, 'suspicious_duplicate');
   assertEquals(n.title, 'عملية مشابهة ⚠️'); // title deliberately unchanged
   assertStringIncludes(n.body, 'النوع: مصروف');
@@ -87,7 +87,7 @@ Deno.test('category "other" remains omitted', () => {
 
 Deno.test('the processed title is unchanged', () => {
   assertEquals(
-    buildNotification('processed', parsed(), 'SNB', RECEIVED, 180).title,
+    buildNotification('processed', parsed(), 'SNB', RECEIVED, 180, 'ar').title,
     'تم رصد عملية شراء 🛒',
   );
 });
@@ -100,6 +100,16 @@ Deno.test('a needs_review capture with no amount keeps its generic body', () => 
     'SNB',
     RECEIVED,
     180,
+    'ar',
   );
   assertEquals(n.body, 'افتح قرش لمراجعة الرسالة.');
+});
+
+Deno.test('English capture copy covers processed, duplicate, review and rejected messages', () => {
+  for (const status of ['processed', 'duplicate', 'needs_review', 'rejected'] as CaptureStatus[]) {
+    const n = buildNotification(status, parsed(), 'SNB', RECEIVED, 180, 'en');
+    assertEquals(/[\u0600-\u06ff]/.test(n.title + n.body), false, status);
+  }
+  assertStringIncludes(buildNotification('duplicate', parsed(), 'SNB', RECEIVED, 180, 'en').body,
+    'Open Qirsh to review');
 });

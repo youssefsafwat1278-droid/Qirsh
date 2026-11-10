@@ -7,6 +7,12 @@ import Security
 
 class RunnerTests: XCTestCase {
 
+  func testShortcutSetupProbeRecordsFreshReceipt() {
+    let started = Date().timeIntervalSince1970 * 1000
+    SharedCaptureStore.recordShortcutSetupProbe()
+    XCTAssertGreaterThanOrEqual(SharedCaptureStore.shortcutSetupProbeMilliseconds, started)
+  }
+
   func testConnectingNonKeySceneControllerHasCaptureAndTimezoneBeforeActivation() throws {
     let delegate = AppDelegate()
     defer {

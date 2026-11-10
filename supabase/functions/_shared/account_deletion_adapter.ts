@@ -105,6 +105,8 @@ export interface AdapterPorts {
   /** Resolves a bearer JWT against Auth. null = not a live user (stale/invalid). */
   identity: { getUser(bearerToken: string): Promise<{ id: string } | null> };
   apple: AppleGateway;
+  alternateProof?: (input: { uid: string; challengeId: string; challengeResponse: string }) =>
+    Promise<AuthorizationResult | null>;
   sealer: MaterialSealer;
   storage: StorageLike;
   authAdmin: AuthAdmin;
@@ -182,6 +184,8 @@ export function createAccountDeletionAdapter(ports: AdapterPorts) {
     },
 
     async authorizeDeletion(input): Promise<AuthorizationResult> {
+      const alternate = await ports.alternateProof?.(input);
+      if (alternate) return alternate;
       const verdict = await ports.apple.authorize(input);
       if (!isObject(verdict)) throw new Error('apple_authorize_malformed');
       if (verdict.status !== 'ok') {

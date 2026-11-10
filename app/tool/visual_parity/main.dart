@@ -1,4 +1,5 @@
 import 'report_surface.dart';
+import 'package:money_companion/features/dashboard/home_hero_period_controller.dart';
 // SIMULATOR PREVIEW ONLY — separate tool entry point, never imported by lib/. Runs the REAL screens over an in-memory, unencrypted demo database
 // seeded through the app's own repositories, so every screen can be inspected on
 // the Simulator without a sign-in. No Supabase config is passed, so nothing here
@@ -342,6 +343,7 @@ final _previewLocale = StateProvider<Locale>((ref) => const Locale('ar'));
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await HomeHeroPeriodController.preload();
   FlutterError.onError = (details) {
     _errors.add(details.exceptionAsString());
     FlutterError.presentError(details);
@@ -546,7 +548,7 @@ class _PreviewShell extends ConsumerWidget {
                     ref.read(shellIndexProvider.notifier).state = _slots[slot],
                 dark: Theme.of(context).brightness == Brightness.dark,
                 rtl: Directionality.of(context) == TextDirection.rtl,
-                tint: context.colors.primary,
+                tint: context.colors.cta,
               )
             : NavigationBar(
                 selectedIndex: _slots.indexOf(index),
@@ -832,6 +834,7 @@ Future<void> _servePreview() async {
       request.response.write(jsonEncode({
         'route': _router.routeInformationProvider.value.uri.toString(),
         'tab': _container.read(shellIndexProvider),
+        'homeHeroPeriod': _container.read(heroPeriodProvider).name,
         'locale': _container.read(_previewLocale).languageCode,
         'theme': _container.read(_previewTheme).name,
         'qaNativeFooterHidden': _container.read(_previewHideNativeFooter),

@@ -675,6 +675,40 @@ class AuthCoordinator {
     });
   }
 
+  /// An authenticated, same-owner identity edit. Unlike sign-in this cannot
+  /// create an admission, replace the owner, or clear refresh attempt limits.
+  Future<T> updateLinkedIdentity<T>({required String owner,
+      required bool Function() current, required Future<T> Function() exchange}) {
+    final intent = _intentSeq;
+    return section.run(() async {
+      final before = store.committed;
+      bool live() => current() && _intentSeq == intent && !removalSince(intent);
+      if (!live() || _transportUnconfirmed || _activeOp != null ||
+          automaticAdmissionDenial() != null || before?.owner != owner ||
+          before?.refreshOp != null || ordinaryAdmissionHeld?.call() != true) {
+        throw const ExplicitRefused('identity_not_current');
+      }
+      try {
+        final result = await _mutate(const AuthTag(AuthTagKind.install), exchange);
+        final session = _sdk?.currentSession;
+        if (!live() || session == null || session.isExpired || session.user.id != owner) {
+          throw const ExplicitRefused('identity_owner_changed');
+        }
+        final next = before!.copyWith(seq: before.seq + 1,
+            session: canonicalSession(session.toJson()));
+        if (await store.write(next) != WriteOutcome.committed) {
+          throw const ExplicitRefused('identity_persistence');
+        }
+        if (!live()) throw const ExplicitRefused('identity_superseded');
+        _setBaseline(next.digest);
+        return result;
+      } catch (_) {
+        await _alignLocked(const AuthTag(AuthTagKind.alignment));
+        rethrow;
+      }
+    });
+  }
+
   // ── removal (§4.9, §6.4) ─────────────────────────────────────────────────
 
   /// Logout, Remove data, immediate deletion, account switch. The intent is

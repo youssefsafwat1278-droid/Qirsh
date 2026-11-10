@@ -48,7 +48,7 @@ class PlansScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(plansWithSpentProvider);
     return AppScreenScaffold(
-      safeArea: false, // The photographic header owns the top inset.
+      scrollHeader: true,
       header: AppHeader(
         sectionPhoto: QirshSectionPhoto.plans,
         title: context.l10n.homePlans,
@@ -63,7 +63,8 @@ class PlansScreen extends ConsumerWidget {
       body: async.when(
         skipLoadingOnReload: true,
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => SingleChildScrollView(child: AppErrorState(
+        error: (e, _) => SingleChildScrollView(
+            child: AppErrorState(
           title: context.l10n.plLoadFailed,
           description: context.l10n.annTryAgainSoon,
           retryLabel: context.l10n.startRetry,
@@ -80,8 +81,7 @@ class PlansScreen extends ConsumerWidget {
                   illustration: const QirshIllustration(
                       name: 'plans', width: 220, height: 165),
                   title: context.l10n.plNoPlans,
-                  subtitle:
-                      context.l10n.plEmptyBody,
+                  subtitle: context.l10n.plEmptyBody,
                   primaryLabel: context.l10n.homeNewPlan,
                   onPrimary: () => PlanFormSheet.show(context),
                 ),
@@ -92,26 +92,6 @@ class PlansScreen extends ConsumerWidget {
             padding: const EdgeInsets.fromLTRB(
                 AppSpacing.gutter, AppSpacing.s4, AppSpacing.gutter, 120),
             children: [
-              Container(
-                padding: const EdgeInsets.all(AppSpacing.s4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).brightness == Brightness.dark
-                      ? const Color(0xFF152846) : const Color(0xFF10223C),
-                  borderRadius: BorderRadius.circular(26),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(child: Text(context.l10n.plSubtitle,
-                        style: AppTypography.custom(size: 17,
-                            weight: FontWeight.w700, height: 1.45,
-                            color: Colors.white))),
-                    const SizedBox(width: 12),
-                    const QirshIllustration(
-                        name: 'plans', width: 128, height: 96),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.s4),
               for (final progress in plans) ...[
                 _PlanCard(progress: progress),
                 const SizedBox(height: AppSpacing.s4),
@@ -187,10 +167,10 @@ class _PlanCard extends ConsumerWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(plan.name,
-                              style: AppTypography.bodyStrong(c.textMain),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis),
+                          child: Text(
+                            plan.name,
+                            style: AppTypography.bodyStrong(c.textMain),
+                          ),
                         ),
                         // UX-006 — a closed plan sat in the main list looking
                         // identical to an active one. Whether closed plans
@@ -314,26 +294,24 @@ class _PlanCard extends ConsumerWidget {
             spacing: 12,
             runSpacing: 6,
             children: [
-                Wrap(
-                  spacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Text(
-                      progress.isOver
-                          ? '${context.l10n.plansOverBudget} '
-                          : '${context.l10n.plansRemaining} ',
-                      style: AppTypography.caption(
-                          progress.isOver ? c.danger : c.textSecondary),
-                    ),
-                    MoneyText(
-                        progress.isOver
-                            ? -progress.remaining
-                            : progress.remaining,
-                        style: AppTypography.caption(
-                            progress.isOver ? c.danger : c.textSecondary),
-                    ),
-                  ],
-                ),
+              Wrap(
+                spacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    progress.isOver
+                        ? '${context.l10n.plansOverBudget} '
+                        : '${context.l10n.plansRemaining} ',
+                    style: AppTypography.caption(
+                        progress.isOver ? c.danger : c.textSecondary),
+                  ),
+                  MoneyText(
+                    progress.isOver ? -progress.remaining : progress.remaining,
+                    style: AppTypography.caption(
+                        progress.isOver ? c.danger : c.textSecondary),
+                  ),
+                ],
+              ),
               if (plan.daysLeft > 0 && !progress.isOver)
                 Wrap(
                   spacing: 4,
@@ -359,8 +337,7 @@ class _PlanCard extends ConsumerWidget {
       context: context,
       builder: (ctx) => GlassAlertDialog(
         title: Text(context.l10n.plDeleteTitle),
-        content: Text(
-            context.l10n.plDeleteBody(progress.plan.name)),
+        content: Text(context.l10n.plDeleteBody(progress.plan.name)),
         actions: [
           TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
@@ -440,7 +417,7 @@ class _PlanDetailsSheet extends ConsumerWidget {
             title: context.l10n.plDetails,
             scrollable: true,
             body: AppMissingRecordState(
-              message: context.l10n.plNotFound, illustration: 'plans'),
+                message: context.l10n.plNotFound, illustration: 'plans'),
           );
         }
         final plan = progress.plan;
@@ -489,7 +466,8 @@ class _PlanDetailsSheet extends ConsumerWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      context.l10n.plOfBudget(formatMoney(plan.budgetAmountMoney), currency),
+                      context.l10n.plOfBudget(
+                          formatMoney(plan.budgetAmountMoney), currency),
                       style: AppTypography.caption(c.textLight),
                     ),
                     const SizedBox(height: AppSpacing.s3),
@@ -505,7 +483,8 @@ class _PlanDetailsSheet extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.s4),
-              Text(context.l10n.plHistory, style: AppTypography.sectionTitle(c.textMain)),
+              Text(context.l10n.plHistory,
+                  style: AppTypography.sectionTitle(c.textMain)),
               const SizedBox(height: AppSpacing.s2),
               txAsync.when(
                 skipLoadingOnReload: true,
@@ -514,7 +493,8 @@ class _PlanDetailsSheet extends ConsumerWidget {
                   title: context.l10n.plTxLoadFailed,
                   description: context.l10n.annTryAgainSoon,
                   retryLabel: context.l10n.startRetry,
-                  onRetry: () => ref.invalidate(planTransactionsProvider(planId)),
+                  onRetry: () =>
+                      ref.invalidate(planTransactionsProvider(planId)),
                 ),
                 data: (transactions) {
                   if (transactions.isEmpty) {
@@ -623,11 +603,12 @@ Future<void> _showLinkTransactionSheet(
             // B2-C — bounded recent-expenses page (kind pushed to SQL) instead of
             // the whole ledger; the picker shows the 40 most-recent confirmed,
             // not-yet-linked expenses.
-            future: transactionPage ??= ref.read(transactionRepositoryProvider).getTransactionPage(
-                  limit: 500,
-                  filter: const TransactionPageFilter(
-                      kind: TransactionPageKind.expenses),
-                ),
+            future: transactionPage ??=
+                ref.read(transactionRepositoryProvider).getTransactionPage(
+                      limit: 500,
+                      filter: const TransactionPageFilter(
+                          kind: TransactionPageKind.expenses),
+                    ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());

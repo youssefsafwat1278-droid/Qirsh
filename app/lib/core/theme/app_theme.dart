@@ -178,12 +178,32 @@ class AppTheme {
           textStyle: AppTypography.title(c.cta),
         ),
       ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected) &&
+                    !states.contains(WidgetState.disabled)
+                ? c.cta
+                : null,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected) &&
+                    !states.contains(WidgetState.disabled)
+                ? c.onCta
+                : null,
+          ),
+        ),
+      ),
       chipTheme: ChipThemeData(
         backgroundColor: c.surfaceMuted,
-        selectedColor: c.ctaSoft,
+        selectedColor: c.cta,
+        checkmarkColor: c.onCta,
         disabledColor: c.disabled,
-        labelStyle: AppTypography.caption(c.textSecondary),
-        secondaryLabelStyle: AppTypography.caption(c.cta),
+        labelStyle: WidgetStateTextStyle.resolveWith((states) =>
+            AppTypography.caption(states.contains(WidgetState.selected)
+                ? c.onCta
+                : c.textSecondary)),
+        secondaryLabelStyle: AppTypography.caption(c.onCta),
         side: BorderSide(color: c.border),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadius.chip),

@@ -67,13 +67,13 @@ void main() {
     });
   });
 
-  test('both onboarding recipes tell the user to always pass Date Received', () {
+  test('onboarding keeps automatic time capture without a manual date demand', () {
     for (final locale in const ['en', 'ar']) {
       final arb = jsonDecode(File('lib/l10n/app_$locale.arb').readAsStringSync())
           as Map<String, dynamic>;
       for (final key in const ['setupShortcutStep5Body', 'iosStep6Body']) {
-        expect(arb[key], contains('Date Received'),
-            reason: '$locale/$key must keep the Date Received instruction');
+        expect(arb[key], isNot(contains('Date Received')),
+            reason: '$locale/$key must not demand manual date setup');
       }
     }
   });

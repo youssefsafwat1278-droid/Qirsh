@@ -36,11 +36,12 @@ void main() {
     TransactionStatus status = TransactionStatus.confirmed,
     TransactionTypeEntity type = TransactionTypeEntity.payment,
     DateTime? at,
+    String amount = '85',
   }) =>
       transactions.saveTransaction(
         transaction: TransactionEntity(
           id: 'event-${serial++}',
-          amountMoney: Money.parse('85', currency),
+          amountMoney: Money.parse(amount, currency),
           currency: currency,
           accountId: account,
           type: type,
@@ -117,7 +118,8 @@ void main() {
     expect(alerts, hasLength(1));
     expect(alerts.single.body, contains('sofa'));
     expect(alerts.single.body, contains('80%'));
-    expect((await check([sofa])).single.notifId, alerts.single.notifId);
+    expect(await check([sofa]), isEmpty,
+        reason: 'reopening/importing at the same budget tier must not repeat it');
   });
 
   test('global budget spans included accounts without default account label',
@@ -128,6 +130,26 @@ void main() {
     expect(alerts.single.body, isNot(contains('mina')));
     expect(await check([await put(currency: 'USD')]), isEmpty);
     expect(await check([await put(account: 'excluded')]), isEmpty);
+  });
+
+  test('only a new tier or another ten percent over budget alerts again', () async {
+    await budget();
+    expect(await check([await put()]), hasLength(1));
+    expect(await check([await put(amount: '1')]), isEmpty);
+    expect(await check([await put(amount: '5')]), hasLength(1));
+    expect(await check([await put(amount: '10')]), hasLength(1));
+    expect(await check([await put(amount: '5')]), isEmpty);
+    expect(await check([await put(amount: '6')]), hasLength(1));
+  });
+
+  test('failed delivery leaves the budget eligible for a later alert', () async {
+    await budget();
+    final event = await put();
+    await expectLater(CapturedMessageProcessor.checkBudgetAlert(db,
+      const NotificationPreferences(), committedTransactions: [event], now: now,
+      emit: (_) async => throw StateError('delivery failed')), throwsStateError);
+    expect(await check([event]), hasLength(1));
+    expect(await check([event]), isEmpty);
   });
 
   test('account-specific excluded account still consumes its budget', () async {
@@ -211,8 +233,10 @@ void main() {
         secondary:
             AddTransactionResult.added(fee, ParseResult.notTransaction()));
     expect(await check(newlyAddedTransactions(result)), hasLength(1));
+    final nextFee = await put(amount: '15');
     final duplicateWithNewFee =
-        AddTransactionResult.duplicate(primary, secondary: result.secondary);
+        AddTransactionResult.duplicate(primary, secondary:
+          AddTransactionResult.added(nextFee, ParseResult.notTransaction()));
     expect(
         await check(newlyAddedTransactions(duplicateWithNewFee)), hasLength(1));
   });

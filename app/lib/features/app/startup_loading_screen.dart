@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/startup/bootstrap_runner.dart';
-import '../../core/theme/app_assets.dart';
+import 'app_boot_loader.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -38,6 +38,7 @@ class StartupLoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (error == null) return const AppBootLoader();
     final c = context.colors;
     return Directionality(
       textDirection: Directionality.of(context),
@@ -47,54 +48,15 @@ class StartupLoadingScreen extends StatelessWidget {
           child: Center(
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.gutter),
-              child: error == null
-                  ? _LoadingBody(updatingData: updatingData)
-                  : _ErrorBody(
-                      error: error!,
-                      lastStep: lastStep,
-                      onRetry: onRetry,
-                    ),
+              child: _ErrorBody(
+                error: error!,
+                lastStep: lastStep,
+                onRetry: onRetry,
+              ),
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _LoadingBody extends StatelessWidget {
-  const _LoadingBody({this.updatingData = false});
-  final bool updatingData;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Image.asset(
-          AppAssets.getLogoTagline(context),
-          width: 220,
-          filterQuality: FilterQuality.high,
-        ),
-        const SizedBox(height: AppSpacing.s8),
-        SizedBox(
-          width: 28,
-          height: 28,
-          child: CircularProgressIndicator(
-            strokeWidth: 2.5,
-            valueColor: AlwaysStoppedAnimation<Color>(c.accent),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.s5),
-        Text(
-          updatingData
-              ? context.l10n.rebootUpdatingData
-              : context.l10n.startPreparing,
-          style: AppTypography.callout(c.textLight)
-              .copyWith(decoration: TextDecoration.none),
-        ),
-      ],
     );
   }
 }

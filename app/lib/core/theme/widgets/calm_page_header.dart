@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'mali_card.dart';
 import 'qirsh_visuals.dart';
 import 'section_photo_header.dart';
 export 'section_photo_header.dart' show QirshSectionPhoto, QirshSectionBackdrop;
@@ -701,6 +702,98 @@ class StatusBarScrim extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+
+/// A neutral statement card for an amount and its supporting metrics.
+class CalmFinancialSummary extends StatelessWidget {
+  const CalmFinancialSummary({
+    super.key,
+    required this.label,
+    required this.amount,
+    this.currency,
+    this.footnote,
+    this.metrics = const [],
+  });
+
+  final String label;
+  final String amount;
+  final String? currency;
+  final String? footnote;
+  final List<CalmMetric> metrics;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.s2, AppSpacing.gutter, 0),
+      child: MaliCard(
+        padding: const EdgeInsets.all(AppSpacing.s4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: AppTypography.subhead(c.textSecondary)),
+            const SizedBox(height: AppSpacing.s2),
+            Wrap(
+              spacing: AppSpacing.s2,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(amount,
+                    style: AppTypography.custom(
+                      size: 30,
+                      weight: FontWeight.w700,
+                      height: 1.2,
+                      color: c.textMain,
+                      tabular: true,
+                    )),
+                if (currency != null)
+                  Text(currency!,
+                      style: AppTypography.caption(c.textSecondary)),
+              ],
+            ),
+            if (footnote != null) ...[
+              const SizedBox(height: AppSpacing.s2),
+              Text(footnote!, style: AppTypography.caption(c.textSecondary)),
+            ],
+            if (metrics.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.s3),
+              Divider(height: 1, color: c.border),
+              const SizedBox(height: AppSpacing.s3),
+              LayoutBuilder(builder: (context, constraints) {
+                final perRow = constraints.maxWidth < 270 ||
+                        MediaQuery.textScalerOf(context).scale(14) > 20
+                    ? 2
+                    : 3;
+                final width =
+                    (constraints.maxWidth - (perRow - 1) * AppSpacing.s2) /
+                        perRow;
+                return Wrap(
+                  spacing: AppSpacing.s2,
+                  runSpacing: AppSpacing.s3,
+                  children: [
+                    for (final metric in metrics)
+                      SizedBox(
+                        width: width,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(metric.value,
+                                style: AppTypography.bodyStrong(c.textMain)),
+                            Text(metric.label,
+                                style: AppTypography.caption(c.textSecondary)),
+                          ],
+                        ),
+                      ),
+                  ],
+                );
+              }),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

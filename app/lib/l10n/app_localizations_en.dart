@@ -9,6 +9,31 @@ class AppL10nEn extends AppL10n {
   AppL10nEn([String locale = 'en']) : super(locale);
 
   @override
+  String get shortcutAddReady => 'Add Qirsh shortcut';
+
+  @override
+  String get shortcutQuickHelp =>
+      'Add the QIRSH template, review the bank-message filter, then enable its Message automation. On older iOS versions, create a Message automation that runs this shortcut with Shortcut Input.';
+
+  @override
+  String get shortcutTestConnection => 'Test connection';
+
+  @override
+  String get shortcutProbeWaiting =>
+      'Run the shortcut, then return to Qirsh. This test does not add a transaction.';
+
+  @override
+  String get shortcutProbePassed =>
+      'Connection verified. Automatic capture still needs the Message automation enabled.';
+
+  @override
+  String get shortcutOpenFailed =>
+      'Couldn’t open Shortcuts. Make sure the Shortcuts app is installed and try again.';
+
+  @override
+  String get shortcutManualSteps => 'Detailed setup instructions';
+
+  @override
   String get appTitle => 'Qirsh';
 
   @override
@@ -90,7 +115,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get setupShortcutStep5Body =>
-      'Choose New Blank Automation, search for \"Process Bank SMS\", set SMS Text to \"Shortcut Input\", and set Date Received to when the message arrived. Never leave Date Received empty.';
+      'Choose New Blank Automation, search for “Process Bank SMS”, and set SMS Text to Shortcut Input.';
 
   @override
   String get setupShortcutStep6Title => 'Save';
@@ -112,11 +137,10 @@ class AppL10nEn extends AppL10n {
   String get brandContinueCta => 'Let\'s get started';
 
   @override
-  String get authTitle => 'Your financial journey, saved';
+  String get authTitle => 'Sign in to Qirsh';
 
   @override
-  String get authSubtitle =>
-      'Sign in to protect your data and restore it on your devices.';
+  String get authSubtitle => 'Choose how you’d like to sign in.';
 
   @override
   String get authTrustLocalEncryption => 'Local encryption';
@@ -473,7 +497,7 @@ class AppL10nEn extends AppL10n {
   String get enterOtpCode => 'Enter Verification Code';
 
   @override
-  String get otpSentTo => 'We sent a 6-digit verification code to the email:';
+  String get otpSentTo => 'Enter the code sent to this email. Check Spam too.';
 
   @override
   String get verifyCode => 'Verify Code';
@@ -4883,7 +4907,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get iosStep6Body =>
-      'An SMS Text field must appear — set it to Shortcut Input. Open the action’s details and set Date Received to when the message arrived and never leave it empty; that is what stops a transaction being recorded twice if the automation runs twice for the same message.';
+      'Set SMS Text to Shortcut Input. Keep Sender as the message sender. Qirsh records the capture time automatically.';
 
   @override
   String get iosStep7 => 'Match the final shape';
@@ -6397,7 +6421,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get deleteAccountIntro =>
-      'Permanently and immediately delete your Qirsh account and all the data saved with it. You\'ll confirm with Apple, and this cannot be undone.';
+      'Permanently delete your Qirsh account and the data saved with it. You’ll confirm your identity first.';
 
   @override
   String get deleteAccountAction => 'Delete account';
@@ -6407,7 +6431,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get deleteAccountConfirmBody =>
-      'This permanently deletes your account and all your data, immediately. You\'ll be asked to confirm with Apple. It cannot be undone.';
+      'This permanently deletes your account and its data. Confirm your identity to continue. This cannot be undone.';
 
   @override
   String get deleteAccountConfirmAction => 'Delete permanently';
@@ -6972,4 +6996,208 @@ class AppL10nEn extends AppL10n {
   @override
   String get onboardingAccountCheckFailed =>
       'We couldn\'t check your account setup. Check your connection and try again.';
+
+  @override
+  String get shortcutVisualInstallTitle => 'Add the Qirsh shortcut';
+
+  @override
+  String get shortcutVisualInstallBody =>
+      'Tap Add Qirsh Shortcut, then Add Shortcut in iOS. Keep the new template name QIRSH so the connection test can find it.';
+
+  @override
+  String get shortcutVisualFilterTitle =>
+      'Choose which bank messages to capture';
+
+  @override
+  String shortcutVisualFilterBody(String currencyCode) {
+    return 'The shared template starts with EGP. Set Message contains to $currencyCode; keep it if it already matches. Keep Shortcut Input and Sender in Process.';
+  }
+
+  @override
+  String get shortcutVisualAutomationTitle => 'Turn on automatic capture';
+
+  @override
+  String get shortcutVisualAutomationBody =>
+      'Tap the arrow beside When I receive a message. Turn Automation ON and Confirm Before Run OFF, then save.\n\nIf your iOS version shows Run Immediately, choose it.';
+
+  @override
+  String get shortcutVisualTestTitle => 'Check the connection';
+
+  @override
+  String get shortcutVisualTestBody =>
+      'Test connection runs QIRSH without adding a transaction. Success confirms the connection.\n\nTo check automatic capture, receive a bank SMS matching your filter.';
+
+  @override
+  String get shortcutVisualImageCaption =>
+      'iOS reference · tap to zoom. The shortcut name for testing is QIRSH.';
+
+  @override
+  String get shortcutVisualEnlarge => 'Enlarge the iOS setup screenshot';
+
+  @override
+  String get shortcutVisualReviewed =>
+      'Steps reviewed. Automatic capture still depends on enabling Automation in Shortcuts.';
+
+  @override
+  String get shortcutCatalogTitle => 'Bank messages';
+
+  @override
+  String get shortcutCatalogBody =>
+      'Choose the word your bank uses. We’ll guide you through the filter and automatic capture, one step at a time.';
+
+  @override
+  String get shortcutCatalogSearch => 'Word or currency';
+
+  @override
+  String get shortcutCatalogOther => 'Other words and currencies';
+
+  @override
+  String shortcutCatalogKeyword(String keyword) {
+    return 'Texts with “$keyword”';
+  }
+
+  @override
+  String shortcutCatalogExample(String keyword) {
+    return 'Purchase of $keyword 450.00 at Talabat.';
+  }
+
+  @override
+  String get shortcutCatalogSetUp => 'Set up';
+
+  @override
+  String get shortcutCatalogReviewed => 'Steps reviewed';
+
+  @override
+  String get shortcutCatalogNoMatches =>
+      'No matches. Try a currency code such as EGP or USD.';
+
+  @override
+  String get shortcutCatalogSingleTemplate =>
+      'All choices use the same QIRSH template. You’ll change its existing filter in Shortcuts. Reviewing the steps does not confirm that iOS Automation is on.';
+
+  @override
+  String get shortcutOpenEditor => 'Open QIRSH in Shortcuts';
+
+  @override
+  String get shortcutVisualArrowTitle => 'Open the automation controls';
+
+  @override
+  String get shortcutVisualArrowBody =>
+      'Open QIRSH in Shortcuts. Tap the small blue arrow beside “where”, under “When I receive a message”.';
+
+  @override
+  String shortcutVisualStep(int current, int total) {
+    return 'Step $current of $total';
+  }
+
+  @override
+  String get shortcutStudioTitle => 'Connect your messages';
+
+  @override
+  String get shortcutStudioBody =>
+      'A small bridge between your bank messages and Qirsh. Set your filter, connect it, and check it.';
+
+  @override
+  String get shortcutRouteMessage => 'Message';
+
+  @override
+  String get shortcutRouteAutomation => 'Shortcut';
+
+  @override
+  String get shortcutStudioCurrency => '1 · Message currency';
+
+  @override
+  String get shortcutStudioWord => '2 · Word to match';
+
+  @override
+  String get shortcutStudioPreview => 'Your capture filter';
+
+  @override
+  String shortcutStudioBegin(String keyword) {
+    return 'Connect “$keyword”';
+  }
+
+  @override
+  String get authEmailExplanation =>
+      'Enter the email on your Qirsh account to receive a one-time login code.';
+
+  @override
+  String get authEmailLinkExplanation =>
+      'Add an email to this account. Your transactions and settings stay in the same account. Changing your email requires confirmation of both addresses.';
+
+  @override
+  String get authInvalidEmail => 'Enter a valid email address.';
+
+  @override
+  String get authCodeSendFailed =>
+      'Could not send the code. Check your connection and try again after a minute.';
+
+  @override
+  String get authCodeVerifyFailed =>
+      'Could not verify the code. Check it and try again.';
+
+  @override
+  String get authResendCode => 'Resend code';
+
+  @override
+  String get authChangeEmail => 'Use a different email';
+
+  @override
+  String get authConfirmBothEmails =>
+      'New email confirmed. Enter the code sent to your current email to finish.';
+
+  @override
+  String get authCurrentEmailCode => 'Code from your current email';
+
+  @override
+  String get authSignInMethods => 'Sign-in methods';
+
+  @override
+  String get authSignInMethodsDescription =>
+      'Add a way to sign in to this account. Your data stays together.';
+
+  @override
+  String get authLinked => 'Connected';
+
+  @override
+  String get authLinkGoogle => 'Connect Google';
+
+  @override
+  String get authLinkEmail => 'Connect email';
+
+  @override
+  String get authLinkSuccess => 'Sign-in method connected to your account.';
+
+  @override
+  String get authLinkFailed =>
+      'Could not connect this sign-in method. If it belongs to another Qirsh account, use a different one.';
+
+  @override
+  String get authExistingAccountHint =>
+      'Already use Apple? Sign in with Apple to link a new method.';
+
+  @override
+  String get authCreateAccount => 'Create an account';
+
+  @override
+  String get authBackToSignIn => 'Already have an account? Sign in';
+
+  @override
+  String get authCreateAccountSubtitle =>
+      'Choose a method for your new Qirsh account.';
+
+  @override
+  String get authCreateEmailExplanation =>
+      'Enter your email. Confirm the code to finish creating your Qirsh account.';
+
+  @override
+  String get deleteAccountEmailProofTitle => 'Email confirmation code';
+
+  @override
+  String get deleteAccountEmailProofBody =>
+      'We sent a one-time code to the verified email on this Qirsh account. Enter it to authorize deletion.';
+
+  @override
+  String get authGoogleSignupRequired =>
+      'This Google account is new to Qirsh. Choose Create an account to register.';
 }

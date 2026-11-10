@@ -20,6 +20,7 @@ import '../capture/services/local_notification_service.dart';
 import 'onboarding_account_step.dart';
 import 'onboarding_consent_steps.dart';
 import 'onboarding_options.dart';
+import 'shortcut_setup_actions.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../../core/theme/app_colors.dart';
 import '../common/repo_error_messages.dart';
@@ -216,48 +217,49 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: Theme.of(context).brightness == Brightness.dark
-          ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: Scaffold(
-      backgroundColor: context.colors.bg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: AppSpacing.s2),
-            const ExcludeSemantics(
-              child: Image(
-                image: AssetImage(AppAssets.qirshLogoFull),
-                height: 32,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.s2),
-            _header(l10n),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 320),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                transitionBuilder: (child, animation) => FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: Tween<Offset>(
-                      begin: const Offset(0, 0.03),
-                      end: Offset.zero,
-                    ).animate(animation),
-                    child: child,
+        value: Theme.of(context).brightness == Brightness.dark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
+        child: Scaffold(
+          backgroundColor: context.colors.bg,
+          body: SafeArea(
+            child: Column(
+              children: [
+                const SizedBox(height: AppSpacing.s2),
+                const ExcludeSemantics(
+                  child: Image(
+                    image: AssetImage(AppAssets.qirshLogoFull),
+                    height: 32,
                   ),
                 ),
-                child: KeyedSubtree(
-                  key: ValueKey(_currentStep),
-                  child: _stepPage(l10n, _currentStep),
+                const SizedBox(height: AppSpacing.s2),
+                _header(l10n),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 320),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    transitionBuilder: (child, animation) => FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.03),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      ),
+                    ),
+                    child: KeyedSubtree(
+                      key: ValueKey(_currentStep),
+                      child: _stepPage(l10n, _currentStep),
+                    ),
+                  ),
                 ),
-              ),
+                _finishBar(l10n),
+              ],
             ),
-            _finishBar(l10n),
-          ],
-        ),
-      ),
-    ));
+          ),
+        ));
   }
 
   Widget _header(AppL10n l10n) {
@@ -273,7 +275,8 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
                 ? IconButton(
                     padding: EdgeInsets.zero,
                     onPressed: _busy ? null : _goBack,
-                    tooltip: MaterialLocalizations.of(context).backButtonTooltip,
+                    tooltip:
+                        MaterialLocalizations.of(context).backButtonTooltip,
                     icon: const BackButtonIcon(),
                     color: context.colors.textPrimary,
                   )
@@ -324,7 +327,8 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
           onDone: (_) => _markDone(1),
         );
       case 2:
-        return OnboardingReadinessStep(onDark: false, onDone: () => _markDone(2));
+        return OnboardingReadinessStep(
+            onDark: false, onDone: () => _markDone(2));
       case _accountStep:
         return OnboardingAccountStep(
           currency: _selectedCountry(context).currency,
@@ -366,12 +370,21 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
             eyebrow,
             const SizedBox(height: AppSpacing.s7),
           ],
-          Center(child: Column(children: [
+          Center(
+              child: Column(children: [
             QirshIllustration(
-              name: step == 0 ? 'welcome' : step == 4 ? 'notifications' : 'capture',
-              width: 220, height: 165),
-            if (done) Padding(padding: const EdgeInsets.only(top: 8),
-              child: Icon(AppLucideIcons.check, color: context.colors.success, size: 24)),
+                name: step == 0
+                    ? 'welcome'
+                    : step == 4
+                        ? 'notifications'
+                        : 'capture',
+                width: 220,
+                height: 165),
+            if (done)
+              Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Icon(AppLucideIcons.check,
+                      color: context.colors.success, size: 24)),
           ])),
           const SizedBox(height: AppSpacing.s6),
           Text(
@@ -466,7 +479,8 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
                   backgroundColor: context.colors.cta,
                   foregroundColor: context.colors.onCta,
                 ),
-                child: Text(cta, style: AppTypography.bodyStrong(context.colors.onCta)),
+                child: Text(cta,
+                    style: AppTypography.bodyStrong(context.colors.onCta)),
               ),
             ),
     );
@@ -495,36 +509,47 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (var i = 0; i < steps.length; i++) ...[
-                          Container(
-                            width: 220,
-                            padding: const EdgeInsets.all(AppSpacing.s3),
-                            decoration: BoxDecoration(
-                              color: context.colors.surface,
-                              borderRadius: BorderRadius.circular(AppRadius.md),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('${i + 1}. ${steps[i].$1}',
-                                    style: AppTypography.bodyStrong(context.colors.textPrimary)),
-                                const SizedBox(height: 6),
-                                Text(steps[i].$2,
-                                    style: AppTypography.caption(context.colors.textMuted)),
-                              ],
-                            ),
-                          ),
-                          if (i != steps.length - 1) const SizedBox(width: 10),
-                        ],
-                      ],
-                    ),
-                  ),
+                ShortcutSetupActions(currencyCode: _selectedCountry(context).currency),
+                const SizedBox(height: 12),
+                ExpansionTile(
+                  title: Text(l10n.shortcutManualSteps),
+                  children: [
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (var i = 0; i < steps.length; i++) ...[
+                              Container(
+                                width: 220,
+                                padding: const EdgeInsets.all(AppSpacing.s3),
+                                decoration: BoxDecoration(
+                                  color: context.colors.surface,
+                                  borderRadius:
+                                      BorderRadius.circular(AppRadius.md),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('${i + 1}. ${steps[i].$1}',
+                                        style: AppTypography.bodyStrong(
+                                            context.colors.textPrimary)),
+                                    const SizedBox(height: 6),
+                                    Text(steps[i].$2,
+                                        style: AppTypography.caption(
+                                            context.colors.textMuted)),
+                                  ],
+                                ),
+                              ),
+                              if (i != steps.length - 1)
+                                const SizedBox(width: 10),
+                            ],
+                          ],
+                        ),
+                      ),
+                    )
+                  ],
                 ),
                 const SizedBox(height: AppSpacing.s4),
                 SizedBox(
@@ -618,7 +643,8 @@ class _CountryPill extends StatelessWidget {
                   Icon(Icons.check, size: 16, color: foreground),
                   const SizedBox(width: 6),
                 ],
-                Flexible(child: Text(
+                Flexible(
+                    child: Text(
                   '${choice.flag} ${choice.name} · ${choice.currency}',
                   style: AppTypography.caption(foreground),
                 )),

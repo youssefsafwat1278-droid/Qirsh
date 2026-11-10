@@ -97,6 +97,48 @@ abstract class AppL10n {
     Locale('en')
   ];
 
+  /// No description provided for @shortcutAddReady.
+  ///
+  /// In ar, this message translates to:
+  /// **'إضافة اختصار قرش'**
+  String get shortcutAddReady;
+
+  /// No description provided for @shortcutQuickHelp.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف قالب QIRSH وراجع فلتر الرسائل، ثم فعّل أتمتة Message. في إصدارات iOS الأقدم، أنشئ أتمتة Message تشغّل الاختصار مع Shortcut Input.'**
+  String get shortcutQuickHelp;
+
+  /// No description provided for @shortcutTestConnection.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبار الاتصال'**
+  String get shortcutTestConnection;
+
+  /// No description provided for @shortcutProbeWaiting.
+  ///
+  /// In ar, this message translates to:
+  /// **'شغّل الاختصار ثم ارجع لقرش. الاختبار لا يضيف معاملة مالية.'**
+  String get shortcutProbeWaiting;
+
+  /// No description provided for @shortcutProbePassed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم التحقق من الاتصال. التسجيل التلقائي يتطلب تفعيل أتمتة الرسائل أيضًا.'**
+  String get shortcutProbePassed;
+
+  /// No description provided for @shortcutOpenFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر فتح الاختصارات. تأكّد من تثبيت تطبيق Shortcuts وحاول مرة أخرى.'**
+  String get shortcutOpenFailed;
+
+  /// No description provided for @shortcutManualSteps.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعليمات الإعداد بالتفصيل'**
+  String get shortcutManualSteps;
+
   /// No description provided for @appTitle.
   ///
   /// In ar, this message translates to:
@@ -238,7 +280,7 @@ abstract class AppL10n {
   /// No description provided for @setupShortcutStep5Body.
   ///
   /// In ar, this message translates to:
-  /// **'اختر New Blank Automation وابحث عن «Process Bank SMS»، وفي SMS Text اختر «Shortcut Input»، وفي Date Received اختر تاريخ استلام الرسالة. لا تترك Date Received فارغًا.'**
+  /// **'اختر New Blank Automation وابحث عن Process Bank SMS، واضبط SMS Text على Shortcut Input.'**
   String get setupShortcutStep5Body;
 
   /// No description provided for @setupShortcutStep6Title.
@@ -280,13 +322,13 @@ abstract class AppL10n {
   /// No description provided for @authTitle.
   ///
   /// In ar, this message translates to:
-  /// **'رحلتك المالية محفوظة'**
+  /// **'سجّل الدخول لقرش'**
   String get authTitle;
 
   /// No description provided for @authSubtitle.
   ///
   /// In ar, this message translates to:
-  /// **'سجّل دخولك لحماية بياناتك واستعادتها على أجهزتك.'**
+  /// **'اختار طريقة تسجيل الدخول المناسبة ليك.'**
   String get authSubtitle;
 
   /// No description provided for @authTrustLocalEncryption.
@@ -940,7 +982,7 @@ abstract class AppL10n {
   /// No description provided for @otpSentTo.
   ///
   /// In ar, this message translates to:
-  /// **'أرسلنا رمز التحقق المكون من 6 أرقام إلى البريد الإلكتروني:'**
+  /// **'اكتب الكود اللي وصلك على البريد ده. راجع الرسائل غير المرغوب فيها كمان.'**
   String get otpSentTo;
 
   /// No description provided for @verifyCode.
@@ -8230,7 +8272,7 @@ abstract class AppL10n {
   /// No description provided for @iosStep6Body.
   ///
   /// In ar, this message translates to:
-  /// **'يجب أن يظهر حقل SMS Text. اختَر له Shortcut Input. وافتح تفاصيل الأكشن واضبط Date Received على تاريخ استلام الرسالة ولا تتركه فارغًا — يمنع تكرار العملية إذا شُغّلت الأتمتة مرتين لنفس الرسالة.'**
+  /// **'اضبط SMS Text على Shortcut Input وسيب Sender على مرسل الرسالة. قرش بيسجّل وقت الالتقاط تلقائيًا.'**
   String get iosStep6Body;
 
   /// No description provided for @iosStep7.
@@ -10780,7 +10822,7 @@ abstract class AppL10n {
   /// No description provided for @deleteAccountIntro.
   ///
   /// In ar, this message translates to:
-  /// **'احذف حسابك في قرش وكل البيانات المحفوظة معه نهائيًا وعلى الفور. ستؤكد ذلك عبر Apple، ولا يمكن التراجع عنه.'**
+  /// **'احذف حساب قرش والبيانات المحفوظة فيه نهائيًا. هتأكّد هويتك الأول.'**
   String get deleteAccountIntro;
 
   /// No description provided for @deleteAccountAction.
@@ -10798,7 +10840,7 @@ abstract class AppL10n {
   /// No description provided for @deleteAccountConfirmBody.
   ///
   /// In ar, this message translates to:
-  /// **'سيُحذف حسابك وكل بياناتك نهائيًا وعلى الفور، ولا يمكن التراجع عن ذلك. ستحتاج إلى التأكيد عبر Apple.'**
+  /// **'هيتحذف حسابك وبياناته نهائيًا. أكّد هويتك عشان تكمل. الحذف لا يمكن التراجع عنه.'**
   String get deleteAccountConfirmBody;
 
   /// No description provided for @deleteAccountConfirmAction.
@@ -11688,6 +11730,348 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'تعذّر التحقق من إعداد حسابك. تحقّق من اتصالك ثم أعد المحاولة.'**
   String get onboardingAccountCheckFailed;
+
+  /// No description provided for @shortcutVisualInstallTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف اختصار قرش'**
+  String get shortcutVisualInstallTitle;
+
+  /// No description provided for @shortcutVisualInstallBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. احتفظ باسم القالب الجديد QIRSH عشان اختبار الاتصال يقدر يفتحه.'**
+  String get shortcutVisualInstallBody;
+
+  /// No description provided for @shortcutVisualFilterTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختار الرسائل البنكية المطلوبة'**
+  String get shortcutVisualFilterTitle;
+
+  /// No description provided for @shortcutVisualFilterBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'القالب المشترك بيبدأ بـ EGP. اضبط Message contains على {currencyCode}؛ لو هي نفس الكلمة سيبها زي ما هي. سيب Shortcut Input وSender في Process.'**
+  String shortcutVisualFilterBody(String currencyCode);
+
+  /// No description provided for @shortcutVisualAutomationTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّل الالتقاط التلقائي'**
+  String get shortcutVisualAutomationTitle;
+
+  /// No description provided for @shortcutVisualAutomationBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط السهم جنب When I receive a message. شغّل Automation واقفل Confirm Before Run، ثم احفظ.\n\nلو إصدار iOS عندك بيعرض Run Immediately اختاره.'**
+  String get shortcutVisualAutomationBody;
+
+  /// No description provided for @shortcutVisualTestTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبر الاتصال بقرش'**
+  String get shortcutVisualTestTitle;
+
+  /// No description provided for @shortcutVisualTestBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختبار الاتصال بيشغّل QIRSH من غير إضافة معاملة. نجاحه بيأكد الاتصال.\n\nوللتأكد من الالتقاط التلقائي، استقبل رسالة بنكية تطابق الفلتر اللي اخترته.'**
+  String get shortcutVisualTestBody;
+
+  /// No description provided for @shortcutVisualImageCaption.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرجع من iOS · اضغط للتكبير. اسم الاختصار المستخدم في الاختبار QIRSH.'**
+  String get shortcutVisualImageCaption;
+
+  /// No description provided for @shortcutVisualEnlarge.
+  ///
+  /// In ar, this message translates to:
+  /// **'تكبير صورة إعداد الاختصار في iOS'**
+  String get shortcutVisualEnlarge;
+
+  /// No description provided for @shortcutVisualReviewed.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجعت الخطوات. الالتقاط التلقائي لسه محتاج تفعيل Automation داخل الاختصارات.'**
+  String get shortcutVisualReviewed;
+
+  /// No description provided for @shortcutCatalogTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسائل البنك'**
+  String get shortcutCatalogTitle;
+
+  /// No description provided for @shortcutCatalogBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختار الكلمة اللي بنكك بيستخدمها، وهنظبط معاك الفلتر والالتقاط التلقائي خطوة بخطوة.'**
+  String get shortcutCatalogBody;
+
+  /// No description provided for @shortcutCatalogSearch.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمة أو عملة'**
+  String get shortcutCatalogSearch;
+
+  /// No description provided for @shortcutCatalogOther.
+  ///
+  /// In ar, this message translates to:
+  /// **'كلمات وعملات أخرى'**
+  String get shortcutCatalogOther;
+
+  /// No description provided for @shortcutCatalogKeyword.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسائل فيها «{keyword}»'**
+  String shortcutCatalogKeyword(String keyword);
+
+  /// No description provided for @shortcutCatalogExample.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم خصم {keyword} 450.00 عند Talabat.'**
+  String shortcutCatalogExample(String keyword);
+
+  /// No description provided for @shortcutCatalogSetUp.
+  ///
+  /// In ar, this message translates to:
+  /// **'إعداد'**
+  String get shortcutCatalogSetUp;
+
+  /// No description provided for @shortcutCatalogReviewed.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجعت الخطوات'**
+  String get shortcutCatalogReviewed;
+
+  /// No description provided for @shortcutCatalogNoMatches.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفيش نتيجة. جرّب رمز عملة زي EGP أو USD.'**
+  String get shortcutCatalogNoMatches;
+
+  /// No description provided for @shortcutCatalogSingleTemplate.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الاختيارات بتستخدم قالب QIRSH نفسه. هتغيّر الفلتر الحالي داخل الاختصارات. مراجعة الخطوات مش تأكيد إن Automation اتفعّل في iOS.'**
+  String get shortcutCatalogSingleTemplate;
+
+  /// No description provided for @shortcutOpenEditor.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح QIRSH في الاختصارات'**
+  String get shortcutOpenEditor;
+
+  /// No description provided for @shortcutVisualArrowTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح إعدادات التشغيل التلقائي'**
+  String get shortcutVisualArrowTitle;
+
+  /// No description provided for @shortcutVisualArrowBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح QIRSH في الاختصارات. اضغط السهم الأزرق الصغير جنب where تحت When I receive a message.'**
+  String get shortcutVisualArrowBody;
+
+  /// No description provided for @shortcutVisualStep.
+  ///
+  /// In ar, this message translates to:
+  /// **'الخطوة {current} من {total}'**
+  String shortcutVisualStep(int current, int total);
+
+  /// No description provided for @shortcutStudioTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسائلك مع قرش'**
+  String get shortcutStudioTitle;
+
+  /// No description provided for @shortcutStudioBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصلة بسيطة بين رسائل بنكك وقرش. اختار الفلتر، جهّز الربط، وبعدها اختبره.'**
+  String get shortcutStudioBody;
+
+  /// No description provided for @shortcutRouteMessage.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسالة'**
+  String get shortcutRouteMessage;
+
+  /// No description provided for @shortcutRouteAutomation.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختصار'**
+  String get shortcutRouteAutomation;
+
+  /// No description provided for @shortcutStudioCurrency.
+  ///
+  /// In ar, this message translates to:
+  /// **'١ · عملة الرسائل'**
+  String get shortcutStudioCurrency;
+
+  /// No description provided for @shortcutStudioWord.
+  ///
+  /// In ar, this message translates to:
+  /// **'٢ · الكلمة المطلوبة'**
+  String get shortcutStudioWord;
+
+  /// No description provided for @shortcutStudioPreview.
+  ///
+  /// In ar, this message translates to:
+  /// **'فلتر الالتقاط الخاص بك'**
+  String get shortcutStudioPreview;
+
+  /// No description provided for @shortcutStudioBegin.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربط رسائل «{keyword}»'**
+  String shortcutStudioBegin(String keyword);
+
+  /// No description provided for @authEmailExplanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب البريد المرتبط بحساب قرش عشان تستلم كود دخول لمرة واحدة.'**
+  String get authEmailExplanation;
+
+  /// No description provided for @authEmailLinkExplanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف بريدًا لحسابك الحالي. عملياتك وإعداداتك هتفضل في نفس الحساب. تغيير البريد بيتطلب تأكيد البريد الحالي والجديد.'**
+  String get authEmailLinkExplanation;
+
+  /// No description provided for @authInvalidEmail.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب بريدًا إلكترونيًا صحيحًا.'**
+  String get authInvalidEmail;
+
+  /// No description provided for @authCodeSendFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر إرسال الكود. تأكد من اتصالك وحاول تاني بعد دقيقة.'**
+  String get authCodeSendFailed;
+
+  /// No description provided for @authCodeVerifyFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تأكيد الكود. راجعه وحاول تاني.'**
+  String get authCodeVerifyFailed;
+
+  /// No description provided for @authResendCode.
+  ///
+  /// In ar, this message translates to:
+  /// **'إرسال الكود مرة تانية'**
+  String get authResendCode;
+
+  /// No description provided for @authChangeEmail.
+  ///
+  /// In ar, this message translates to:
+  /// **'استخدام بريد آخر'**
+  String get authChangeEmail;
+
+  /// No description provided for @authConfirmBothEmails.
+  ///
+  /// In ar, this message translates to:
+  /// **'اتأكدنا من البريد الجديد. اكتب الكود اللي اتبعت لبريدك الحالي عشان تكمل.'**
+  String get authConfirmBothEmails;
+
+  /// No description provided for @authCurrentEmailCode.
+  ///
+  /// In ar, this message translates to:
+  /// **'كود البريد الحالي'**
+  String get authCurrentEmailCode;
+
+  /// No description provided for @authSignInMethods.
+  ///
+  /// In ar, this message translates to:
+  /// **'طرق تسجيل الدخول'**
+  String get authSignInMethods;
+
+  /// No description provided for @authSignInMethodsDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'أضف طريقة دخول لنفس الحساب، واحتفظ بكل بياناتك مع بعض.'**
+  String get authSignInMethodsDescription;
+
+  /// No description provided for @authLinked.
+  ///
+  /// In ar, this message translates to:
+  /// **'مرتبط'**
+  String get authLinked;
+
+  /// No description provided for @authLinkGoogle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربط حساب Google'**
+  String get authLinkGoogle;
+
+  /// No description provided for @authLinkEmail.
+  ///
+  /// In ar, this message translates to:
+  /// **'ربط البريد الإلكتروني'**
+  String get authLinkEmail;
+
+  /// No description provided for @authLinkSuccess.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم ربط طريقة الدخول بحسابك.'**
+  String get authLinkSuccess;
+
+  /// No description provided for @authLinkFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر ربط طريقة الدخول. لو مرتبطة بحساب قرش تاني، استخدم غيرها.'**
+  String get authLinkFailed;
+
+  /// No description provided for @authExistingAccountHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'بتستخدم Apple؟ ادخل بيه الأول عشان تربط طريقة دخول جديدة.'**
+  String get authExistingAccountHint;
+
+  /// No description provided for @authCreateAccount.
+  ///
+  /// In ar, this message translates to:
+  /// **'إنشاء حساب'**
+  String get authCreateAccount;
+
+  /// No description provided for @authBackToSignIn.
+  ///
+  /// In ar, this message translates to:
+  /// **'عندك حساب بالفعل؟ سجّل الدخول'**
+  String get authBackToSignIn;
+
+  /// No description provided for @authCreateAccountSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختار طريقة الدخول لحساب قرش الجديد.'**
+  String get authCreateAccountSubtitle;
+
+  /// No description provided for @authCreateEmailExplanation.
+  ///
+  /// In ar, this message translates to:
+  /// **'اكتب بريدك الإلكتروني وأكّد الكود لإكمال إنشاء حساب قرش.'**
+  String get authCreateEmailExplanation;
+
+  /// No description provided for @deleteAccountEmailProofTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'كود تأكيد البريد'**
+  String get deleteAccountEmailProofTitle;
+
+  /// No description provided for @deleteAccountEmailProofBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعتنا كود لمرة واحدة على البريد المؤكّد لحساب قرش ده. أدخل الكود لتأكيد الحذف.'**
+  String get deleteAccountEmailProofBody;
+
+  /// No description provided for @authGoogleSignupRequired.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساب Google ده جديد على قرش. اختار «إنشاء حساب» عشان تسجّل.'**
+  String get authGoogleSignupRequired;
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {

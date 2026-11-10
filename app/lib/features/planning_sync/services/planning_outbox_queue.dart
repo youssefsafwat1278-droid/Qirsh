@@ -1534,15 +1534,7 @@ class PlanningOutboxQueue {
           budget.lastNotifiedPeriodStart.toUtc().toIso8601String(),
       'show_on_header': budget.showOnHeader,
       'local_account_id': budget.accountId,
-      // `alert_threshold_percent` is DELIBERATELY absent, the same way the
-      // settings payload omits merchant personalization. The server has no such
-      // column and adding one needs a migration, which is deferred by owner
-      // decision — a payload carrying an unknown key is rejected outright, so
-      // shipping it would break budget sync for everyone rather than add a
-      // feature. It stays device-local for V1, and the pull below leaves the
-      // local value alone because it never names the column.
-      // `budget_threshold_not_pushed_test` fails if this changes without the
-      // server migration landing first.
+      'alert_threshold_percent': budget.alertThresholdPercent,
     });
   }
 

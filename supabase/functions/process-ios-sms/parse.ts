@@ -262,7 +262,7 @@ Decide whether it describes a completed financial transaction. OTPs, adverts and
 Return JSON with is_transaction. For a transaction provide amount (legacy number), amount_text (exact plain-decimal transaction amount), currency (ISO), type, direction (credit/debit), merchant, category and occurredAt only if written in the SMS.
 Separate transaction amount from available balance, account/card numbers and reference codes. Category must be one of: ${AI_CATEGORIES.join(', ')}.
 A received IPN/InstaPay/person-to-person transfer is type=transfer and category=transfers with direction=credit; an outgoing one is debit. A person's name is not a merchant.
-Use the SMS's local date and time without inventing a date. Date reference: ${input.receivedAt}.
+Use the SMS's local date and time without inventing a date. Return a local clock as YYYY-MM-DDTHH:MM:SS with no Z or timezone offset. PM means afternoon/evening, 12 AM means 00:00, and 12 PM means noon. Date reference: ${input.receivedAt}.
 SMS:
 ${input.text}`;
   const candidate = (v: Record<string, unknown>): AiCandidate => ({
@@ -297,8 +297,12 @@ ${input.text}`;
   if (!checked.accepted) return { parsed: pending, accepted: false, aiInvoked: true, aiTransientFailure: true };
   const direction = ai.direction === 'credit' || ai.direction === 'debit'
     ? ai.direction : ai.type === 'income' || ai.type === 'refund' ? 'credit' : 'debit';
-  const stamp = checked.occurredAt
-    ? trustedSmsTimestamp(checked.occurredAt, input.receivedAt, input.tzOffsetMinutes) : undefined;
+  // Ground the clock in the literal SMS before trusting model formatting. The
+  // candidate validator normalizes a naive clock to UTC for its age check;
+  // using that normalized value here incorrectly shifts Egyptian SMS by +2h.
+  const literalStamp = extractTimestamp(normalize(input.text), input.receivedAt, input.tzOffsetMinutes);
+  const stamp = trustedSmsTimestamp(literalStamp ?? ai.occurred_at,
+    input.receivedAt, input.tzOffsetMinutes);
   return { accepted: true, aiInvoked: true, parsed: {
     amount: Number(checked.amountText), amount_text: checked.amountText,
     currency: checked.currency, type: ai.type, direction,

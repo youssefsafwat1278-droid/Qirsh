@@ -28,6 +28,7 @@ import '../../../data/repositories/drift_suspected_duplicate_repository.dart';
 import '../../../data/repositories/drift_transaction_repository.dart';
 import '../../../data/repositories/drift_user_settings_repository.dart';
 import '../../planning_sync/services/outbox_queue_factory.dart';
+import '../../gamification/services/achievement_unlocks.dart';
 import 'package:drift/drift.dart' show Variable;
 
 import '../../../domain/entities/captured_message.dart';
@@ -454,9 +455,11 @@ class CapturedMessageProcessor {
     final transactions = committedTransactions.toList();
     if (transactions.isEmpty) return;
     final current = now ?? DateTime.now().toUtc();
+    final budgetRepository = DriftBudgetRepository(db);
     final progress = await BudgetProgressUseCase(
-      budgetRepository: DriftBudgetRepository(db),
+      budgetRepository: budgetRepository,
       transactionRepository: DriftTransactionRepository(db),
+      onMonthUnderBudget: (at) => recordMonthUnderBudget(db, at),
     )(now: current);
     if (progress.entries.isEmpty) return;
 
@@ -501,16 +504,20 @@ class CapturedMessageProcessor {
 
       if (emit != null) {
         await emit(content);
-        continue;
-      }
-      await LocalNotificationService.instance.showBudgetAlert(
+      } else if (!await LocalNotificationService.instance.showBudgetAlert(
         title: content.title,
         body: content.body,
         type: content.type,
         preferences: prefs,
         notifId: content.notifId,
         storeHistory: storeHistory,
-      );
+      )) {
+        continue;
+      }
+      await budgetRepository.save(entry.budget.copyWith(
+        lastNotifiedSpentMoney: entry.spent,
+        lastNotifiedPeriodStart: entry.periodStart,
+      ));
     }
   }
 

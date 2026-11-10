@@ -60,6 +60,10 @@ struct PostBankStatusIntent: AppIntent {
   /// App Group failure. Returning a quiet result there told the user a capture
   /// succeeded that was never saved.
   func perform() async throws -> some IntentResult {
+    if smsText.trimmingCharacters(in: .whitespacesAndNewlines) == SharedCaptureStore.shortcutSetupProbe {
+      SharedCaptureStore.recordShortcutSetupProbe()
+      return .result()
+    }
     let receivedAt = dateReceived ?? Date()
     let request = BankSMSCaptureRequest(
       smsText: smsText,
@@ -69,7 +73,7 @@ struct PostBankStatusIntent: AppIntent {
       // R9: the recipe is meant to always pass Date Received; record when it
       // did not, since the inferred time makes the payload id unstable.
       receivedAtInferred: dateReceived == nil,
-      localeIdentifier: deviceLocale
+      localeIdentifier: SharedCaptureStore.notificationLanguage
     )
     let service = BankSMSCaptureService()
     let config = SharedCaptureStore.backendConfig()
@@ -357,12 +361,12 @@ struct PostBankStatusIntent: AppIntent {
     )
   }
 
-  /// The detailed banner in the device language: from the server's AI reading
+  /// The detailed banner in Qirsh's selected language: from the server's AI reading
   /// when there is one, else from the local parser; nil when neither read the
   /// message with confidence.
   private func detailedCaptureNotification(
     aiDetail: CaptureDetail? = nil,
-    preferredLanguage: String? = Locale.preferredLanguages.first
+    preferredLanguage: String? = SharedCaptureStore.notificationLanguage
   ) -> BackendNotification? {
     // The user's "hide lock-screen content" preference keeps it generic.
     guard !SharedCaptureStore.hidesCaptureDetails,
@@ -453,7 +457,7 @@ struct PostBankStatusIntent: AppIntent {
 
   /// PROPOSED COPY, pending user approval. English mirrors the server push
   /// (GENERIC_CAPTURE_PUSH); the Arabic is a proposal.
-  static func genericCaptureBody(preferredLanguage: String? = Locale.preferredLanguages.first) -> String {
+  static func genericCaptureBody(preferredLanguage: String? = SharedCaptureStore.notificationLanguage) -> String {
     (preferredLanguage ?? "").hasPrefix("ar") ? "تم رصد عملية جديدة" : "New transaction captured"
   }
 
@@ -523,7 +527,7 @@ struct PostBankStatusIntent: AppIntent {
     await QirshNotificationCategories.registerUnrecognizedCapture()
     await scheduleNotification(
       BackendNotification(
-        title: "قِرش رصد رسالة بنك",
+        title: SharedCaptureStore.notificationLanguage == "ar" ? "قِرش رصد رسالة بنك" : "Bank message captured",
         body: offersSmartAnalysis
           ? Self.smartAnalysisInviteBody(sender: sender)
           : Self.backendFailureBody(sender: sender),
@@ -537,7 +541,10 @@ struct PostBankStatusIntent: AppIntent {
 
   /// Copy for the backend-unavailable (consent off / not registered) generic
   /// fallback. One text serves both causes: the extension cannot tell them apart.
-  static func smartAnalysisInviteBody(sender: String?) -> String {
+  static func smartAnalysisInviteBody(sender: String?, preferredLanguage: String = SharedCaptureStore.notificationLanguage) -> String {
+    if preferredLanguage != "ar" {
+      return "Couldn't recognize \(sender ?? "the bank") message automatically. Enable Smart Analysis to read new bank messages, or add it manually."
+    }
     guard let sender, !sender.isEmpty else {
       return "لم نتعرّف على رسالة البنك تلقائيًا. فعّل التحليل الذكي ليحاول قِرش فهم رسائل البنوك الجديدة، أو أضفها يدويًا."
     }
@@ -548,7 +555,10 @@ struct PostBankStatusIntent: AppIntent {
   /// answer, and the on-device PreviewParser has no confident result). Says the
   /// analysis failed for now and points to review / manual entry; the capture is
   /// already stored durably (`.sent` + failureReason) for the app to import.
-  static func backendFailureBody(sender: String?) -> String {
+  static func backendFailureBody(sender: String?, preferredLanguage: String = SharedCaptureStore.notificationLanguage) -> String {
+    if preferredLanguage != "ar" {
+      return "Couldn't analyze \(sender ?? "the bank") message right now. Open Qirsh to review it or add it manually."
+    }
     guard let sender, !sender.isEmpty else {
       return "تعذّر تحليل رسالة البنك الآن. افتح قِرش لمراجعتها أو إضافتها يدويًا."
     }
@@ -625,15 +635,13 @@ struct BankSMSCaptureService {
       throw ProcessBankSMSError.emptySMSText
     }
 
-    let locale = request.localeIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let fallbackLocale = Locale.autoupdatingCurrent.identifier
     let result = queue.enqueue(
       text: trimmedText,
       senderName: request.senderName,
       senderID: request.senderID,
       source: "ios_shortcut",
       receivedAt: request.receivedAt ?? Date(),
-      localeIdentifier: (locale?.isEmpty ?? true) ? fallbackLocale : locale,
+      localeIdentifier: SharedCaptureStore.notificationLanguage,
       status: status,
       sentAt: sentAt,
       failureReason: failureReason,
@@ -801,9 +809,10 @@ struct BackendCaptureClient {
       "senderId": request.senderID ?? "",
       "receivedAt": SharedCaptureStore.isoString(from: request.receivedAt ?? Date()),
       "tzOffsetMinutes": TimeZone.current.secondsFromGMT() / 60,
-      "locale": request.localeIdentifier ?? Locale.autoupdatingCurrent.identifier,
+      "locale": SharedCaptureStore.notificationLanguage,
       "source": "ios_shortcut",
       "localNotification": true,
+      "notificationDetails": !SharedCaptureStore.hidesCaptureDetails,
       // The owner's consent mirror is the only source (A-12-min R2): there is no
       // install-level fallback, so an upload never carries a wider AI grant.
       "allowAi": allowAi
@@ -1307,12 +1316,12 @@ enum QirshNotificationCategories {
       actions: [
         UNNotificationAction(
           identifier: enableSmartAnalysisActionId,
-          title: "تفعيل التحليل الذكي",
+          title: SharedCaptureStore.notificationLanguage == "ar" ? "تفعيل التحليل الذكي" : "Enable Smart Analysis",
           options: [.foreground]
         ),
         UNNotificationAction(
           identifier: addManuallyActionId,
-          title: "إضافة يدويًا",
+          title: SharedCaptureStore.notificationLanguage == "ar" ? "إضافة يدويًا" : "Add manually",
           options: [.foreground]
         ),
       ],

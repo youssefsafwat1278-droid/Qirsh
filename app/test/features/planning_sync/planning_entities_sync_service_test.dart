@@ -297,6 +297,28 @@ void main() {
       expect(await _outboxCount(db), 0);
     });
 
+    test('legacy cloud NULL preserves local custom warning and queues its upgrade', () async {
+      final queue = _queue(db, enabled: true);
+      await DriftBudgetRepository(db).save(_budget('legacy').copyWith(alertThresholdPercent: 70));
+      await db.customStatement("UPDATE budgets SET server_id='server-legacy', sync_status='synced', server_updated_at='2026-07-01T00:00:00Z' WHERE id='legacy';");
+      final remote = _FakePlanningRemote();
+      remote.rows['user_budgets'] = {'legacy': {
+        'id':'server-legacy', 'local_id':'legacy', 'category_id':'all_expenses',
+        'currency':'SAR', 'amount':500, 'period':'monthly',
+        'start_date':'2026-07-01T00:00:00Z', 'is_active':true,
+        'last_notified_spent_amount':0, 'last_notified_period_start':'2000-01-01T00:00:00Z',
+        'alert_threshold_percent':null, 'updated_at':'2026-07-02T00:00:00Z', 'deleted_at':null,
+      }};
+      final pull = PlanningPullService(db: db, isEnabled: (e) => e == 'budget',
+        getAuthUserId: () async => 'user-1', remoteSource: remote,
+        outboxQueue: queue, mayEgress: () async => true);
+      await pull.pull();
+      expect((await DriftBudgetRepository(db).getById('legacy'))!.alertThresholdPercent, 70);
+      final pending = await db.customSelect("SELECT payload_json FROM planning_sync_outbox WHERE entity_type='budget';").get();
+      expect(pending, hasLength(1));
+      expect(pending.single.read<String>('payload_json'), contains('"alert_threshold_percent":70'));
+    });
+
     test('signed-in flag ON queues and pushes create update delete', () async {
       final remote = _FakePlanningRemote();
       final queue = _queue(db, enabled: true);
@@ -316,7 +338,7 @@ void main() {
 
       await budgets.save(_budget('b1'));
       await budgets.save(
-        _budget('b1').copyWith(amountMoney: Money.parse('600', 'SAR')),
+        _budget('b1').copyWith(amountMoney: Money.parse('600', 'SAR'), alertThresholdPercent: 70),
       );
       await budgets.save(_budget('b-delete'));
       await budgets.delete('b-delete');
@@ -333,6 +355,7 @@ void main() {
       expect(result.pushed, 4);
       expect(await _outboxCount(db), 0);
       expect(remote.rows['user_budgets']?['b1']?['amount'], 600);
+      expect(remote.rows['user_budgets']?['b1']?['alert_threshold_percent'], 70);
       expect(remote.rows['user_subscriptions']?['s1']?['name'], 'Netflix');
       expect(remote.rows['user_goals']?['g1']?['saved_amount'], 300);
       expect(remote.rows['user_plans']?['p1']?['name'], 'Summer');
@@ -353,6 +376,7 @@ void main() {
           'category_id': BudgetEntity.allExpensesCategoryKey,
           'currency': 'SAR',
           'amount': 750,
+          'alert_threshold_percent': 95,
           'period': 'monthly',
           'start_date': DateTime.utc(2026, 7, 1).toIso8601String(),
           'is_active': true,
@@ -385,6 +409,7 @@ void main() {
           )
           .getSingle();
       expect(count.read<int>('total'), 1);
+      expect((await DriftBudgetRepository(db).getById('remote-budget'))!.alertThresholdPercent, 95);
       final importedCategory = await db
           .customSelect(
             "SELECT category_id FROM budgets WHERE id = 'remote-budget';",

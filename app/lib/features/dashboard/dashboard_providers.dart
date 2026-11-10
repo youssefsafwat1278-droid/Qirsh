@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'home_hero_period_controller.dart';
+export 'home_hero_period_controller.dart' show HeroPeriod;
 
 import '../../core/di/app_providers.dart';
 import '../../core/i18n/locale_provider.dart';
@@ -286,9 +288,6 @@ class DashboardData {
 /// الحساب المختار في الـ dashboard (null = الحساب الافتراضي الحالي).
 final dashboardAccountProvider = activeAccountIdProvider;
 
-/// The period the Home hero figure is showing.
-enum HeroPeriod { day, week, month }
-
 /// HOME-LOCAL on purpose — it must not be `transactionsDateRangeProvider`.
 ///
 /// That provider is shared by Transactions (list + total), the bills view,
@@ -300,7 +299,9 @@ enum HeroPeriod { day, week, month }
 /// No new query is needed either way: `todaySpend`, `weekSpend` and
 /// `spentThisMonth` are all already on [DashboardData].
 final heroPeriodProvider =
-    StateProvider<HeroPeriod>((_) => HeroPeriod.month);
+    StateNotifierProvider<HomeHeroPeriodController, HeroPeriod>(
+      (_) => HomeHeroPeriodController(),
+    );
 
 final dashboardDataProvider = FutureProvider<DashboardData>((ref) async {
   ref.watch(financialRevisionProvider);

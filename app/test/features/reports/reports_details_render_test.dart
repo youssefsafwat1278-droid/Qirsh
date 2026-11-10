@@ -14,6 +14,7 @@ import 'package:money_companion/features/dashboard/dashboard_providers.dart';
 import 'package:money_companion/features/reports/reports_providers.dart';
 import 'package:money_companion/features/reports/reports_screen.dart';
 import 'package:money_companion/features/settings/settings_providers.dart';
+import 'package:money_companion/features/transactions/transactions_providers.dart';
 import 'package:money_companion/l10n/app_localizations.dart';
 
 ReportSection _section() => ReportSection(
@@ -62,7 +63,13 @@ Future<AppL10n> _openDetails(WidgetTester tester,
   )));
   await tester.pumpAndSettle();
   final l10n = AppL10n.of(tester.element(find.byType(ReportsScreen)));
-  await tester.tap(find.text(trends ? l10n.rptTabTrends : l10n.rptTabDetails));
+  final hero = find.byKey(const ValueKey('section-hero-reports'));
+  final targetTab = find.descendant(
+    of: hero,
+    matching: find.text(trends ? l10n.rptTabTrends : l10n.rptTabDetails),
+  );
+  expect(targetTab.hitTestable(), findsOneWidget);
+  await tester.tap(targetTab);
   await tester.pumpAndSettle();
   return l10n;
 }
@@ -72,8 +79,6 @@ void main() {
     testWidgets('Details keeps all categories before merchants in $language',
         (tester) async {
       final l10n = await _openDetails(tester, language: language);
-      // The Overview legend deliberately shows only eight categories. Details
-      // must make the remaining category totals available rather than repeat it.
       for (var i = 0; i < 6 && find.text(l10n.rptByMerchant).evaluate().isEmpty; i++) {
         await tester.drag(find.byType(NestedScrollView), const Offset(0, -600));
         await tester.pumpAndSettle();
@@ -88,6 +93,33 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('report hero date presets drive the shared period', (tester) async {
+    await _openDetails(tester, language: 'en');
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ReportsScreen)),
+    );
+    final hero = find.byKey(const ValueKey('section-hero-reports'));
+    for (final preset in [
+      TransactionsDatePreset.previousMonth,
+      TransactionsDatePreset.last90Days,
+      TransactionsDatePreset.thisMonth,
+    ]) {
+      final label = transactionsRangeForPreset(preset).labelIn('en');
+      final button = find.descendant(of: hero, matching: find.text(label));
+      expect(button.hitTestable(), findsOneWidget);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(container.read(transactionsDateRangeProvider).preset, preset);
+      expect(
+        find.ancestor(of: button, matching: find.byWidgetPredicate(
+          (widget) => widget is Semantics && widget.properties.selected == true,
+        )),
+        findsOneWidget,
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('Details privacy hides totals and refund amounts', (tester) async {
     await _openDetails(tester, language: 'en', privacy: true);

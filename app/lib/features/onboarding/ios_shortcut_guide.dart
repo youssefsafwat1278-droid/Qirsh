@@ -12,6 +12,7 @@ import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../core/utils/l10n_ext.dart';
 import '../../core/theme/widgets/mali_card.dart';
 import '../../core/utils/app_lucide_icons.dart';
+import 'shortcut_setup_actions.dart';
 
 TextStyle _alex(double size, FontWeight weight, double height, Color color,
     {bool tabular = false, List<Shadow>? shadows}) {
@@ -74,20 +75,23 @@ class IosShortcutGuide extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          context.l10n.shortcutSetupGuide,
-          style: _alex(15, FontWeight.w800, 1.3, c.textMain),
+        ShortcutSetupActions(currencyCode: _shortcutCurrency(currencyCode)),
+        const SizedBox(height: 20),
+        ExpansionTile(
+          title: Text(context.l10n.shortcutManualSteps,
+              style: _alex(15, FontWeight.w800, 1.3, c.textMain)),
+          children: [
+            Text(
+              context.l10n.doStepsOnceFromShortcuts,
+              style: _alex(11, FontWeight.w600, 1.45, c.textLight),
+            ),
+            const SizedBox(height: 16),
+            for (var i = 0; i < steps.length; i++) ...[
+              _ShortcutStepRow(index: i + 1, step: steps[i]),
+              if (i != steps.length - 1) const SizedBox(height: 12),
+            ],
+          ],
         ),
-        const SizedBox(height: 6),
-        Text(
-          context.l10n.doStepsOnceFromShortcuts,
-          style: _alex(11, FontWeight.w600, 1.45, c.textLight),
-        ),
-        const SizedBox(height: 16),
-        for (var i = 0; i < steps.length; i++) ...[
-          _ShortcutStepRow(index: i + 1, step: steps[i]),
-          if (i != steps.length - 1) const SizedBox(height: 12),
-        ],
       ],
     );
   }
@@ -167,7 +171,8 @@ Future<void> showIosShortcutSheet(BuildContext context) {
     backgroundColor: c.bg,
     barrierColor: Colors.black.withValues(alpha: 0.55),
     shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
+      borderRadius:
+          BorderRadius.vertical(top: Radius.circular(AppRadius.sheet)),
     ),
     constraints: BoxConstraints(
       maxHeight: MediaQuery.of(context).size.height * 0.9,
@@ -194,13 +199,17 @@ class _IosShortcutSheet extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Center(child: QirshIllustration(name: 'capture', width: 220, height: 165)),
+          const Center(
+              child:
+                  QirshIllustration(name: 'capture', width: 220, height: 165)),
           const SizedBox(height: 12),
-          Text(context.l10n.setupAppleShortcut, textAlign: TextAlign.center,
-            style: _alex(22, FontWeight.w700, 1.3, c.textPrimary)),
+          Text(context.l10n.setupAppleShortcut,
+              textAlign: TextAlign.center,
+              style: _alex(22, FontWeight.w700, 1.3, c.textPrimary)),
           const SizedBox(height: 8),
-          Text(context.l10n.autoTrackingSubtitleIos, textAlign: TextAlign.center,
-            style: _alex(13, FontWeight.w400, 1.7, c.textMuted)),
+          Text(context.l10n.autoTrackingSubtitleIos,
+              textAlign: TextAlign.center,
+              style: _alex(13, FontWeight.w400, 1.7, c.textMuted)),
           const SizedBox(height: 16),
           MaliCard(
             padding: const EdgeInsets.all(18),

@@ -522,11 +522,6 @@ Future<void> _showAddContributionSheet(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const QirshPhotoBanner(
-                  photo: QirshPhoto.jar,
-                  height: 132,
-                  margin: EdgeInsets.only(bottom: 14),
-                ),
                 TextField(
                   controller: controller,
                   onChanged: (_) => setSheetState(() {}),

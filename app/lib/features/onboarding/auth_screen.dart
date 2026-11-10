@@ -1,18 +1,20 @@
 import 'widgets/onboarding_language_button.dart';
 import '../../core/session/admission_authority.dart';
 
-import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../core/auth/auth_coordinator.dart';
 import '../../core/auth/auth_service.dart';
-import '../../core/auth/supabase_auth_service.dart' show AuthCancelledException;
+import '../../core/auth/auth_methods_config.dart';
+import '../../core/theme/widgets/glass_sheet.dart';
+import 'widgets/email_code_sheet.dart';
+import '../../core/auth/supabase_auth_service.dart'
+    show AuthCancelledException, googleSignInConfigured;
 import '../../core/backend/supabase_config.dart';
 import '../../core/privacy/cloud_egress_gate.dart' show EgressDeniedException;
 import '../../core/privacy/consent_authority.dart' show ConsentAuthority;
@@ -21,20 +23,11 @@ import '../../core/session/app_session.dart';
 import '../../core/theme/app_assets.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/theme/widgets/premium_glass_container.dart';
 import '../../core/utils/l10n_ext.dart';
-import 'widgets/word_reveal_text.dart';
 import '../../core/theme/widgets/app_toast.dart';
 import '../../core/utils/app_lucide_icons.dart';
 
-/// The deep navy of the hero art's lower half (`banner_onboarding_1.jpg`),
-/// shown behind it while it loads.
 const _authDeepNavy = Color(0xFF031322);
-
-/// Pixel size of the full-page hero (`banner_onboarding_1.jpg`) and where its
-/// emblem's gold ring ends, as a fraction of its height.
-const _heroSize = Size(600, 1200);
-const _heroEmblemBottom = 0.58;
 
 /// Whether this platform can complete Sign in with Apple.
 ///
@@ -75,13 +68,7 @@ String signInFailureCode(Object error) {
   return error.runtimeType.toString();
 }
 
-/// Page 3 of the redesigned onboarding: mandatory sign-in.
-///
-/// Same flat navy background and small fixed logo as the rest of the
-/// onboarding sequence — no photo backdrop.
-///
-/// After sign-in, account completion decides whether to enter Home or run
-/// setup. Legacy backup restore remains available from Data Transfer.
+/// Entry point for both first sign-in and recovery of an existing account.
 class OnboardingAuthScreen extends ConsumerStatefulWidget {
   const OnboardingAuthScreen({super.key});
 
@@ -92,10 +79,11 @@ class OnboardingAuthScreen extends ConsumerStatefulWidget {
 
 class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
   // Publishing the admitted account can remount this screen before routing.
-  // Keep the Apple button busy until that same attempt hands off to setup.
-  static final _appleSignInPending = ValueNotifier<bool>(false);
+  // Keep the active method busy until that same attempt hands off to setup.
+  static final _pendingMethod = ValueNotifier<String?>(null);
 
-  bool get _busy => _appleSignInPending.value;
+  bool get _busy => _pendingMethod.value != null;
+  bool _creatingAccount = false;
 
   @override
   void didChangeDependencies() {
@@ -104,10 +92,11 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
     precacheImage(const AssetImage(AppAssets.authHero), context);
   }
 
-  Future<void> _signIn(Future<AuthIdentity> Function() method) async {
-    if (_busy) return;
+  Future<bool> _signIn(Future<AuthIdentity> Function() method,
+      {required String provider, bool showFailureToast = true}) async {
+    if (_busy) return false;
     HapticFeedback.lightImpact();
-    _appleSignInPending.value = true;
+    _pendingMethod.value = provider;
     // F2: the attempt is captured BEFORE the provider is awaited. If Remove data
     // is accepted while the provider sheet is open, this attempt is stale and
     // cannot authorize (re)creating anything once it completes.
@@ -133,7 +122,7 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
       if (SupabaseConfig.isConfigured) {
         if (!AppSession.instance.hasCompletedOnboarding) {
           appRouter.go('/onboarding/check');
-          return;
+          return true;
         }
         await AppSession.instance.reconcileAccountOnboarding(
           supabase.Supabase.instance.client,
@@ -141,10 +130,11 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
       }
       if (AppSession.instance.hasCompletedOnboarding) {
         appRouter.go('/');
-        return;
+        return true;
       }
 
       appRouter.go('/onboarding/setup');
+      return true;
     } catch (error, stackTrace) {
       // ASR §4.6: an exchange that never reached its commit releases the
       // exclusion after aligning SDK memory (no-op otherwise).
@@ -153,235 +143,300 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
       }
       if (kDebugMode) {
         debugPrint(
-          '[Auth] interactive sign-in failed: '
-          '${error.runtimeType}: $error',
+          '[Auth] interactive sign-in failed: ${signInFailureCode(error)}',
         );
         debugPrintStack(stackTrace: stackTrace);
       }
-      if (mounted) {
+      if (mounted && showFailureToast) {
         // A CONFIGURATION failure is permanent: "try again" would be a lie the
         // user could follow forever. Surface the service's own message for
         // those; keep the generic retry copy for transient failures.
         if (error is AuthCancelledException) {
           // The user closed the sheet. Nothing failed; say nothing.
         } else {
+          final needsGoogleSignup = provider == 'google' &&
+              error is supabase.AuthApiException &&
+              error.message == 'Use Create an account to register with Google.';
           AppToast.showError(
             context,
-            '${context.l10n.authSignInError} (E: ${signInFailureCode(error)})',
+            needsGoogleSignup
+                ? context.l10n.authGoogleSignupRequired
+                : '${context.l10n.authSignInError} (E: ${signInFailureCode(error)})',
           );
         }
       }
+      return false;
     } finally {
-      _appleSignInPending.value = false;
+      _pendingMethod.value = null;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = context.l10n;
+    final methods = ref.watch(authMethodsConfigProvider);
+    final google = methods.google &&
+        googleSignInConfigured() &&
+        {TargetPlatform.iOS, TargetPlatform.android}
+            .contains(defaultTargetPlatform);
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: SystemUiOverlayStyle.light.copyWith(
+        systemNavigationBarColor: _authDeepNavy,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
       child: Scaffold(
+        resizeToAvoidBottomInset: false,
         backgroundColor: _authDeepNavy,
-        body: Stack(
-          children: [
-            Column(
-              children: [
-                // The band above the content. The full-page hero is drawn from
-                // here at full-screen size and overflows down behind the
-                // content (its lower half is plain navy); on a short screen it
-                // is lifted so the emblem always ends just above the title.
-                Expanded(
-                  child: LayoutBuilder(
-                    builder: (context, band) {
-                      final screen = MediaQuery.sizeOf(context);
-                      final scale = math.max(
-                        screen.width / _heroSize.width,
-                        screen.height / _heroSize.height,
-                      );
-                      final width = _heroSize.width * scale;
-                      final height = _heroSize.height * scale;
-                      final top = math.min(
-                        0.0,
-                        band.maxHeight - 12 - _heroEmblemBottom * height,
-                      );
-                      return Stack(
-                        clipBehavior: Clip.none,
-                        children: [
-                          Positioned(
-                            top: top,
-                            left: (screen.width - width) / 2,
-                            width: width,
-                            height: height,
-                            child: const Image(
-                              image: AssetImage(AppAssets.bannerOnboarding1),
-                              fit: BoxFit.fill,
-                            ),
-                          ),
-                        ],
-                      );
-                    },
+        body: LayoutBuilder(builder: (context, viewport) {
+          final compact = viewport.maxHeight < 730;
+          final photoHeight = viewport.maxHeight * .72;
+          final breathingRoom = viewport.maxHeight * (compact ? .25 : .35);
+          return Stack(
+            children: [
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: photoHeight,
+                child: const ExcludeSemantics(
+                  child: Image(
+                    image: AssetImage(AppAssets.authHero),
+                    fit: BoxFit.cover,
+                    alignment: Alignment(0, .76),
                   ),
                 ),
-                // Title + subtitle + sign-in card, on the photo's navy half.
-                SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.gutter,
-                      0,
-                      AppSpacing.gutter,
-                      AppSpacing.s5,
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        WordRevealText(
-                          l10n.authTitle,
-                          textAlign: TextAlign.center,
-                          style: AppTypography.custom(
-                            size: 28,
-                            weight: FontWeight.w700,
-                            height: 1.14,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          l10n.authSubtitle,
-                          textAlign: TextAlign.center,
-                          style: AppTypography.body(
-                            Colors.white.withValues(alpha: 0.74),
-                          ).copyWith(height: 1.6),
-                        ),
-                        const SizedBox(height: AppSpacing.s6),
-                        PremiumGlassContainer(
-                          blurSigma: 25,
-                          noiseOpacity: 0.05,
-                          backgroundColor: Colors.white.withValues(alpha: 0.08),
-                          borderColor: Colors.white.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(32),
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (appleSignInSupported) _appleButton(),
-                              const SizedBox(height: 24),
-                              // One centred line per promise: a Wrap with a
-                              // spacer child pushed the first line off-centre.
-                              _trustLine(
-                                AppLucideIcons.shieldCheck,
-                                l10n.authTrustLocalEncryption,
-                              ),
-                              const SizedBox(height: 6),
-                              _trustLine(
-                                AppLucideIcons.smartphone,
-                                l10n.authTrustOnDevice,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                l10n.authTermsNotice,
-                                textAlign: TextAlign.center,
-                                style: AppTypography.micro(
-                                  Colors.white.withValues(alpha: 0.48),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            // Status-bar scrim: the photo runs under the status bar and the
-            // language button, which sit on its bright sky otherwise.
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: MediaQuery.paddingOf(context).top + 64,
-              child: const IgnorePointer(
+              ),
+              Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0x8C000000), Color(0x00000000)],
+                      colors: const [
+                        Color(0x55031322),
+                        Color(0x00031322),
+                        Color(0xD9031322),
+                        _authDeepNavy,
+                        _authDeepNavy,
+                      ],
+                      stops: [0, .18, compact ? .38 : .45, .65, 1],
                     ),
                   ),
                 ),
               ),
-            ),
-            const PositionedDirectional(
-              top: 0,
-              end: AppSpacing.gutter,
-              child: SafeArea(
-                child: Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: OnboardingLanguageButton(),
+              CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(child: SizedBox(height: breathingRoom)),
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: SafeArea(
+                      top: false,
+                      minimum: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+                      child: Align(
+                        alignment: Alignment.bottomCenter,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 440),
+                          child: _authPanel(
+                            google: google,
+                            email: methods.email,
+                            compact: compact,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const PositionedDirectional(
+                top: 0,
+                end: AppSpacing.gutter,
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: OnboardingLanguageButton(compact: true),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        }),
       ),
     );
   }
 
-  Widget _trustLine(IconData icon, String text) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+  Widget _authPanel(
+      {required bool google, required bool email, required bool compact}) {
+    final l = context.l10n;
+    const foreground = Colors.white;
+    const secondary = Color(0xFFB8C6D9);
+    const outline = Color(0xFF747775);
+    const appleFill = Colors.white;
+    const appleInk = Colors.black;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(icon, size: 14, color: Colors.white54),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: AppTypography.micro(Colors.white54),
+        Text(_creatingAccount ? l.authCreateAccount : l.authTitle,
+            style: AppTypography.custom(
+              size: compact ? 28 : 32,
+              weight: FontWeight.w700,
+              height: 1.2,
+              color: foreground,
+            )),
+        const SizedBox(height: 5),
+        Text(_creatingAccount ? l.authCreateAccountSubtitle : l.authSubtitle,
+            style: AppTypography.caption(secondary)
+                .copyWith(fontSize: 14, height: 1.45)),
+        const SizedBox(height: 22),
+        ValueListenableBuilder<String?>(
+            valueListenable: _pendingMethod,
+            builder: (context, pending, _) => Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (appleSignInSupported)
+                      FilledButton.icon(
+                        key: const ValueKey('auth-apple'),
+                        onPressed: pending == null
+                            ? () => _signIn(
+                                ref.read(authServiceProvider).signInWithApple,
+                                provider: 'apple')
+                            : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: appleFill,
+                          foregroundColor: appleInk,
+                          disabledBackgroundColor: appleFill,
+                          disabledForegroundColor: appleInk,
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: _methodIcon(pending == 'apple', appleInk,
+                            const Icon(Icons.apple, size: 23)),
+                        label: Text(
+                            pending == 'apple'
+                                ? l.startPreparing
+                                : l.authAppleCta,
+                            style: AppTypography.bodyStrong(appleInk)),
+                      ),
+                    if (google) ...[
+                      if (appleSignInSupported) const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        key: const ValueKey('auth-google'),
+                        onPressed: pending == null
+                            ? () => _signIn(
+                                _creatingAccount
+                                    ? ref
+                                        .read(authServiceProvider)
+                                        .signUpWithGoogle
+                                    : ref
+                                        .read(authServiceProvider)
+                                        .signInWithGoogle,
+                                provider: 'google')
+                            : null,
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF1F1F1F),
+                          side: const BorderSide(color: outline),
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16)),
+                        ),
+                        icon: _methodIcon(
+                            pending == 'google',
+                            const Color(0xFF172339),
+                            SvgPicture.asset('assets/brands/google.svg',
+                                width: 19, height: 19)),
+                        label: Text(
+                            pending == 'google'
+                                ? l.startPreparing
+                                : l.authGoogleCta,
+                            style: AppTypography.bodyStrong(
+                                const Color(0xFF1F1F1F))),
+                      ),
+                    ],
+                    if (email) ...[
+                      if (appleSignInSupported || google)
+                        const SizedBox(height: 10),
+                      OutlinedButton.icon(
+                        key: const ValueKey('auth-email'),
+                        onPressed: pending == null ? _emailSignIn : null,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: foreground,
+                          backgroundColor: const Color(0x80233850),
+                          side: const BorderSide(color: Color(0xFF60748F)),
+                          minimumSize: const Size.fromHeight(52),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
+                        icon: const Icon(Icons.mail_outline, size: 19),
+                        label: Text(l.continueWithEmail,
+                            style: AppTypography.bodyStrong(foreground)),
+                      ),
+                    ],
+                  ],
+                )),
+        if (ref.watch(authMethodsConfigProvider).signup && (google || email))
+          TextButton(
+            key: const ValueKey('auth-toggle-signup'),
+            onPressed: () {
+              if (!_busy) setState(() => _creatingAccount = !_creatingAccount);
+            },
+            style: TextButton.styleFrom(
+              foregroundColor: const Color(0xFFF4CB6C),
+              minimumSize: const Size.fromHeight(44),
+            ),
+            child: Text(
+                _creatingAccount ? l.authBackToSignIn : l.authCreateAccount),
           ),
-        ),
+        if (!_creatingAccount && appleSignInSupported && (google || email)) ...[
+          const SizedBox(height: 5),
+          Text(l.authExistingAccountHint,
+              textAlign: TextAlign.center,
+              style: AppTypography.micro(secondary).copyWith(height: 1.35)),
+        ],
+        const SizedBox(height: 16),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Icon(AppLucideIcons.shieldCheck, size: 15, color: secondary),
+          const SizedBox(width: 6),
+          Flexible(
+              child: Text(l.authTrustLocalEncryption,
+                  style: AppTypography.micro(secondary))),
+        ]),
+        const SizedBox(height: 6),
+        Text(l.authTermsNotice,
+            textAlign: TextAlign.center,
+            style: AppTypography.micro(secondary).copyWith(height: 1.35)),
       ],
     );
   }
 
-  Widget _appleButton() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: _appleSignInPending,
-      builder: (context, busy, _) => SizedBox(
-        width: double.infinity,
-        child: FilledButton.icon(
-          onPressed: busy
-              ? null
-              : () => _signIn(ref.read(authServiceProvider).signInWithApple),
-          style: FilledButton.styleFrom(
-            backgroundColor: Colors.white,
-            disabledBackgroundColor:
-                Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white.withValues(alpha: 0.75)
-                    : null,
-            foregroundColor: Colors.black,
-            minimumSize: const Size.fromHeight(54),
-            shape: const StadiumBorder(),
-          ),
-          icon: busy
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Colors.black,
-                  ),
-                )
-              : const Icon(Icons.apple, size: 24),
-          label: Text(
-            busy ? context.l10n.startPreparing : context.l10n.authAppleCta,
-            style: AppTypography.bodyStrong(Colors.black),
-          ),
-        ),
-      ),
-    );
+  Widget _methodIcon(bool pending, Color color, Widget icon) => pending
+      ? SizedBox.square(
+          dimension: 18,
+          child: CircularProgressIndicator(strokeWidth: 2, color: color))
+      : icon;
+
+  Future<void> _emailSignIn() async {
+    final service = ref.read(authServiceProvider);
+    await showGlassSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => EmailCodeSheet(
+              onSend: _creatingAccount
+                  ? service.sendEmailSignupCode
+                  : service.sendEmailCode,
+              creatingAccount: _creatingAccount,
+              onVerify: (email, code, _) async {
+                final ok = await _signIn(() async {
+                  final identity =
+                      await service.verifyEmailCode(email: email, code: code);
+                  if (identity == null) throw const StaleAdmissionException();
+                  return identity;
+                }, provider: 'email', showFailureToast: false);
+                return ok ? EmailCodeResult.verified : EmailCodeResult.invalid;
+              },
+            ));
   }
 }

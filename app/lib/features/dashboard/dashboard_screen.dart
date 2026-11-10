@@ -20,6 +20,7 @@ import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../core/theme/widgets/glass_selector.dart';
 import '../../core/theme/widgets/mali_glass.dart';
 import '../../core/theme/widgets/mali_screen.dart';
+import '../../core/theme/widgets/app_toast.dart';
 import '../../core/theme/widgets/ring_progress.dart';
 import '../../core/theme/widgets/section_header.dart';
 import '../../core/theme/widgets/navy_sheet_theme.dart';
@@ -279,9 +280,6 @@ class _HomeBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Concept B: the blue hero melts into the page behind the first cards —
-    // no sheet edge — exactly like the rest of Qirsh's page headers.
-    //
     // An account that has never had a transaction gets the first-run Home
     // (welcome + three start steps) instead of a hero full of zeros. A period
     // that is merely empty is NOT that: it keeps the normal layout, and the
@@ -946,14 +944,26 @@ class _BlueZone extends ConsumerWidget {
           children: [
             LayoutBuilder(builder: (context, constraints) {
               final account = _accountSelector(context, ref);
-              final periods = CoachAnchor(target: 'period', child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: _PeriodSegments(
-                  selected: period,
-                  onSelect: (value) =>
-                      ref.read(heroPeriodProvider.notifier).state = value,
-                ),
-              ));
+              final periods = CoachAnchor(
+                  target: 'period',
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: _PeriodSegments(
+                      selected: period,
+                      onSelect: (value) async {
+                        try {
+                          await ref
+                              .read(heroPeriodProvider.notifier)
+                              .select(value);
+                        } catch (_) {
+                          if (context.mounted) {
+                            AppToast.showError(
+                                context, context.l10n.setupSaveFailed);
+                          }
+                        }
+                      },
+                    ),
+                  ));
               if (MediaQuery.textScalerOf(context).scale(16) > 20) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1083,15 +1093,17 @@ class _BlueZone extends ConsumerWidget {
           '${Currency.label(context, selected.currency.toUpperCase())}';
     }
     // The shared selector chip every other screen uses for the account.
-    return CoachAnchor(target: 'account', child: GlassSelector(
-      onBlue: true,
-      icon: AppLucideIcons.wallet,
-      label: accountLabel,
-      onTap: () {
-        HapticFeedback.selectionClick();
-        context.push('/accounts');
-      },
-    ));
+    return CoachAnchor(
+        target: 'account',
+        child: GlassSelector(
+          onBlue: true,
+          icon: AppLucideIcons.wallet,
+          label: accountLabel,
+          onTap: () {
+            HapticFeedback.selectionClick();
+            context.push('/accounts');
+          },
+        ));
   }
 
   Widget _heroTotals(BuildContext context, HeroPeriod period) {
@@ -1238,35 +1250,36 @@ class _QuickActions extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget action(IconData icon, String label, VoidCallback onTap) {
       final button = Semantics(
-          button: true,
-          label: label,
-          excludeSemantics: true,
-          child: Column(
-            children: [
-              MaliGlass(
-                variant: MaliGlassVariant.headerAction,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  onTap();
-                },
-                child: SizedBox(
-                  width: 48,
-                  height: 48,
-                  child:
-                      Center(child: Icon(icon, color: Colors.white, size: 22)),
-                ),
+        button: true,
+        label: label,
+        excludeSemantics: true,
+        child: Column(
+          children: [
+            MaliGlass(
+              variant: MaliGlassVariant.headerAction,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                onTap();
+              },
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: Center(child: Icon(icon, color: Colors.white, size: 22)),
               ),
-              const SizedBox(height: 6),
-              Text(label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.caption(
-                      Colors.white.withValues(alpha: 0.85))),
-            ],
-          ),
+            ),
+            const SizedBox(height: 6),
+            Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.caption(
+                    Colors.white.withValues(alpha: 0.85))),
+          ],
+        ),
       );
-      return Expanded(child: icon == AppLucideIcons.clipboardPaste
-          ? CoachAnchor(target: 'paste', child: button) : button);
+      return Expanded(
+          child: icon == AppLucideIcons.clipboardPaste
+              ? CoachAnchor(target: 'paste', child: button)
+              : button);
     }
 
     return Row(
@@ -1399,8 +1412,7 @@ class _Sheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // شفاف بالكامل: الهيرو الأزرق بيكمّل وراه ([_heroMeltOverflow]) وبيدوب في
-    // كانفاس الصفحة، فأول الكروت بتقعد على الذوبان بدل ما خلفية صلبة تقطعه.
+    // Keep the blue fade visible behind the first cards, with no solid edge.
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.gutter, AppSpacing.s4, AppSpacing.gutter, 0),

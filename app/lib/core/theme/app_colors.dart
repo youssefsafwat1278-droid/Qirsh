@@ -27,7 +27,7 @@ abstract final class AppBrandBlue {
   static const Color strong = Color(0xFF0336BF);
 
   /// Light-mode CTA. `--qirsh-blue-light`.
-  static const Color mid = Color(0xFF1653F3);
+  static const Color mid = Color(0xFF155DFC);
 
   /// Dark-mode CTA and the accent-gradient start. Unchanged: the dark theme
   /// already carried the design system's `--qirsh-blue-light` for dark.
@@ -331,7 +331,7 @@ class AppColors extends ThemeExtension<AppColors> {
     surfaceMuted: Color(0xFF0C0D11),
     primary: AppBrandBlue.pale,
     onPrimary: Color(0xFF00123A),
-    cta: AppBrandBlue.bright,
+    cta: AppBrandBlue.mid,
     onCta: Color(0xFFFFFFFF),
     ctaSoft: Color(0xFF15233F),
     // The same tinted blue as light (2026-10-28, see the light theme): the

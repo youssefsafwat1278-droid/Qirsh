@@ -5,7 +5,7 @@ import '../../core/theme/app_motion.dart';
 import '../../core/utils/app_lucide_icons.dart';
 
 /// AppCheckMark — the unified selection mark for pickable list rows: a small
-/// rounded square that fills with ink + a check when selected, and shows a
+/// rounded square that fills with blue + a check when selected, and shows a
 /// quiet border when not. Presentation only — the enclosing row owns the
 /// onTap and the interactive semantics; this widget just reports the checked
 /// state to assistive tech.
@@ -26,12 +26,12 @@ class AppCheckMark extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: selected ? c.ink : Colors.transparent,
+          color: selected ? c.cta : Colors.transparent,
           borderRadius: BorderRadius.circular(size * 0.32),
           border: selected ? null : Border.all(color: c.border, width: 1.5),
         ),
         child: selected
-            ? Icon(AppLucideIcons.check, size: size * 0.7, color: c.onInk)
+            ? Icon(AppLucideIcons.check, size: size * 0.7, color: c.onCta)
             : null,
       ),
     );

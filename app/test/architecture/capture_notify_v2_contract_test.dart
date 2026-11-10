@@ -74,6 +74,20 @@ void main() {
   });
 
   group('App Intent owner rule (T-D9)', () {
+    test('the native channel and all capture copies share the app language',
+        () {
+      expect(delegate, contains('case "setNotificationLanguage":'));
+      expect(storeCopy, store);
+      expect(store, contains('static var notificationLanguage: String'));
+      expect(intent,
+          contains('"locale": SharedCaptureStore.notificationLanguage'));
+      expect(
+          intent,
+          contains(
+              'preferredLanguage: String? = SharedCaptureStore.notificationLanguage'));
+      expect(intent, isNot(contains('Locale.preferredLanguages.first')));
+    });
+
     test('the mirror is read from the shared store and defaults to false', () {
       expect(store, contains('var captureNotifyV2: Bool = false'));
       expect(
@@ -88,7 +102,8 @@ void main() {
       final perform = body(intent, 'func perform()');
       expect(perform, contains('if config.captureNotifyV2 {'));
       expect(perform, contains('response.pushAttempted ?? response.pushSent'));
-      final success = perform.substring(perform.indexOf('if let response = attempt.response'),
+      final success = perform.substring(
+          perform.indexOf('if let response = attempt.response'),
           perform.indexOf('// Backend unreachable'));
       expect(success, isNot(contains('if config.captureNotifyV2')));
       expect(success, isNot(contains('else if !response.pushSent')));
@@ -165,7 +180,7 @@ void main() {
         () {
       final svc =
           read('lib/features/capture/services/local_notification_service.dart');
-      final show = body(svc, 'Future<void> _show({');
+      final show = body(svc, 'Future<bool> _show({');
       expect(show, contains('lockScreenContentFor('));
       expect(show, contains('captureNotifyV2: captureNotifyV2()'));
       final bg =
@@ -204,7 +219,8 @@ void main() {
         expect(fn.substring(0, 900), contains('"$prefix"'));
         // The retired backend identifier remains removable after an upgrade.
         if (prefix != 'capture_backend_') {
-          expect(intent, contains('"${prefix.substring(0, prefix.length - 1)}"'));
+          expect(
+              intent, contains('"${prefix.substring(0, prefix.length - 1)}"'));
         }
       }
     });

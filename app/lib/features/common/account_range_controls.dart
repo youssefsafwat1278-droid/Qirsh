@@ -215,7 +215,6 @@ class _DateRangeChips extends ConsumerWidget {
                         ChoiceChip(
                           label: Text(_label(context, preset)),
                           selected: current.preset == preset,
-                          selectedColor: c.primary.withValues(alpha: 0.16),
                           onSelected: (_) {
                             if (preset == TransactionsDatePreset.custom) {
                               setState(() {});

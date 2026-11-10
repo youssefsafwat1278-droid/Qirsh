@@ -2238,6 +2238,33 @@ class NativeCaptureBridge {
     }
   }
 
+  /// Mirrors Qirsh's chosen language for capture notifications while closed.
+  static Future<int> shortcutSetupProbeStatus() async {
+    try {
+      final value = await _channel.invokeMethod<num>('shortcutSetupProbeStatus');
+      return value?.toInt() ?? 0;
+    } on MissingPluginException {
+      return 0;
+    } on PlatformException {
+      return 0;
+    }
+  }
+
+  static Future<void> setNotificationLanguage(String code) async {
+    if (!_hasNativeQueue) return;
+    final language = code.toLowerCase().split(RegExp('[-_]')).first == 'ar'
+        ? 'ar'
+        : 'en';
+    try {
+      await _channel.invokeMethod<void>(
+          'setNotificationLanguage', {'language': language});
+    } on PlatformException {
+      return;
+    } on MissingPluginException {
+      return;
+    }
+  }
+
   /// CAP-7: mirrors the `capture_notify_v2` flag for the App Intent. Best-effort.
   static Future<void> setCaptureNotifyV2(bool enabled) async {
     if (!_hasNativeQueue) return;

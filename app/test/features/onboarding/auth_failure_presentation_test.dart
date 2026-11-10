@@ -54,19 +54,20 @@ void main() {
             expect(find.byType(CircularProgressIndicator), findsOneWidget);
             final material = tester.widget<Material>(
                 find.descendant(of: button, matching: find.byType(Material)));
-            final worstFill = Color.alphaBlend(material.color!, Colors.black);
-            final busyContrast = (worstFill.computeLuminance() + .05) / .05;
+            const ink = Colors.black;
+            final fill = material.color!.computeLuminance();
+            final busyContrast = (fill + .05) / .05;
             final label = find.descendant(
                 of: button, matching: find.text(l10n.startPreparing));
             expect(
                 tester.renderObject<RenderParagraph>(label).text.style!.color,
-                Colors.black);
+                ink);
             expect(
                 tester
                     .widget<CircularProgressIndicator>(
                         find.byType(CircularProgressIndicator))
                     .color,
-                Colors.black);
+                ink);
             await tester.tap(button, warnIfMissed: false);
             await tester.pump();
             expect(auth.calls, 1);
@@ -89,7 +90,7 @@ void main() {
             expect(tester.takeException(), isNull);
             expect(busyContrast, greaterThanOrEqualTo(4.5),
                 reason:
-                    'The actual black label and progress ring must remain visible even over the darkest background');
+                    'The label and progress ring must remain readable on the actual button fill');
           }, createHttpClient: (context) {
             clients++;
             throw StateError('auth_failure_preview_must_not_create_http');

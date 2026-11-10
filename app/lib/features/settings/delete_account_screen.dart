@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/immediate_deletion_flow.dart';
@@ -163,13 +164,70 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
       return;
     }
     _session = captured;
-    unawaited(_run(captured.confirm));
+    unawaited(_run(() => _confirmIdentity(captured)));
   }
 
   Future<void> _retry() async {
     final session = _session;
     if (session == null) return _confirmAndStart();
-    unawaited(_run(session.confirm));
+    unawaited(_run(() => _confirmIdentity(session)));
+  }
+
+  Future<DeletionFlowResult> _confirmIdentity(DeletionFlowSession session) =>
+      session is EmailProofDeletionSession
+          ? session.confirmWithEmailProof(_readDeletionCode)
+          : session.confirm();
+
+  Future<String?> _readDeletionCode() async {
+    if (!mounted) return null;
+    final l10n = context.l10n;
+    var code = '';
+    final form = GlobalKey<FormState>();
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => GlassAlertDialog(
+        title: Text(l10n.deleteAccountEmailProofTitle),
+        content: Form(
+          key: form,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.deleteAccountEmailProofBody),
+              const SizedBox(height: 12),
+              TextFormField(
+                autofocus: true,
+                keyboardType: TextInputType.number,
+                textDirection: TextDirection.ltr,
+                autofillHints: const [AutofillHints.oneTimeCode],
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                decoration: InputDecoration(
+                    labelText: l10n.deleteAccountEmailProofTitle),
+                onChanged: (value) => code = value,
+                validator: (value) =>
+                    (value?.length ?? 0) < 6 ? l10n.authCodeVerifyFailed : null,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.commonCancel)),
+          TextButton(
+            onPressed: () {
+              if (form.currentState?.validate() ?? false) {
+                Navigator.pop(ctx, code);
+              }
+            },
+            child: Text(l10n.deleteAccountConfirmAction),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _retryCleanup() async {
@@ -368,12 +426,16 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
       body: ListView(
         padding: const EdgeInsets.all(AppSpacing.gutter),
         children: [
-          AppCard(child: Column(
+          AppCard(
+              child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Center(child: QirshIllustration(name: 'privacy', width: 112, height: 84)),
+              const Center(
+                  child: QirshIllustration(
+                      name: 'privacy', width: 112, height: 84)),
               const SizedBox(height: AppSpacing.s3),
-              Text(l10n.deleteAccountIntro, style: AppTypography.body(c.textMain)),
+              Text(l10n.deleteAccountIntro,
+                  style: AppTypography.body(c.textMain)),
             ],
           )),
           const SizedBox(height: AppSpacing.s4),

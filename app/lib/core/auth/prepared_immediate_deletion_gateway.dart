@@ -204,7 +204,7 @@ final class PreparedImmediateDeletionGateway {
   /// yet sent a request (and is not a resumed one) can ask. A challenge that
   /// arrives after the original binding was lost is discarded.
   Future<PreparedChallengeOutcome> challenge(
-      PreparedDeletionOperation operation) {
+      PreparedDeletionOperation operation, {bool? emailOnly}) {
     if (!identical(operation._issuer, this)) {
       return Future.value(const PreparedChallengeUnavailable._());
     }
@@ -217,7 +217,7 @@ final class PreparedImmediateDeletionGateway {
           !operation._original.current) {
         return const PreparedChallengeUnavailable._();
       }
-      final issued = await operation._recovery.challenge();
+      final issued = await operation._recovery.challenge(emailOnly: emailOnly);
       if (operation._closed ||
           operation._attempted ||
           !operation._original.current) {
@@ -227,7 +227,8 @@ final class PreparedImmediateDeletionGateway {
         ImmediateChallengeIssued() => PreparedChallengeIssued._(
             challengeId: issued.challengeId,
             nonce: issued.nonce,
-            expiresAtMs: issued.expiresAtMs),
+            expiresAtMs: issued.expiresAtMs,
+            method: issued.method),
         ImmediateChallengeRefused() => PreparedChallengeRefused._(issued.reason),
         ImmediateChallengeFailed() => PreparedChallengeFailed._(
             retryable: issued.retryable, code: issued.code),
@@ -535,11 +536,13 @@ final class PreparedChallengeIssued extends PreparedChallengeOutcome {
   const PreparedChallengeIssued._(
       {required this.challengeId,
       required this.nonce,
-      required this.expiresAtMs})
+      required this.expiresAtMs,
+      required this.method})
       : super._();
   final String challengeId;
   final String nonce;
   final int expiresAtMs;
+  final DeletionProofMethod method;
   @override
   String toString() => 'PreparedChallengeIssued';
 }

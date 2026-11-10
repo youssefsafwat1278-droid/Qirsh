@@ -67,12 +67,16 @@ final appRouter = GoRouter(
   refreshListenable: Listenable.merge([
     AppSession.instance,
     AutomaticSessionRecovery.restoringSession,
+    AutomaticSessionRecovery.recoveryTimedOut,
   ]),
   // Hides the native glass tab bar while a bottom sheet/dialog is open (it is
   // a platform view that Flutter modals can't cover). See ModalRouteObserver.
   observers: [modalRouteObserver],
   redirect: (context, state) {
     final session = AppSession.instance;
+    if (AutomaticSessionRecovery.recoveryTimedOut.value) {
+      return state.uri.path == '/' ? null : '/';
+    }
     // A writable scope can be published before the recovered identity/status.
     // Keep Auth and the financial shell out of that intermediate frame.
     if (AutomaticSessionRecovery.restoringSession.value) {
@@ -141,13 +145,22 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/',
       name: 'home',
-      builder: (context, state) => AutomaticSessionRecovery.restoringSession.value
+      builder: (context, state) => ListenableBuilder(
+        listenable: Listenable.merge([
+          AppSession.instance,
+          AutomaticSessionRecovery.restoringSession,
+          AutomaticSessionRecovery.recoveryTimedOut,
+        ]),
+        builder: (context, _) => AutomaticSessionRecovery.restoringSession.value
           ? const AppBootLoader()
+          : AutomaticSessionRecovery.recoveryTimedOut.value
+              ? const LocalReadShell()
           : AppSession.instance.localReadActive
               ? const LocalReadShell()
               : AppSession.instance.localReadPresentationRestricted
                   ? const AppBootLoader()
                   : const AppShell(),
+      ),
     ),
     GoRoute(
       path: '/onboarding/brand',

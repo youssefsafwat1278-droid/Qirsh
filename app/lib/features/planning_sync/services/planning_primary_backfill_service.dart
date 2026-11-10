@@ -190,6 +190,7 @@ class PlanningPrimaryBackfillService {
           // repair-set value (the NULL case is deferred above); NEVER a base/
           // account/settings fallback. Omitting it made the server store NULL.
           'currency': currency,
+          'alert_threshold_percent': row.read<int>('alert_threshold_percent'),
           'period': row.read<String>('period'),
           'start_date': row.read<String>('start_date'),
           'is_active': row.read<int>('is_active') == 1,

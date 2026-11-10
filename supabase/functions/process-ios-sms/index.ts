@@ -8,7 +8,7 @@ import {
   verifyDevice,
 } from '../_shared/capture_auth.ts';
 import { sendCapturePush } from '../_shared/apns.ts';
-import { clearDeadApnsToken, enqueueNotificationRetry, GENERIC_CAPTURE_PUSH, isDeadApnsToken } from '../_shared/capture_push.ts';
+import { clearDeadApnsToken, enqueueNotificationRetry, capturePushContent, transactionPushAlert, isDeadApnsToken } from '../_shared/capture_push.ts';
 import { fingerprintTimeKeys } from '../_shared/capture_fingerprint.ts';
 import { redactPii, redactThirdPartyNames } from '../_shared/sms_redaction.ts';
 import { markApnsLogFailed, markApnsLogSent } from '../_shared/notification_logs.ts';
@@ -27,6 +27,8 @@ export type { ParsedCapture };
 export type CaptureStatus = 'processed' | 'needs_review' | 'duplicate' | 'rejected';
 type NotificationPayload = {
   localDelivery?: boolean;
+  pushAlert?: { title: string; body: string };
+  pushLanguage?: 'ar' | 'en';
   title: string;
   body: string;
   type: 'new_transaction' | 'needs_review' | 'suspicious_duplicate' | 'received';
@@ -322,8 +324,12 @@ export async function handleProcessIosSms(
 
     const notification: NotificationPayload = aiPrimary && status === 'rejected'
       ? { title: '', body: '', type: 'received' }
-      : buildNotification(status, parsed, sender, receivedAt, tzOffsetMinutes);
+      : buildNotification(status, parsed, sender, receivedAt, tzOffsetMinutes, locale);
+    notification.pushLanguage = locale.toLowerCase().startsWith('ar') ? 'ar' : 'en';
     if (body.localNotification === true && !background) notification.localDelivery = true;
+    if (body.notificationDetails === true && status === 'processed') {
+      notification.pushAlert = transactionPushAlert(parsed, locale, { receivedAt, tzOffsetMinutes });
+    }
     // Each primary analysis already made its bounded provider attempts. A
     // terminal unverified result is preserved for review, with no push.
     const transient = !aiPrimary && outcome.aiTransientFailure === true;
@@ -349,6 +355,24 @@ export async function handleProcessIosSms(
     }
 
     console.log(JSON.stringify({ event: 'capture_stored', status, retryable: transient }));
+    if (status === 'processed' && ownerUid) {
+      const secret = Deno.env.get('ENGAGEMENT_WORKER_SECRET');
+      const url = Deno.env.get('SUPABASE_URL');
+      const runtime = (globalThis as unknown as {
+        EdgeRuntime?: { waitUntil: (work: Promise<unknown>) => void }
+      }).EdgeRuntime;
+      const wait = dependencies.waitUntil ?? runtime?.waitUntil.bind(runtime);
+      if (secret && url && wait) {
+        wait(fetch(`${url}/functions/v1/evaluate-budgets`, {
+          method: 'POST', signal: AbortSignal.timeout(10000),
+          headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' },
+          body: JSON.stringify({ record: { user_id: ownerUid }, capturePayloadId: payloadId,
+            locale, tzOffsetMinutes }),
+        }).then((response) => {
+          if (!response.ok) console.error('capture_budget_evaluation_failed', response.status);
+        }).catch(() => console.error('capture_budget_evaluation_unavailable')));
+      }
+    }
     // I-1: the durable result is committed; only now may APNs be attempted.
     const push = done.push_allowed === true ? (done.push as PushInfo | null) : null;
     const pushSent = push
@@ -482,8 +506,7 @@ async function detectDuplicate(
     card,
   ].join('|');
 
-  // Exact for sms_body timestamps; bucketed (~10–20 min window) for
-  // received_at ones — see _shared/capture_fingerprint.ts and its tests.
+  // Exact timestamps for both sources; stable payload IDs handle retries.
   const timeKeys = fingerprintTimeKeys(
     parsed.comparisonTimestamp,
     parsed.comparisonTimestampSource,
@@ -520,7 +543,26 @@ export function buildNotification(
   sender: string,
   receivedAt: string,
   tzOffsetMinutes: number | null,
+  locale = 'en',
 ): NotificationPayload {
+  if (!locale.toLowerCase().startsWith('ar')) {
+    const detail = transactionPushAlert(parsed, 'en', { receivedAt, tzOffsetMinutes });
+    const summary = detail ? `${detail.title}\n${detail.body}\n` : '';
+    if (status === 'duplicate') return {
+      title: 'Similar transaction ⚠️', type: 'suspicious_duplicate',
+      body: `${summary}Already recorded? Open Qirsh to review.`,
+    };
+    if (status === 'needs_review') return {
+      title: 'Transaction needs review ⚠️', type: 'needs_review',
+      body: `${summary}Open Qirsh to review and confirm.`,
+    };
+    if (status === 'processed') return {
+      title: detail?.title ?? 'Transaction captured', type: 'new_transaction',
+      body: detail?.body ?? 'Open Qirsh to view transaction',
+    };
+    return { title: 'Bank message captured', type: 'received',
+      body: "Couldn't analyze this bank message. Paste it in Qirsh to add it manually." };
+  }
   if (status === 'duplicate') {
     return {
       title: 'عملية مشابهة ⚠️',
@@ -755,9 +797,7 @@ async function sendFinalizedPush(
     environment,
     payloadId,
     notificationLogId,
-    // Q3: generic alert only; the result itself is pulled by the app.
-    title: GENERIC_CAPTURE_PUSH.title,
-    body: GENERIC_CAPTURE_PUSH.body,
+    ...capturePushContent(notification),
     notificationType: notification.type,
     smartInboxItemId: notification.type === 'needs_review' ||
         notification.type === 'suspicious_duplicate'

@@ -161,13 +161,21 @@ class AppTransactionRow extends StatelessWidget {
                 ),
                 const SizedBox(width: AppSpacing.s3),
                 trailing ??
-                    Text(
-                      privacyMode
-                          ? '••••'
-                          : '$amountPrefix$magnitude',
-                      textDirection: TextDirection.ltr,
-                      style: AppTypography.bodyStrong(
-                          privacyMode ? c.textMuted : amountColor),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.sizeOf(context).width * .4,
+                      ),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerEnd,
+                        child: Text(
+                          privacyMode ? '••••' : '$amountPrefix$magnitude',
+                          textDirection: TextDirection.ltr,
+                          style: AppTypography.bodyStrong(
+                            privacyMode ? c.textMuted : amountColor,
+                          ),
+                        ),
+                      ),
                     ),
               ],
             ),
