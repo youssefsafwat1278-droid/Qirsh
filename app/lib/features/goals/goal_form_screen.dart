@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +26,11 @@ import '../../core/theme/widgets/app_toast.dart';
 import '../common/app_header.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../common/repo_error_messages.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shadows.dart';
+import '../../core/theme/widgets/mali_card.dart';
+import '../../domain/finance/money_format.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/widgets/glass_pickers.dart';
 import '../../core/theme/widgets/glass_dropdown_field.dart';
 
@@ -62,6 +68,7 @@ class GoalFormScreen extends ConsumerStatefulWidget {
 class _GoalFormScreenState extends ConsumerState<GoalFormScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: AppHeader(
           title: widget.goal == null ? context.l10n.gfNewGoal : context.l10n.gfEditGoal,
         ),
@@ -173,42 +180,37 @@ class _GoalFormContentState extends ConsumerState<_GoalFormContent> {
         (ref.watch(baseCurrencyProvider).valueOrNull ?? 'SAR');
     final recommended = _recommendedDailyAmount(currency);
     final cur = Currency.label(context, currency);
-    return Form(
+    final form = Form(
       key: _formKey,
       child: ListView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: EdgeInsets.fromLTRB(
           AppSpacing.gutter,
-          widget.fullScreen ? AppSpacing.gutter : AppSpacing.s2,
+          // Full screen: the list runs under the glass nav bar, whose
+          // height arrives as the top inset.
+          widget.fullScreen
+              ? MediaQuery.paddingOf(context).top + AppSpacing.gutter
+              : AppSpacing.s2,
           AppSpacing.gutter,
-          MediaQuery.of(context).viewInsets.bottom + AppSpacing.s6,
+          (widget.fullScreen ? MediaQuery.of(context).viewInsets.bottom : 0) +
+              AppSpacing.s6,
         ),
         children: [
-          const Center(child: QirshIllustration(name: 'savings', width: 170, height: 128)),
-          const SizedBox(height: 12),
+          _GoalPreview(
+            photo: qirshGoalPhoto(
+                _coverSkin ?? widget.goal?.vaultSkin ?? 'default_vault'),
+            name: _nameController.text.trim(),
+            amount: _previewAmount(currency),
+            currency: currency,
+            currencyLabel: cur,
+          ),
+          const SizedBox(height: AppSpacing.s3),
           TextFormField(
             controller: _nameController,
             style: _alex(15, FontWeight.w700, 1.2, c.textMain),
-            decoration: InputDecoration(
-              labelText: context.l10n.gfGoalName,
-              labelStyle: _alex(13, FontWeight.w700, 1.2, c.textLight),
-              filled: true,
-              fillColor: c.surface.withValues(alpha: 0.15),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: c.border.withValues(alpha: 0.3)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: c.border.withValues(alpha: 0.3)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: c.primary, width: 1.5),
-              ),
-            ),
+            decoration: _fieldDecoration(context,
+                label: context.l10n.gfGoalName),
+            onChanged: (_) => setState(() {}),
             validator: (value) => (value == null || value.trim().isEmpty)
                 ? context.l10n.gfEnterGoalName
                 : null,
@@ -218,28 +220,8 @@ class _GoalFormContentState extends ConsumerState<_GoalFormContent> {
             controller: _amountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: _alex(15, FontWeight.w700, 1.2, c.textMain),
-            decoration: InputDecoration(
-              labelText: context.l10n.gfTargetAmount,
-              labelStyle: _alex(13, FontWeight.w700, 1.2, c.textLight),
-              suffixText: cur,
-              suffixStyle: _alex(14, FontWeight.w700, 1.2, c.textMain),
-              filled: true,
-              fillColor: c.surface.withValues(alpha: 0.15),
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: c.border.withValues(alpha: 0.3)),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: c.border.withValues(alpha: 0.3)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: c.primary, width: 1.5),
-              ),
-            ),
+            decoration: _fieldDecoration(context,
+                label: context.l10n.gfTargetAmount, suffix: cur),
             onChanged: (_) => setState(() {}),
             validator: (value) {
               try {
@@ -253,42 +235,74 @@ class _GoalFormContentState extends ConsumerState<_GoalFormContent> {
             },
           ),
           const SizedBox(height: AppSpacing.s4),
-          Container(
-            decoration: BoxDecoration(
-              color: c.surface.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: c.border.withValues(alpha: 0.3)),
-            ),
+          DecoratedBox(
+            decoration: _fieldBox(context),
             child: Material(
               type: MaterialType.transparency,
               child: ListTile(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
                 title: Text(context.l10n.gfDeadline,
-                    style: _alex(14, FontWeight.w700, 1.2, c.textMain)),
+                    style: AppTypography.caption(c.textMuted)),
                 subtitle: Text(
                   _deadline == null
                       ? context.l10n.gfOptional
                       : Formatters.fullDate(_deadline!, context),
-                  style: _alex(12, FontWeight.w500, 1.2, c.textLight),
+                  style: AppTypography.body(
+                      _deadline == null ? c.textFaint : c.textMain),
                 ),
-                trailing:
-                    Icon(AppLucideIcons.calendar, color: c.textLight, size: 20),
+                trailing: Icon(AppLucideIcons.calendar,
+                    color: c.actionText, size: 20),
                 onTap: _pickDeadline,
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.s4),
+          // v2 info helper (spec §3.0 17): plain caption under the date field,
+          // no slab; becomes the recommended amount once a date is picked.
+          Padding(
+            padding: const EdgeInsetsDirectional.only(
+                start: 4, top: AppSpacing.s2),
+            child: Row(
+              children: [
+                Icon(
+                  recommended == null
+                      ? AppLucideIcons.info
+                      : AppLucideIcons.lightbulb,
+                  color: recommended == null ? c.info : c.success,
+                  size: 16,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: AppMotion.base,
+                    child: Text(
+                      key: ValueKey(recommended == null),
+                      recommended == null
+                          ? context.l10n.gfRecommendedAfterDate
+                          : context.l10n.gfRecommendedFor(
+                              Formatters.integer(recommended), cur,
+                              _deadline!.difference(DateTime.now()).inDays),
+                      style: AppTypography.caption(
+                          recommended == null ? c.textMuted : c.success),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.s5),
           Text(context.l10n.goalCoverLabel,
-            style: AppTypography.bodyStrong(c.textPrimary)),
-          const SizedBox(height: 8),
+            style: AppTypography.sectionTitle(c.textPrimary)),
+          const SizedBox(height: AppSpacing.s3),
           GridView.builder(
             padding: EdgeInsets.zero,
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: 3, mainAxisSpacing: 8, crossAxisSpacing: 8,
-              mainAxisExtent: 76),
+              mainAxisExtent: 84),
             itemCount: 6,
             itemBuilder: (context, index) {
               final options = [
@@ -302,66 +316,41 @@ class _GoalFormContentState extends ConsumerState<_GoalFormContent> {
               final option = options[index];
               final selected = qirshGoalPhoto(_coverSkin ?? widget.goal?.vaultSkin ?? 'default_vault') == option.$2;
               return Semantics(selected: selected, button: true, label: option.$3,
-                child: InkWell(onTap: _saving ? null : () => setState(() => _coverSkin = option.$1),
+                child: InkWell(onTap: _saving ? null : () {
+                    if (!selected) HapticFeedback.selectionClick();
+                    setState(() => _coverSkin = option.$1);
+                  },
                   borderRadius: BorderRadius.circular(14),
-                  child: Container(clipBehavior: Clip.antiAlias,
+                  child: AnimatedContainer(duration: AppMotion.micro,
+                    clipBehavior: Clip.antiAlias,
                     decoration: BoxDecoration(borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: selected ? c.cta : c.border, width: selected ? 2 : 1)),
+                      border: Border.all(
+                        color: selected ? c.cta : Colors.transparent, width: 2)),
                     child: Stack(children: [
-                      Positioned.fill(child: QirshPhotoFrame(photo: option.$2, height: 76)),
+                      Positioned.fill(child: QirshPhotoFrame(photo: option.$2, height: 84)),
                       const Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(
                         gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                          colors: [Colors.transparent, Color(0x9906122E)])))),
-                      Positioned(right: 8, bottom: 6, child: Text(option.$3,
-                        style: AppTypography.custom(size: 11, weight: FontWeight.w500,
-                          height: 1.2, color: Colors.white))),
+                          colors: [Colors.transparent, Color(0xB306122E)])))),
+                      PositionedDirectional(start: 8, end: 8, bottom: 6, child: Text(option.$3,
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: AppTypography.subhead(Colors.white)
+                            .copyWith(fontWeight: FontWeight.w600))),
+                      if (selected)
+                        PositionedDirectional(top: 6, start: 6, child: Container(
+                          width: 20, height: 20,
+                          decoration: BoxDecoration(color: c.cta, shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 1.5)),
+                          child: const Icon(AppLucideIcons.check, size: 12, color: Colors.white))),
                     ]),
                   ),
                 ));
             },
           ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: (recommended == null ? c.primary : c.success)
-                  .withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                  color: (recommended == null ? c.primary : c.success)
-                      .withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  recommended == null
-                      ? AppLucideIcons.info
-                      : AppLucideIcons.lightbulb,
-                  color: recommended == null ? c.primary : c.success,
-                  size: 18,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    recommended == null
-                        ? context.l10n.gfRecommendedAfterDate
-                        : context.l10n.gfRecommendedFor(Formatters.integer(recommended), cur,
-                        _deadline!.difference(DateTime.now()).inDays),
-                    style: _alex(12, FontWeight.w700, 1.4,
-                        recommended == null ? c.textLight : c.success),
-                  ),
-                ),
-              ],
-            ),
-          ),
           const SizedBox(height: AppSpacing.s5),
-          Container(
+          // ادخار تلقائي — a Group row with the switch.
+          MaliCard(
+            style: MaliSurfaceStyle.floating,
             padding: const EdgeInsets.all(AppSpacing.s4),
-            decoration: BoxDecoration(
-              color: c.surface.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: c.border),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -372,12 +361,10 @@ class _GoalFormContentState extends ConsumerState<_GoalFormContent> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(context.l10n.gfAutoSaving,
-                              style:
-                                  _alex(14, FontWeight.w700, 1.2, c.textMain)),
+                              style: AppTypography.bodyStrong(c.textMain)),
                           const SizedBox(height: 2),
                           Text(context.l10n.gfAutoSavingHint,
-                              style:
-                                  _alex(11, FontWeight.w600, 1.3, c.textLight)),
+                              style: AppTypography.caption(c.textMuted)),
                         ],
                       ),
                     ),
@@ -435,17 +422,54 @@ class _GoalFormContentState extends ConsumerState<_GoalFormContent> {
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.s5),
-          // زر النظام الأسود (ink) — بدل التدرّج الأزرق القديم بظلّه الكحلي.
-          AppPrimaryButton(
-            label: widget.goal == null ? context.l10n.gfCreateGoal : context.l10n.gfSaveEdit,
-            onTap: _submit,
-            loading: _saving,
-            height: 52,
-          ),
         ],
       ),
     );
+    // v2 QStickyDock: the one primary action stays on screen instead of
+    // sitting below the fold. In the sheet the dock rides above the keyboard;
+    // the full-screen route's Scaffold already resizes for it.
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      children: [
+        Expanded(child: form),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: c.border)),
+            color: widget.fullScreen ? c.bg : null,
+            boxShadow: isDark || !widget.fullScreen ? null : AppShadows.e2,
+          ),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              AppSpacing.gutter,
+              AppSpacing.s3,
+              AppSpacing.gutter,
+              AppSpacing.s3 +
+                  (widget.fullScreen
+                      ? MediaQuery.paddingOf(context).bottom
+                      : math.max(MediaQuery.viewInsetsOf(context).bottom,
+                          MediaQuery.paddingOf(context).bottom)),
+            ),
+            // زر النظام الأساسي — بدل التدرّج الأزرق القديم بظلّه الكحلي.
+            child: AppPrimaryButton(
+              label: widget.goal == null ? context.l10n.gfCreateGoal : context.l10n.gfSaveEdit,
+              onTap: _submit,
+              loading: _saving,
+              height: 52,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Display-only target for the live preview (canonical parse, no rounding).
+  Money? _previewAmount(String currency) {
+    try {
+      final m = parseLocalizedMoney(_amountController.text, currency);
+      return m.minorUnits > 0 ? m : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   void _seedInitialState() {
@@ -605,5 +629,123 @@ class _GoalFormContentState extends ConsumerState<_GoalFormContent> {
       }
     }
     return (await accountRepo.getDefault())?.id;
+  }
+}
+
+
+/// v2 form field surface (spec §3.0 17): dark = Inset well, no border;
+/// light = white + 1px strokeSoft + e1 on the canvas.
+BoxDecoration _fieldBox(BuildContext context) {
+  final c = context.colors;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return BoxDecoration(
+    color: isDark ? c.surfaceMuted : c.surface,
+    borderRadius: BorderRadius.circular(14),
+    border: isDark ? null : Border.all(color: c.strokeSoft),
+    boxShadow: isDark ? null : AppShadows.e1,
+  );
+}
+
+InputDecoration _fieldDecoration(BuildContext context,
+    {required String label, String? suffix}) {
+  final c = context.colors;
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  final radius = BorderRadius.circular(14);
+  final rest = isDark
+      ? BorderSide.none
+      : BorderSide(color: c.strokeSoft);
+  return InputDecoration(
+    labelText: label,
+    labelStyle: AppTypography.callout(c.textMuted),
+    floatingLabelStyle: AppTypography.caption(c.textMuted),
+    suffixText: suffix,
+    suffixStyle: AppTypography.subhead(c.textSecondary),
+    filled: true,
+    fillColor: isDark ? c.surfaceMuted : c.surface,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    border: OutlineInputBorder(borderRadius: radius, borderSide: rest),
+    enabledBorder: OutlineInputBorder(borderRadius: radius, borderSide: rest),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: radius,
+      borderSide: BorderSide(color: c.cta, width: 1.5),
+    ),
+  );
+}
+
+/// Live preview card (spec 17) replacing the illustration: the chosen photo
+/// under a scrim, with the goal name and target updating as the user types.
+/// 120pt (spec: 140) so both required fields stay above the fold on a compact
+/// phone with the keyboard up.
+class _GoalPreview extends StatelessWidget {
+  const _GoalPreview({
+    required this.photo,
+    required this.name,
+    required this.amount,
+    required this.currency,
+    required this.currencyLabel,
+  });
+
+  final QirshPhoto photo;
+  final String name;
+  final Money? amount;
+  final String currency;
+  final String currencyLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    const white = Colors.white;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.card),
+      child: SizedBox(
+        height: 120,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: AnimatedSwitcher(
+                duration: AppMotion.moderate,
+                child: QirshPhotoFrame(
+                  key: ValueKey(photo),
+                  photo: photo,
+                  height: 120,
+                  width: double.infinity,
+                ),
+              ),
+            ),
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0x14011341), Color(0xB3011341)],
+                  ),
+                ),
+              ),
+            ),
+            PositionedDirectional(
+              start: AppSpacing.s4,
+              end: AppSpacing.s4,
+              bottom: AppSpacing.s4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(context.l10n.gfV2Preview,
+                      style: AppTypography.caption(
+                          white.withValues(alpha: 0.8))),
+                  Text(name.isEmpty ? context.l10n.gfGoalName : name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.sectionTitle(white)),
+                  Text(
+                    '\u2068${formatMoney(amount ?? Money.zero(currency))}\u2069 $currencyLabel',
+                    style: AppTypography.subhead(white.withValues(alpha: 0.9)),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

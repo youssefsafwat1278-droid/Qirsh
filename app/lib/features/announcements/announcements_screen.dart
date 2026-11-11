@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'announcement_text.dart';
@@ -10,7 +12,6 @@ import '../../core/di/app_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
-import '../common/app_header.dart';
 import '../common/app_card.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../data/catalog/catalog_daos.dart';
@@ -18,6 +19,9 @@ import '../../data/db/sql_value_codec.dart';
 import '../../domain/entities/engagement_entities.dart';
 import '../common/widgets.dart';
 import '../settings/settings_providers.dart';
+import '../settings/settings_screen.dart';
+import '../settings/widgets/settings_v2.dart';
+import '../common/motion.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../../core/utils/formatters.dart';
 
@@ -72,91 +76,123 @@ class AnnouncementsScreen extends ConsumerWidget {
     final shortcutHistory = ref.watch(shortcutHistoryProvider);
     ref.watch(_importShortcutHistoryProvider);
 
-    return AppScreenScaffold(
-      header: AppHeader(title: context.l10n.annTitle),
-      body: prefsAsync.when(
-        skipLoadingOnReload: true,
-        loading: () => AppLoadingState(label: context.l10n.annLoading),
-        error: (_, __) => AppErrorState(
-          title: context.l10n.annLoadFailed,
-          description: context.l10n.annTryAgainSoon,
-          retryLabel: context.l10n.annRetry,
-          onRetry: () => ref.invalidate(notificationPreferencesProvider),
-        ),
-        data: (prefs) {
-          final inbox = prefs.inboxState;
-          final history = [
-            ...inbox.history,
-            for (final event in shortcutHistory.valueOrNull ?? const <ShortcutHistoryEntry>[])
-              NotificationHistoryEntry(
-                id: event.id,
-                kind: event.kind,
-                title: switch (event.kind) {
-                  'new_transaction' => context.l10n.annShortcutCaptured,
-                  'needs_review' => context.l10n.txnPendingReview,
-                  _ => context.l10n.annShortcutReceived,
-                },
-                body: '',
-                sentAt: event.sentAt,
-              ),
-          ].where((entry) => !inbox.hasDismissed(entry.id));
-          final announcements = (announcementsAsync.valueOrNull ?? [])
-              .where((item) => !item.isForceUpdate)
-              .toList();
-          final campaigns = campaignsAsync.valueOrNull ?? const [];
-          final items = <_MessageItem>[
-            ...history.map((e) => _MessageItem.fromHistory(context, e)),
-            ...campaigns.map((e) => _MessageItem.fromCampaign(context, e)),
-            ...announcements
-                .map((e) => _MessageItem.fromAnnouncement(context, e)),
-          ]..sort((a, b) => b.sortAt.compareTo(a.sortAt));
+    Future<void> refresh() async {
+      ref.invalidate(_importShortcutHistoryProvider);
+      ref.invalidate(shortcutHistoryProvider);
+      ref.invalidate(activeAnnouncementsProvider);
+      ref.invalidate(activeDashboardCampaignsProvider);
+      ref.invalidate(notificationPreferencesProvider);
+    }
 
-          if (items.isEmpty && shortcutHistory.isLoading) {
-            return AppLoadingState(label: context.l10n.annLoading);
-          }
+    // v2 §29: QNavBar + QLargeTitle «مركز رسائل قِرش»; the empty state is
+    // centred in the free area with one useful action.
+    return prefsAsync.when(
+      skipLoadingOnReload: true,
+      loading: () => SettingsV2Page(
+        title: context.l10n.annTitle,
+        children: [
+          const SizedBox(height: AppSpacing.s8),
+          AppLoadingState(label: context.l10n.annLoading),
+        ],
+      ),
+      error: (_, __) => SettingsV2Page(
+        title: context.l10n.annTitle,
+        children: [
+          const SizedBox(height: AppSpacing.s8),
+          AppErrorState(
+            title: context.l10n.annLoadFailed,
+            description: context.l10n.annTryAgainSoon,
+            retryLabel: context.l10n.annRetry,
+            onRetry: () => ref.invalidate(notificationPreferencesProvider),
+          ),
+        ],
+      ),
+      data: (prefs) {
+        final inbox = prefs.inboxState;
+        final history = [
+          ...inbox.history,
+          for (final event in shortcutHistory.valueOrNull ?? const <ShortcutHistoryEntry>[])
+            NotificationHistoryEntry(
+              id: event.id,
+              kind: event.kind,
+              title: switch (event.kind) {
+                'new_transaction' => context.l10n.annShortcutCaptured,
+                'needs_review' => context.l10n.txnPendingReview,
+                _ => context.l10n.annShortcutReceived,
+              },
+              body: '',
+              sentAt: event.sentAt,
+            ),
+        ].where((entry) => !inbox.hasDismissed(entry.id));
+        final announcements = (announcementsAsync.valueOrNull ?? [])
+            .where((item) => !item.isForceUpdate)
+            .toList();
+        final campaigns = campaignsAsync.valueOrNull ?? const [];
+        final items = <_MessageItem>[
+          ...history.map((e) => _MessageItem.fromHistory(context, e)),
+          ...campaigns.map((e) => _MessageItem.fromCampaign(context, e)),
+          ...announcements
+              .map((e) => _MessageItem.fromAnnouncement(context, e)),
+        ]..sort((a, b) => b.sortAt.compareTo(a.sortAt));
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(_importShortcutHistoryProvider);
-              ref.invalidate(shortcutHistoryProvider);
-              ref.invalidate(activeAnnouncementsProvider);
-              ref.invalidate(activeDashboardCampaignsProvider);
-              ref.invalidate(notificationPreferencesProvider);
-            },
-            child: ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.gutter,
-                AppSpacing.s2,
-                AppSpacing.gutter,
-                120,
-              ),
-              children: [
-                if (items.isEmpty)
-                  AppEmptyState(
-                    icon: AppLucideIcons.bell,
-                    illustration: const QirshIllustration(
-                        name: 'notifications', width: 220, height: 165),
-                    title: context.l10n.annEmpty,
-                    subtitle: context.l10n.annEmptyBody,
-                  )
-                else ...[
-                  AppCard(
-                    padding: EdgeInsets.zero,
-                    child: Column(children: [
-                      for (final item in items) ...[
-                        if (item != items.first)
-                          Divider(
-                              height: 1,
-                              indent: 16,
-                              endIndent: 16,
-                              color: context.colors.border),
-                        _MessageCard(item: item),
-                      ],
-                    ]),
+        if (items.isEmpty && shortcutHistory.isLoading) {
+          return SettingsV2Page(
+            title: context.l10n.annTitle,
+            children: [
+              const SizedBox(height: AppSpacing.s8),
+              AppLoadingState(label: context.l10n.annLoading),
+            ],
+          );
+        }
+
+        return SettingsV2Page(
+          title: context.l10n.annTitle,
+          onRefresh: refresh,
+          bottomPadding: 120,
+          children: [
+            if (items.isEmpty)
+              Padding(
+                // Optical centre of the free area (≈44% from the top).
+                padding: EdgeInsets.fromLTRB(AppSpacing.gutter,
+                    MediaQuery.sizeOf(context).height * 0.08,
+                    AppSpacing.gutter, 0),
+                child: AppEmptyState(
+                  icon: AppLucideIcons.bell,
+                  illustration: const _SwingingBell(
+                    child: QirshIllustration(
+                        name: 'notifications', width: 240, height: 180),
                   ),
-                  const SizedBox(height: 20),
-                  AppCard(
+                  title: context.l10n.annEmpty,
+                  subtitle: context.l10n.annEmptyBody,
+                  primaryLabel: context.l10n.annPreferencesAction,
+                  onPrimary: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SettingsScreen(
+                        page: SettingsPage.alerts,
+                        showBackButton: true,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else ...[
+              const SizedBox(height: AppSpacing.s4),
+              settingsV2Enter(
+                0,
+                SettingsV2Group(
+                  dividerIndent: 68,
+                  children: [
+                    for (final item in items) _MessageCard(item: item),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.s5),
+              settingsV2Enter(
+                1,
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+                  child: AppCard(
                     child: Row(children: [
                       Expanded(
                           child: Column(
@@ -164,7 +200,7 @@ class AnnouncementsScreen extends ConsumerWidget {
                         children: [
                           Text(context.l10n.setSettings,
                               style: AppTypography.caption(
-                                  context.colors.primary)),
+                                  context.colors.actionText)),
                           const SizedBox(height: 4),
                           Text(context.l10n.annPreferencesTitle,
                               style: AppTypography.bodyStrong(
@@ -172,6 +208,7 @@ class AnnouncementsScreen extends ConsumerWidget {
                           TextButton(
                             onPressed: () => context.push('/settings'),
                             style: TextButton.styleFrom(
+                                foregroundColor: context.colors.actionText,
                                 padding: EdgeInsets.zero,
                                 alignment: AlignmentDirectional.centerStart),
                             child: Text(context.l10n.annPreferencesAction),
@@ -182,12 +219,36 @@ class AnnouncementsScreen extends ConsumerWidget {
                           name: 'notifications', width: 100, height: 75),
                     ]),
                   ),
-                ],
-              ],
-            ),
-          );
-        },
+                ),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// v2 §29 motion: the bell swings once on enter (±10°, pivot at the top,
+/// lively settle, ~700ms). Reduce Motion: still.
+class _SwingingBell extends StatelessWidget {
+  const _SwingingBell({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (shouldReduceMotion(context)) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 700),
+      builder: (context, t, child) => Transform.rotate(
+        alignment: Alignment.topCenter,
+        // Two damped swings of up to 10° (0.1745 rad).
+        angle: math.sin(t * math.pi * 3) * (1 - t) * 0.1745,
+        child: child,
       ),
+      child: child,
     );
   }
 }

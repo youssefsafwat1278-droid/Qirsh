@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../core/theme/widgets/qirsh_visuals.dart';
 
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
@@ -12,10 +14,12 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/utils/l10n_ext.dart';
 import '../../../domain/entities/bill_entity.dart';
 import '../../common/app_avatar.dart';
+import '../../common/app_status_pill.dart';
 import '../../../domain/entities/goal_entity.dart';
 import '../../../domain/finance/money_format.dart';
 import '../../plans/plans_providers.dart';
 import '../dashboard_providers.dart';
+import 'home_v2_style.dart';
 
 /// The cards of the redesigned Home (concept B). Presentation only: every
 /// figure arrives computed from `dashboardDataProvider` or the Home section
@@ -23,7 +27,11 @@ import '../dashboard_providers.dart';
 
 /// «أين ذهبت أموالك» — one segmented bar of the period's categories, then the
 /// top four with their share and change against the previous window.
-class CategorySpendCard extends StatelessWidget {
+///
+/// v2: 12pt bar in the v2 category palette, segments grow from the leading
+/// edge in sequence (60ms stagger); tapping a row focuses its segment and
+/// dims the others to 30%.
+class CategorySpendCard extends StatefulWidget {
   const CategorySpendCard({
     super.key,
     required this.categories,
@@ -34,93 +42,140 @@ class CategorySpendCard extends StatelessWidget {
   final bool privacyMode;
 
   @override
+  State<CategorySpendCard> createState() => _CategorySpendCardState();
+}
+
+class _CategorySpendCardState extends State<CategorySpendCard> {
+  int? _focused;
+
+  static const int _segmentMs = 600;
+  static const int _staggerMs = 60;
+
+  @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final t = MaliTokens.of(context);
+    final brightness = Theme.of(context).brightness;
+    final categories = widget.categories;
+    final totalMs = _segmentMs + _staggerMs * (categories.length - 1).clamp(0, 99);
+    final animate = HomeV2.chart(context) != Duration.zero;
     return MaliCard(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            child: SizedBox(
-              height: 14,
-              child: Row(
-                children: [
-                  for (var i = 0; i < categories.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 3),
-                    Expanded(
-                      flex:
-                          (categories[i].percent * 1000).round().clamp(8, 1000),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: categories[i].category.color,
-                          borderRadius: BorderRadius.circular(3),
+          RepaintBoundary(
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: animate ? 0 : 1, end: 1),
+              duration: Duration(milliseconds: animate ? totalMs : 0),
+              builder: (context, p, _) => ClipRRect(
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: SizedBox(
+                  height: 12,
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < categories.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 2),
+                        Expanded(
+                          flex: (categories[i].percent * 1000)
+                              .round()
+                              .clamp(8, 1000),
+                          child: FractionallySizedBox(
+                            alignment: AlignmentDirectional.centerStart,
+                            widthFactor: AppMotion.easeOut.transform(
+                                ((p * totalMs - i * _staggerMs) / _segmentMs)
+                                    .clamp(0.0, 1.0)),
+                            child: AnimatedOpacity(
+                              opacity: _focused == null || _focused == i
+                                  ? 1
+                                  : 0.3,
+                              duration: AppMotion.micro,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: categories[i]
+                                      .category
+                                      .accent(brightness),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
-                ],
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 6),
           for (var i = 0; i < categories.length && i < 4; i++)
-            _row(context, c, t, categories[i], first: i == 0),
+            _row(context, c, t, categories[i], i, brightness),
         ],
       ),
     );
   }
 
-  Widget _row(
-      BuildContext context, AppColors c, MaliTokens t, CategorySlice slice,
-      {required bool first}) {
+  Widget _row(BuildContext context, AppColors c, MaliTokens t,
+      CategorySlice slice, int index, Brightness brightness) {
     final prev = slice.previousTotal;
     String? delta;
-    Color? deltaColor;
+    AppStatusTone? deltaTone;
     if (prev != null && !prev.isZero && !prev.isNegative) {
       final ratio = slice.total.toDouble() / prev.toDouble() - 1;
       final pct = (ratio * 100).round();
       if (pct != 0) {
-        delta = '${pct > 0 ? '+' : '−'}${pct.abs() > 999 ? 999 : pct.abs()}%';
-        deltaColor = pct > 0 ? c.warning : c.income;
+        delta = '${pct > 0 ? '+' : '\u2212'}${pct.abs() > 999 ? 999 : pct.abs()}%';
+        deltaTone = pct > 0 ? AppStatusTone.warning : AppStatusTone.success;
       }
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        border: first ? null : Border(top: BorderSide(color: t.cardBorder)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 10,
-            height: 10,
-            decoration: BoxDecoration(
-              color: slice.category.color,
-              borderRadius: BorderRadius.circular(3),
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () {
+        HapticFeedback.selectionClick();
+        setState(() => _focused = _focused == index ? null : index);
+      },
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 52),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          border: index == 0
+              ? null
+              : Border(top: BorderSide(color: HomeV2.hairline(context))),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                color: slice.category.accent(brightness),
+                shape: BoxShape.circle,
+              ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(slice.category.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.body(t.textOnCanvasPrimary)),
-          ),
-          if (delta != null) ...[
-            Text(delta,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(slice.category.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTypography.body(t.textOnCanvasPrimary)),
+            ),
+            if (delta != null) ...[
+              Directionality(
                 textDirection: TextDirection.ltr,
-                style: AppTypography.micro(deltaColor!)),
-            const SizedBox(width: 8),
+                child: AppStatusPill(
+                    label: delta, tone: deltaTone!, compact: true),
+              ),
+              const SizedBox(width: 8),
+            ],
+            Text('${(slice.percent * 100).round()}%',
+                style: AppTypography.caption(t.textOnCanvasMuted)),
+            const SizedBox(width: 10),
+            Text(widget.privacyMode ? '••••' : formatMoney(slice.total),
+                style: AppTypography.amountSmall(t.textOnCanvasPrimary)
+                    .copyWith(fontSize: 16)),
           ],
-          Text('${(slice.percent * 100).round()}%',
-              style: AppTypography.caption(t.textOnCanvasMuted)),
-          const SizedBox(width: 10),
-          Text(privacyMode ? '••••' : formatMoney(slice.total),
-              style: AppTypography.bodyStrong(t.textOnCanvasPrimary)),
-        ],
+        ),
       ),
     );
   }
@@ -206,11 +261,15 @@ class UpcomingPaymentsCard extends StatelessWidget {
                   .narrowWeekdays[d.weekday % 7];
               return Container(
                 width: dayWidth,
+                // v2 day strip: card cell + hairline (light #E6EAF2); today
+                // is the action fill.
                 decoration: BoxDecoration(
-                  color: isToday ? c.cta : t.surfaceFloating,
-                  borderRadius: BorderRadius.circular(AppRadius.md),
+                  color: isToday ? c.cta : c.surface,
+                  borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                      color: isToday ? Colors.transparent : t.cardBorder),
+                      color: isToday
+                          ? Colors.transparent
+                          : HomeV2.hairline(context)),
                 ),
                 child: Stack(
                   alignment: Alignment.center,
@@ -235,7 +294,7 @@ class UpcomingPaymentsCard extends StatelessWidget {
                           width: 5,
                           height: 5,
                           decoration: BoxDecoration(
-                            color: isToday ? Colors.white : c.danger,
+                            color: isToday ? Colors.white : c.warning,
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -284,7 +343,9 @@ class UpcomingPaymentsCard extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 9),
         decoration: BoxDecoration(
-          border: first ? null : Border(top: BorderSide(color: t.cardBorder)),
+          border: first
+              ? null
+              : Border(top: BorderSide(color: HomeV2.hairline(context))),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -318,15 +379,11 @@ class UpcomingPaymentsCard extends StatelessWidget {
                         ? '••••'
                         : '\u2066−${formatMoney(b.amountMoney)}\u2069 ${Currency.label(context, b.currency.toUpperCase())}',
                     style: AppTypography.bodyStrong(t.textOnCanvasPrimary)),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: (soon ? c.warning : c.cta).withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                  ),
-                  child: Text(when,
-                      style: AppTypography.micro(soon ? c.warning : c.cta)),
+                IntrinsicWidth(
+                  child: AppStatusPill(
+                      label: when,
+                      tone: soon ? AppStatusTone.warning : AppStatusTone.info,
+                      compact: true),
                 ),
               ],
             ),
@@ -337,7 +394,9 @@ class UpcomingPaymentsCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 9),
       decoration: BoxDecoration(
-        border: first ? null : Border(top: BorderSide(color: t.cardBorder)),
+        border: first
+            ? null
+            : Border(top: BorderSide(color: HomeV2.hairline(context))),
       ),
       child: Row(
         children: [
@@ -369,18 +428,14 @@ class UpcomingPaymentsCard extends StatelessWidget {
                     // LRI…PDI isolates the signed number so RTL keeps the
                     // minus in front of it («−56.00 ريال»).
                     : '\u2066−${formatMoney(b.amountMoney)}\u2069 ${Currency.label(context, b.currency.toUpperCase())}',
-                style: AppTypography.bodyStrong(t.textOnCanvasPrimary),
+                style: AppTypography.amountSmall(t.textOnCanvasPrimary)
+                    .copyWith(fontSize: 16),
               ),
               const SizedBox(height: 3),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: (soon ? c.warning : c.cta).withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(AppRadius.pill),
-                ),
-                child: Text(when,
-                    style: AppTypography.micro(soon ? c.warning : c.cta)),
-              ),
+              AppStatusPill(
+                  label: when,
+                  tone: soon ? AppStatusTone.warning : AppStatusTone.info,
+                  compact: true),
             ],
           ),
         ],
@@ -429,7 +484,10 @@ class GoalsPlansRail extends StatelessWidget {
           label: context.l10n.homeTileGoal,
           photo: qirshGoalPhoto(g.vaultSkin),
           ratio: g.targetAmount > 0 ? g.savedAmount / g.targetAmount : 0,
-          color: c.income,
+          // v2: goal progress is the action blue, gold once reached.
+          color: g.targetAmount > 0 && g.savedAmount >= g.targetAmount
+              ? c.accent
+              : c.cta,
           line: privacyMode
               ? '•••• / ••••'
               : '${formatMoney(g.savedMoney)} / ${formatMoney(g.targetMoney)}',
@@ -492,8 +550,9 @@ class GoalsPlansRail extends StatelessWidget {
     final t = MaliTokens.of(context);
     return SizedBox(
       width: width,
+      // v2: goal cards are Group cards (light white + e1).
       child: MaliCard(
-        style: MaliSurfaceStyle.raised,
+        style: MaliSurfaceStyle.floating,
         onTap: onTap,
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -503,21 +562,21 @@ class GoalsPlansRail extends StatelessWidget {
             Row(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                   child: photo == null
                       ? Container(
-                          width: 38,
-                          height: 38,
+                          width: 40,
+                          height: 40,
                           color: color.withValues(alpha: 0.12),
                           child: Icon(AppLucideIcons.calendar,
                               color: color, size: 18),
                         )
-                      : QirshPhotoFrame(photo: photo, height: 38, width: 38),
+                      : QirshPhotoFrame(photo: photo, height: 40, width: 40),
                 ),
                 const SizedBox(width: AppSpacing.s2),
                 Expanded(
                   child: Text(label,
-                      style: AppTypography.caption(t.textOnCanvasMuted)),
+                      style: AppTypography.overline(t.textOnCanvasMuted)),
                 ),
               ],
             ),
@@ -536,9 +595,9 @@ class GoalsPlansRail extends StatelessWidget {
               const SizedBox(height: AppSpacing.s2),
               LinearProgressIndicator(
                 value: ratio.clamp(0, 1),
-                minHeight: 5,
-                borderRadius: BorderRadius.circular(4),
-                backgroundColor: t.ringTrackNeutral,
+                minHeight: 6,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                backgroundColor: HomeV2.track(context),
                 color: color,
                 semanticsLabel: name,
               ),

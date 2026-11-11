@@ -45,7 +45,7 @@ void main(){
   // Real fixture preference saved before snapshot, not an accepted tested action.
   final seed=DriftUserSettingsRepository(db);final old=await seed.getSettings();await seed.saveSettings(old.copyWith(notificationsJson:jsonEncode(NotificationPreferences(quietHoursEnabled:quiet).toJson())));
   final before=await _sql(db);final repo=_FailureSettings(db);
-  await tester.pumpWidget(ProviderScope(overrides:[appDatabaseProvider.overrideWithValue(db),userSettingsRepositoryProvider.overrideWithValue(repo)],child:MaterialApp(theme:dark?AppTheme.dark:AppTheme.light,locale:Locale(lang),supportedLocales:AppL10n.supportedLocales,localizationsDelegates:AppL10n.localizationsDelegates,home:const SettingsScreen())));
+  await tester.pumpWidget(ProviderScope(overrides:[appDatabaseProvider.overrideWithValue(db),userSettingsRepositoryProvider.overrideWithValue(repo)],child:MaterialApp(theme:dark?AppTheme.dark:AppTheme.light,locale:Locale(lang),supportedLocales:AppL10n.supportedLocales,localizationsDelegates:AppL10n.localizationsDelegates,home:SettingsScreen(page:quiet?SettingsPage.alerts:SettingsPage.capture))));// v2: quiet hours live on «تنبيهاتك», capture switches on «رصد العمليات».
   for(var i=0;i<5;i++){await tester.runAsync(() async=>Future<void>.delayed(const Duration(milliseconds:50)));await tester.pump(const Duration(milliseconds:100));}await tester.pumpAndSettle();
   final l=AppL10n.of(tester.element(find.byType(SettingsScreen)));
   Future<void> reveal(Finder finder) async {await tester.scrollUntilVisible(finder,300,scrollable:find.byType(Scrollable).first);await tester.pumpAndSettle();}

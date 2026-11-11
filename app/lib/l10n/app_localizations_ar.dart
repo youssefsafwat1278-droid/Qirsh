@@ -6432,7 +6432,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get deleteAccountIntro =>
-      'احذف حساب قرش والبيانات المحفوظة فيه نهائيًا. هتأكّد هويتك الأول.';
+      'احذف حساب قرش والبيانات المحفوظة فيه نهائيًا وعلى الفور. ستؤكد هويتك أولًا عبر Apple أو طريقة الدخول التي تستخدمها.';
 
   @override
   String get deleteAccountAction => 'حذف الحساب';
@@ -6442,7 +6442,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get deleteAccountConfirmBody =>
-      'هيتحذف حسابك وبياناته نهائيًا. أكّد هويتك عشان تكمل. الحذف لا يمكن التراجع عنه.';
+      'سيُحذف حسابك وبياناته نهائيًا وعلى الفور. أكّد هويتك عبر Apple أو طريقة الدخول التي تستخدمها للمتابعة. لا يمكن التراجع عن الحذف.';
 
   @override
   String get deleteAccountConfirmAction => 'حذف نهائي';
@@ -7007,7 +7007,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get shortcutVisualInstallBody =>
-      'اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. احتفظ باسم القالب الجديد QIRSH عشان اختبار الاتصال يقدر يفتحه.';
+      'اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. احتفظ باسم القالب الجديد QIRSH ليتمكّن اختبار الاتصال من فتحه.';
 
   @override
   String get shortcutVisualFilterTitle => 'اختار الرسائل البنكية المطلوبة';
@@ -7040,7 +7040,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get shortcutVisualReviewed =>
-      'راجعت الخطوات. الالتقاط التلقائي لسه محتاج تفعيل Automation داخل الاختصارات.';
+      'راجعت الخطوات. يتطلّب الالتقاط التلقائي تفعيل Automation داخل الاختصارات.';
 
   @override
   String get shortcutCatalogTitle => 'رسائل البنك';
@@ -7073,21 +7073,50 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get shortcutCatalogNoMatches =>
-      'مفيش نتيجة. جرّب رمز عملة زي EGP أو USD.';
+      'لا توجد نتائج. جرّب رمز عملة مثل EGP أو USD.';
 
   @override
   String get shortcutCatalogSingleTemplate =>
       'كل الاختيارات بتستخدم قالب QIRSH نفسه. هتغيّر الفلتر الحالي داخل الاختصارات. مراجعة الخطوات مش تأكيد إن Automation اتفعّل في iOS.';
 
   @override
-  String get shortcutOpenEditor => 'افتح QIRSH في الاختصارات';
+  String shortcutVisualInstallDedicatedBody(String keyword) {
+    return 'اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. هذا الاختصار مُعدّ مسبقًا لالتقاط الرسائل التي تحتوي على $keyword، فلا حاجة إلى كتابة أي شيء.';
+  }
+
+  @override
+  String shortcutCatalogDedicated(String keyword) {
+    return 'الكلمة $keyword لها اختصار جاهز أُضيفت فيه مسبقًا. ما زال iOS يطلب منك تفعيل Automation بنفسك، ولا يستطيع قرش معرفة ما إذا كانت مفعّلة.';
+  }
+
+  @override
+  String get shortcutConfirmAutomation => 'فعّلتُ Automation';
+
+  @override
+  String get shortcutStateConfirmed =>
+      'أكّدتَ أن Automation مفعّلة. لا يستطيع قرش التحقق من ذلك داخل iOS.';
+
+  @override
+  String get shortcutStateTested =>
+      'تم اختبار الاتصال. فعّل Automation لالتقاط الرسائل تلقائيًا.';
+
+  @override
+  String shortcutOverlapWarning(String keyword) {
+    return 'سبق أن أعددت $keyword لهذه العملة. استخدم كلمة واحدة لكل عملة حتى لا تُلتقط الرسالة نفسها مرتين.';
+  }
+
+  @override
+  String shortcutOpenEditor(String name) {
+    return 'افتح $name في الاختصارات';
+  }
 
   @override
   String get shortcutVisualArrowTitle => 'افتح إعدادات التشغيل التلقائي';
 
   @override
-  String get shortcutVisualArrowBody =>
-      'افتح QIRSH في الاختصارات. اضغط السهم الأزرق الصغير جنب where تحت When I receive a message.';
+  String shortcutVisualArrowBody(String name) {
+    return 'افتح $name في الاختصارات. اضغط السهم الأزرق الصغير جنب where تحت When I receive a message.';
+  }
 
   @override
   String shortcutVisualStep(int current, int total) {
@@ -7123,7 +7152,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get authEmailExplanation =>
-      'اكتب البريد المرتبط بحساب قرش عشان تستلم كود دخول لمرة واحدة.';
+      'أدخل البريد المرتبط بحساب قرش لاستلام رمز دخول يُستخدم مرة واحدة.';
 
   @override
   String get authEmailLinkExplanation =>
@@ -7147,7 +7176,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get authConfirmBothEmails =>
-      'اتأكدنا من البريد الجديد. اكتب الكود اللي اتبعت لبريدك الحالي عشان تكمل.';
+      'تم تأكيد البريد الجديد. أدخل الرمز المُرسل إلى بريدك الحالي للمتابعة.';
 
   @override
   String get authCurrentEmailCode => 'كود البريد الحالي';
@@ -7177,7 +7206,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get authExistingAccountHint =>
-      'بتستخدم Apple؟ ادخل بيه الأول عشان تربط طريقة دخول جديدة.';
+      'تستخدم Apple؟ سجّل الدخول به أولًا لربط طريقة دخول جديدة.';
 
   @override
   String get authCreateAccount => 'إنشاء حساب';
@@ -7202,5 +7231,116 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get authGoogleSignupRequired =>
-      'حساب Google ده جديد على قرش. اختار «إنشاء حساب» عشان تسجّل.';
+      'حساب Google هذا جديد على قرش. اختر «إنشاء حساب» للتسجيل.';
+
+  @override
+  String get accV2Balance => 'الرصيد';
+
+  @override
+  String get accV2YourAccounts => 'حساباتك';
+
+  @override
+  String get subsV2Upcoming => 'قادمة';
+
+  @override
+  String get subsV2AllSubs => 'كل الاشتراكات';
+
+  @override
+  String get gfV2Preview => 'معاينة';
+
+  @override
+  String gdV2DaysCount(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days يوم',
+      many: '$days يومًا',
+      few: '$days أيام',
+      two: 'يومان',
+      one: 'يوم واحد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gdV2MoreActions => 'خيارات الهدف';
+
+  @override
+  String get setV2Tools => 'أدوات';
+
+  @override
+  String setV2Version(String version) {
+    return 'قِرش $version';
+  }
+
+  @override
+  String get setV2AppearanceLead => 'اختار شكل قِرش — بيتغير فورًا.';
+
+  @override
+  String get setV2CaptureNeedsCheck => 'يحتاج مراجعة';
+
+  @override
+  String get bdgV2YourBudgets => 'ميزانياتك';
+
+  @override
+  String get bdgV2WorstFirst => 'الأسوأ أولًا';
+
+  @override
+  String get bfsV2ShowAll => 'عرض الكل';
+
+  @override
+  String get bfsV2ShowLess => 'عرض أقل';
+
+  @override
+  String get couponsV2BrowseOffers => 'تصفّح العروض';
+
+  @override
+  String get txnV2EndOfList => '— دي كل عمليات الفترة —';
+
+  @override
+  String get txnV2Filters => 'الفلاتر';
+
+  @override
+  String pasteV2DetectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count رسالة مكتشفة',
+      many: '$count رسالة مكتشفة',
+      few: '$count رسائل مكتشفة',
+      two: 'رسالتين مكتشفتين',
+      one: 'رسالة واحدة مكتشفة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pasteV2Clear => 'مسح النص';
+
+  @override
+  String get smsV2Step1 => 'افتح رسالة البنك';
+
+  @override
+  String get smsV2Step2 => 'اضغط «مشاركة»';
+
+  @override
+  String get smsV2Step3 => 'اختر قِرش';
+
+  @override
+  String get smsV2PrivacyLine =>
+      'بدون إذن قراءة الرسائل · سنحلّل النص على جهازك فقط.';
+
+  @override
+  String get insV3Report => 'تقرير';
+
+  @override
+  String get txnV3NetThisMonth => 'صافي الشهر';
+
+  @override
+  String get txnV3NetThisPeriod => 'صافي الفترة';
+
+  @override
+  String billsV3Counts(int subs, int instalments) {
+    return '$subs اشتراك · $instalments أقساط';
+  }
 }

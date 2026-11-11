@@ -3472,10 +3472,10 @@
   "consentWithdrawFailed": "لم نتمكن من التأكد من إيقاف هذه الميزة. يبقى الإرسال متوقفًا. حاول مجددًا.",
   "signOutDataStays": "تبقى بياناتك على هذا الجهاز وتعود إليك عند تسجيل الدخول مجددًا.",
   "deleteAccountTitle": "حذف الحساب",
-  "deleteAccountIntro": "احذف حساب قرش والبيانات المحفوظة فيه نهائيًا. هتأكّد هويتك الأول.",
+  "deleteAccountIntro": "احذف حساب قرش والبيانات المحفوظة فيه نهائيًا وعلى الفور. ستؤكد هويتك أولًا عبر Apple أو طريقة الدخول التي تستخدمها.",
   "deleteAccountAction": "حذف الحساب",
   "deleteAccountConfirmTitle": "حذف حسابك؟",
-  "deleteAccountConfirmBody": "هيتحذف حسابك وبياناته نهائيًا. أكّد هويتك عشان تكمل. الحذف لا يمكن التراجع عنه.",
+  "deleteAccountConfirmBody": "سيُحذف حسابك وبياناته نهائيًا وعلى الفور. أكّد هويتك عبر Apple أو طريقة الدخول التي تستخدمها للمتابعة. لا يمكن التراجع عن الحذف.",
   "deleteAccountConfirmAction": "حذف نهائي",
   "deleteAccountProgress": "جارٍ حذف حسابك…",
   "deleteAccountSuccess": "تم حذف حسابك.",
@@ -3804,7 +3804,7 @@
   "retryBankAnalysis": "أعد التحليل بالذكاء الاصطناعي",
   "onboardingAccountCheckFailed": "تعذّر التحقق من إعداد حسابك. تحقّق من اتصالك ثم أعد المحاولة.",
   "shortcutVisualInstallTitle": "أضف اختصار قرش",
-  "shortcutVisualInstallBody": "اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. احتفظ باسم القالب الجديد QIRSH عشان اختبار الاتصال يقدر يفتحه.",
+  "shortcutVisualInstallBody": "اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. احتفظ باسم القالب الجديد QIRSH ليتمكّن اختبار الاتصال من فتحه.",
   "shortcutVisualFilterTitle": "اختار الرسائل البنكية المطلوبة",
   "shortcutVisualFilterBody": "القالب المشترك بيبدأ بـ EGP. اضبط Message contains على {currencyCode}؛ لو هي نفس الكلمة سيبها زي ما هي. سيب Shortcut Input وSender في Process.",
   "@shortcutVisualFilterBody": {
@@ -3820,7 +3820,7 @@
   "shortcutVisualTestBody": "اختبار الاتصال بيشغّل QIRSH من غير إضافة معاملة. نجاحه بيأكد الاتصال.\n\nوللتأكد من الالتقاط التلقائي، استقبل رسالة بنكية تطابق الفلتر اللي اخترته.",
   "shortcutVisualImageCaption": "مرجع من iOS · اضغط للتكبير. اسم الاختصار المستخدم في الاختبار QIRSH.",
   "shortcutVisualEnlarge": "تكبير صورة إعداد الاختصار في iOS",
-  "shortcutVisualReviewed": "راجعت الخطوات. الالتقاط التلقائي لسه محتاج تفعيل Automation داخل الاختصارات.",
+  "shortcutVisualReviewed": "راجعت الخطوات. يتطلّب الالتقاط التلقائي تفعيل Automation داخل الاختصارات.",
   "shortcutCatalogTitle": "رسائل البنك",
   "shortcutCatalogBody": "اختار الكلمة اللي بنكك بيستخدمها، وهنظبط معاك الفلتر والالتقاط التلقائي خطوة بخطوة.",
   "shortcutCatalogSearch": "كلمة أو عملة",
@@ -3843,11 +3843,52 @@
   },
   "shortcutCatalogSetUp": "إعداد",
   "shortcutCatalogReviewed": "راجعت الخطوات",
-  "shortcutCatalogNoMatches": "مفيش نتيجة. جرّب رمز عملة زي EGP أو USD.",
+  "shortcutCatalogNoMatches": "لا توجد نتائج. جرّب رمز عملة مثل EGP أو USD.",
   "shortcutCatalogSingleTemplate": "كل الاختيارات بتستخدم قالب QIRSH نفسه. هتغيّر الفلتر الحالي داخل الاختصارات. مراجعة الخطوات مش تأكيد إن Automation اتفعّل في iOS.",
-  "shortcutOpenEditor": "افتح QIRSH في الاختصارات",
+  "shortcutVisualInstallDedicatedBody": "اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. هذا الاختصار مُعدّ مسبقًا لالتقاط الرسائل التي تحتوي على {keyword}، فلا حاجة إلى كتابة أي شيء.",
+  "@shortcutVisualInstallDedicatedBody": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutCatalogDedicated": "الكلمة {keyword} لها اختصار جاهز أُضيفت فيه مسبقًا. ما زال iOS يطلب منك تفعيل Automation بنفسك، ولا يستطيع قرش معرفة ما إذا كانت مفعّلة.",
+  "@shortcutCatalogDedicated": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutConfirmAutomation": "فعّلتُ Automation",
+  "shortcutStateConfirmed": "أكّدتَ أن Automation مفعّلة. لا يستطيع قرش التحقق من ذلك داخل iOS.",
+  "shortcutStateTested": "تم اختبار الاتصال. فعّل Automation لالتقاط الرسائل تلقائيًا.",
+  "shortcutOverlapWarning": "سبق أن أعددت {keyword} لهذه العملة. استخدم كلمة واحدة لكل عملة حتى لا تُلتقط الرسالة نفسها مرتين.",
+  "@shortcutOverlapWarning": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutOpenEditor": "افتح {name} في الاختصارات",
+  "@shortcutOpenEditor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "shortcutVisualArrowTitle": "افتح إعدادات التشغيل التلقائي",
-  "shortcutVisualArrowBody": "افتح QIRSH في الاختصارات. اضغط السهم الأزرق الصغير جنب where تحت When I receive a message.",
+  "shortcutVisualArrowBody": "افتح {name} في الاختصارات. اضغط السهم الأزرق الصغير جنب where تحت When I receive a message.",
+  "@shortcutVisualArrowBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "shortcutVisualStep": "الخطوة {current} من {total}",
   "@shortcutVisualStep": {
     "placeholders": {
@@ -3874,14 +3915,14 @@
       }
     }
   },
-  "authEmailExplanation": "اكتب البريد المرتبط بحساب قرش عشان تستلم كود دخول لمرة واحدة.",
+  "authEmailExplanation": "أدخل البريد المرتبط بحساب قرش لاستلام رمز دخول يُستخدم مرة واحدة.",
   "authEmailLinkExplanation": "أضف بريدًا لحسابك الحالي. عملياتك وإعداداتك هتفضل في نفس الحساب. تغيير البريد بيتطلب تأكيد البريد الحالي والجديد.",
   "authInvalidEmail": "اكتب بريدًا إلكترونيًا صحيحًا.",
   "authCodeSendFailed": "تعذّر إرسال الكود. تأكد من اتصالك وحاول تاني بعد دقيقة.",
   "authCodeVerifyFailed": "تعذّر تأكيد الكود. راجعه وحاول تاني.",
   "authResendCode": "إرسال الكود مرة تانية",
   "authChangeEmail": "استخدام بريد آخر",
-  "authConfirmBothEmails": "اتأكدنا من البريد الجديد. اكتب الكود اللي اتبعت لبريدك الحالي عشان تكمل.",
+  "authConfirmBothEmails": "تم تأكيد البريد الجديد. أدخل الرمز المُرسل إلى بريدك الحالي للمتابعة.",
   "authCurrentEmailCode": "كود البريد الحالي",
   "authSignInMethods": "طرق تسجيل الدخول",
   "authSignInMethodsDescription": "أضف طريقة دخول لنفس الحساب، واحتفظ بكل بياناتك مع بعض.",
@@ -3890,12 +3931,71 @@
   "authLinkEmail": "ربط البريد الإلكتروني",
   "authLinkSuccess": "تم ربط طريقة الدخول بحسابك.",
   "authLinkFailed": "تعذّر ربط طريقة الدخول. لو مرتبطة بحساب قرش تاني، استخدم غيرها.",
-  "authExistingAccountHint": "بتستخدم Apple؟ ادخل بيه الأول عشان تربط طريقة دخول جديدة.",
+  "authExistingAccountHint": "تستخدم Apple؟ سجّل الدخول به أولًا لربط طريقة دخول جديدة.",
   "authCreateAccount": "إنشاء حساب",
   "authBackToSignIn": "عندك حساب بالفعل؟ سجّل الدخول",
   "authCreateAccountSubtitle": "اختار طريقة الدخول لحساب قرش الجديد.",
   "authCreateEmailExplanation": "اكتب بريدك الإلكتروني وأكّد الكود لإكمال إنشاء حساب قرش.",
   "deleteAccountEmailProofTitle": "كود تأكيد البريد",
   "deleteAccountEmailProofBody": "بعتنا كود لمرة واحدة على البريد المؤكّد لحساب قرش ده. أدخل الكود لتأكيد الحذف.",
-  "authGoogleSignupRequired": "حساب Google ده جديد على قرش. اختار «إنشاء حساب» عشان تسجّل."
+  "authGoogleSignupRequired": "حساب Google هذا جديد على قرش. اختر «إنشاء حساب» للتسجيل.",
+  "accV2Balance": "الرصيد",
+  "accV2YourAccounts": "حساباتك",
+  "subsV2Upcoming": "قادمة",
+  "subsV2AllSubs": "كل الاشتراكات",
+  "gfV2Preview": "معاينة",
+  "gdV2DaysCount": "{days, plural, =1{يوم واحد} =2{يومان} few{{days} أيام} many{{days} يومًا} other{{days} يوم}}",
+  "@gdV2DaysCount": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "gdV2MoreActions": "خيارات الهدف",
+  "setV2Tools": "أدوات",
+  "setV2Version": "قِرش {version}",
+  "@setV2Version": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "setV2AppearanceLead": "اختار شكل قِرش — بيتغير فورًا.",
+  "setV2CaptureNeedsCheck": "يحتاج مراجعة",
+  "bdgV2YourBudgets": "ميزانياتك",
+  "bdgV2WorstFirst": "الأسوأ أولًا",
+  "bfsV2ShowAll": "عرض الكل",
+  "bfsV2ShowLess": "عرض أقل",
+  "couponsV2BrowseOffers": "تصفّح العروض",
+  "txnV2EndOfList": "— دي كل عمليات الفترة —",
+  "txnV2Filters": "الفلاتر",
+  "pasteV2DetectedCount": "{count, plural, =1{رسالة واحدة مكتشفة} =2{رسالتين مكتشفتين} few{{count} رسائل مكتشفة} many{{count} رسالة مكتشفة} other{{count} رسالة مكتشفة}}",
+  "@pasteV2DetectedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "pasteV2Clear": "مسح النص",
+  "smsV2Step1": "افتح رسالة البنك",
+  "smsV2Step2": "اضغط «مشاركة»",
+  "smsV2Step3": "اختر قِرش",
+  "smsV2PrivacyLine": "بدون إذن قراءة الرسائل · سنحلّل النص على جهازك فقط.",
+  "insV3Report": "تقرير",
+  "txnV3NetThisMonth": "صافي الشهر",
+  "txnV3NetThisPeriod": "صافي الفترة",
+  "billsV3Counts": "{subs} اشتراك · {instalments} أقساط",
+  "@billsV3Counts": {
+    "placeholders": {
+      "subs": {
+        "type": "int"
+      },
+      "instalments": {
+        "type": "int"
+      }
+    }
+  }
 }

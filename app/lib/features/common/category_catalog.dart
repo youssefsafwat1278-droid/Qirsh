@@ -61,6 +61,11 @@ class CategoryView {
   /// لون خلفية التايل الثابت (عميق ومكتوم) — بدل لون الـ DB المتغيّر.
   Color get tileColor => categoryTileColor(entity.icon);
   Color get color => Formatters.colorFromHex(entity.color);
+
+  /// v2 category colour for the active theme (spec §2.1 palette); falls back
+  /// to the stored [color] for a category the palette does not name.
+  Color accent(Brightness brightness) =>
+      categoryAccent(entity.key, brightness) ?? color;
 }
 
 /// كتالوج التصنيفات (id↔عرض، key↔عرض) — يُحمّل مرة من DB.

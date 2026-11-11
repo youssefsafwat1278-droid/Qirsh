@@ -171,7 +171,9 @@ void main() {
               expect(find.descendant(of: picker,
                   matching: find.text('${formatMoney(money(5))} $currency')), findsOneWidget);
             } else if (component == 'subscriptions') {
-              await tester.drag(find.byType(NestedScrollView), const Offset(0, -450));
+              // v3: one shared bills body in a plain list (was a NestedScrollView
+              // with Subscriptions / Instalments tabs).
+              await tester.drag(find.byType(Scrollable).first, const Offset(0, -450));
               await _settle(tester);
               await _reveal(tester, find.text('QA exact subscription'));
               final card = find.ancestor(of: find.text('QA exact subscription'), matching: find.byType(MaliCard)).first;
@@ -181,8 +183,9 @@ void main() {
               for (final textFinder in [
                 find.descendant(of: card, matching: find.text(formatMoney(money(0)))),
                 find.descendant(of: card, matching: find.text('${formatMoney(money(1))} $currency')),
+                // v3 second line: «status · cadence».
                 find.descendant(of: card, matching: find.byWidgetPredicate((widget) =>
-                    widget is Text && (widget.data?.startsWith('${l10n.txnCycleMonthly} · ') ?? false))),
+                    widget is Text && (widget.data?.endsWith(' · ${l10n.txnCycleMonthly}') ?? false))),
               ]) {
                 final paragraph = tester.renderObject<RenderParagraph>(textFinder);
                 expect(paragraph.didExceedMaxLines, isFalse);
@@ -190,7 +193,8 @@ void main() {
                 expect(bounds.left, greaterThanOrEqualTo(0));
                 expect(bounds.right, lessThanOrEqualTo(375));
               }
-              final tab = find.text(l10n.subsTabInst(1));
+              // Subscriptions / Instalments is a chips row now.
+              final tab = find.text(l10n.txnBillsInstalments);
               await tester.ensureVisible(tab);
               await tester.tap(tab);
               await _settle(tester);
@@ -198,18 +202,19 @@ void main() {
               await _reveal(tester, find.text(l10n.subsTotalInstDebt));
               expect(find.text('${formatMoney(remaining)} $currency'), findsOneWidget);
             } else if (component == 'remainingSubs') {
-              await tester.drag(find.byType(NestedScrollView), const Offset(0, -450));
+              await tester.drag(find.byType(Scrollable).first, const Offset(0, -450));
               await _settle(tester);
               await _reveal(tester, find.text('QA exact suggestion'));
               final suggestionCard = find.ancestor(of: find.text('QA exact suggestion'),
                   matching: find.byType(MaliCard)).first;
               expect(find.descendant(of: suggestionCard, matching: find.text(
                   l10n.txnEstPerMonth(formatMoney(money(18)), currency))), findsOneWidget);
-              await tester.ensureVisible(find.text(l10n.subsTabInst(1)));
-              await tester.tap(find.text(l10n.subsTabInst(1)));
+              await tester.ensureVisible(find.text(l10n.txnBillsInstalments));
+              await tester.tap(find.text(l10n.txnBillsInstalments));
               await _settle(tester);
-              await _reveal(tester, find.text(l10n.subsNearestInst));
-              expect(find.textContaining('${formatMoney(money(2))} · '), findsOneWidget);
+              // v3: the old debt card's «nearest instalment» line is gone; the
+              // «Upcoming» list is sorted by due date and carries the same
+              // exact amount on the row (checked below).
               await _reveal(tester, find.text('QA exact installment'));
               final installmentCard = find.ancestor(of: find.text('QA exact installment'),
                   matching: find.byType(MaliCard)).first;

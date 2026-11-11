@@ -67,9 +67,10 @@ void main() {
     testWidgets('the minus stays attached to the number', (tester) async {
       await _pump(tester, Money(-124050, 'SAR'));
       final out = _rendered(tester).replaceAll('\u2068', '').replaceAll('\u2069', '');
-      expect(out.startsWith('-'), isTrue,
+      // v2: a true minus sign (U+2212), still leading the digits.
+      expect(out.startsWith('\u2212'), isTrue,
           reason: 'a trailing minus reads as a positive amount');
-      expect(out, '-1,240.50');
+      expect(out, '\u22121,240.50');
     });
 
     testWidgets('renders identically in LTR and RTL', (tester) async {

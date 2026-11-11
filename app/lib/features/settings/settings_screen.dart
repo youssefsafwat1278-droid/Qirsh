@@ -24,7 +24,6 @@ import '../../core/di/app_providers.dart';
 import '../planning_sync/planning_conflicts_sheet.dart';
 import 'sign_out_sheet.dart';
 import 'sign_in_methods_sheet.dart';
-import '../../core/theme/app_shadows.dart';
 import '../../data/catalog/catalog_daos.dart';
 import '../../core/security/app_lock_service.dart';
 import '../../core/router/app_router.dart';
@@ -53,7 +52,6 @@ import '../cards/my_cards_screen.dart';
 import '../plans/plans_screen.dart';
 import '../common/app_avatar.dart';
 import '../common/category_catalog.dart';
-import '../../core/theme/widgets/calm_page_header.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../common/motion.dart';
 import '../dashboard/dashboard_providers.dart';
@@ -62,7 +60,12 @@ import '../onboarding/ios_shortcut_guide.dart';
 import '../transactions/transactions_providers.dart';
 import 'settings_providers.dart';
 import 'sync_status_ui.dart';
-import '../../core/theme/widgets/directional_chevron.dart';
+import 'widgets/settings_v2.dart';
+import '../common/app_button.dart';
+import '../common/app_card.dart';
+import '../../core/backend/app_version.dart';
+import '../../core/theme/app_motion.dart';
+import '../../domain/usecases/gamification_rules.dart';
 import '../../core/theme/widgets/glass_sheet.dart';
 import '../../core/theme/widgets/glass_dialog.dart';
 import '../../core/theme/widgets/glass_dropdown_field.dart';
@@ -140,10 +143,21 @@ extension _AsyncReloadSafe<T> on AsyncValue<T> {
   }
 }
 
+/// The «المزيد» hub and its one-topic sub-pages (Calm Capital v2 §09).
+enum SettingsPage { hub, account, appearance, capture, alerts, security }
+
 class SettingsScreen extends ConsumerStatefulWidget {
-  const SettingsScreen({super.key, this.showBackButton = false});
+  const SettingsScreen({
+    super.key,
+    this.showBackButton = false,
+    this.page = SettingsPage.hub,
+  });
 
   final bool showBackButton;
+
+  /// Which page this instance renders. Sub-pages share this state class, so
+  /// every control keeps exactly the save path it had in the single scroll.
+  final SettingsPage page;
 
   @override
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
@@ -151,6 +165,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _savingPrefs = false;
+  bool _showDeveloper = false;
   String _profileName(UserSettingsEntity? s, String email) {
     final n = s?.displayName?.trim() ?? '';
     if (n.isNotEmpty) return n;
@@ -265,442 +280,534 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final prefsAsync = ref.watch(notificationPreferencesProvider);
-    final captureHealthAsync = ref.watch(captureHealthStatusProvider);
+    return switch (widget.page) {
+      SettingsPage.hub => _buildHub(context, ref),
+      SettingsPage.account => _buildAccountPage(context, ref),
+      SettingsPage.appearance => _buildAppearancePage(context, ref),
+      SettingsPage.capture => _buildCapturePage(context, ref),
+      SettingsPage.alerts => _buildAlertsPage(context, ref),
+      SettingsPage.security => _buildSecurityPage(context, ref),
+    };
+  }
+
+  /// v2: «المزيد» is a hub; each settings topic is its own sub-page with the
+  /// same controls it had in the old single scroll.
+  void _openPage(BuildContext context, SettingsPage page) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => SettingsScreen(page: page, showBackButton: true),
+    ));
+  }
+
+  String _themeLabel(BuildContext context, ThemeMode mode) => switch (mode) {
+        ThemeMode.light => context.l10n.setThemeLight,
+        ThemeMode.dark => context.l10n.setThemeDark,
+        ThemeMode.system => context.l10n.setThemeAuto,
+      };
+
+  /// Progress through the current XP tier, for the profile card's gold bar.
+  static double _xpProgress(AchievementsView? view) {
+    if (view == null) return 0;
+    final next = view.nextLevelThreshold;
+    if (next == null) return 1;
+    final level = view.xpLevel.level.clamp(1, XpLevelEngine.thresholds.length);
+    final floor = XpLevelEngine.thresholds[level - 1];
+    final span = next - floor;
+    if (span <= 0) return 1;
+    return ((view.xpLevel.totalXp - floor) / span).clamp(0.0, 1.0);
+  }
+
+  Widget _buildHub(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final c = context.colors;
+    final settings = ref.watch(userSettingsProvider).valueOrNull;
+    final achievements = ref.watch(achievementsViewProvider).valueOrNull;
+    final captureHealth = ref.watch(captureHealthStatusProvider).valueOrNull;
+    final themeMode = ref.watch(themeModeProvider);
+    final email = AppSession.instance.email ?? '—';
+    final captureNeedsCheck = captureHealth != null &&
+        (captureHealth.shouldNudge ||
+            captureHealth.apnsRegistrationFailure != null);
+
+    return SettingsV2Page(
+      title: widget.showBackButton ? l10n.setSettings : l10n.navMore,
+      showBack: widget.showBackButton,
+      onBack: () {
+        if (context.canPop()) context.pop();
+      },
+      bottomPadding: 96,
+      children: [
+        const SizedBox(height: AppSpacing.s3),
+        settingsV2Enter(
+          0,
+          _ProfileCard(
+            name: _profileName(settings, email),
+            avatarPath: settings?.avatarPath?.trim() ?? '',
+            levelKey: achievements?.xpLevel.levelKey,
+            totalXp: achievements?.xpLevel.totalXp,
+            xpProgress: _xpProgress(achievements),
+            onAvatarTap: settings == null
+                ? null
+                : () => _pickProfileImage(context, ref, settings),
+            onNameTap: settings == null
+                ? null
+                : () => _editName(context, ref, settings),
+          ),
+        ),
+        // MALI-022: surface unresolved multi-device conflicts so they are no
+        // longer stuck/invisible. Shown only when some exist.
+        if ((ref.watch(conflictsProvider).valueOrNull ?? const [])
+            .isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.s4),
+          SettingsV2Group(children: [
+            SettingsV2Row(
+              icon: AppLucideIcons.cloudOff,
+              tileColor: c.warning,
+              title: l10n.setSyncConflicts,
+              subtitle: l10n.setSyncConflictsSub,
+              onTap: () => PlanningConflictsSheet.show(context),
+            ),
+          ]),
+        ],
+        // UX-029 — accounts, cards, subscriptions and plans have no tab of
+        // their own and legitimately live here, as destinations — split from
+        // the configuration entries so they stop reading as a second nav bar.
+        settingsV2Enter(
+          1,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SettingsV2Label(l10n.setAccountsAndDues),
+              _DestinationGrid(items: [
+                _Destination(
+                  icon: AppLucideIcons.landmark,
+                  title: l10n.setAccountsWallets,
+                  hint: l10n.setAccountsWalletsSub,
+                  onTap: () => context.push('/accounts'),
+                ),
+                _Destination(
+                  icon: AppLucideIcons.creditCard,
+                  title: l10n.setAllCards,
+                  hint: l10n.setAllCardsSub,
+                  onTap: () => MyCardsScreen.open(context),
+                ),
+                _Destination(
+                  icon: AppLucideIcons.repeat,
+                  title: l10n.setSubsAndBills,
+                  hint: l10n.setSubsAndBillsSub,
+                  onTap: () => context.push('/subscriptions'),
+                ),
+                _Destination(
+                  icon: AppLucideIcons.target,
+                  title: l10n.setPlans,
+                  hint: l10n.setPlansSub,
+                  onTap: () => PlansScreen.open(context),
+                ),
+              ]),
+            ],
+          ),
+        ),
+        settingsV2Enter(
+          2,
+          SettingsV2Group(label: l10n.setV2Tools, children: [
+            _NavTile(
+              icon: AppLucideIcons.tag,
+              title: l10n.setCategories,
+              subtitle: l10n.setCategoriesSub,
+              onTap: () => _showCategoriesSheet(context, ref),
+            ),
+            _NavTile(
+              icon: AppLucideIcons.trophy,
+              title: l10n.setAchievements,
+              subtitle: l10n.setAchievementsSub,
+              onTap: () => context.push('/achievements'),
+            ),
+            _NavTile(
+              icon: AppLucideIcons.arrowLeftRight,
+              title: l10n.setCurrencyRepair,
+              subtitle: l10n.setCurrencyRepairSub,
+              onTap: () => context.push('/settings/planning-currency-repair'),
+            ),
+            if (Platform.isIOS)
+              _NavTile(
+                icon: AppLucideIcons.zap,
+                title: l10n.setAppleShortcut,
+                subtitle: l10n.setAppleShortcutSub,
+                onTap: () => showIosShortcutSheet(context),
+              ),
+          ]),
+        ),
+        settingsV2Enter(
+          3,
+          SettingsV2Group(label: l10n.setSettings, children: [
+            _NavTile(
+              key: const ValueKey('settings-page-account'),
+              icon: AppLucideIcons.user,
+              title: l10n.setAccountData,
+              onTap: () => _openPage(context, SettingsPage.account),
+            ),
+            _NavTile(
+              key: const ValueKey('settings-page-appearance'),
+              icon: AppLucideIcons.palette,
+              title: l10n.setAppearance,
+              value: _themeLabel(context, themeMode),
+              onTap: () => _openPage(context, SettingsPage.appearance),
+            ),
+            _NavTile(
+              key: const ValueKey('settings-page-capture'),
+              icon: AppLucideIcons.circleDot,
+              title: l10n.setCaptureStatus,
+              valueWidget: captureNeedsCheck
+                  ? Semantics(
+                      label: l10n.setV2CaptureNeedsCheck,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                            color: c.warning, shape: BoxShape.circle),
+                      ),
+                    )
+                  : null,
+              onTap: () => _openPage(context, SettingsPage.capture),
+            ),
+            _NavTile(
+              key: const ValueKey('settings-page-alerts'),
+              icon: AppLucideIcons.bell,
+              title: l10n.setYourAlerts,
+              onTap: () => _openPage(context, SettingsPage.alerts),
+            ),
+            _NavTile(
+              icon: AppLucideIcons.arrowUpDown,
+              title: l10n.setDataTransfer,
+              onTap: () => context.push('/data-transfer'),
+            ),
+            _NavTile(
+              key: const ValueKey('settings-page-security'),
+              icon: AppLucideIcons.shieldCheck,
+              title: l10n.setSecurityPrivacy,
+              onTap: () => _openPage(context, SettingsPage.security),
+            ),
+          ]),
+        ),
+        settingsV2Enter(
+          4,
+          SettingsV2Group(label: l10n.setRewardsAndSupport, children: [
+            // Referral discovery is gated by enable_referrals (R3). When the
+            // flag is off the tile is hidden — no referral functionality is
+            // presented (docs REFERRAL_REWARDS_SYSTEM.md §19/§24).
+            if (ref.watch(referralsEnabledProvider))
+              _NavTile(
+                icon: AppLucideIcons.gift,
+                title: l10n.setInviteFriends,
+                subtitle: l10n.setInviteFriendsSub,
+                onTap: () => context.push('/referrals'),
+              ),
+            // Ads privacy (R4 §11): shown only when UMP requires privacy
+            // options; invokes the Google UMP privacy-options form. UMP is
+            // the sole ad-consent authority — no Qirsh consent boolean here.
+            if (ref.watch(adPrivacyOptionsRequiredProvider).valueOrNull ??
+                false)
+              _NavTile(
+                icon: Icons.privacy_tip_outlined,
+                title: l10n.setAdPrivacyOptions,
+                subtitle: l10n.setAdPrivacyOptionsSub,
+                onTap: () =>
+                    ref.read(adConsentServiceProvider).showPrivacyOptions(),
+              ),
+            _NavTile(
+              icon: AppLucideIcons.messageSquare,
+              title: l10n.setContactUs,
+              onTap: () => _showContactSupport(context),
+            ),
+            _NavTile(
+              icon: AppLucideIcons.info,
+              title: l10n.setAboutQirsh,
+              onTap: () => _showAboutApp(context),
+            ),
+            _NavTile(
+              icon: AppLucideIcons.helpCircle,
+              title: l10n.helpSettingsTile,
+              onTap: () => context.push('/help'),
+            ),
+          ]),
+        ),
+        const SizedBox(height: AppSpacing.s6),
+        SettingsV2Group(children: [
+          _NavTile(
+            icon: AppLucideIcons.logOut,
+            danger: true,
+            showChevron: false,
+            title: l10n.setSignOut,
+            onTap: () => _signOut(context, ref),
+          ),
+        ]),
+        // The version string; in debug builds a long-press reveals the
+        // Developer group. Release builds have neither the group nor the
+        // gesture (the routes are kDebugMode-gated in app_router.dart too).
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onLongPress: kDebugMode
+              ? () => setState(() => _showDeveloper = !_showDeveloper)
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
+            child: Text(
+              l10n.setV2Version(kAppVersion),
+              textAlign: TextAlign.center,
+              style: AppTypography.mono(size: 13, color: c.textMuted),
+            ),
+          ),
+        ),
+        // Debug-only entry point into the Mali design-system review surface
+        // (docs/MALI_DESIGN_SYSTEM.md). The route itself is also gated by
+        // kDebugMode in app_router.dart, so this tile is redundant defense,
+        // not the only gate — it simply doesn't exist in release builds.
+        if (kDebugMode)
+          if (_showDeveloper)
+            SettingsV2Group(label: 'Developer', children: [
+              _NavTile(
+                icon: AppLucideIcons.shapes,
+                title: 'Design Gallery',
+                subtitle: 'Qirsh flagship design system — debug only',
+                onTap: () => context.push('/design'),
+              ),
+              _NavTile(
+                icon: AppLucideIcons.refreshCw,
+                title: 'Sync diagnostics',
+                subtitle: 'Queue, health and capability state — debug only',
+                onTap: () => context.push('/settings/sync-diagnostics'),
+              ),
+            ]),
+      ],
+    );
+  }
+
+  void _editName(
+      BuildContext context, WidgetRef ref, UserSettingsEntity settings) {
+    _showProfileTextSheet(
+      context,
+      ref,
+      title: context.l10n.setName,
+      label: context.l10n.setNameInApp,
+      initialValue: settings.displayName ?? '',
+      apply: (value) => settings.copyWith(displayName: value.trim()),
+    );
+  }
+
+  /// «بيانات حسابك» (spec 23): identity, sync status and the profile data.
+  Widget _buildAccountPage(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final c = context.colors;
     final settingsAsync = ref.watch(userSettingsProvider);
     final settings = settingsAsync.valueOrNull;
     final achievements = ref.watch(achievementsViewProvider).valueOrNull;
     final countriesAsync = ref.watch(supportedCountriesProvider);
     final currenciesAsync = ref.watch(activeCurrenciesProvider);
-    final c = context.colors;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final session = AppSession.instance;
-    final email = session.email ?? '—';
+    final email = AppSession.instance.email ?? '—';
     final countries = countriesAsync.valueOrNull ?? const <RemoteCountry>[];
     final currencies = currenciesAsync.valueOrNull ?? const <RemoteCurrency>[];
+    final hasPhone = settings?.phoneNumber?.trim().isNotEmpty ?? false;
 
-    return Scaffold(
-      backgroundColor: c.bg,
-      body: StatusBarScrim(
-        child: Stack(
-        children: [
-          // Ambient glow for dark mode (matches dashboard)
-          if (isDark) ...[
-            Positioned(
-              right: -100,
-              top: -100,
-              width: 320,
-              height: 320,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      c.cta.withValues(alpha: 0.05),
-                      c.cta.withValues(alpha: 0.0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: -120,
-              bottom: -120,
-              width: 360,
-              height: 360,
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      c.cta.withValues(alpha: 0.035),
-                      c.cta.withValues(alpha: 0.0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ],
-          CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: _SettingsHeader(
-                  name: _profileName(settings, email),
-                  contact: (settings?.phoneNumber?.trim().isNotEmpty ?? false)
-                      ? settings!.phoneNumber!.trim()
-                      : email,
-                  avatarPath: settings?.avatarPath?.trim() ?? '',
-                  levelKey: achievements?.xpLevel.levelKey,
-                  totalXp: achievements?.xpLevel.totalXp,
-                  onBack: widget.showBackButton
-                      ? () {
-                          if (context.canPop()) context.pop();
-                        }
-                      : null,
-                  onAvatarTap: settings == null
-                      ? null
-                      : () => _pickProfileImage(context, ref, settings),
-                  onNameTap: settings == null
-                      ? null
-                      : () => _showProfileTextSheet(
-                            context,
-                            ref,
-                            title: context.l10n.setName,
-                            label: context.l10n.setNameInApp,
-                            initialValue: settings.displayName ?? '',
-                            apply: (value) =>
-                                settings.copyWith(displayName: value.trim()),
-                          ),
-                ),
-              ),
-              // الذوبان لازم يلفّ المحتوى كامل العرض ومن غير مسافة فوقه — لو
-              // اتحط جوّه الـ padding بيبقى شريط أزرق مقصوص من الجناب وبحافة
-              // حادّة تحت الهيدر.
-              SliverToBoxAdapter(
-                child: MeltTail(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.gutter,
-                      AppSpacing.s4,
-                      AppSpacing.gutter,
-                      120,
-                    ),
-                    child: Column(children: [
-                      _buildGeneralTab(context, ref, settingsAsync),
-                      const SizedBox(height: AppSpacing.s4),
-                      if (settings != null) ...[
-                        _Section(
-                          // UX-028 — the other «الحساب». This group is profile
-                          // data, so it says so.
-                          title: context.l10n.setAccountData,
-                          children: [
-                            // A-5: the one quiet answer to "did my data reach
-                            // the cloud?".
-                            const SyncStatusTile(),
-                            if (!AppSession.instance.isGuest &&
-                                (ref.watch(authMethodsConfigProvider).google ||
-                                    ref.watch(authMethodsConfigProvider).email))
-                              _NavTile(
-                                key: const ValueKey('settings-sign-in-methods'),
-                                icon: AppLucideIcons.shieldCheck,
-                                title: context.l10n.authSignInMethods,
-                                subtitle: context.l10n.authSignInMethodsDescription,
-                                onTap: () => showGlassSheet<void>(context: context,
-                                  isScrollControlled: true, useSafeArea: true,
-                                  builder: (_) => const SignInMethodsSheet()),
-                              ),
-                            _NavTile(
-                              icon: AppLucideIcons.smartphone,
-                              title: context.l10n.setMobileNumber,
-                              subtitle:
-                                  (settings.phoneNumber?.trim().isNotEmpty ??
-                                          false)
-                                      ? settings.phoneNumber!.trim()
-                                      : context.l10n.setAddYourNumber,
-                              onTap: () => _showProfileTextSheet(
-                                context,
-                                ref,
-                                title: context.l10n.setMobileNumber,
-                                label: context.l10n.setMobileNumber,
-                                keyboardType: TextInputType.phone,
-                                initialValue: settings.phoneNumber ?? '',
-                                apply: (value) => settings.copyWith(
-                                    phoneNumber: value.trim()),
-                              ),
-                            ),
-                            _NavTile(
-                              icon: AppLucideIcons.flag,
-                              title: context.l10n.setCountry,
-                              subtitle: _countryLabel(settings, countries,
-                                  countriesAsync.isLoading),
-                              onTap: countries.isEmpty
-                                  ? null
-                                  : () => _editCountry(context, ref, settings,
-                                      countries, currencies),
-                            ),
-                            _NavTile(
-                              icon: AppLucideIcons.banknote,
-                              title: context.l10n.setBaseCurrency,
-                              subtitle: _currencyLabel(settings, currencies,
-                                  currenciesAsync.isLoading),
-                              onTap: currencies.isEmpty
-                                  ? null
-                                  : () => _editCurrency(
-                                      context, ref, settings, currencies),
-                            ),
-                            _NavTile(
-                              // Named so the device walk can reach the control
-                              // by identity rather than by a label that changes
-                              // language the moment it is used.
-                              key: const ValueKey('settings-language'),
-                              icon: AppLucideIcons.globe,
-                              title: context.l10n.setLanguage,
-                              subtitle: languageValues[_languageKey(settings)]!,
-                              onTap: () =>
-                                  _editLanguage(context, ref, settings),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.s4),
-                      ],
-                      _buildAppearanceSection(context, ref),
-                      const SizedBox(height: AppSpacing.s4),
-                      _buildNotificationsTab(
-                        context,
-                        ref,
-                        prefsAsync,
-                        captureHealthAsync,
-                      ),
-                      const SizedBox(height: AppSpacing.s4),
-                      _buildDataTab(context, ref, settingsAsync),
-                    ]),
-                  ),
-                ),
-              ),
-            ],
+    return SettingsV2Page(
+      title: l10n.setAccountData,
+      children: [
+        const SizedBox(height: AppSpacing.s4),
+        settingsV2Enter(
+          0,
+          _IdentityHeader(
+            name: _profileName(settings, email),
+            contact: hasPhone ? settings!.phoneNumber!.trim() : email,
+            avatarPath: settings?.avatarPath?.trim() ?? '',
+            levelKey: achievements?.xpLevel.levelKey,
+            totalXp: achievements?.xpLevel.totalXp,
+            onAvatarTap: settings == null
+                ? null
+                : () => _pickProfileImage(context, ref, settings),
+            onNameTap: settings == null
+                ? null
+                : () => _editName(context, ref, settings),
           ),
-        ],
-      ),
-      ),
+        ),
+        const SizedBox(height: AppSpacing.s5),
+        // A-5: the one quiet answer to "did my data reach the cloud?".
+        const SyncStatusTile(banner: true),
+        if (settings != null)
+          settingsV2Enter(
+            1,
+            SettingsV2Group(label: l10n.setAccountData, children: [
+              if (!AppSession.instance.isGuest &&
+                  (ref.watch(authMethodsConfigProvider).google ||
+                      ref.watch(authMethodsConfigProvider).email))
+                _NavTile(
+                  key: const ValueKey('settings-sign-in-methods'),
+                  icon: AppLucideIcons.shieldCheck,
+                  title: l10n.authSignInMethods,
+                  subtitle: l10n.authSignInMethodsDescription,
+                  onTap: () => showGlassSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      useSafeArea: true,
+                      builder: (_) => const SignInMethodsSheet()),
+                ),
+              _NavTile(
+                icon: AppLucideIcons.smartphone,
+                title: l10n.setMobileNumber,
+                value: hasPhone ? settings.phoneNumber!.trim() : null,
+                valueLtr: hasPhone,
+                valueWidget: hasPhone
+                    ? null
+                    : Text(l10n.setAddYourNumber,
+                        style: AppTypography.subhead(c.actionText)),
+                onTap: () => _showProfileTextSheet(
+                  context,
+                  ref,
+                  title: l10n.setMobileNumber,
+                  label: l10n.setMobileNumber,
+                  keyboardType: TextInputType.phone,
+                  initialValue: settings.phoneNumber ?? '',
+                  apply: (value) =>
+                      settings.copyWith(phoneNumber: value.trim()),
+                ),
+              ),
+              _NavTile(
+                icon: AppLucideIcons.flag,
+                title: l10n.setCountry,
+                value: _countryLabel(
+                    settings, countries, countriesAsync.isLoading),
+                onTap: countries.isEmpty
+                    ? null
+                    : () => _editCountry(
+                        context, ref, settings, countries, currencies),
+              ),
+              _NavTile(
+                icon: AppLucideIcons.banknote,
+                title: l10n.setBaseCurrency,
+                value: _currencyLabel(
+                    settings, currencies, currenciesAsync.isLoading),
+                onTap: currencies.isEmpty
+                    ? null
+                    : () => _editCurrency(context, ref, settings, currencies),
+              ),
+              _NavTile(
+                // Named so the device walk can reach the control by identity
+                // rather than by a label that changes language the moment it
+                // is used.
+                key: const ValueKey('settings-language'),
+                icon: AppLucideIcons.globe,
+                title: l10n.setLanguage,
+                value: languageValues[_languageKey(settings)]!,
+                onTap: () => _editLanguage(context, ref, settings),
+              ),
+            ]),
+          ),
+      ],
     );
   }
 
-  Widget _buildAppearanceSection(BuildContext context, WidgetRef ref) {
-    return _Section(
+  Widget _buildAppearancePage(BuildContext context, WidgetRef ref) {
+    return SettingsV2Page(
       title: context.l10n.setAppearance,
-      description: context.l10n.setAppearanceSub,
+      subtitle: context.l10n.setV2AppearanceLead,
       children: [
-        _ThemeModeSelector(
-          value: ref.watch(themeModeProvider),
-          onChanged: (mode) => ref.read(themeModeProvider.notifier).set(mode),
+        const SizedBox(height: AppSpacing.s5),
+        settingsV2Enter(
+          0,
+          _ThemeModeSelector(
+            value: ref.watch(themeModeProvider),
+            onChanged: (mode) => ref.read(themeModeProvider.notifier).set(mode),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildGeneralTab(
-    BuildContext context,
-    WidgetRef ref,
-    AsyncValue<UserSettingsEntity> settingsAsync,
-  ) {
-    return Column(
+  Widget _buildCapturePage(BuildContext context, WidgetRef ref) {
+    final prefsAsync = ref.watch(notificationPreferencesProvider);
+    final captureHealthAsync = ref.watch(captureHealthStatusProvider);
+    return SettingsV2Page(
+      title: context.l10n.setCaptureStatus,
+      subtitle: context.l10n.setCaptureStatusSub,
       children: [
-        PremiumMotion(
-            delay: const Duration(milliseconds: 80),
-            // UX-029 — «إدارة أموالك» had become the app's navigation hub: ten
-            // flat entries under one heading, with primary destinations
-            // reachable THROUGH Settings, which is where users go for
-            // configuration and not for their money.
-            //
-            // The QA's own diagnosis was that this compensates for UX-012 —
-            // the bottom-navigation icons were illegible, so a second,
-            // text-labelled route was built beside them — and its instruction
-            // was explicit: *"Fixing UX-012 should reduce this list, not
-            // duplicate it."*
-            //
-            // UX-012 is fixed: every bottom-nav destination now carries a text
-            // label (app_shell.dart), including «التحليلات» — which is the
-            // Reports screen. «الرؤى والتقارير» was therefore a duplicate route
-            // to a tab that is now legible, and it is removed.
-            //
-            // The rest are NOT duplicates: accounts, cards, subscriptions and
-            // plans have no tab of their own and legitimately live here. They
-            // are split from the configuration entries so ten undifferentiated
-            // rows stop reading as a second navigation bar.
-            child: _Section(
-              title: context.l10n.setAccountsAndDues,
-              children: [
-                // MALI-022: surface unresolved multi-device conflicts so they
-                // are no longer stuck/invisible. Shown only when some exist.
-                if ((ref.watch(conflictsProvider).valueOrNull ?? const [])
-                    .isNotEmpty)
-                  _NavTile(
-                    icon: AppLucideIcons.cloudOff,
-                    title: context.l10n.setSyncConflicts,
-                    subtitle: context.l10n.setSyncConflictsSub,
-                    onTap: () => PlanningConflictsSheet.show(context),
-                  ),
-                _NavTile(
-                  icon: AppLucideIcons.wallet,
-                  title: context.l10n.setAccountsWallets,
-                  subtitle: context.l10n.setAccountsWalletsSub,
-                  onTap: () => context.push('/accounts'),
-                ),
-                _NavTile(
-                  icon: AppLucideIcons.creditCard,
-                  title: context.l10n.setAllCards,
-                  subtitle: context.l10n.setAllCardsSub,
-                  onTap: () => MyCardsScreen.open(context),
-                ),
-                _NavTile(
-                  icon: AppLucideIcons.receipt,
-                  title: context.l10n.setSubsAndBills,
-                  subtitle: context.l10n.setSubsAndBillsSub,
-                  onTap: () => context.push('/subscriptions'),
-                ),
-                _NavTile(
-                  icon: AppLucideIcons.luggage,
-                  title: context.l10n.setPlans,
-                  subtitle: context.l10n.setPlansSub,
-                  onTap: () => PlansScreen.open(context),
-                ),
-              ],
-            )),
+        const SizedBox(height: AppSpacing.s5),
+        captureHealthAsync.dataOr(
+          (status) => settingsV2Enter(0, _CaptureHealthTile(status: status)),
+          () => const SizedBox.shrink(),
+        ),
         const SizedBox(height: AppSpacing.s3),
-        PremiumMotion(
-            delay: const Duration(milliseconds: 100),
-            child: _Section(
-              title: context.l10n.setToolsAndSettings,
-              children: [
-                _NavTile(
-                  icon: AppLucideIcons.inbox,
-                  title: context.l10n.setCategories,
-                  subtitle: context.l10n.setCategoriesSub,
-                  onTap: () => _showCategoriesSheet(context, ref),
+        prefsAsync.when(
+          skipLoadingOnReload: true,
+          loading: () => const _SettingsLoadingState(),
+          error: (error, _) => const _SettingsErrorState(),
+          data: (prefs) => settingsV2Enter(
+            1,
+            SettingsV2Group(children: [
+              // MALI-013 — the automatic bank-SMS capture opt-in.
+              //
+              // This is the ONLY way a user can turn the feature on. Until it
+              // existed, the app shipped RECEIVE_SMS and a registered
+              // SMS_RECEIVED receiver for a feature no user could reach —
+              // which fails Play's core-functionality test for a restricted
+              // permission and contradicted the already-live privacy policy
+              // §8. Android-only, and hidden entirely when the build does not
+              // declare the permission.
+              const _SmsAutoCaptureTile(),
+              // Replaces a sentence that said Qirsh "does not read bank
+              // notifications or system SMS". That was true of a fresh install
+              // through the UI that existed, and false as a description of
+              // what the app implements and declares. The copy is about
+              // Android's automatic capture, so it is shown on Android only.
+              if (Platform.isAndroid)
+                _TrustNoticeTile(text: context.l10n.smsCaptureTrustNotice),
+              _SwitchTile(
+                title: context.l10n.setConfirmCaptured,
+                icon: AppLucideIcons.messageSquare,
+                value: prefs.captureReview,
+                onChanged: _savingPrefs ? null : (value) => _savePrefs(
+                  ref,
+                  prefs.copyWith(captureReview: value),
                 ),
-                _NavTile(
-                  icon: AppLucideIcons.trophy,
-                  title: context.l10n.setAchievements,
-                  subtitle: context.l10n.setAchievementsSub,
-                  onTap: () => context.push('/achievements'),
+              ),
+              _SwitchTile(
+                title: context.l10n.setNotifyOnCapture,
+                icon: AppLucideIcons.bellRing,
+                value: prefs.captureLight,
+                onChanged: _savingPrefs ? null : (value) => _savePrefs(
+                  ref,
+                  prefs.copyWith(captureLight: value),
                 ),
-                _NavTile(
-                  icon: AppLucideIcons.arrowLeftRight,
-                  title: context.l10n.setCurrencyRepair,
-                  subtitle: context.l10n.setCurrencyRepairSub,
-                  onTap: () =>
-                      context.push('/settings/planning-currency-repair'),
+              ),
+              // MALI-019 §6 — lock-screen privacy.
+              _SwitchTile(
+                title: context.l10n.setHideOnLockScreen,
+                icon: AppLucideIcons.lock,
+                value: prefs.hideLockScreenContent,
+                onChanged: _savingPrefs ? null : (value) => _savePrefs(
+                  ref,
+                  prefs.copyWith(hideLockScreenContent: value),
                 ),
-                if (Platform.isIOS)
-                  _NavTile(
-                    icon: AppLucideIcons.share,
-                    title: context.l10n.setAppleShortcut,
-                    subtitle: context.l10n.setAppleShortcutSub,
-                    onTap: () => showIosShortcutSheet(context),
-                  ),
-              ],
-            )),
-        const SizedBox(height: AppSpacing.s3),
-        PremiumMotion(
-            delay: const Duration(milliseconds: 120),
-            child: _Section(
-              title: context.l10n.setRewardsAndSupport,
-              children: [
-                // Referral discovery is gated by enable_referrals (R3). When the
-                // flag is off the tile is hidden — no referral functionality is
-                // presented (docs REFERRAL_REWARDS_SYSTEM.md §19/§24).
-                if (ref.watch(referralsEnabledProvider))
-                  _NavTile(
-                    icon: AppLucideIcons.gift,
-                    title: context.l10n.setInviteFriends,
-                    subtitle: context.l10n.setInviteFriendsSub,
-                    onTap: () => context.push('/referrals'),
-                  ),
-                // Ads privacy (R4 §11): shown only when UMP requires privacy
-                // options; invokes the Google UMP privacy-options form. UMP is
-                // the sole ad-consent authority — no Qirsh consent boolean here.
-                if (ref.watch(adPrivacyOptionsRequiredProvider).valueOrNull ??
-                    false)
-                  _NavTile(
-                    icon: Icons.privacy_tip_outlined,
-                    title: context.l10n.setAdPrivacyOptions,
-                    subtitle: context.l10n.setAdPrivacyOptionsSub,
-                    onTap: () =>
-                        ref.read(adConsentServiceProvider).showPrivacyOptions(),
-                  ),
-                _NavTile(
-                  icon: AppLucideIcons.receipt,
-                  title: context.l10n.setContactUs,
-                  subtitle: context.l10n.setContactUsSub,
-                  onTap: () => _showContactSupport(context),
-                ),
-                _NavTile(
-                  icon: AppLucideIcons.info,
-                  title: context.l10n.setAboutQirsh,
-                  subtitle: context.l10n.setAboutQirshSub,
-                  onTap: () => _showAboutApp(context),
-                ),
-              ],
-            )),
+              ),
+            ]),
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildNotificationsTab(
-    BuildContext context,
-    WidgetRef ref,
-    AsyncValue<NotificationPreferences> prefsAsync,
-    AsyncValue<CaptureHealthStatus> captureHealthAsync,
-  ) {
-    final c = context.colors;
-    return prefsAsync.when(
-      skipLoadingOnReload: true,
-      loading: () => const _SettingsLoadingState(),
-      error: (error, _) => const _SettingsErrorState(),
-      data: (prefs) => Column(
-        children: [
-          PremiumMotion(
-              delay: const Duration(milliseconds: 80),
-              child: _Section(
-                title: context.l10n.setCaptureStatus,
-                description: context.l10n.setCaptureStatusSub,
-                children: [
-                  captureHealthAsync.dataOr(
-                    (status) => _CaptureHealthTile(status: status),
-                    () => const SizedBox.shrink(),
-                  ),
-                  // MALI-013 — the automatic bank-SMS capture opt-in.
-                  //
-                  // This is the ONLY way a user can turn the feature on. Until
-                  // it existed, the app shipped RECEIVE_SMS and a registered
-                  // SMS_RECEIVED receiver for a feature no user could reach —
-                  // which fails Play's core-functionality test for a restricted
-                  // permission and contradicted the already-live privacy policy
-                  // §8. Android-only, and hidden entirely when the build does
-                  // not declare the permission.
-                  const _SmsAutoCaptureTile(),
-                  // Replaces a sentence that said Qirsh "does not read bank
-                  // notifications or system SMS". That was true of a fresh
-                  // install through the UI that existed, and false as a
-                  // description of what the app implements and declares.
-                  _TrustNoticeTile(text: context.l10n.smsCaptureTrustNotice),
-                  _SwitchTile(
-                    title: context.l10n.setConfirmCaptured,
-                    icon: AppLucideIcons.messageSquare,
-                    value: prefs.captureReview,
-                    onChanged: _savingPrefs ? null : (value) => _savePrefs(
-                      ref,
-                      prefs.copyWith(captureReview: value),
-                    ),
-                  ),
-                  _SwitchTile(
-                    title: context.l10n.setNotifyOnCapture,
-                    icon: AppLucideIcons.bellRing,
-                    iconColor: c.cta,
-                    value: prefs.captureLight,
-                    onChanged: _savingPrefs ? null : (value) => _savePrefs(
-                      ref,
-                      prefs.copyWith(captureLight: value),
-                    ),
-                  ),
-                  // MALI-019 §6 — lock-screen privacy.
-                  _SwitchTile(
-                    title: context.l10n.setHideOnLockScreen,
-                    icon: AppLucideIcons.lock,
-                    value: prefs.hideLockScreenContent,
-                    onChanged: _savingPrefs ? null : (value) => _savePrefs(
-                      ref,
-                      prefs.copyWith(hideLockScreenContent: value),
-                    ),
-                  ),
-                ],
-              )),
-          const SizedBox(height: AppSpacing.s3),
-          PremiumMotion(
-              delay: const Duration(milliseconds: 100),
-              child: _Section(
-                title: context.l10n.setYourAlerts,
-                children: [
+  Widget _buildAlertsPage(BuildContext context, WidgetRef ref) {
+    final prefsAsync = ref.watch(notificationPreferencesProvider);
+    return SettingsV2Page(
+      title: context.l10n.setYourAlerts,
+      children: [
+        const SizedBox(height: AppSpacing.s5),
+        prefsAsync.when(
+          skipLoadingOnReload: true,
+          loading: () => const _SettingsLoadingState(),
+          error: (error, _) => const _SettingsErrorState(),
+          data: (prefs) => Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              settingsV2Enter(
+                0,
+                SettingsV2Group(children: [
                   _SwitchTile(
                     title: context.l10n.setQirshMessages,
                     icon: AppLucideIcons.megaphone,
@@ -713,7 +820,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _SwitchTile(
                     title: context.l10n.setBudgetAlerts,
                     icon: AppLucideIcons.alertTriangle,
-                    iconColor: c.accent,
                     value: prefs.budgetWarning,
                     onChanged: _savingPrefs ? null : (value) => _savePrefs(
                       ref,
@@ -723,7 +829,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _SwitchTile(
                     title: context.l10n.setBudgetOverAlert,
                     icon: AppLucideIcons.alertCircle,
-                    iconColor: c.danger,
                     value: prefs.budgetOver,
                     onChanged: _savingPrefs ? null : (value) => _savePrefs(
                       ref,
@@ -752,7 +857,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _SwitchTile(
                     title: context.l10n.setBillReminders,
                     icon: AppLucideIcons.calendarCheck,
-                    iconColor: c.cta,
                     value: prefs.subscriptionReminder,
                     onChanged: _savingPrefs ? null : (value) => _savePrefs(
                       ref,
@@ -762,7 +866,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _SwitchTile(
                     title: context.l10n.setGoalCelebrations,
                     icon: AppLucideIcons.flag,
-                    iconColor: c.success,
                     value: prefs.goalMilestone,
                     onChanged: _savingPrefs ? null : (value) => _savePrefs(
                       ref,
@@ -772,7 +875,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   _SwitchTile(
                     title: context.l10n.setAchievementAlerts,
                     icon: AppLucideIcons.trophy,
-                    iconColor: c.success,
                     value: prefs.achievements,
                     onChanged: _savingPrefs ? null : (value) => _savePrefs(
                       ref,
@@ -781,7 +883,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                   _SwitchTile(
                     icon: AppLucideIcons.moon,
-                    iconColor: c.textMuted,
                     title: context.l10n.setQuietHours,
                     subtitle: prefs.quietHoursEnabled
                         ? '${Formatters.hourOfDay(prefs.quietHoursStartHour, context)} - ${Formatters.hourOfDay(prefs.quietHoursEndHour, context)}'
@@ -796,195 +897,124 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     _NavTile(
                       icon: AppLucideIcons.clock,
                       title: context.l10n.setEditQuietHours,
-                      subtitle:
+                      value:
                           '${Formatters.hourOfDay(prefs.quietHoursStartHour, context)} - ${Formatters.hourOfDay(prefs.quietHoursEndHour, context)}',
                       onTap: () => _showQuietHoursSheet(context, ref, prefs),
                     ),
-                ],
-              )),
-          const SizedBox(height: AppSpacing.s3),
-          PremiumMotion(
-              delay: const Duration(milliseconds: 120),
-              child: _Section(
-                title: context.l10n.setNotificationTools,
-                children: [
-                  _NavTile(
-                    icon: AppLucideIcons.bellPlus,
-                    title: context.l10n.setTestNotifications,
-                    subtitle: context.l10n.setTestNotificationsSub,
-                    onTap: () => _sendTestNotification(context),
-                  ),
-                  _NavTile(
-                    icon: AppLucideIcons.inbox,
-                    title: context.l10n.setMessageCentre,
-                    subtitle: context.l10n.setMessageCentreSub,
-                    onTap: () => context.push('/announcements'),
-                  ),
-                ],
-              )),
-        ],
-      ),
+                ]),
+              ),
+              settingsV2Enter(
+                1,
+                SettingsV2Group(
+                    label: context.l10n.setNotificationTools,
+                    children: [
+                      _NavTile(
+                        icon: AppLucideIcons.bellPlus,
+                        title: context.l10n.setTestNotifications,
+                        subtitle: context.l10n.setTestNotificationsSub,
+                        onTap: () => _sendTestNotification(context),
+                      ),
+                      _NavTile(
+                        icon: AppLucideIcons.inbox,
+                        title: context.l10n.setMessageCentre,
+                        subtitle: context.l10n.setMessageCentreSub,
+                        onTap: () => context.push('/announcements'),
+                      ),
+                    ]),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildDataTab(
-    BuildContext context,
-    WidgetRef ref,
-    AsyncValue<UserSettingsEntity> settingsAsync,
-  ) {
+  Widget _buildSecurityPage(BuildContext context, WidgetRef ref) {
+    final settingsAsync = ref.watch(userSettingsProvider);
     final c = context.colors;
-    return Column(
+    final l10n = context.l10n;
+    return SettingsV2Page(
+      title: l10n.setSecurityPrivacy,
       children: [
-        PremiumMotion(
-            delay: const Duration(milliseconds: 80),
-            child: _Section(
-              title: context.l10n.setDataTransfer,
-              description: context.l10n.setDataTransferSub,
+        const SizedBox(height: AppSpacing.s4),
+        // UX-030 — the strongest TRUE privacy claim the product can make was
+        // never made anywhere in the UI. The local database is opened with
+        // `PRAGMA cipher = 'sqlcipher'` and a key held in the platform
+        // keychain (`database_key_store.dart`), and the open FAILS CLOSED if
+        // the encryption extension is missing rather than continuing
+        // unencrypted (`app_database.dart`).
+        //
+        // Worth stating precisely because it is verifiable, and worth stating
+        // carefully: it claims local-database encryption, which is what the
+        // code does — not end-to-end encryption, which it does not.
+        settingsV2Enter(
+          0,
+          SettingsV2Tinted(
+            background: c.successBg,
+            accent: c.success,
+            child: Row(
               children: [
-                _NavTile(
-                  icon: AppLucideIcons.folderOpen,
-                  title: context.l10n.setImportFile,
-                  subtitle: context.l10n.setImportFileSub,
-                  onTap: () => context.push('/data-transfer?intent=import'),
+                Expanded(
+                  child: Text(
+                    l10n.setEncryptedDbPart1 + l10n.setEncryptedDbPart2,
+                    style: AppTypography.callout(c.textSecondary),
+                  ),
                 ),
-                _NavTile(
-                  icon: AppLucideIcons.table,
-                  title: context.l10n.setExportCsv,
-                  subtitle: context.l10n.setExportCsvSub,
-                  onTap: () =>
-                      context.push('/data-transfer?intent=transactions'),
-                ),
-                _NavTile(
-                  icon: AppLucideIcons.archive,
-                  title: context.l10n.setExportAll,
-                  subtitle: context.l10n.setExportAllSub,
-                  onTap: () => context.push('/data-transfer?intent=package'),
-                ),
+                const SizedBox(width: AppSpacing.s3),
+                const QirshIllustration(name: 'privacy', width: 92, height: 69),
               ],
-            )),
-        const SizedBox(height: AppSpacing.s3),
-        PremiumMotion(
-            delay: const Duration(milliseconds: 100),
-            child: _Section(
-              title: context.l10n.setSecurityPrivacy,
-              // UX-030 — the strongest TRUE privacy claim the product can make
-              // was never made anywhere in the UI. The local database is opened
-              // with `PRAGMA cipher = 'sqlcipher'` and a key held in the
-              // platform keychain (`database_key_store.dart`), and the open
-              // FAILS CLOSED if the encryption extension is missing rather than
-              // continuing unencrypted (`app_database.dart`).
-              //
-              // Worth stating precisely because it is verifiable, and worth
-              // stating carefully: it claims local-database encryption, which
-              // is what the code does — not end-to-end encryption, which it
-              // does not.
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.s4,
-                    vertical: AppSpacing.s3,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          context.l10n.setEncryptedDbPart1 +
-                              context.l10n.setEncryptedDbPart2,
-                          style: AppTypography.caption(
-                              context.colors.textSecondary),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.s3),
-                      const QirshIllustration(
-                        name: 'privacy', width: 92, height: 69),
-                    ],
-                  ),
+            ),
+          ),
+        ),
+        settingsV2Enter(
+          1,
+          Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.s4),
+            child: SettingsV2Group(children: [
+              _NavTile(
+                icon: AppLucideIcons.heartPulse,
+                title: l10n.setPrivacyAndData,
+                subtitle: l10n.setPrivacyAndDataSub,
+                onTap: () => context.push('/privacy'),
+              ),
+              settingsAsync.dataOr(
+                (settings) => _SwitchTile(
+                  title: l10n.setHideAmounts,
+                  icon: AppLucideIcons.eyeOff,
+                  value: settings.privacyModeEnabled,
+                  onChanged: (value) async {
+                    await ref
+                        .read(userSettingsRepositoryProvider)
+                        .saveSettings(settings.copyWith(
+                          privacyModeEnabled: value,
+                        ));
+                    // dbRevision (from saveSettings) rebuilds the switch and
+                    // dashboard while keeping their value — invalidating would
+                    // blank them and flicker.
+                  },
                 ),
-                _NavTile(
-                  icon: AppLucideIcons.helpCircle,
-                  title: context.l10n.helpSettingsTile,
-                  subtitle: context.l10n.helpSettingsSubtitle,
-                  onTap: () => context.push('/help'),
-                ),
-                _NavTile(
-                  icon: AppLucideIcons.heartPulse,
-                  title: context.l10n.setPrivacyAndData,
-                  subtitle: context.l10n.setPrivacyAndDataSub,
-                  onTap: () => context.push('/privacy'),
-                ),
-                settingsAsync.dataOr(
-                  (settings) => _SwitchTile(
-                    title: context.l10n.setHideAmounts,
-                    icon: AppLucideIcons.eyeOff,
-                    value: settings.privacyModeEnabled,
-                    onChanged: (value) async {
-                      await ref
-                          .read(userSettingsRepositoryProvider)
-                          .saveSettings(settings.copyWith(
-                            privacyModeEnabled: value,
-                          ));
-                      // dbRevision (from saveSettings) rebuilds the switch and
-                      // dashboard while keeping their value — invalidating would
-                      // blank them and flicker.
-                    },
-                  ),
-                  () => const SizedBox.shrink(),
-                ),
-                const _AppLockTile(),
-              ],
-            )),
-        const SizedBox(height: AppSpacing.s3),
-        PremiumMotion(
-            delay: const Duration(milliseconds: 120),
-            // UX-028 — «الحساب» was used as the heading TWICE: once near the
-            // top for profile data (رقم الموبايل · الدولة · العملة الأساسية)
-            // and again here for the destructive group. Two unrelated groups
-            // under an identical name. This one is named for what it does.
-            child: _Section(
-              title: context.l10n.setExitAndErase,
-              description: context.l10n.setExitAndEraseSub,
-              children: [
-                _NavTile(
-                  icon: AppLucideIcons.logOut,
-                  iconColor: c.danger,
-                  title: context.l10n.setSignOut,
-                  onTap: () => _signOut(context, ref),
-                ),
-                _NavTile(
-                  icon: AppLucideIcons.trash2,
-                  iconColor: c.danger,
-                  title: context.l10n.setDeleteAccount,
-                  subtitle: context.l10n.setDeleteAccountSub,
-                  onTap: () => context.push('/privacy'),
-                ),
-              ],
-            )),
-        // Debug-only entry point into the Mali design-system review surface
-        // (docs/MALI_DESIGN_SYSTEM.md). The route itself is also gated by
-        // kDebugMode in app_router.dart, so this tile is redundant defense,
-        // not the only gate — it simply doesn't exist in release builds.
-        if (kDebugMode) ...[
-          const SizedBox(height: AppSpacing.s3),
-          PremiumMotion(
-              delay: const Duration(milliseconds: 140),
-              child: _Section(
-                title: 'Developer',
-                children: [
-                  _NavTile(
-                    icon: AppLucideIcons.shapes,
-                    title: 'Design Gallery',
-                    subtitle: 'Qirsh flagship design system — debug only',
-                    onTap: () => context.push('/design'),
-                  ),
-                  _NavTile(
-                    icon: AppLucideIcons.refreshCw,
-                    title: 'Sync diagnostics',
-                    subtitle: 'Queue, health and capability state — debug only',
-                    onTap: () => context.push('/settings/sync-diagnostics'),
-                  ),
-                ],
-              )),
-        ],
+                () => const SizedBox.shrink(),
+              ),
+              const _AppLockTile(),
+            ]),
+          ),
+        ),
+        // UX-028 — the destructive group is named for what it does.
+        settingsV2Enter(
+          2,
+          SettingsV2Group(
+            label: l10n.setExitAndErase,
+            children: [
+              _NavTile(
+                icon: AppLucideIcons.trash2,
+                danger: true,
+                title: l10n.setDeleteAccount,
+                subtitle: l10n.setDeleteAccountSub,
+                onTap: () => context.push('/privacy'),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -1789,17 +1819,12 @@ class _SettingsLoadingState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    return Container(
-      height: 140,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: c.border),
+    return const SettingsV2Group(children: [
+      SizedBox(
+        height: 140,
+        child: Center(child: CircularProgressIndicator()),
       ),
-      child: const CircularProgressIndicator(),
-    );
+    ]);
   }
 }
 
@@ -1809,13 +1834,9 @@ class _SettingsErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.s5),
-      decoration: BoxDecoration(
-        color: c.dangerBg,
-        borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: c.danger.withValues(alpha: 0.3)),
-      ),
+    return SettingsV2Tinted(
+      background: c.dangerBg,
+      accent: c.danger,
       child: Row(
         children: [
           Icon(AppLucideIcons.alertCircle, color: c.danger),
@@ -1832,15 +1853,171 @@ class _SettingsErrorState extends StatelessWidget {
   }
 }
 
-/// Profile and canonical level summary, followed by the existing settings.
-class _SettingsHeader extends StatelessWidget {
-  const _SettingsHeader({
+String _levelName(BuildContext context, String? levelKey) =>
+    switch (levelKey) {
+      'organized' => context.l10n.achLevelOrganised,
+      'smart_saver' => context.l10n.achLevelSmartSaver,
+      'financial_expert' => context.l10n.achLevelExpert,
+      'saving_legend' => context.l10n.achLevelLegend,
+      _ => context.l10n.achLevelBeginner,
+    };
+
+/// «المستوى مبتدئ · 0 XP» — the XP figure kept left-to-right.
+String _levelLine(BuildContext context, String? levelKey, int totalXp) =>
+    '${context.l10n.achLevel} ${_levelName(context, levelKey)} · '
+    '\u2066$totalXp XP\u2069';
+
+/// Avatar with a gold ring (v2: gold = value earned). Image or initial.
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar({
+    required this.name,
+    required this.avatarPath,
+    required this.size,
+    this.onTap,
+  });
+
+  final String name;
+  final String avatarPath;
+  final double size;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final file = avatarPath.isEmpty ? null : File(avatarPath);
+    final hasImage = file != null && file.existsSync();
+    final initial = name.trim().isEmpty ? 'م' : name.characters.first;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: size,
+        height: size,
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: c.accent, width: 2),
+        ),
+        child: Container(
+          alignment: Alignment.center,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(color: c.goldSoft, shape: BoxShape.circle),
+          child: hasImage
+              ? Image.file(file, fit: BoxFit.cover, width: size, height: size)
+              : Text(
+                  initial,
+                  style: AppTypography.custom(
+                      size: size * 0.36,
+                      weight: FontWeight.w700,
+                      height: 1.1,
+                      color: c.goldText),
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Hub profile card (v2 §09 item 2): `surface.raised` (dark raised + hairline,
+/// light white + e2), radius 24, 56pt gold-ringed avatar, name, level line with
+/// a 4pt gold XP bar that fills once on enter, trailing tinted «تعديل».
+class _ProfileCard extends StatelessWidget {
+  const _ProfileCard({
+    required this.name,
+    required this.avatarPath,
+    required this.xpProgress,
+    this.levelKey,
+    this.totalXp,
+    this.onAvatarTap,
+    this.onNameTap,
+  });
+
+  final String name;
+  final String avatarPath;
+  final String? levelKey;
+  final int? totalXp;
+  final double xpProgress;
+  final VoidCallback? onAvatarTap;
+  final VoidCallback? onNameTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final reduce = shouldReduceMotion(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      padding: const EdgeInsets.all(AppSpacing.s4),
+      decoration: settingsV2RaisedDecoration(context),
+      child: Row(children: [
+        _ProfileAvatar(
+            name: name, avatarPath: avatarPath, size: 56, onTap: onAvatarTap),
+        const SizedBox(width: AppSpacing.s3),
+        Expanded(
+          child: GestureDetector(
+            onTap: onNameTap,
+            behavior: HitTestBehavior.opaque,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.cardTitle(c.textPrimary)),
+                if (levelKey != null && totalXp != null) ...[
+                  const SizedBox(height: 2),
+                  Text(_levelLine(context, levelKey, totalXp!),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.caption(c.textMuted)),
+                  const SizedBox(height: AppSpacing.s2),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(AppRadius.pill),
+                    child: SizedBox(
+                      width: 120,
+                      height: 4,
+                      child: ColoredBox(
+                        color: c.surfaceMuted,
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(begin: 0, end: xpProgress),
+                          duration: reduce
+                              ? Duration.zero
+                              : const Duration(milliseconds: 600),
+                          curve: AppMotion.easeOut,
+                          builder: (context, t, _) => FractionallySizedBox(
+                            alignment: AlignmentDirectional.centerStart,
+                            widthFactor: t,
+                            child: ColoredBox(color: c.accent),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.s2),
+        AppSecondaryButton(
+          label: context.l10n.setEdit,
+          height: 36,
+          onTap: onNameTap,
+        ),
+      ]),
+    );
+  }
+}
+
+/// «بيانات حسابك» identity header (spec 23): centred 88pt gold-ringed avatar
+/// that pops in, name, contact (LTR, middle-ellipsised), level line with a
+/// trophy glyph, tinted «تعديل».
+class _IdentityHeader extends StatelessWidget {
+  const _IdentityHeader({
     required this.name,
     required this.contact,
     required this.avatarPath,
     this.levelKey,
     this.totalXp,
-    this.onBack,
     this.onAvatarTap,
     this.onNameTap,
   });
@@ -1850,165 +2027,168 @@ class _SettingsHeader extends StatelessWidget {
   final String avatarPath;
   final String? levelKey;
   final int? totalXp;
-  final VoidCallback? onBack;
   final VoidCallback? onAvatarTap;
   final VoidCallback? onNameTap;
 
-  String _levelName(BuildContext context) => switch (levelKey) {
-    'organized' => context.l10n.achLevelOrganised,
-    'smart_saver' => context.l10n.achLevelSmartSaver,
-    'financial_expert' => context.l10n.achLevelExpert,
-    'saving_legend' => context.l10n.achLevelLegend,
-    _ => context.l10n.achLevelBeginner,
-  };
+  /// Middle ellipsis for an LTR address: keeps the start and the domain end.
+  static String _middleEllipsis(String value, {int max = 30}) {
+    if (value.length <= max) return value;
+    final head = (max * 0.55).floor();
+    final tail = max - head - 1;
+    return '${value.substring(0, head)}…${value.substring(value.length - tail)}';
+  }
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final file = avatarPath.isEmpty ? null : File(avatarPath);
-    final hasImage = file != null && file.existsSync();
-    final initial = name.trim().isEmpty ? 'م' : name.characters.first;
+    final avatar = _ProfileAvatar(
+        name: name, avatarPath: avatarPath, size: 88, onTap: onAvatarTap);
     return Padding(
-      padding: EdgeInsets.fromLTRB(AppSpacing.gutter,
-          MediaQuery.paddingOf(context).top + 16, AppSpacing.gutter, 0),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Row(children: [
-          if (onBack != null) IconButton(
-            tooltip: context.l10n.setBack,
-            onPressed: onBack,
-            icon: const BackButtonIcon(),
-            color: c.textPrimary,
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: Column(
+        children: [
+          if (shouldReduceMotion(context))
+            avatar
+          else
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0.9, end: 1),
+              duration: const Duration(milliseconds: 420),
+              curve: AppMotion.springLivelyCurve,
+              builder: (context, s, child) =>
+                  Transform.scale(scale: s, child: child),
+              child: avatar,
+            ),
+          const SizedBox(height: AppSpacing.s3),
+          GestureDetector(
+            onTap: onNameTap,
+            child: Text(name,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.sectionTitle(c.textPrimary)),
           ),
-          Expanded(child: Text(onBack == null ? context.l10n.navMore : context.l10n.setSettings,
-            style: AppTypography.title1(c.textPrimary))),
-        ]),
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(color: c.surface, borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: c.border), boxShadow: AppShadows.card),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Row(children: [
-              GestureDetector(onTap: onAvatarTap,
-                child: Container(width: 54, height: 54, alignment: Alignment.center,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(color: const Color(0xFFFFD46C),
-                    borderRadius: BorderRadius.circular(27)),
-                  child: hasImage
-                    ? Image.file(file, fit: BoxFit.cover, width: 54, height: 54)
-                    : Text(initial, style: AppTypography.title2(const Color(0xFF0A2540))))),
-              const SizedBox(width: 12),
-              Expanded(child: GestureDetector(onTap: onNameTap,
-                behavior: HitTestBehavior.opaque,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min, children: [
-                    Text(name, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: AppTypography.headline(c.textPrimary)),
-                    const SizedBox(height: 4),
-                    Text(contact, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      textDirection: TextDirection.ltr,
-                      style: AppTypography.caption(c.textMuted)),
-                  ]))),
-              const SizedBox(width: 8),
-              TextButton(onPressed: onNameTap,
-                style: TextButton.styleFrom(backgroundColor: c.surfaceMuted,
-                  foregroundColor: c.textPrimary,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                child: Text(context.l10n.setEdit)),
-            ]),
-            if (levelKey != null && totalXp != null) ...[
-              const SizedBox(height: 12),
-              Divider(height: 1, color: c.divider),
-              const SizedBox(height: 10),
-              Row(children: [
-                Expanded(child: Text('${context.l10n.achLevel} ${_levelName(context)}',
-                  style: AppTypography.caption(c.textMuted))),
-                Text('$totalXp XP', textDirection: TextDirection.ltr,
-                  style: AppTypography.caption(c.textPrimary)),
-                const SizedBox(width: 6),
-                SizedBox(width: 32, height: 32, child: IconButton(
-                  padding: EdgeInsets.zero, tooltip: context.l10n.achTitle,
-                  onPressed: () => context.push('/achievements'),
-                  icon: Icon(AppLucideIcons.trophy, color: c.primary, size: 18))),
-              ]),
-            ],
-          ]),
-        ),
-      ]),
+          const SizedBox(height: 2),
+          Text(_middleEllipsis(contact),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              textDirection: TextDirection.ltr,
+              style: AppTypography.callout(c.textMuted)),
+          if (levelKey != null && totalXp != null) ...[
+            const SizedBox(height: AppSpacing.s2),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(AppLucideIcons.trophy, size: 16, color: c.goldText),
+                const SizedBox(width: AppSpacing.s1),
+                Text(_levelLine(context, levelKey, totalXp!),
+                    style: AppTypography.caption(c.textMuted)),
+              ],
+            ),
+          ],
+          const SizedBox(height: AppSpacing.s3),
+          SizedBox(
+            width: 140,
+            child: AppSecondaryButton(
+              label: context.l10n.setEdit,
+              height: 40,
+              onTap: onNameTap,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({
+class _Destination {
+  const _Destination({
+    required this.icon,
     required this.title,
-    required this.children,
-    this.description,
+    required this.hint,
+    required this.onTap,
   });
 
+  final IconData icon;
   final String title;
-  final String? description;
-  final List<Widget> children;
+
+  /// The old row description, kept as an accessibility hint (v2 §09 item 3).
+  final String hint;
+  final VoidCallback onTap;
+}
+
+/// «حساباتك والتزاماتك» — a 2×2 grid of 88pt Group tiles, icon 28pt in
+/// `action.text`, title `subhead`.
+class _DestinationGrid extends StatelessWidget {
+  const _DestinationGrid({required this.items});
+
+  final List<_Destination> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <Widget>[];
+    for (var i = 0; i < items.length; i += 2) {
+      if (i > 0) rows.add(const SizedBox(height: AppSpacing.s3));
+      rows.add(Row(children: [
+        Expanded(child: _DestinationTile(item: items[i])),
+        const SizedBox(width: AppSpacing.s3),
+        Expanded(
+          child: i + 1 < items.length
+              ? _DestinationTile(item: items[i + 1])
+              : const SizedBox.shrink(),
+        ),
+      ]));
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: Column(children: rows),
+    );
+  }
+}
+
+class _DestinationTile extends StatelessWidget {
+  const _DestinationTile({required this.item});
+
+  final _Destination item;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-              AppSpacing.s2, 0, AppSpacing.s2, AppSpacing.s1),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: AppTypography.footnote(c.textLight)
-                    .copyWith(fontWeight: FontWeight.w700),
-              ),
-              if (description != null) ...[
-                const SizedBox(height: 1),
-                Text(
-                  description!,
-                  style: AppTypography.micro(c.textMuted),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.s2),
-        Container(
-          clipBehavior: Clip.antiAlias,
-          decoration: BoxDecoration(
-            color: c.surfaceCard,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            border: Border.all(color: c.border),
-            boxShadow: AppShadows.card,
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: Column(
-              children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  children[i],
-                  if (i != children.length - 1)
-                    Divider(
-                      height: 1,
-                      indent: AppSpacing.s4,
-                      endIndent: AppSpacing.s4,
-                      color: c.divider,
-                    ),
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: Semantics(
+        button: true,
+        hint: item.hint,
+        child: InkWell(
+          onTap: item.onTap,
+          splashFactory: NoSplash.splashFactory,
+          highlightColor: settingsV2PressedColor(context),
+          child: SizedBox(
+            height: 88,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.s3 + 2),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Icon(item.icon, size: 28, color: c.actionText),
+                  Text(item.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.subhead(c.textPrimary)),
                 ],
-              ],
+              ),
             ),
           ),
         ),
-      ],
+      ),
     );
   }
 }
 
+/// «المظهر»: three preview tiles «تلقائي / فاتح / داكن» with a mini phone
+/// mock each. Unselected: dark well + hairline / light white + strokeSoft.
+/// Selected: a 2pt `action` ring and a check badge; the ring morphs between
+/// tiles and the theme cross-fades app-wide.
 class _ThemeModeSelector extends StatelessWidget {
   const _ThemeModeSelector({required this.value, required this.onChanged});
 
@@ -2018,52 +2198,160 @@ class _ThemeModeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final c = context.colors;
-    final options = <(ThemeMode, IconData, String)>[
-      (ThemeMode.system, AppLucideIcons.monitor, l10n.setThemeAuto),
-      (ThemeMode.light, AppLucideIcons.sun, l10n.setThemeLight),
-      (ThemeMode.dark, AppLucideIcons.moon, l10n.setThemeDark),
+    final options = <(ThemeMode, String)>[
+      (ThemeMode.system, l10n.setThemeAuto),
+      (ThemeMode.light, l10n.setThemeLight),
+      (ThemeMode.dark, l10n.setThemeDark),
     ];
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.s3),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       child: Row(
         children: [
-          for (final (mode, icon, label) in options) ...[
+          for (final (mode, label) in options) ...[
             Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onChanged(mode),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.s3),
-                  // المختار = سطح ink الموحّد (كان أزرق ctaSoft).
-                  decoration: BoxDecoration(
-                    color: value == mode ? c.ink : c.surfaceMuted,
-                    borderRadius: BorderRadius.circular(AppRadius.md),
-                    border: value == mode ? null : Border.all(color: c.border),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(
-                        icon,
-                        size: 20,
-                        color: value == mode ? c.onInk : c.textSecondary,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        label,
-                        style: AppTypography.caption(
-                          value == mode ? c.onInk : c.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              child: _ThemeTile(
+                mode: mode,
+                label: label,
+                selected: value == mode,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  onChanged(mode);
+                },
               ),
             ),
             if (mode != ThemeMode.dark) const SizedBox(width: AppSpacing.s3),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ThemeTile extends StatelessWidget {
+  const _ThemeTile({
+    required this.mode,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ThemeMode mode;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final lightCanvas = AppColors.light.bg;
+    final darkCanvas = AppColors.dark.bg;
+    final canvas = switch (mode) {
+      ThemeMode.light => BoxDecoration(color: lightCanvas),
+      ThemeMode.dark => BoxDecoration(color: darkCanvas),
+      ThemeMode.system => BoxDecoration(
+          gradient: LinearGradient(
+            colors: [lightCanvas, lightCanvas, darkCanvas, darkCanvas],
+            stops: const [0, .5, .5, 1],
+          ),
+        ),
+    };
+    final line = c.textMuted.withValues(alpha: 0.35);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: ExcludeSemantics(
+          child: Column(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  AnimatedContainer(
+                    duration: AppMotion.micro,
+                    curve: AppMotion.easeOut,
+                    height: 96,
+                    padding: const EdgeInsets.all(AppSpacing.s2),
+                    decoration: BoxDecoration(
+                      color: isDark ? c.surfaceMuted : c.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.row),
+                      border: Border.all(
+                        color: selected
+                            ? c.ink
+                            : (isDark ? c.border : c.strokeSoft),
+                        width: selected ? 2 : 1,
+                      ),
+                    ),
+                    child: Container(
+                      clipBehavior: Clip.antiAlias,
+                      decoration: canvas.copyWith(
+                        borderRadius: BorderRadius.circular(AppRadius.control),
+                      ),
+                      padding: const EdgeInsets.all(AppSpacing.s2),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            height: 20,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(6),
+                              gradient: LinearGradient(
+                                  colors: [AppBrandBlue.brand, c.cta]),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          for (final f in const [1.0, 0.7, 0.85]) ...[
+                            FractionallySizedBox(
+                              alignment: AlignmentDirectional.centerStart,
+                              widthFactor: f,
+                              child: Container(
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  color: line,
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  PositionedDirectional(
+                    top: -6,
+                    end: -6,
+                    child: AnimatedScale(
+                      scale: selected ? 1 : 0,
+                      duration: AppMotion.base,
+                      curve: AppMotion.springLivelyCurve,
+                      child: Container(
+                        width: 22,
+                        height: 22,
+                        decoration: BoxDecoration(
+                          color: c.cta,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: c.bg, width: 2),
+                        ),
+                        child: Icon(AppLucideIcons.check,
+                            size: 12, color: c.onCta),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.s2),
+              Text(
+                label,
+                style: AppTypography.subhead(
+                    selected ? c.actionText : c.textSecondary),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2271,11 +2559,11 @@ class _AppLockTileState extends State<_AppLockTile> {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
     return _SwitchTile(
       title: context.l10n.setAppLock,
       icon: AppLucideIcons.lock,
-      iconColor: c.primary,
+      // v2 haptics: toggling app lock is a commit (mediumImpact).
+      commitHaptic: true,
       value: _enabled,
       onChanged: _loading || _busy ? null : _setEnabled,
     );
@@ -2288,35 +2576,37 @@ class _NavTile extends StatelessWidget {
     required this.icon,
     required this.title,
     this.subtitle,
-    this.iconColor,
+    this.value,
+    this.valueWidget,
+    this.valueLtr = false,
+    this.danger = false,
+    this.showChevron = true,
     required this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
-  final Color? iconColor;
+
+  /// The current value, shown at the trailing side in `text.muted`.
+  final String? value;
+  final Widget? valueWidget;
+  final bool valueLtr;
+  final bool danger;
+  final bool showChevron;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    return ListTile(
-      visualDensity: VisualDensity.compact,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: AppSpacing.s4, vertical: 2),
-      minVerticalPadding: AppSpacing.s2,
-      leading: _TileIcon(icon: icon, color: iconColor ?? c.primary),
-      title: Text(title, style: AppTypography.subhead(c.textMain)),
-      subtitle: subtitle == null
-          ? null
-          : Text(
-              subtitle!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.caption(c.textLight),
-            ),
-      trailing: DirectionalChevron(color: c.textMuted, size: 20),
+    return SettingsV2Row(
+      icon: icon,
+      title: title,
+      subtitle: subtitle,
+      value: value,
+      valueWidget: valueWidget,
+      valueLtr: valueLtr,
+      danger: danger,
+      showChevron: showChevron,
       onTap: onTap,
     );
   }
@@ -2437,19 +2727,17 @@ class _TrustNoticeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.s4,
-        vertical: AppSpacing.s3,
-      ),
+      padding: const EdgeInsetsDirectional.fromSTEB(
+          AppSpacing.s4, AppSpacing.s3, AppSpacing.s4, AppSpacing.s3),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _TileIcon(icon: AppLucideIcons.shieldCheck, color: c.success),
+          SettingsV2Tile(icon: AppLucideIcons.shieldCheck, color: c.success),
           const SizedBox(width: AppSpacing.s3),
           Expanded(
             child: Text(
               text,
-              style: AppTypography.caption(c.textLight).copyWith(height: 1.45),
+              style: AppTypography.caption(c.textSecondary).copyWith(height: 1.45),
               textAlign: TextAlign.start,
             ),
           ),
@@ -2459,6 +2747,9 @@ class _TrustNoticeTile extends StatelessWidget {
   }
 }
 
+/// «رصد العمليات» status banner (v2 §09): tinted warningBg when no bank
+/// message arrived for a while (with a tinted «تحقق»), successBg when
+/// healthy, dangerBg when enabling failed.
 class _CaptureHealthTile extends StatelessWidget {
   const _CaptureHealthTile({required this.status});
 
@@ -2471,7 +2762,11 @@ class _CaptureHealthTile extends StatelessWidget {
         ? context.l10n.setNoBankMessageYet
         : context.l10n.setLastCapture(_captureGapLabel(context, status.gap!));
     final apnsFailure = status.apnsRegistrationFailure;
-    final color = status.shouldNudge ? c.accent : c.success;
+    final (Color bg, Color tone, Color text) = apnsFailure != null
+        ? (c.dangerBg, c.danger, c.danger)
+        : status.shouldNudge
+            ? (c.warningBg, c.warning, c.warningText)
+            : (c.successBg, c.success, c.success);
     final title = apnsFailure != null
         ? context.l10n.setCaptureEnableFailed
         : status.shouldNudge
@@ -2482,23 +2777,50 @@ class _CaptureHealthTile extends StatelessWidget {
         : status.shouldNudge
             ? context.l10n.setCheckShortcutStillOn(subtitle)
             : subtitle;
-    final Widget? trailing = status.shouldNudge
-        ? TextButton(
-            onPressed:
-                Platform.isIOS ? () => showIosShortcutSheet(context) : null,
-            child: Text(context.l10n.setCheck),
-          )
-        : null;
-    return ListTile(
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: AppSpacing.s4, vertical: 2),
-      leading: _TileIcon(icon: AppLucideIcons.shieldCheck, color: color),
-      title: Text(title, style: AppTypography.bodyStrong(c.textMain)),
-      subtitle: Text(
-        statusSubtitle,
-        style: AppTypography.caption(c.textLight),
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return SettingsV2Tinted(
+      background: bg,
+      accent: tone,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: tone.withValues(alpha: isDark ? 0.22 : 0.18),
+                  borderRadius: BorderRadius.circular(AppRadius.control),
+                ),
+                child: Icon(AppLucideIcons.shieldCheck, size: 18, color: text),
+              ),
+              const SizedBox(width: AppSpacing.s3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTypography.bodyStrong(c.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text(statusSubtitle,
+                        style: AppTypography.caption(c.textSecondary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (status.shouldNudge) ...[
+            const SizedBox(height: AppSpacing.s3),
+            AppSecondaryButton(
+              label: context.l10n.setCheck,
+              height: 40,
+              onTap:
+                  Platform.isIOS ? () => showIosShortcutSheet(context) : null,
+            ),
+          ],
+        ],
       ),
-      trailing: trailing,
     );
   }
 }
@@ -2514,51 +2836,29 @@ class _SwitchTile extends StatelessWidget {
   const _SwitchTile({
     required this.title,
     required this.icon,
-    this.iconColor,
     required this.value,
     required this.onChanged,
     this.subtitle,
+    this.commitHaptic = false,
   });
 
   final String title;
   final String? subtitle;
   final IconData icon;
-  final Color? iconColor;
   final bool value;
   final ValueChanged<bool>? onChanged;
+  final bool commitHaptic;
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    return SwitchListTile(
-      visualDensity: VisualDensity.compact,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: AppSpacing.s4, vertical: 2),
-      minVerticalPadding: AppSpacing.s2,
-      secondary: _TileIcon(icon: icon, color: iconColor ?? c.primary),
+    return SettingsV2SwitchRow(
+      title: title,
+      subtitle: subtitle,
+      icon: icon,
       value: value,
       onChanged: onChanged,
-      activeThumbColor: c.onCta,
-      activeTrackColor: c.cta,
-      title: Text(title, style: AppTypography.subhead(c.textMain)),
-      subtitle: subtitle == null
-          ? null
-          : Text(subtitle!, style: AppTypography.caption(c.textLight)),
+      commitHaptic: commitHaptic,
     );
-  }
-}
-
-class _TileIcon extends StatelessWidget {
-  const _TileIcon({required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    // نفس تايل [AppAvatar] بالظبط — سوبر-إليبس بلون هادي وجليف بلونه
-    // (`iconTile` في النموذج).
-    return AppAvatar.icon(icon: icon, color: color, tone: AppAvatarTone.soft);
   }
 }
 

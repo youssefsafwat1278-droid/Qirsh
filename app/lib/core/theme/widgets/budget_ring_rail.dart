@@ -68,7 +68,8 @@ class BudgetRingRail extends StatelessWidget {
                     r.sub,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: AppTypography.micro(t.textOnCanvasMuted),
+                    // v2: 13pt caption is the floor for Arabic.
+                    style: AppTypography.caption(t.textOnCanvasMuted),
                   ),
                 ],
               ),

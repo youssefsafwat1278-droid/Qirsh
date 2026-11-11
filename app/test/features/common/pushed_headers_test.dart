@@ -7,7 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/di/app_providers.dart';
 import 'package:money_companion/core/theme/app_theme.dart';
-import 'package:money_companion/core/theme/widgets/qirsh_visuals.dart';
+import 'package:money_companion/core/theme/widgets/calm_page_header.dart';
 import 'package:money_companion/core/theme/widgets/section_photo_header.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
@@ -18,6 +18,7 @@ import 'package:money_companion/domain/finance/money.dart';
 import 'package:money_companion/features/accounts/accounts_screen.dart';
 import 'package:money_companion/features/achievements/achievements_providers.dart';
 import 'package:money_companion/features/achievements/achievements_screen.dart';
+import 'package:money_companion/features/budgets/widgets/planning_hero_tabs.dart';
 import 'package:money_companion/features/ads/ad_placement.dart';
 import 'package:money_companion/features/ads/banner_ads_providers.dart';
 import 'package:money_companion/features/common/app_header.dart';
@@ -100,7 +101,11 @@ void main() {
           for (var frame = 0; frame < 10; frame++) {
             await tester.pump(const Duration(milliseconds: 100));
           }
-          final header = find.byType(AppHeader);
+          // Goals' pushed header is the v2 in-body photo hero (CalmPageHeader
+          // over QirshSectionHero), not an AppBar-slot AppHeader.
+          final header = surface == 'goals'
+              ? find.byType(CalmPageHeader)
+              : find.byType(AppHeader);
           expect(header, findsOneWidget);
           final l10n = AppL10n.of(tester.element(header));
           final title = switch (surface) {
@@ -108,19 +113,29 @@ void main() {
             'goals' => l10n.bdgTabGoals,
             _ => l10n.achTitle,
           };
-          expect(find.text(title), findsOneWidget);
-          final titleText = tester.widget<Text>(find.text(title));
+          // The goals hero also carries the planning segmented control, whose
+          // middle segment is the same «Goals» label; the title is the other.
+          final titleFinder = surface == 'goals'
+              ? find.byElementPredicate((element) =>
+                  element.widget is Text &&
+                  (element.widget as Text).data == title &&
+                  element.findAncestorWidgetOfExactType<PlanningHeroTabs>() ==
+                      null)
+              : find.text(title);
+          expect(titleFinder, findsOneWidget);
+          final titleText = tester.widget<Text>(titleFinder);
           if (surface == 'achievements') {
             final bar = tester.widget<AppBar>(find.byType(AppBar));
             expect(bar.centerTitle, isTrue);
             expect(titleText.style?.fontSize, 17);
-            expect(tester.getCenter(find.text(title)).dx, closeTo(187.5, 1));
+            expect(tester.getCenter(titleFinder).dx, closeTo(187.5, 1));
           } else {
             final photo = surface == 'accounts'
                 ? QirshSectionPhoto.accounts : QirshSectionPhoto.goals;
             final hero = tester.widget<QirshSectionHero>(find.byType(QirshSectionHero));
             expect(hero.photo, photo);
-            expect(titleText.style?.fontSize, 25);
+            // v2 title.large (Alexandria 700 30/38).
+            expect(titleText.style?.fontSize, 30);
             expect(titleText.style?.color, Colors.white);
             expect(find.byWidgetPredicate((widget) => widget is Image &&
                 widget.image is AssetImage &&
@@ -136,9 +151,14 @@ void main() {
           }
           if (surface == 'goals') {
             expect(find.byTooltip(l10n.bdgAddGoal).hitTestable(), findsOneWidget);
+            expect(tester.widget<PlanningHeroTabs>(find.descendant(
+                of: header, matching: find.byType(PlanningHeroTabs))).tab, 2);
             if (state == 'data') {
-              expect(find.byWidgetPredicate((widget) => widget is QirshPhotoCard &&
-                  widget.photo == QirshPhoto.goals), findsOneWidget);
+              // v2: the total-saved summary is a soft CalmFinancialSummary
+              // card under the photo hero (it was a QirshPhotoCard).
+              final summary = tester.widget<CalmFinancialSummary>(
+                  find.byType(CalmFinancialSummary));
+              expect(summary.label, l10n.goalTotalSavedAll);
               expect(find.text(l10n.goalTotalSavedAll), findsOneWidget);
             }
           }
@@ -147,7 +167,7 @@ void main() {
           for (var frame = 0; frame < 20 && header.evaluate().isNotEmpty; frame++) {
             await tester.pump(const Duration(milliseconds: 100));
           }
-          expect(find.byType(AppHeader), findsNothing);
+          expect(header, findsNothing);
           expect(find.text('Open surface'), findsOneWidget);
           expect(tester.takeException(), isNull);
           await tester.pumpWidget(const SizedBox.shrink());

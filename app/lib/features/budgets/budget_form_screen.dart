@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/utils/l10n_ext.dart';
@@ -9,6 +10,11 @@ import '../../domain/finance/money.dart';
 import '../../domain/finance/money_input.dart';
 import '../../domain/entities/account_entity.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shadows.dart';
+import '../../core/theme/widgets/segmented_control.dart';
+import '../common/app_card.dart';
+import '../common/motion.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/widgets/mali_glass.dart';
@@ -67,6 +73,7 @@ class _BudgetFormScreenState extends ConsumerState<BudgetFormScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppHeader(
         title: widget.budgetId == null ? context.l10n.bfsNewBudget : context.l10n.bdgEditBudget,
       ),
@@ -161,6 +168,7 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
   bool _didSeedInitialState = false;
   bool _suggestionLoading = false;
   bool _saving = false;
+  bool _showAllCategories = false;
   Money? _suggestedAmount;
   String? _suggestionKey;
 
@@ -183,11 +191,19 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
     final baseCurrency = ref.watch(baseCurrencyProvider).valueOrNull ?? 'SAR';
     final currencyLabel =
         Currency.label(context, selectedAccount?.currency ?? baseCurrency);
+    // Full screen: the body runs under the glass nav bar, whose height
+    // arrives as the top inset. The sheet has its own header — no inset.
+    final topInset =
+        widget.fullScreen ? MediaQuery.paddingOf(context).top : 0.0;
 
     return budgetAsync.when(
       skipLoadingOnReload: true,
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => SingleChildScrollView(child: AppErrorState(
+      loading: () => Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: const Center(child: CircularProgressIndicator())),
+      error: (error, _) => SingleChildScrollView(
+          padding: EdgeInsets.only(top: topInset),
+          child: AppErrorState(
         title: context.l10n.txnError,
         description: context.l10n.annTryAgainSoon,
         retryLabel: context.l10n.startRetry,
@@ -196,8 +212,12 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
       data: (budget) {
         return categoriesAsync.when(
           skipLoadingOnReload: true,
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (error, _) => SingleChildScrollView(child: AppErrorState(
+          loading: () => Padding(
+              padding: EdgeInsets.only(top: topInset),
+              child: const Center(child: CircularProgressIndicator())),
+          error: (error, _) => SingleChildScrollView(
+              padding: EdgeInsets.only(top: topInset),
+              child: AppErrorState(
             title: context.l10n.txnError,
             description: context.l10n.annTryAgainSoon,
             retryLabel: context.l10n.startRetry,
@@ -207,11 +227,73 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
             _seedInitialState(budget);
             return Form(
               key: _formKey,
-              child: ListView(
-                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.gutter, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Expanded(
+                    child: ListView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.fromLTRB(
+                    AppSpacing.gutter, topInset + 8, AppSpacing.gutter, 8),
+                children: [
+                  // v2: the amount comes first and is the hero of the form.
+                  _FormField(
+                    padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.s4, AppSpacing.s3, AppSpacing.s4, AppSpacing.s2),
+                    child: Column(
+                      children: [
+                        Text('${context.l10n.bdgAmount} · $currencyLabel',
+                            style: AppTypography.caption(c.textMuted)),
+                        TextFormField(
+                          controller: _amountController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
+                          textAlign: TextAlign.center,
+                          style: AppTypography.amountHero(c.textMain),
+                          decoration: InputDecoration(
+                            hintText: '0',
+                            hintStyle: AppTypography.amountHero(c.textFaint),
+                            border: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                            focusedBorder: InputBorder.none,
+                            errorBorder: InputBorder.none,
+                            focusedErrorBorder: InputBorder.none,
+                            filled: false,
+                            contentPadding:
+                                const EdgeInsets.symmetric(vertical: 6),
+                          ),
+                          validator: (value) {
+                            try {
+                              final amount = parseLocalizedMoney(
+                                  value ?? '', budget?.currency ?? baseCurrency);
+                              if (amount.minorUnits > 0) return null;
+                            } catch (_) {
+                              return context.l10n.gfEnterValidAmount;
+                            }
+                            return context.l10n.gfEnterValidAmount;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (budget == null) ...[
+                    const SizedBox(height: AppSpacing.s2),
+                    _BudgetSuggestionCard(
+                      loading: _suggestionLoading,
+                      amount: _suggestedAmount,
+                      period: _period,
+                      onApply: _suggestedAmount == null
+                          ? null
+                          : () {
+                              HapticFeedback.lightImpact();
+                              setState(() {
+                                _amountController.text =
+                                    _suggestedAmount!.toDecimalString();
+                              });
+                            },
+                    ),
+                  ],
+                  const SizedBox(height: AppSpacing.s5),
                   _PeriodSelector(
                     value: _period,
                     onChanged: (value) {
@@ -219,51 +301,7 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
                       _refreshSuggestedAmount();
                     },
                   ),
-                  const SizedBox(height: AppSpacing.s4),
-                  TextFormField(
-                    controller: _amountController,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    style: _alex(15, FontWeight.w700, 1.2, c.textMain),
-                    decoration: InputDecoration(
-                      labelText: context.l10n.bdgAmount,
-                      labelStyle: _alex(13, FontWeight.w700, 1.2, c.textLight),
-                      suffixText: currencyLabel,
-                      suffixStyle: _alex(14, FontWeight.w700, 1.2, c.textMain),
-                      filled: true,
-                      fillColor: c.surface.withValues(alpha: 0.15),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide:
-                            BorderSide(color: c.border.withValues(alpha: 0.3)),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide:
-                            BorderSide(color: c.border.withValues(alpha: 0.3)),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide(color: c.primary, width: 1.5),
-                      ),
-                    ),
-                    validator: (value) {
-                      try {
-                        final amount = parseLocalizedMoney(
-                            value ?? '', budget?.currency ?? baseCurrency);
-                        if (amount.minorUnits > 0) return null;
-                      } catch (_) {
-                        return context.l10n.gfEnterValidAmount;
-                      }
-                      return context.l10n.gfEnterValidAmount;
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.s4),
-                  Text(context.l10n.txnCategory,
-                    style: _alex(13, FontWeight.w600, 1.4, c.textMuted)),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: AppSpacing.s5),
                   FormField<String>(
                     key: ValueKey('budget-category-$_categoryId'),
                     initialValue: _categoryId,
@@ -275,84 +313,118 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
                             it.key != 'income' && it.key != BudgetEntity.allExpensesCategoryKey))
                           (category.id, category.name, category),
                       ];
+                      // Two rows (8 tiles) + «عرض الكل»; a selection beyond the
+                      // first two rows keeps the grid open so it stays visible.
+                      final selectedAt =
+                          choices.indexWhere((it) => it.$1 == _categoryId);
+                      final canCollapse = choices.length > 8;
+                      final expanded =
+                          !canCollapse || _showAllCategories || selectedAt >= 8;
+                      final visible =
+                          expanded ? choices : choices.take(8).toList();
                       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                        LayoutBuilder(builder: (context, box) => GridView.builder(
+                        Row(children: [
+                          Expanded(
+                            child: Text(context.l10n.txnCategory,
+                                style: AppTypography.sectionTitle(c.textMain)),
+                          ),
+                          if (canCollapse && selectedAt < 8)
+                            TextButton(
+                              style: TextButton.styleFrom(
+                                  foregroundColor: c.actionText),
+                              onPressed: () => setState(() =>
+                                  _showAllCategories = !_showAllCategories),
+                              child: Text(_showAllCategories
+                                  ? context.l10n.bfsV2ShowLess
+                                  : context.l10n.bfsV2ShowAll),
+                            ),
+                        ]),
+                        const SizedBox(height: AppSpacing.s2),
+                        AnimatedSize(
+                          duration: AppMotion.moderate,
+                          curve: AppMotion.easeInOut,
+                          alignment: Alignment.topCenter,
+                          child: GridView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
-                          itemCount: choices.length,
+                          itemCount: visible.length,
                           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: box.maxWidth < 400 ? 3 : 4,
+                            crossAxisCount: 4,
                             crossAxisSpacing: 8, mainAxisSpacing: 8,
-                            mainAxisExtent: 94 * MediaQuery.textScalerOf(context).scale(1)),
+                            mainAxisExtent: 100 * MediaQuery.textScalerOf(context).scale(1)),
                           itemBuilder: (context, index) {
-                            final choice = choices[index];
+                            final choice = visible[index];
                             final selected = _categoryId == choice.$1;
+                            final avatar = choice.$3 == null
+                                ? AppAvatar.icon(icon: AppLucideIcons.wallet, color: c.cta, size: 40)
+                                : AppAvatar.category(category: choice.$3, size: 40);
                             return Semantics(selected: selected, button: true,
                               child: InkWell(
                                 key: ValueKey('budget-category-${choice.$1}'),
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(AppRadius.button),
                                 onTap: () {
+                                  if (!selected) HapticFeedback.selectionClick();
                                   field.didChange(choice.$1);
                                   setState(() => _categoryId = choice.$1);
                                   _refreshSuggestedAmount();
                                 },
-                                child: Container(
+                                // v2 selected tile: action.soft fill, 1.5pt
+                                // action ring, action.text label (§3.0).
+                                child: AnimatedContainer(
+                                  duration: AppMotion.base,
+                                  curve: AppMotion.springSmoothCurve,
                                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
                                   decoration: BoxDecoration(
-                                    color: selected ? c.primary.withValues(alpha: .08) : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(color: selected ? c.primary : Colors.transparent, width: 1.5)),
+                                    color: selected ? c.ctaSoft : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(AppRadius.button),
+                                    border: Border.all(color: selected ? c.cta : Colors.transparent, width: 1.5)),
                                   child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                                    choice.$3 == null
-                                      ? AppAvatar.icon(icon: AppLucideIcons.wallet, color: c.primary, size: 32)
-                                      : AppAvatar.category(category: choice.$3, size: 32),
+                                    selected && !shouldReduceMotion(context)
+                                        ? TweenAnimationBuilder<double>(
+                                            tween: Tween(begin: .85, end: 1),
+                                            duration: AppMotion.moderate,
+                                            curve: AppMotion.springLivelyCurve,
+                                            builder: (context, v, child) =>
+                                                Transform.scale(scale: v, child: child),
+                                            child: avatar)
+                                        : avatar,
                                     const SizedBox(height: 6),
                                     Text(choice.$2, textAlign: TextAlign.center, maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
-                                      style: _alex(11.5, FontWeight.w600, 1.25, selected ? c.primary : c.textSecondary)),
+                                      style: AppTypography.caption(selected ? c.actionText : c.textSecondary)
+                                          .copyWith(fontWeight: selected ? FontWeight.w600 : null, height: 1.25)),
                                   ]),
                                 ),
                               ));
                           },
                         )),
                         if (field.hasError) Padding(padding: const EdgeInsets.only(top: 6),
-                          child: Text(field.errorText!, style: _alex(12, FontWeight.w400, 1.4, c.danger))),
+                          child: Text(field.errorText!, style: AppTypography.caption(c.danger))),
                       ]);
                     },
                   ),
-                  const SizedBox(height: AppSpacing.s4),
+                  const SizedBox(height: AppSpacing.s5),
                   _AlertThresholdField(
                     value: _alertThreshold,
                     onChanged: (value) =>
                         setState(() => _alertThreshold = value),
                   ),
                   if (accounts.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.s4),
-                    GlassDropdownField<String>(
+                    const SizedBox(height: AppSpacing.s3),
+                    _FormField(
+                      padding: EdgeInsets.zero,
+                      child: GlassDropdownField<String>(
                       value: selectedAccount?.id,
-                      style: _alex(14, FontWeight.w700, 1.2, c.textMain),
+                      style: AppTypography.bodyStrong(c.textMain),
                       decoration: InputDecoration(
                         labelText: context.l10n.commonAccountDefinite,
-                        labelStyle:
-                            _alex(13, FontWeight.w700, 1.2, c.textLight),
-                        filled: true,
-                        fillColor: c.surface.withValues(alpha: 0.15),
+                        labelStyle: AppTypography.subhead(c.textMuted),
+                        filled: false,
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 14),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                              color: c.border.withValues(alpha: 0.3)),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(
-                              color: c.border.withValues(alpha: 0.3)),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          borderSide: BorderSide(color: c.primary, width: 1.5),
-                        ),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
                       ),
                       items: [
                         for (final acc in accounts)
@@ -366,32 +438,10 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
                         _refreshSuggestedAmount();
                       },
                     ),
-                  ],
-                  if (budget == null) ...[
-                    const SizedBox(height: AppSpacing.s3),
-                    _BudgetSuggestionCard(
-                      loading: _suggestionLoading,
-                      amount: _suggestedAmount,
-                      period: _period,
-                      onApply: _suggestedAmount == null
-                          ? null
-                          : () => setState(() {
-                                _amountController.text =
-                                    _suggestedAmount!.toDecimalString();
-                              }),
                     ),
                   ],
-                  const SizedBox(height: AppSpacing.s4),
-                  const SizedBox(height: AppSpacing.s5),
-                  // زر النظام الأسود (ink) — بدل التدرّج الأزرق القديم.
-                  AppPrimaryButton(
-                    label: context.l10n.bfsSaveBudget,
-                    onTap: () => _submit(budget),
-                    loading: _saving,
-                    height: 52,
-                  ),
                   if (budget != null) ...[
-                    const SizedBox(height: AppSpacing.s3),
+                    const SizedBox(height: AppSpacing.s5),
                     SizedBox(
                       height: 52,
                       width: double.infinity,
@@ -411,6 +461,30 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: AppSpacing.s4),
+                ],
+              ),
+                  ),
+                  // v2 QStickyDock: the one primary stays pinned under the
+                  // scrolling form.
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(top: BorderSide(color: c.border)),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                          AppSpacing.s3, AppSpacing.gutter, AppSpacing.s3),
+                      child: AppPrimaryButton(
+                        label: context.l10n.bfsSaveBudget,
+                        onTap: () {
+                          HapticFeedback.mediumImpact();
+                          _submit(budget);
+                        },
+                        loading: _saving,
+                        height: AppSpacing.buttonHeight,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             );
@@ -629,6 +703,31 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
   }
 }
 
+/// v2 form field surface (§3.0 «17 / 18 / 28 form fields»): dark Inset
+/// #0C0D11; light white + 1px strokeSoft + e1 on the canvas.
+class _FormField extends StatelessWidget {
+  const _FormField({required this.child, required this.padding});
+
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: isDark ? c.surfaceMuted : c.surface,
+        borderRadius: BorderRadius.circular(AppRadius.button),
+        border: isDark ? null : Border.all(color: c.strokeSoft),
+        boxShadow: AppShadows.group(Theme.of(context).brightness),
+      ),
+      child: child,
+    );
+  }
+}
+
 class _BudgetSuggestionCard extends StatelessWidget {
   const _BudgetSuggestionCard({
     required this.loading,
@@ -652,30 +751,25 @@ class _BudgetSuggestionCard extends StatelessWidget {
       BudgetPeriod.yearly => context.l10n.bfsPeriodYearly,
     };
     final value = amount?.toDecimalString();
+    // v2 suggestion chip: sparkle on action.soft + a Plain «استخدمه».
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.s3),
+      padding: const EdgeInsetsDirectional.fromSTEB(
+          AppSpacing.s3, AppSpacing.s1, AppSpacing.s1, AppSpacing.s1),
+      constraints: const BoxConstraints(minHeight: 44),
       decoration: BoxDecoration(
-        color: c.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.primary.withValues(alpha: 0.16)),
+        color: c.ctaSoft,
+        borderRadius: BorderRadius.circular(AppRadius.button),
       ),
       child: Row(
         children: [
-          Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: c.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(13),
-            ),
+          SizedBox.square(
+            dimension: 18,
             child: loading
-                ? const Padding(
-                    padding: EdgeInsets.all(10),
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(AppLucideIcons.sparkles, color: c.primary),
+                ? CircularProgressIndicator(
+                    strokeWidth: 2, color: c.actionText)
+                : Icon(AppLucideIcons.sparkles, color: c.actionText, size: 18),
           ),
-          const SizedBox(width: AppSpacing.s3),
+          const SizedBox(width: AppSpacing.s2),
           Expanded(
             child: Text(
               loading
@@ -683,17 +777,17 @@ class _BudgetSuggestionCard extends StatelessWidget {
                   : value == null
                       ? context.l10n.bfsSuggestAfterMoreTx(label)
                       : context.l10n.bfsSuggestion(label, value),
-              style: _alex(12, FontWeight.w700, 1.35, c.textMain),
+              style: AppTypography.subhead(c.textMain),
             ),
           ),
           if (value != null) ...[
-            const SizedBox(width: AppSpacing.s2),
+            const SizedBox(width: AppSpacing.s1),
             TextButton(
-              style: Theme.of(context).brightness == Brightness.dark
-                  ? TextButton.styleFrom(foregroundColor: c.primary)
-                  : null,
+              style: TextButton.styleFrom(foregroundColor: c.actionText),
               onPressed: onApply,
-              child: Text(context.l10n.bfsUseIt),
+              child: Text(context.l10n.bfsUseIt,
+                  style: AppTypography.subhead(c.actionText)
+                      .copyWith(fontWeight: FontWeight.w600)),
             ),
           ],
         ],
@@ -714,66 +808,35 @@ class _PeriodSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-
+    // v2 QSegmented, primary filter: thumb in the action fill #155DFC in
+    // both themes — never brand navy (§3.0 «18 New budget»).
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           context.l10n.bfsBudgetPeriod,
-          style: _alex(12, FontWeight.w700, 1.2, c.textLight),
+          style: AppTypography.sectionTitle(c.textMain),
         ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(4),
-          decoration: BoxDecoration(
-            color: c.surface.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: c.border.withValues(alpha: 0.3)),
-          ),
-          child: Row(
-            children: [
-              _buildSegment(context, BudgetPeriod.daily, context.l10n.bdgFilterDaily),
-              _buildSegment(context, BudgetPeriod.weekly, context.l10n.txnCycleWeekly),
-              _buildSegment(context, BudgetPeriod.monthly, context.l10n.txnCycleMonthly),
-              _buildSegment(context, BudgetPeriod.yearly, context.l10n.txnCycleYearly),
-            ],
-          ),
+        const SizedBox(height: AppSpacing.s3),
+        SegmentedControl<BudgetPeriod>(
+          accent: true,
+          value: value,
+          onChanged: onChanged,
+          options: [
+            SegmentOption(
+                value: BudgetPeriod.daily, label: context.l10n.bdgFilterDaily),
+            SegmentOption(
+                value: BudgetPeriod.weekly,
+                label: context.l10n.txnCycleWeekly),
+            SegmentOption(
+                value: BudgetPeriod.monthly,
+                label: context.l10n.txnCycleMonthly),
+            SegmentOption(
+                value: BudgetPeriod.yearly,
+                label: context.l10n.txnCycleYearly),
+          ],
         ),
       ],
-    );
-  }
-
-  Widget _buildSegment(
-      BuildContext context, BudgetPeriod period, String label) {
-    final c = context.colors;
-    final active = value == period;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => onChanged(period),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: active ? c.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: active
-                ? [
-                    BoxShadow(
-                      color: c.primary.withValues(alpha: 0.2),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: _alex(13, active ? FontWeight.bold : FontWeight.w600, 1.2,
-                active ? Colors.white : c.textLight),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -803,14 +866,12 @@ class _AlertThresholdField extends StatelessWidget {
     final display = NumberFormat.decimalPattern(
       Localizations.localeOf(context).toString(),
     ).format(value);
-    return Container(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // v2: a Group — title + live value (action.text), the slider, then the
+    // helper line.
+    return AppCard(
       padding: const EdgeInsets.fromLTRB(
-          AppSpacing.s4, AppSpacing.s3, AppSpacing.s4, AppSpacing.s2),
-      decoration: BoxDecoration(
-        color: c.surface.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: c.border.withValues(alpha: 0.3)),
-      ),
+          AppSpacing.s4, AppSpacing.s4, AppSpacing.s4, AppSpacing.s3),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -819,35 +880,37 @@ class _AlertThresholdField extends StatelessWidget {
               Expanded(
                 child: Text(
                   l10n.bfBudgetAlert,
-                  style: _alex(13, FontWeight.w700, 1.2, c.textLight),
+                  style: AppTypography.cardTitle(c.textMain),
                 ),
               ),
               // Stays visible while dragging: this is the value being chosen,
               // not a summary of a choice already made.
               Text(
                 l10n.bfBudgetAlertValue(display),
-                style: _alex(15, FontWeight.w800, 1.2, c.primary,
+                style: _alex(15, FontWeight.w700, 1.2, c.actionText,
                     tabular: true),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.s1),
-          Text(
-            l10n.bfBudgetAlertHint,
-            style: _alex(12, FontWeight.w600, 1.35, c.textLight),
-          ),
           SliderTheme(
             // Themed rather than replaced: a custom-painted control would lose
             // the platform's own slider semantics and keyboard/VoiceOver
             // handling, which this one keeps.
+            // v2 (§3.0): action fill #155DFC in both themes (never navy),
+            // 6pt track on the theme's progress track, white 28pt thumb.
             data: SliderTheme.of(context).copyWith(
-              activeTrackColor: c.primary,
-              inactiveTrackColor: c.border.withValues(alpha: 0.45),
-              thumbColor: c.primary,
-              overlayColor: c.primary.withValues(alpha: 0.12),
-              trackHeight: 4,
-              thumbShape:
-                  const RoundSliderThumbShape(enabledThumbRadius: 9),
+              activeTrackColor: c.cta,
+              inactiveTrackColor: isDark
+                  ? Colors.white.withValues(alpha: .12)
+                  : c.surfaceMuted,
+              thumbColor: Colors.white,
+              overlayColor: c.cta.withValues(alpha: 0.12),
+              trackHeight: 6,
+              activeTickMarkColor: Colors.transparent,
+              inactiveTickMarkColor: Colors.transparent,
+              thumbShape: const RoundSliderThumbShape(
+                  enabledThumbRadius: 14, elevation: 3, pressedElevation: 5),
             ),
             child: Slider(
               value: value.toDouble(),
@@ -864,9 +927,17 @@ class _AlertThresholdField extends StatelessWidget {
                   Localizations.localeOf(context).toString(),
                 ).format(v.round()),
               )}',
-              onChanged: (v) => onChanged(
-                  BudgetEntity.normalizeAlertThreshold(v.round())),
+              onChanged: (v) {
+                final next = BudgetEntity.normalizeAlertThreshold(v.round());
+                // selectionClick at each 5% step, not on every pixel.
+                if (next != value) HapticFeedback.selectionClick();
+                onChanged(next);
+              },
             ),
+          ),
+          Text(
+            l10n.bfBudgetAlertHint,
+            style: AppTypography.caption(c.textMuted),
           ),
         ],
       ),

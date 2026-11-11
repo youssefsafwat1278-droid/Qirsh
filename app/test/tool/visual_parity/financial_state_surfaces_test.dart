@@ -140,7 +140,9 @@ void main() {
             expect(bundle.monthly.topMerchants.single.total, Money(8000, 'EGP'));
             expect(bundle.monthly.topMerchants.single.refunds, Money(2000, 'EGP'));
             expect(find.text(l10n.rptRefunds), findsOneWidget);
-            expect(find.text(l10n.rptNet), findsOneWidget);
+            // v3: the net is the summary card's headline, labelled as net.
+            expect(find.text(l10n.rptNetPeriodSpend), findsOneWidget);
+            expect(find.text(l10n.rptTotalExpenses), findsOneWidget);
             final range = container.read(transactionsDateRangeProvider);
             expect(await DriftTransactionRepository(db).incomeTotalBetween(
               from: range.from, to: DateTime.now(), currency: 'EGP',

@@ -301,7 +301,8 @@ Future<bool> openVisualParityExtendedSurface(
       if (!context.mounted) return false;
       _record('quietHoursMemoryPreferenceSeeded');
       _open(navigator.push<void>(MaterialPageRoute<void>(
-        builder: (_) => const SettingsScreen(showBackButton: true))));
+        builder: (_) => const SettingsScreen(
+            page: SettingsPage.alerts, showBackButton: true))));
     case 'deleteAccountIdle':
       // The typed provider cannot return null. Its blocked construction is
       // caught by the production screen's existing _flow() guard, yielding

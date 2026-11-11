@@ -18,8 +18,8 @@ import '../../engine/parser/card_network.dart';
 import 'card_network_badge.dart';
 import 'card_theme.dart';
 import 'cards_providers.dart';
+import '../accounts/day_grouped_transactions.dart';
 import '../../core/utils/app_lucide_icons.dart';
-import '../transactions/transaction_details_screen.dart';
 
 /// شاشة تفاصيل البطاقة (بآخر 4 أرقام): بطاقة مُشتقّة من العمليات، تُفتح عبر
 /// المسار `/card/:last4`. كانت سابقًا bottom sheet زجاجية بارتفاع 86% —
@@ -34,6 +34,7 @@ class CardDetailsScreen extends ConsumerWidget {
     final c = context.colors;
     return Scaffold(
       backgroundColor: c.bg,
+      extendBodyBehindAppBar: true,
       appBar: AppHeader(title: context.l10n.cdCardTitle(last4)),
       body: _CardDetailsContent(last4: last4),
     );
@@ -65,7 +66,10 @@ class _CardDetailsContent extends ConsumerWidget {
     final summary = displayCurrencySummary ?? matchingSummaries.firstOrNull;
 
     return ListView(
-      padding: const EdgeInsets.all(AppSpacing.gutter),
+      // Immersive: the list runs under the glass nav bar, whose height
+      // arrives as the top inset.
+      padding: const EdgeInsets.all(AppSpacing.gutter).copyWith(
+          top: MediaQuery.paddingOf(context).top + AppSpacing.gutter),
       children: [
         _CardHeader(
           last4: last4,
@@ -80,10 +84,10 @@ class _CardDetailsContent extends ConsumerWidget {
               ? summary!.currency
               : displayCurrency,
         ),
-        const SizedBox(height: AppSpacing.s4),
+        const SizedBox(height: AppSpacing.s6),
         Text(context.l10n.cdCardTransactions,
             style: AppTypography.sectionTitle(c.textMain)),
-        const SizedBox(height: AppSpacing.s2),
+        const SizedBox(height: AppSpacing.s3),
         txAsync.when(
           skipLoadingOnReload: true,
           loading: () => const Center(
@@ -110,17 +114,7 @@ class _CardDetailsContent extends ConsumerWidget {
                 ],
               );
             }
-            return Column(
-              children: [
-                for (final tx in txns)
-                  TransactionRow(
-                    transaction: tx,
-                    category: catalog?.byId(tx.categoryId),
-                    onTap: () => TransactionDetailsScreen.showSheet(
-                        context, tx.id),
-                  ),
-              ],
-            );
+            return DayGroupedTransactions(transactions: txns, catalog: catalog);
           },
         ),
       ],
@@ -155,20 +149,23 @@ class _CardHeader extends StatelessWidget {
       decoration: BoxDecoration(
         gradient:
             cardGradient(context, themeKey: colorTheme, accentHex: accentHex),
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.22),
-            blurRadius: 22,
-            offset: const Offset(0, 12),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: bankCardShadow(context),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
+              Container(
+                width: 38,
+                height: 28,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(7),
+                  gradient: bankCardChipGradient,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.s3),
               Icon(AppLucideIcons.wifi,
                   color: Colors.white.withValues(alpha: 0.8)),
               const Spacer(),
@@ -179,8 +176,11 @@ class _CardHeader extends StatelessWidget {
           Directionality(
             textDirection: TextDirection.ltr,
             child: Text('••••  ••••  ••••  $last4',
-                style: AppTypography.title2(Colors.white)
-                    .copyWith(letterSpacing: 2)),
+                style: AppTypography.mono(
+                    size: 20,
+                    weight: FontWeight.w700,
+                    letterSpacing: 2,
+                    color: Colors.white)),
           ),
           const SizedBox(height: AppSpacing.s5),
           Row(
@@ -200,10 +200,8 @@ class _CardHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(label,
-            style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 12,
-                fontWeight: FontWeight.w600)),
+            style: AppTypography.caption(
+                Colors.white.withValues(alpha: 0.72))),
         const SizedBox(height: 2),
         FittedBox(
           fit: BoxFit.scaleDown,

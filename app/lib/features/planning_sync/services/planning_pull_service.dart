@@ -19,6 +19,8 @@ import '../../../data/sync/seq_pull.dart';
 import '../../../data/sync/sync_cursor.dart';
 import '../../../domain/entities/budget_entity.dart';
 import '../../../domain/entities/engagement_entities.dart';
+import '../../../domain/finance/currency_scale.dart';
+import '../../../domain/finance/decimal_minor.dart';
 import '../../../domain/finance/money.dart';
 import '../../../domain/finance/money_transport.dart';
 import 'planning_outbox_queue.dart';
@@ -94,9 +96,24 @@ Money? deserializePlansPullMoney(Map<String, dynamic> row) {
   }
   return (
     amountMoney: moneyFromPulledValueRequired(row['amount_text'], currency),
-    lastNotifiedSpentMoney: moneyFromPulledValueRequired(
+    lastNotifiedSpentMoney: _pulledBookkeepingMoney(
         row['last_notified_spent_amount_text'], currency),
   );
+}
+
+/// The `last_notified_*` columns are alert BOOKKEEPING (the progress last
+/// notified about), not user money. Older clients pushed them as binary
+/// doubles, so a server row can hold e.g. `1234.560000000002` for EGP. The
+/// strict user-money parse rejects that, which used to abort the WHOLE budgets
+/// pull on a fresh install (every budget missing after restore). These values
+/// are quantized to the currency scale instead (half away from zero); the
+/// budget/goal amounts themselves stay strict.
+Money _pulledBookkeepingMoney(Object? raw, String currency) {
+  if (raw is String) {
+    final code = currency.trim().toUpperCase();
+    return Money(quantizeDecimalToMinor(raw, currencyScale(code)), code);
+  }
+  return moneyFromPulledValueRequired(raw, currency);
 }
 
 /// MALI-026 (B8-3 §9): exact goal pull money. Target/saved/last-notified are
@@ -116,7 +133,7 @@ Money? deserializePlansPullMoney(Map<String, dynamic> row) {
         moneyFromPulledValueRequired(row['target_amount_text'], currency),
     savedMoney:
         moneyFromPulledValueRequired(row['saved_amount_text'], currency),
-    lastNotifiedSavedMoney: moneyFromPulledValueRequired(
+    lastNotifiedSavedMoney: _pulledBookkeepingMoney(
         row['last_notified_saved_amount_text'], currency),
     autoSaveMoney: moneyFromPulledValue(row['auto_save_amount_text'], currency),
   );
@@ -455,7 +472,14 @@ class PlanningPullService {
                   case _PlanningPullOutcome.skipped:
                     break;
                 }
-              } on MoneyTransportException {
+              } catch (e) {
+                // A strict money parse that rejects one row's amount (excess
+                // precision → DecimalFormatException) is row-level too: it must
+                // not roll back the page and block every other budget/goal.
+                if (e is! MoneyTransportException &&
+                    e is! DecimalFormatException) {
+                  rethrow;
+                }
                 // MALI-026 (Phase-9F §4): an ACTIVE budget/goal whose persisted
                 // server currency is NULL/unsupported is UNRESOLVED. Quarantine it
                 // durably (NEVER invent currency — no base/account/settings

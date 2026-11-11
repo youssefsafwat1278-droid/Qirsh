@@ -6421,7 +6421,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get deleteAccountIntro =>
-      'Permanently delete your Qirsh account and the data saved with it. You’ll confirm your identity first.';
+      'Permanently and immediately delete your Qirsh account and the data saved with it. You’ll confirm your identity first, with Apple or the method you signed in with.';
 
   @override
   String get deleteAccountAction => 'Delete account';
@@ -6431,7 +6431,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get deleteAccountConfirmBody =>
-      'This permanently deletes your account and its data. Confirm your identity to continue. This cannot be undone.';
+      'This permanently and immediately deletes your account and its data. Confirm your identity with Apple or the method you signed in with to continue. This cannot be undone.';
 
   @override
   String get deleteAccountConfirmAction => 'Delete permanently';
@@ -7076,14 +7076,43 @@ class AppL10nEn extends AppL10n {
       'All choices use the same QIRSH template. You’ll change its existing filter in Shortcuts. Reviewing the steps does not confirm that iOS Automation is on.';
 
   @override
-  String get shortcutOpenEditor => 'Open QIRSH in Shortcuts';
+  String shortcutVisualInstallDedicatedBody(String keyword) {
+    return 'Tap Add Qirsh Shortcut, then Add Shortcut in iOS. This shortcut already listens for messages containing $keyword, so there is nothing to type.';
+  }
+
+  @override
+  String shortcutCatalogDedicated(String keyword) {
+    return '$keyword has its own ready shortcut with the keyword already filled in. iOS still asks you to turn its Automation on yourself, and Qirsh cannot see whether it is on.';
+  }
+
+  @override
+  String get shortcutConfirmAutomation => 'I turned Automation on';
+
+  @override
+  String get shortcutStateConfirmed =>
+      'You confirmed Automation is on. Qirsh can’t check this in iOS.';
+
+  @override
+  String get shortcutStateTested =>
+      'Connection tested. Turn Automation on to capture texts automatically.';
+
+  @override
+  String shortcutOverlapWarning(String keyword) {
+    return 'You already set up $keyword for this currency. Keep one keyword per currency so a single text isn’t captured twice.';
+  }
+
+  @override
+  String shortcutOpenEditor(String name) {
+    return 'Open $name in Shortcuts';
+  }
 
   @override
   String get shortcutVisualArrowTitle => 'Open the automation controls';
 
   @override
-  String get shortcutVisualArrowBody =>
-      'Open QIRSH in Shortcuts. Tap the small blue arrow beside “where”, under “When I receive a message”.';
+  String shortcutVisualArrowBody(String name) {
+    return 'Open $name in Shortcuts. Tap the small blue arrow beside “where”, under “When I receive a message”.';
+  }
 
   @override
   String shortcutVisualStep(int current, int total) {
@@ -7200,4 +7229,110 @@ class AppL10nEn extends AppL10n {
   @override
   String get authGoogleSignupRequired =>
       'This Google account is new to Qirsh. Choose Create an account to register.';
+
+  @override
+  String get accV2Balance => 'Balance';
+
+  @override
+  String get accV2YourAccounts => 'Your accounts';
+
+  @override
+  String get subsV2Upcoming => 'Upcoming';
+
+  @override
+  String get subsV2AllSubs => 'All subscriptions';
+
+  @override
+  String get gfV2Preview => 'Preview';
+
+  @override
+  String gdV2DaysCount(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gdV2MoreActions => 'Goal options';
+
+  @override
+  String get setV2Tools => 'Tools';
+
+  @override
+  String setV2Version(String version) {
+    return 'Qirsh $version';
+  }
+
+  @override
+  String get setV2AppearanceLead =>
+      'Choose how Qirsh looks — it changes right away.';
+
+  @override
+  String get setV2CaptureNeedsCheck => 'Needs a check';
+
+  @override
+  String get bdgV2YourBudgets => 'Your budgets';
+
+  @override
+  String get bdgV2WorstFirst => 'Worst first';
+
+  @override
+  String get bfsV2ShowAll => 'Show all';
+
+  @override
+  String get bfsV2ShowLess => 'Show less';
+
+  @override
+  String get couponsV2BrowseOffers => 'Browse offers';
+
+  @override
+  String get txnV2EndOfList => '— That\'s every transaction in this period —';
+
+  @override
+  String get txnV2Filters => 'Filters';
+
+  @override
+  String pasteV2DetectedCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count messages detected',
+      one: '1 message detected',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get pasteV2Clear => 'Clear text';
+
+  @override
+  String get smsV2Step1 => 'Open the bank message';
+
+  @override
+  String get smsV2Step2 => 'Tap Share';
+
+  @override
+  String get smsV2Step3 => 'Choose Qirsh';
+
+  @override
+  String get smsV2PrivacyLine =>
+      'Without SMS read permission · The text is analysed on your device only.';
+
+  @override
+  String get insV3Report => 'Report';
+
+  @override
+  String get txnV3NetThisMonth => 'Net this month';
+
+  @override
+  String get txnV3NetThisPeriod => 'Net this period';
+
+  @override
+  String billsV3Counts(int subs, int instalments) {
+    return '$subs subscriptions · $instalments instalments';
+  }
 }

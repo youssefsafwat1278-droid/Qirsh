@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../core/privacy/gated_network_image.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_typography.dart';
+import '../../core/utils/category_tone.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
@@ -424,37 +427,43 @@ class BrandMark extends ConsumerWidget {
 
     // 1) شعار SVG مرفق (محلي، بدون شبكة) — أول السلّم دائماً.
     final slug = _resolveSlug(name);
-    if (slug != null) return _svgMark(slug);
+    final edge = AppAvatar.logoEdge(context);
+    if (slug != null) return _svgMark(slug, edge);
 
     // 2) الشعارات البعيدة تتطلّب موافقة المعالجة السحابية. مرفوضة → مفيش أي طلب.
+    //
+    // While a remote logo loads, the tile shows the merchant's MONOGRAM (never
+    // the category icon), and the logo crossfades in over it. A failed load
+    // keeps the monogram — the next rung of the ladder (logo.dev) shows the
+    // same monogram while it tries — so the tile never hard-swaps.
     if (allowRemote) {
+      final monogram = _monogram(context);
+      final logoDevUrl = logoDevUrlFor(name);
+      final logoDevTile = logoDevUrl == null
+          ? null
+          : _networkLogo(logoDevUrl, edge,
+              placeholder: monogram, fallback: monogram);
       if (logoUrl != null && logoUrl!.isNotEmpty) {
-        return _networkLogo(logoUrl!, fallback: _logoDevMark());
+        return _networkLogo(logoUrl!, edge,
+            placeholder: monogram, fallback: logoDevTile ?? monogram);
       }
-      return _logoDevMark();
+      if (logoDevTile != null) return logoDevTile;
     }
 
     // 3) بديل بدون شبكة.
     return _letterMark();
   }
 
-  /// شعار logo.dev بالدومين العام (تُستدعى فقط بعد التحقق من الموافقة).
-  Widget _logoDevMark() {
-    final logoDevUrl = logoDevUrlFor(name);
-    if (logoDevUrl != null) {
-      return _networkLogo(logoDevUrl, fallback: _letterMark());
-    }
-    return _letterMark();
-  }
-
-  Widget _svgMark(String slug) {
+  Widget _svgMark(String slug, BorderSide edge) {
     return Container(
       width: size,
       height: size,
-      padding: EdgeInsets.all(size * 0.18),
+      // The mark fills the tile: contain with ≤12% padding.
+      padding: EdgeInsets.all(size * 0.12),
       decoration: ShapeDecoration(
         color: slug == 'sony' ? AppBrandBlue.deep : Colors.white,
-        shape: AppAvatar.shapeFor(size),
+        shape: AppAvatar.shapeFor(size,
+            side: slug == 'sony' ? BorderSide.none : edge),
       ),
       child: SvgPicture.asset(
         'assets/brands/$slug.svg',
@@ -463,22 +472,66 @@ class BrandMark extends ConsumerWidget {
     );
   }
 
-  /// مربّع أبيض بشعار من الشبكة، مع [fallback] لو فشل التحميل/أثناء التحميل.
-  Widget _networkLogo(String url, {required Widget fallback}) {
+  /// شعار من الشبكة يملا المربّع: [placeholder] تحته لحد ما يوصل، ثم fade
+  /// (أو ظهور فوري لو كان في الكاش)، و[fallback] لو فشل التحميل.
+  Widget _networkLogo(String url, BorderSide edge,
+      {required Widget placeholder, required Widget fallback}) {
+    return _NetworkLogoTile(
+      key: ValueKey<String>('brandLogo:$url'),
+      provider: GatedNetworkImage(url),
+      size: size,
+      edge: edge,
+      placeholder: placeholder,
+      fallback: fallback,
+    );
+  }
+
+  /// Icon keys whose design-family tones (bg + ink, per theme) give the
+  /// monogram its calm tint. Income green is left out so a merchant initial
+  /// never reads as money in.
+  static const List<String> _monogramTones = [
+    'cake', // food
+    'plane', // move
+    'house', // bill
+    'gift', // shop
+    '', // neutral (qirsh blue wash)
+  ];
+
+  /// FNV-1a over the name's code units — stable across runs and builds, so a
+  /// merchant keeps the same tint everywhere (unlike `String.hashCode`).
+  static int _stableHash(String value) {
+    var hash = 0x811c9dc5;
+    for (final unit in value.codeUnits) {
+      hash = ((hash ^ unit) * 0x01000193) & 0xffffffff;
+    }
+    return hash;
+  }
+
+  /// The loading placeholder: the merchant's first grapheme on a calm tinted
+  /// tile whose hue is derived from a stable hash of the name.
+  Widget _monogram(BuildContext context) {
+    final trimmed = name.trim();
+    final glyph =
+        trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
+    final tone = categoryTone(
+      _monogramTones[_stableHash(trimmed.toUpperCase()) % _monogramTones.length],
+      Theme.of(context).brightness,
+    );
     return Container(
       width: size,
       height: size,
-      padding: EdgeInsets.all(size * 0.14),
+      alignment: Alignment.center,
       decoration: ShapeDecoration(
-        color: Colors.white,
+        color: tone.background,
         shape: AppAvatar.shapeFor(size),
       ),
-      child: Image(
-        image: GatedNetworkImage(url),
-        fit: BoxFit.contain,
-        errorBuilder: (_, __, ___) => fallback,
-        frameBuilder: (ctx, child, frame, sync) =>
-            frame == null && !sync ? fallback : child,
+      child: Text(
+        glyph,
+        style: AppTypography.title2(tone.ink).copyWith(
+          fontSize: size * 0.40,
+          fontWeight: FontWeight.w700,
+          height: 1,
+        ),
       ),
     );
   }
@@ -532,4 +585,144 @@ class _StableBrand {
 
   bool get hasBrand =>
       slug != null || logoDevUrl != null || letterColor != null;
+}
+
+/// A remote merchant logo that FILLS its tile.
+///
+/// - Square-ish logos (aspect 0.8–1.25) are drawn full-bleed (`cover`); wide
+///   wordmarks, or a logo whose size is not known yet, are contained with a
+///   10% inset on white.
+/// - Until the first frame arrives, [placeholder] (the merchant monogram)
+///   shows; the logo then crossfades in over ~300ms. A logo already in the
+///   image cache paints on the first frame with no fade, so cached logos never
+///   animate. Reduce Motion skips the fade.
+/// - On a load error, [fallback] replaces the tile.
+class _NetworkLogoTile extends StatefulWidget {
+  const _NetworkLogoTile({
+    super.key,
+    required this.provider,
+    required this.size,
+    required this.edge,
+    required this.placeholder,
+    required this.fallback,
+  });
+
+  final ImageProvider provider;
+  final double size;
+  final BorderSide edge;
+  final Widget placeholder;
+  final Widget fallback;
+
+  @override
+  State<_NetworkLogoTile> createState() => _NetworkLogoTileState();
+}
+
+class _NetworkLogoTileState extends State<_NetworkLogoTile> {
+  ImageStream? _stream;
+  late final ImageStreamListener _listener =
+      ImageStreamListener(_onImage, onError: _onError);
+
+  /// Width / height of the decoded logo, once known.
+  double? _aspect;
+  bool _resolving = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _resolve();
+  }
+
+  @override
+  void didUpdateWidget(_NetworkLogoTile oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.provider != widget.provider) {
+      _aspect = null;
+      _resolve();
+    }
+  }
+
+  /// Listens to the same (cached) image stream the [Image] below uses — one
+  /// request, shared — only to learn the logo's aspect ratio.
+  void _resolve() {
+    final stream =
+        widget.provider.resolve(createLocalImageConfiguration(context));
+    if (_stream != null && stream.key == _stream!.key) {
+      return;
+    }
+    _stream?.removeListener(_listener);
+    _stream = stream;
+    _resolving = true;
+    stream.addListener(_listener);
+    _resolving = false;
+  }
+
+  void _onImage(ImageInfo info, bool synchronousCall) {
+    final width = info.image.width;
+    final height = info.image.height;
+    info.dispose();
+    final aspect = height == 0 ? 1.0 : width / height;
+    if (aspect == _aspect) return;
+    if (_resolving || !mounted) {
+      _aspect = aspect; // cached: known before the first build.
+    } else {
+      setState(() => _aspect = aspect);
+    }
+  }
+
+  // The [Image] below shows [_NetworkLogoTile.fallback] on error; this
+  // listener only has to mark the error as handled.
+  void _onError(Object error, StackTrace? stackTrace) {}
+
+  @override
+  void dispose() {
+    _stream?.removeListener(_listener);
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = widget.size;
+    final aspect = _aspect;
+    final fills = aspect != null && aspect >= 0.8 && aspect <= 1.25;
+    final fade = (MediaQuery.maybeDisableAnimationsOf(context) ?? false)
+        ? Duration.zero
+        : AppMotion.moderate;
+    return SizedBox.square(
+      dimension: size,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          widget.placeholder,
+          Image(
+            image: widget.provider,
+            fit: fills ? BoxFit.cover : BoxFit.contain,
+            gaplessPlayback: true,
+            errorBuilder: (_, __, ___) => widget.fallback,
+            frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+              final plate = Container(
+                padding: EdgeInsets.all(fills ? 0 : size * 0.10),
+                clipBehavior: Clip.antiAlias,
+                decoration: ShapeDecoration(
+                  color: Colors.white,
+                  shape: AppAvatar.shapeFor(size),
+                ),
+                foregroundDecoration: ShapeDecoration(
+                  shape: AppAvatar.shapeFor(size, side: widget.edge),
+                ),
+                child: child,
+              );
+              // Cached → painted on the first frame, no animation.
+              if (wasSynchronouslyLoaded) return plate;
+              return AnimatedOpacity(
+                opacity: frame == null ? 0 : 1,
+                duration: fade,
+                curve: Curves.easeOut,
+                child: plate,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
 }

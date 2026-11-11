@@ -107,13 +107,15 @@ class _ReportConfigPageState extends ConsumerState<_ReportConfigPage> {
         (_allAccounts || selectedAccountId != null);
 
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppHeader(
           title: context.l10n.rcTitle),
-      body: SingleChildScrollView(
+      // Immersive: scrolls under the glass bar; content starts below it.
+      body: Builder(builder: (bodyContext) => SingleChildScrollView(
         padding: EdgeInsets.only(
           left: 16,
           right: 16,
-          top: 12,
+          top: MediaQuery.paddingOf(bodyContext).top + 12,
           bottom: MediaQuery.of(context).viewInsets.bottom + 20,
         ),
         child: Column(
@@ -208,7 +210,7 @@ class _ReportConfigPageState extends ConsumerState<_ReportConfigPage> {
             _switch(context.l10n.rcPrivacyMode, _privacy, (v) => _privacy = v),
           ],
         ),
-      ),
+      )),
       // Pinned action so the primary CTA stays reachable on a long form.
       bottomNavigationBar: SafeArea(
         minimum: const EdgeInsets.fromLTRB(20, 0, 20, 12),

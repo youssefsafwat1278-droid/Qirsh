@@ -67,14 +67,75 @@ class AppTypography {
 
   // ===== Premium Named Styles =====
 
-  static TextStyle amountHero(Color c) => custom(
-      size: 40, weight: FontWeight.w700, height: 1.10, tabular: true, color: c);
+  /// v2 display family — Alexandria 600/700, for `title.large` and
+  /// `amount.hero` ONLY.
+  static const String displayFamily = 'Alexandria';
 
+  static TextStyle _displayFace({
+    required double size,
+    required FontWeight weight,
+    required double height,
+    double letterSpacing = 0,
+    bool tabular = false,
+    Color? color,
+  }) =>
+      custom(
+        size: size,
+        weight: weight,
+        height: height,
+        letterSpacing: letterSpacing,
+        tabular: tabular,
+        color: color,
+      ).copyWith(
+        fontFamily: displayFamily,
+        fontFamilyFallback: const ['Vazirmatn', 'IBMPlexSansArabic'],
+      );
+
+  /// v2 `amount.hero` — Alexandria 600, 48/52, −1.2.
+  static TextStyle amountHero(Color c) => _displayFace(
+      size: 48,
+      weight: FontWeight.w600,
+      height: 52 / 48,
+      letterSpacing: -1.2,
+      tabular: true,
+      color: c);
+
+  /// v2 `amount.large` — 32/38, −0.4.
+  static TextStyle amountLarge(Color c) => custom(
+      size: 32,
+      weight: FontWeight.w700,
+      height: 38 / 32,
+      letterSpacing: -0.4,
+      tabular: true,
+      color: c);
+
+  /// v2 `amount.medium` — 22/28.
   static TextStyle amountMedium(Color c) => custom(
-      size: 24, weight: FontWeight.w700, height: 1.20, tabular: true, color: c);
+      size: 22, weight: FontWeight.w700, height: 28 / 22, tabular: true, color: c);
 
+  /// v2 `amount.row` — 17/22.
   static TextStyle amountSmall(Color c) => custom(
-      size: 18, weight: FontWeight.w600, height: 1.25, tabular: true, color: c);
+      size: 17, weight: FontWeight.w600, height: 22 / 17, tabular: true, color: c);
+
+  /// v2 `title.large` — Alexandria 700, 30/38, −0.3.
+  static TextStyle titleLarge(Color c) => _displayFace(
+      size: 30,
+      weight: FontWeight.w700,
+      height: 38 / 30,
+      letterSpacing: -0.3,
+      color: c);
+
+  /// v2 `title.nav` — collapsed nav-bar title, 17/22.
+  static TextStyle titleNav(Color c) =>
+      custom(size: 17, weight: FontWeight.w600, height: 22 / 17, color: c);
+
+  /// v2 `overline` — group labels and chart axes only, 12/16 +0.2.
+  static TextStyle overline(Color c) => custom(
+      size: 12,
+      weight: FontWeight.w600,
+      height: 16 / 12,
+      letterSpacing: 0.2,
+      color: c);
 
   // UX-002 — the scale below follows `docs/design/BRAND_AND_DESIGN_SYSTEM.md` §7 with ONE
   // deliberate deviation: sizes for Display / Title-1 / Title-2 are one step
@@ -101,14 +162,15 @@ class AppTypography {
   static TextStyle title(Color c) =>
       custom(size: 16, weight: FontWeight.w600, height: 1.40, color: c);
 
+  // v2: Arabic body needs ≥1.6 line height (16/26).
   static TextStyle body(Color c) =>
-      custom(size: 16, weight: FontWeight.w400, height: 1.50, color: c);
+      custom(size: 16, weight: FontWeight.w400, height: 26 / 16, color: c);
 
   static TextStyle bodyStrong(Color c) =>
       custom(size: 16, weight: FontWeight.w500, height: 1.50, color: c);
 
   static TextStyle callout(Color c) =>
-      custom(size: 15, weight: FontWeight.w400, height: 1.46, color: c);
+      custom(size: 15, weight: FontWeight.w400, height: 24 / 15, color: c);
 
   static TextStyle subhead(Color c) =>
       custom(size: 14, weight: FontWeight.w500, height: 1.43, color: c);
@@ -116,14 +178,15 @@ class AppTypography {
   static TextStyle footnote(Color c) =>
       custom(size: 13, weight: FontWeight.w400, height: 1.38, color: c);
 
+  // v2: 13 is the floor for Arabic UI text.
   static TextStyle caption(Color c) =>
-      custom(size: 12, weight: FontWeight.w500, height: 1.33, color: c);
+      custom(size: 13, weight: FontWeight.w500, height: 18 / 13, color: c);
 
   static TextStyle label(Color c) =>
       custom(size: 12, weight: FontWeight.w600, height: 1.25, color: c);
 
   static TextStyle micro(Color c) =>
-      custom(size: 11, weight: FontWeight.w500, height: 1.30, color: c);
+      custom(size: 12, weight: FontWeight.w500, height: 16 / 12, color: c);
 
   /// The MONOSPACED family, `--f-mono` in the design prototype.
   ///
@@ -176,21 +239,10 @@ class AppTypography {
   // numbers, per the flagship spec. Adopted intentionally, screen by screen.
 
   /// The Home balance statement — large, calm, tight tracking, tabular.
-  static TextStyle balanceHero(Color c) => custom(
-      size: 52,
-      weight: FontWeight.w600,
-      height: 1.05,
-      letterSpacing: -1.4,
-      tabular: true,
-      color: c);
+  static TextStyle balanceHero(Color c) => amountHero(c);
 
   /// Calmer alternative to [display] — same role, capped at w600.
-  static TextStyle calmDisplay(Color c) => custom(
-      size: 32,
-      weight: FontWeight.w600,
-      height: 1.15,
-      letterSpacing: -0.4,
-      color: c);
+  static TextStyle calmDisplay(Color c) => titleLarge(c);
 
   /// Calmer alternative to [title1]/section titles — capped at w600.
   static TextStyle calmTitle(Color c) =>
@@ -199,12 +251,12 @@ class AppTypography {
   /// Compact section heading (docs/MALI_COMPACT_UI_SYSTEM_PLAN.md) — replaces
   /// oversized `headline`(18)/`title2`(20) misuse on section titles.
   static TextStyle sectionTitle(Color c) =>
-      custom(size: 19, weight: FontWeight.w600, height: 1.25, color: c);
+      custom(size: 20, weight: FontWeight.w700, height: 26 / 20, color: c);
 
   /// Compact card / list-group title (also empty/error headings and default
   /// amount text). One step below a section title.
   static TextStyle cardTitle(Color c) =>
-      custom(size: 16, weight: FontWeight.w600, height: 1.30, color: c);
+      custom(size: 16, weight: FontWeight.w600, height: 22 / 16, color: c);
 
   /// Plain-language verdict line for a RingProgress (e.g. "وضعك مستقر").
   /// Deliberately body-weight, not a headline — the ring carries the visual

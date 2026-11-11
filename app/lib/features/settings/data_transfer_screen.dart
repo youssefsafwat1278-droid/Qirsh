@@ -20,13 +20,12 @@ import '../../core/theme/app_typography.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../domain/entities/account_entity.dart';
 import '../../core/theme/widgets/app_toast.dart';
-import '../common/app_header.dart';
 import '../common/app_card.dart';
 import '../report_ads/report_ad_notice.dart';
 import '../report_ads/report_ads_providers.dart';
 import '../reporting/ui/report_config_page.dart';
 import '../../core/utils/app_lucide_icons.dart';
-import '../../core/theme/widgets/directional_chevron.dart';
+import 'widgets/settings_v2.dart';
 import 'import_issue_messages.dart';
 import '../../core/privacy/consent_authority.dart';
 import '../../core/theme/widgets/glass_dialog.dart';
@@ -297,106 +296,128 @@ class _DataTransferScreenState extends ConsumerState<DataTransferScreen> {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Scaffold(
-      backgroundColor: colors.bg,
-      appBar: AppHeader(title: context.l10n.dtxTitle),
-      body: Stack(
-        children: [
-          ListView(
-            padding: const EdgeInsets.all(AppSpacing.gutter),
+    final l10n = context.l10n;
+    // v2 §26/27: export and import are separate Groups; each file type has
+    // its own tinted tile, and rows that ACT carry an action glyph rather than
+    // a navigation chevron.
+    return SettingsV2Page(
+      title: l10n.dtxTitle,
+      subtitle: l10n.dtxSubtitle,
+      overlay: _busy
+          ? const ColoredBox(
+              color: Color(0x22000000),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          : null,
+      children: [
+        const Center(
+          child: QirshIllustration(
+            name: 'dataTransfer', width: 187, height: 140,
+          ),
+        ),
+        SettingsV2Group(
+          label: l10n.dtxExportSection,
+          dividerIndent: 68,
+          children: [
+            _ActionTile(
+              icon: AppLucideIcons.fileText,
+              accent: colors.danger,
+              title: l10n.dtxPdfReport,
+              subtitle: l10n.dtxPdfReportSub,
+              action: AppLucideIcons.share,
+              onTap: _openPdfReport,
+            ),
+            _ActionTile(
+              icon: AppLucideIcons.table,
+              accent: colors.success,
+              title: l10n.dtxExportCsv,
+              subtitle: l10n.dtxExportCsvSub,
+              action: AppLucideIcons.share,
+              onTap: () => _export(fullPackage: false),
+            ),
+            _ActionTile(
+              icon: AppLucideIcons.archive,
+              accent: colors.info,
+              title: l10n.dtxExportZip,
+              subtitle: l10n.dtxExportZipSub,
+              action: AppLucideIcons.share,
+              onTap: () => _export(fullPackage: true),
+            ),
+            if (_legacyBackupExists)
+              _ActionTile(
+                icon: AppLucideIcons.rotateCcw,
+                accent: colors.info,
+                title: l10n.dtxRestoreOld,
+                subtitle: l10n.dtxRestoreOldSub,
+                onTap: () => context.push('/backup/restore'),
+              ),
+          ],
+        ),
+        SettingsV2Group(
+          label: l10n.dtxImportSection,
+          children: [
+            _ActionTile(
+              icon: AppLucideIcons.folderOpen,
+              accent: colors.warning,
+              title: l10n.dtxImportFile,
+              subtitle: l10n.dtxImportFileSub,
+              action: AppLucideIcons.download,
+              onTap: _pickFile,
+            ),
+          ],
+        ),
+        if (_preview != null || _result != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (_preview != null) ...[
+                  const SizedBox(height: AppSpacing.s6),
+                  _PreviewPanel(
+                    preview: _preview!,
+                    mode: _mode,
+                    accounts:
+                        ref.watch(accountsProvider).valueOrNull ?? const [],
+                    onPreviewChanged: (value) =>
+                        setState(() => _preview = value),
+                    onModeChanged: (value) => setState(() => _mode = value),
+                    onImport: _runImport,
+                  ),
+                ],
+                if (_result != null) ...[
+                  const SizedBox(height: AppSpacing.s5),
+                  _ResultPanel(result: _result!),
+                ],
+              ],
+            ),
+          ),
+        const SizedBox(height: AppSpacing.s4),
+        // The most important sentence on the page is no longer its smallest:
+        // a warning-tinted notice at `subhead`.
+        SettingsV2Tinted(
+          background: colors.warningBg,
+          accent: colors.warning,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Center(
-                child: QirshIllustration(
-                  name: 'dataTransfer', width: 230, height: 172.5,
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Icon(AppLucideIcons.lock,
+                    size: 18, color: colors.warningText),
+              ),
+              const SizedBox(width: AppSpacing.s3),
+              Expanded(
+                child: Text(
+                  l10n.dtxExportNotice,
+                  style: AppTypography.subhead(colors.textSecondary)
+                      .copyWith(height: 22 / 14),
                 ),
-              ),
-              Text(
-                context.l10n.dtxSubtitle,
-                style: AppTypography.body(colors.textSecondary),
-              ),
-              const SizedBox(height: AppSpacing.s5),
-              _TransferSectionLabel(context.l10n.dtxExportSection),
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: Column(children: [
-                  _ActionTile(
-                    icon: AppLucideIcons.fileText,
-                    accent: const Color(0xFFC4362C),
-                    title: context.l10n.dtxPdfReport,
-                    subtitle: context.l10n.dtxPdfReportSub,
-                    onTap: _openPdfReport,
-                  ),
-                  Divider(height: 1, indent: 64, endIndent: 16, color: colors.border),
-                  _ActionTile(
-                    icon: AppLucideIcons.table,
-                    accent: const Color(0xFF16A37F),
-                    title: context.l10n.dtxExportCsv,
-                    subtitle: context.l10n.dtxExportCsvSub,
-                    onTap: () => _export(fullPackage: false),
-                  ),
-                  Divider(height: 1, indent: 64, endIndent: 16, color: colors.border),
-                  _ActionTile(
-                    icon: AppLucideIcons.archive,
-                    accent: const Color(0xFF1653F3),
-                    title: context.l10n.dtxExportZip,
-                    subtitle: context.l10n.dtxExportZipSub,
-                    onTap: () => _export(fullPackage: true),
-                  ),
-                  if (_legacyBackupExists) ...[
-                    Divider(height: 1, indent: 64, endIndent: 16, color: colors.border),
-                    _ActionTile(
-                      icon: AppLucideIcons.rotateCcw,
-                      accent: const Color(0xFF1653F3),
-                      title: context.l10n.dtxRestoreOld,
-                      subtitle: context.l10n.dtxRestoreOldSub,
-                      onTap: () => context.push('/backup/restore'),
-                    ),
-                  ],
-                ]),
-              ),
-              const SizedBox(height: 20),
-              _TransferSectionLabel(context.l10n.dtxImportSection),
-              AppCard(
-                padding: EdgeInsets.zero,
-                child: _ActionTile(
-                  icon: AppLucideIcons.folderOpen,
-                  accent: const Color(0xFFE08A00),
-                  title: context.l10n.dtxImportFile,
-                  subtitle: context.l10n.dtxImportFileSub,
-                  onTap: _pickFile,
-                ),
-              ),
-              if (_preview != null) ...[
-                const SizedBox(height: AppSpacing.s6),
-                _PreviewPanel(
-                  preview: _preview!,
-                  mode: _mode,
-                  accounts: ref.watch(accountsProvider).valueOrNull ?? const [],
-                  onPreviewChanged: (value) => setState(() => _preview = value),
-                  onModeChanged: (value) => setState(() => _mode = value),
-                  onImport: _runImport,
-                ),
-              ],
-              if (_result != null) ...[
-                const SizedBox(height: AppSpacing.s5),
-                _ResultPanel(result: _result!),
-              ],
-              const SizedBox(height: AppSpacing.s8),
-              Text(
-                context.l10n.dtxExportNotice,
-                style: AppTypography.caption(colors.textSecondary),
               ),
             ],
           ),
-          if (_busy)
-            const Positioned.fill(
-              child: ColoredBox(
-                color: Color(0x22000000),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -475,18 +496,6 @@ class _ReplaceConfirmationDialogState
   }
 }
 
-class _TransferSectionLabel extends StatelessWidget {
-  const _TransferSectionLabel(this.label);
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsetsDirectional.fromSTEB(4, 0, 4, 8),
-    child: Text(label, style: AppTypography.caption(context.colors.textMuted)
-        .copyWith(fontWeight: FontWeight.w700)),
-  );
-}
-
 class _ActionTile extends StatelessWidget {
   const _ActionTile({
     required this.icon,
@@ -494,6 +503,7 @@ class _ActionTile extends StatelessWidget {
     required this.subtitle,
     required this.onTap,
     required this.accent,
+    this.action,
   });
 
   final Color accent;
@@ -502,23 +512,18 @@ class _ActionTile extends StatelessWidget {
   final String subtitle;
   final VoidCallback onTap;
 
+  /// Trailing action glyph (share / download) for rows that act; rows that
+  /// navigate keep the chevron.
+  final IconData? action;
+
   @override
-  Widget build(BuildContext context) => ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Container(
-          width: 36, height: 36,
-          decoration: BoxDecoration(
-            color: accent.withValues(alpha:
-                Theme.of(context).brightness == Brightness.dark ? 0.22 : 0.12),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(icon, size: 18, color: accent),
-        ),
-        title: Text(title, style: AppTypography.custom(size: 14.5,
-            weight: FontWeight.w500, height: 1.4,
-            color: context.colors.textPrimary)),
-        subtitle: Text(subtitle, style: AppTypography.caption(context.colors.textMuted)),
-        trailing: const DirectionalChevron(),
+  Widget build(BuildContext context) => SettingsV2Row(
+        leading: SettingsV2Tile(icon: icon, color: accent, size: 40),
+        title: title,
+        subtitle: subtitle,
+        trailing: action == null
+            ? null
+            : Icon(action, size: 20, color: context.colors.actionText),
         onTap: onTap,
       );
 }

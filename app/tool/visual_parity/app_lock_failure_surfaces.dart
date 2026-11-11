@@ -96,5 +96,5 @@ class _ReviewState extends State<_Review> {
   }
 
   @override
-  Widget build(BuildContext context) => const SettingsScreen();
+  Widget build(BuildContext context) => const SettingsScreen(page: SettingsPage.security);
 }

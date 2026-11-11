@@ -21,10 +21,10 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  testWidgets('settings shows all groups in one scroll (no tabs)',
+  testWidgets('the «المزيد» hub shows every group and links each settings topic',
       (tester) async {
-    // Tall viewport so the whole single-scroll list builds (no tabs to reveal
-    // lower groups any more).
+    // Tall viewport so the whole hub builds. Calm Capital v2 split the old
+    // single scroll into a hub plus one-topic sub-pages; no tabs either way.
     tester.view.physicalSize = const Size(390, 4200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -87,22 +87,28 @@ void main() {
       findsNothing,
     );
 
-    // Every group renders together in one scroll (general + notifications +
-    // data), instead of being hidden behind tabs.
+    // The hub keeps every group (UX-029: destinations split from
+    // configuration) and links each settings topic by name; the topics'
+    // controls now live on their own sub-pages.
     for (final label in const [
-      // UX-029 — «إدارة أموالك» held ten flat entries and read as a second
-      // navigation bar. It is split into destinations and configuration; this
-      // test's subject is that every group renders in ONE scroll rather than
-      // behind tabs, so it asserts both halves are present.
       'حساباتك والتزاماتك',
-      'أدوات وإعدادات',
+      'أدوات',
       'تأكيد عملة الميزانيات والأهداف',
+      'الإعدادات',
+      'بيانات حسابك',
+      'المظهر',
       'رصد العمليات',
       'تنبيهاتك',
       'نقل البيانات',
+      'الأمان والخصوصية',
+      'المكافآت والدعم',
+      'تسجيل الخروج',
     ]) {
       expect(find.text(label), findsOneWidget, reason: label);
     }
+    // Release builds never show the Developer group; debug builds hide it
+    // behind a long-press on the version string.
+    expect(find.text('Developer'), findsNothing);
     final l10n = AppL10n.of(tester.element(find.byType(SettingsScreen)));
     await tester.ensureVisible(find.text(l10n.setContactUs));
     await tester.pumpAndSettle();
@@ -125,6 +131,54 @@ void main() {
     await tester.pumpAndSettle();
     expect(copiedEmail, 'support@money-companion.app');
     expect(find.text(l10n.setSupportBody), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('each hub link opens its sub-page with the same controls',
+      (tester) async {
+    tester.view.physicalSize = const Size(390, 4200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(_host(const SettingsScreen()));
+    await tester.pumpAndSettle();
+    final l10n = AppL10n.of(tester.element(find.byType(SettingsScreen)));
+
+    Future<void> openAndBack(String key, List<String> expected) async {
+      await tester.tap(find.byKey(ValueKey(key)));
+      await tester.pumpAndSettle();
+      for (final text in expected) {
+        expect(find.text(text), findsWidgets, reason: '$key → $text');
+      }
+      await tester.tap(find.byTooltip('رجوع').last);
+      await tester.pumpAndSettle();
+    }
+
+    await openAndBack('settings-page-account', [l10n.setLanguage]);
+    await openAndBack('settings-page-appearance',
+        [l10n.setThemeAuto, l10n.setThemeLight, l10n.setThemeDark]);
+    await openAndBack('settings-page-capture', [
+      l10n.setConfirmCaptured,
+      l10n.setNotifyOnCapture,
+      l10n.setHideOnLockScreen,
+    ]);
+    await openAndBack('settings-page-alerts', [
+      l10n.setQirshMessages,
+      l10n.setBudgetAlerts,
+      l10n.setQuietHours,
+      l10n.setTestNotifications,
+      l10n.setMessageCentre,
+    ]);
+    await openAndBack('settings-page-security', [
+      l10n.setPrivacyAndData,
+      l10n.setHideAmounts,
+      l10n.setAppLock,
+      l10n.setDeleteAccount,
+    ]);
+    // The Android-only paragraph never shows off Android.
+    await tester.tap(find.byKey(const ValueKey('settings-page-capture')));
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.smsCaptureTrustNotice), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -208,3 +262,32 @@ const _settings = UserSettingsEntity(
   dbEncryptionKeyRef: 'test',
   privacyModeEnabled: false,
 );
+
+Widget _host(Widget home) => ProviderScope(
+      overrides: [
+        userSettingsProvider.overrideWith((ref) async => _settings),
+        notificationPreferencesProvider.overrideWith(
+          (ref) async => const NotificationPreferences(),
+        ),
+        captureHealthStatusProvider.overrideWith(
+          (ref) async => CaptureHealthStatus(
+            lastCaptureAt: null,
+            now: DateTime.utc(2026, 7, 18),
+          ),
+        ),
+        supportedCountriesProvider.overrideWith((ref) async => const []),
+        activeCurrenciesProvider.overrideWith((ref) async => const []),
+      ],
+      child: MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppL10n.supportedLocales,
+        localizationsDelegates: const [
+          ...AppL10n.localizationsDelegates,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        theme: AppTheme.light,
+        home: home,
+      ),
+    );

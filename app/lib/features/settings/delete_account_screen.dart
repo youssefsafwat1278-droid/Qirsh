@@ -422,9 +422,15 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
 
     return Scaffold(
       backgroundColor: c.bg,
+      extendBodyBehindAppBar: true,
       appBar: AppHeader(title: l10n.deleteAccountTitle),
-      body: ListView(
-        padding: const EdgeInsets.all(AppSpacing.gutter),
+      // Immersive: scrolls under the glass bar; content starts below it.
+      body: Builder(builder: (bodyContext) => ListView(
+        padding: EdgeInsets.fromLTRB(
+            AppSpacing.gutter,
+            MediaQuery.paddingOf(bodyContext).top + AppSpacing.gutter,
+            AppSpacing.gutter,
+            AppSpacing.gutter),
         children: [
           AppCard(
               child: Column(
@@ -449,7 +455,7 @@ class _DeleteAccountScreenState extends ConsumerState<DeleteAccountScreen> {
           const SizedBox(height: AppSpacing.s4),
           status(),
         ],
-      ),
+      )),
     );
   }
 }

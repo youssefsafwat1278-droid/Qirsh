@@ -2,6 +2,7 @@ import '../common/top_banner.dart';
 import '../../core/session/app_session.dart';
 import '../../domain/entities/captured_message.dart';
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
@@ -15,9 +16,10 @@ import '../../core/privacy/consent_authority.dart';
 import '../consent/smart_analysis_consent_sheet.dart';
 import '../settings/settings_providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shadows.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
-import '../../core/theme/widgets/calm_chip.dart';
 import '../../core/theme/widgets/calm_page_header.dart';
 import '../../core/theme/widgets/glass_selector.dart';
 import '../../core/theme/widgets/mali_card.dart';
@@ -26,7 +28,6 @@ import '../../core/utils/app_lucide_icons.dart';
 import '../../core/utils/category_glyph.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/formatters.dart';
-import '../../domain/entities/account_entity.dart';
 import '../../domain/entities/bill_entity.dart';
 import '../../domain/finance/bill_metrics.dart';
 import '../../domain/finance/money.dart' show Money;
@@ -35,13 +36,13 @@ import '../../domain/entities/transaction_entity.dart';
 import '../cards/brand_mark.dart';
 import '../common/app_avatar.dart';
 import '../common/premium_loading.dart';
+import '../common/motion.dart';
 import '../common/transaction_direction.dart';
 import '../common/app_pill_tab_bar.dart';
 import '../common/app_empty_state.dart';
 import '../common/app_transaction_row.dart';
 import '../common/app_sheet_scaffold.dart';
 import '../common/category_catalog.dart';
-import '../subscriptions/bill_details_sheet.dart';
 import '../subscriptions/bill_form_sheet.dart';
 import '../dashboard/dashboard_providers.dart';
 import '../../domain/entities/suspected_duplicate_entity.dart';
@@ -53,6 +54,13 @@ import 'manual_transaction_sheet.dart';
 import 'transaction_details_screen.dart';
 import 'transactions_providers.dart';
 import 'widgets/change_category_sheet.dart';
+import 'widgets/account_scope_sheet.dart';
+import 'widgets/activity_chip.dart';
+import '../common/qirsh_summary_card.dart';
+import '../subscriptions/subscriptions_providers.dart'
+    show billsScopeAccountProvider;
+import '../subscriptions/widgets/bills_overview.dart';
+import 'package:flutter/rendering.dart';
 import '../../core/theme/widgets/directional_chevron.dart';
 import '../../core/theme/widgets/glass_sheet.dart';
 import '../../core/theme/widgets/glass_dialog.dart';
@@ -67,16 +75,19 @@ class TransactionsScreen extends ConsumerStatefulWidget {
 }
 
 class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
-  BillType _billType = BillType.subscription;
+  /// v2 header icons: search reveals (and focuses) the existing search field;
+  /// the filter chip (end of the chips row) reveals the existing account /
+  /// date-range selectors.
+  bool _searchOpen = false;
+  bool _filtersOpen = false;
 
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(transactionsListProvider);
+    final searchQuery = ref.watch(transactionSearchQueryProvider);
     final billsAsync = ref.watch(billsViewProvider);
     final tab = ref.watch(transactionsPageTabProvider);
     final pendingOnly = ref.watch(transactionsPendingFilterProvider);
-    final currencyLabel = Currency.label(
-        context, ref.watch(baseCurrencyProvider).valueOrNull ?? 'SAR');
     // MALI-047n: canonical period expense over the full dataset (not a fold of
     // loaded pages), single-currency for the active-account scope.
     final periodTotal = ref.watch(transactionsPeriodTotalProvider).valueOrNull;
@@ -108,7 +119,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
             final title = tx.rawMerchant ??
                 category?.name ??
                 context.l10n.txnTransactionWord;
-            return AppTransactionRow(
+            final row = AppTransactionRow(
               title: title,
               amount: tx.amount,
               amountMoney: tx.amountMoney,
@@ -116,7 +127,8 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
               subtitle:
                   '${Formatters.time(tx.occurredAt, context)} · ${category?.name ?? context.l10n.homeUncategorised}',
               categoryIconName: category?.iconName,
-              categoryColor: category?.color,
+              categoryColor:
+                  category?.accent(Theme.of(context).brightness),
               brandLogoUrl: BrandMark.logoFor(title, logos),
               isPending: tx.status == TransactionStatus.pending,
               awaitingPrice:
@@ -126,91 +138,164 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
               horizontalPadding: 14,
               onTap: () => TransactionDetailsScreen.showSheet(context, tx.id),
             );
+            // v2 row swipe (trailing → leading) reveals «تغيير التصنيف» and
+            // opens the SAME category sheet the detail screen uses; the row
+            // snaps back. Delete is not offered here — its handler (with the
+            // bill-payment cleanup) lives inside the detail screen only.
+            return Dismissible(
+              key: ValueKey('txn-swipe-${tx.id}'),
+              direction: DismissDirection.endToStart,
+              dismissThresholds: const {DismissDirection.endToStart: 0.3},
+              background: ColoredBox(
+                color: context.colors.cta,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.s4),
+                  child: Align(
+                    alignment: AlignmentDirectional.centerEnd,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(AppLucideIcons.shapes,
+                            size: 18, color: context.colors.onCta),
+                        const SizedBox(width: AppSpacing.s2),
+                        Text(context.l10n.txnChangeCategory,
+                            style: AppTypography.subhead(
+                                context.colors.onCta)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              confirmDismiss: (_) async {
+                HapticFeedback.lightImpact();
+                await showChangeCategorySheet(context, tx, view.catalog);
+                return false;
+              },
+              child: row,
+            );
           }
 
-          return QirshSectionBackdrop(
-              child: SafeArea(
-                  // Keep the pinned tabs below the status bar.
-                  bottom: false,
-                  child: NestedScrollView(
-                    headerSliverBuilder: (context, innerBoxIsScrolled) {
-                      return [
-                        SliverToBoxAdapter(
+          // v2: search and the account/date filters stay out of the first
+          // screenful until asked for. An active query keeps the field open.
+          final searchField = AnimatedSize(
+            duration: AppMotion.base,
+            curve: AppMotion.easeInOut,
+            alignment: AlignmentDirectional.topStart,
+            child: _searchOpen || searchQuery.isNotEmpty
+                ? Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+                    child: TransactionSearchField(autofocus: _searchOpen),
+                  )
+                : const SizedBox(width: double.infinity),
+          );
+          // Revealed by the filter chip, directly under the chips row.
+          final filterPanel = AnimatedSize(
+            duration: AppMotion.base,
+            curve: AppMotion.easeInOut,
+            alignment: AlignmentDirectional.topStart,
+            child: !_filtersOpen
+                ? const SizedBox(width: double.infinity)
+                : Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.s2),
+                    child: !pendingOnly
+                        ? Row(children: [
+                            const Expanded(
+                                child: _ActiveAccountPicker(onBlue: false)),
+                            const SizedBox(width: AppSpacing.s2),
+                            Expanded(
+                                child: _DateRangeChips(
+                                    range: view.range, onBlue: false)),
+                          ])
+                        : const _ActiveAccountPicker(onBlue: false),
+                  ),
+          );
+
+          final bills = billsAsync.valueOrNull;
+          final header = _TransactionsHeader(
+            subtitle: tab == 0
+                ? '${view.range.labelIn(Localizations.localeOf(context).languageCode)} ${context.l10n.txnCountSuffix(view.transactions.length.toString())}${view.hasMore ? "+" : ""}'
+                : bills == null
+                    ? null
+                    : context.l10n.billsV3Counts(
+                        bills.subscriptionsCount, bills.installmentsCount),
+            // The ONE Transactions | Bills control, on the photo for both tabs.
+            tabs: AppPillTabBar(
+              onPhoto: true,
+              tabs: [
+                context.l10n.txnTabTransactions,
+                context.l10n.txnTabBills,
+              ],
+              selectedIndex: tab,
+              onSelected: (value) {
+                if (tab == value) return;
+                ref.read(transactionsPageTabProvider.notifier).state = value;
+              },
+            ),
+            onSearch: () {
+              HapticFeedback.selectionClick();
+              if (tab != 0) {
+                // Search lives on the activity list: go there and open it.
+                ref.read(transactionsPageTabProvider.notifier).state = 0;
+                setState(() => _searchOpen = true);
+                return;
+              }
+              if (_searchOpen) FocusManager.instance.primaryFocus?.unfocus();
+              setState(() => _searchOpen = !_searchOpen);
+            },
+            onAdd: () {
+              if (tab == 0) {
+                showCaptureEntrySheet(context);
+              } else {
+                BillFormSheet.show(context);
+              }
+            },
+          );
+
+          // Immersive top edge: the scroll view fills from y = 0 and the
+          // section photo runs under the status bar on BOTH tabs. On the
+          // activity list a transparent pinned band of the status-bar height
+          // leads the headers so the pinned chips dock right under the clock,
+          // while rows pass beneath both (the glass is QirshSectionBackdrop +
+          // the chips). The photo hero is pulled up under that band, so at
+          // rest the page looks exactly like the Bills tab.
+          final statusTop = tab == 0 ? MediaQuery.paddingOf(context).top : 0.0;
+
+          final scrollView = NestedScrollView(
+            headerSliverBuilder: (context, innerBoxIsScrolled) {
+              return [
+                if (statusTop > 0)
+                  PinnedHeaderSliver(child: SizedBox(height: statusTop)),
+                SliverToBoxAdapter(
+                  child: PremiumMotion(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _PullUnder(by: statusTop, child: header),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.gutter,
+                          ),
                           child: Column(
                             children: [
-                              _TransactionsHeader(
-                                tab: tab,
-                                rangeLabel: view.range.labelIn(
-                                    Localizations.localeOf(context)
-                                        .languageCode),
-                                hasMoreTransactions: view.hasMore,
-                                transactionsCount: view.transactions.length,
-                                pendingCount: view.pendingCount,
-                                controls: Column(
-                                  children: [
-                                    AppPillTabBar(
-                                      onPhoto: true,
-                                      tabs: [
-                                        context.l10n.txnTabTransactions,
-                                        context.l10n.txnTabBills,
+                                      if (tab == 0) ...[
+                                        searchField,
+                                        _TransactionsSummary(
+                                          total: periodTotal,
+                                          privacyMode: privacyMode,
+                                          periodLabel: view.range.labelIn(
+                                              Localizations.localeOf(context)
+                                                  .languageCode),
+                                          thisMonth: view.range.preset ==
+                                              TransactionsDatePreset.thisMonth,
+                                          onPeriodTap: () {
+                                            HapticFeedback.selectionClick();
+                                            _DateRangeChips.open(
+                                                context, ref, view.range);
+                                          },
+                                        ),
+                                        const SizedBox(height: AppSpacing.s3),
                                       ],
-                                      selectedIndex: tab,
-                                      onSelected: (value) {
-                                        if (tab == value) return;
-                                        setState(() => _billType = BillType.subscription);
-                                        ref.read(transactionsPageTabProvider.notifier).state = value;
-                                      },
-                                    ),
-                                    const SizedBox(height: AppSpacing.s2),
-                                    if (tab == 0) ...[
-                                      const TransactionSearchField(onPhoto: true),
-                                      const SizedBox(height: AppSpacing.s2),
-                                    ],
-                                    if (tab == 0 && !pendingOnly)
-                                      Row(children: [
-                                        const Expanded(child: _ActiveAccountPicker()),
-                                        const SizedBox(width: AppSpacing.s2),
-                                        Expanded(child: _DateRangeChips(range: view.range)),
-                                      ])
-                                    else
-                                      const _ActiveAccountPicker(),
-                                    if (tab != 0) ...[
-                                      const SizedBox(height: AppSpacing.s2),
-                                      AppPillTabBar(
-                                        onPhoto: true,
-                                        tabs: [context.l10n.txnBillsSubs, context.l10n.txnBillsInstalments],
-                                        selectedIndex: _billType == BillType.subscription ? 0 : 1,
-                                        onSelected: (index) => setState(() {
-                                          _billType = index == 0 ? BillType.subscription : BillType.installment;
-                                        }),
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                                onAdd: () {
-                                  if (tab == 0) {
-                                    showCaptureEntrySheet(context);
-                                  } else {
-                                    BillFormSheet.show(context);
-                                  }
-                                },
-                              ),
-                              if (tab == 0) ...[
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: AppSpacing.gutter),
-                                  child: _TransactionFlowTotals(
-                                      total: periodTotal,
-                                      privacyMode: privacyMode),
-                                ),
-                                const SizedBox(height: AppSpacing.s3),
-                              ],
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: AppSpacing.gutter,
-                                ),
-                                child: Column(
-                                  children: [
                                       if (tab == 0) ...[
                                         const _SuspectedDuplicatesBanner(),
                                         const _SmartInboxBanner(),
@@ -225,13 +310,12 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                                         horizontal: 12,
                                                         vertical: 8),
                                                 decoration: BoxDecoration(
-                                                  color: context.colors.accent
-                                                      .withValues(alpha: 0.12),
+                                                  color: context.colors.warningBg,
                                                   borderRadius:
                                                       BorderRadius.circular(20),
                                                   border: Border.all(
                                                       color: context
-                                                          .colors.accent
+                                                          .colors.warning
                                                           .withValues(
                                                               alpha: 0.30)),
                                                 ),
@@ -244,7 +328,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                                             .alertTriangle,
                                                         size: 14,
                                                         color: context
-                                                            .colors.accent),
+                                                            .colors.warningText),
                                                     const SizedBox(width: 6),
                                                     Text(
                                                         context.l10n
@@ -252,7 +336,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                                         style: AppTypography
                                                                 .caption(context
                                                                     .colors
-                                                                    .accent)
+                                                                    .warningText)
                                                             .copyWith(
                                                                 fontWeight:
                                                                     FontWeight
@@ -268,7 +352,7 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                                           AppLucideIcons.x,
                                                           size: 14,
                                                           color: context
-                                                              .colors.accent),
+                                                              .colors.warningText),
                                                     ),
                                                   ],
                                                 ),
@@ -303,47 +387,84 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                           const SizedBox(height: AppSpacing.s3),
                                         ],
                                       ],
-                                  ],
-                                ),
-                              ),
                             ],
                           ),
                         ),
-                      ];
-                    },
-                    body: MeltTail(
-                      startAt: 64,
-                      child: tab == 0
-                          ? NotificationListener<ScrollNotification>(
-                              onNotification: (notification) {
-                                if (notification.metrics.extentAfter < 900 &&
-                                    view.hasMore &&
-                                    !view.isLoadingMore) {
-                                  ref
-                                      .read(transactionsListProvider.notifier)
-                                      .loadMore();
-                                }
-                                return false;
-                              },
-                              child: ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(
-                                  AppSpacing.gutter,
-                                  AppSpacing.s3,
-                                  AppSpacing.gutter,
-                                  120,
-                                ),
-                                itemCount: 2 +
-                                    (view.transactions.isEmpty
-                                        ? 1
-                                        : sections.length) +
-                                    (view.isLoadingMore ? 1 : 0),
-                                itemBuilder: (context, index) {
-                                  if (index == 0) return const _FilterBar();
-                                  if (index == 1) {
-                                    return const SizedBox(
-                                        height: AppSpacing.s2);
-                                  }
-                                  final itemIndex = index - 2;
+                      ],
+                    ),
+                  ),
+                ),
+                // v2 sticky filter row: pins under the status bar and turns to
+                // glass once content scrolls beneath it.
+                if (tab == 0)
+                  SliverOverlapAbsorber(
+                    handle:
+                        NestedScrollView.sliverOverlapAbsorberHandleFor(context),
+                    sliver: SliverPersistentHeader(
+                      pinned: true,
+                      delegate: _PinnedFilterBarDelegate(
+                        filtersOpen: _filtersOpen,
+                        onFilter: () =>
+                            setState(() => _filtersOpen = !_filtersOpen),
+                      ),
+                    ),
+                  ),
+              ];
+            },
+            // The header keeps the device inset (the photo pads below the
+            // clock); the body lists consume none of it, as before.
+            body: MediaQuery.removePadding(
+              context: context,
+              removeTop: true,
+              child: MeltTail(
+              startAt: 64,
+              child: tab == 0
+                  ? NotificationListener<ScrollNotification>(
+                      onNotification: (notification) {
+                        if (notification.metrics.extentAfter < 900 &&
+                            view.hasMore &&
+                            !view.isLoadingMore) {
+                          ref
+                              .read(transactionsListProvider.notifier)
+                              .loadMore();
+                        }
+                        return false;
+                      },
+                      child: Builder(
+                        builder: (context) => CustomScrollView(
+                          slivers: [
+                            SliverOverlapInjector(
+                              handle: NestedScrollView
+                                  .sliverOverlapAbsorberHandleFor(context),
+                            ),
+                            if (statusTop > 0)
+                              _StatusBandCatchUp(
+                                // This Builder sits inside the OUTER
+                                // scrollable, so this is the header's offset.
+                                outer: Scrollable.maybeOf(context)?.position,
+                                statusTop: statusTop,
+                              ),
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.gutter),
+                                child: filterPanel,
+                              ),
+                            ),
+                            SliverPadding(
+                              padding: const EdgeInsets.fromLTRB(
+                                AppSpacing.gutter,
+                                AppSpacing.s2,
+                                AppSpacing.gutter,
+                                120,
+                              ),
+                              sliver: SliverList(
+                                delegate: SliverChildBuilderDelegate(
+                                  childCount: view.transactions.isEmpty
+                                      ? 1
+                                      : sections.length + 1,
+                                  (context, index) {
+                                  final itemIndex = index;
                                   if (view.transactions.isEmpty) {
                                     // EMPTY STATE — the message first, the banner
                                     // after it. A placement may not depend on the
@@ -370,6 +491,15 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                           subtitle: pendingOnly
                                               ? context.l10n.txnPendingEmptyBody
                                               : context.l10n.txnEmptyPeriodBody,
+                                          // v2 QEmptyState: one useful action
+                                          // — the same add entry as the «+».
+                                          primaryLabel: pendingOnly
+                                              ? null
+                                              : context.l10n.cesTitle,
+                                          onPrimary: pendingOnly
+                                              ? null
+                                              : () => showCaptureEntrySheet(
+                                                  context),
                                         ),
                                         if (!pendingOnly) ...[
                                           const SizedBox(height: AppSpacing.s4),
@@ -380,6 +510,25 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                         ],
                                       ],
                                     );
+                                  }
+                                  if (itemIndex == sections.length &&
+                                      !view.isLoadingMore) {
+                                    // v2 end-of-list marker; while more pages
+                                    // exist it would be a lie, so it waits.
+                                    // (The loading row below takes this slot
+                                    // while a page is in flight.)
+                                    return view.hasMore
+                                        ? const SizedBox.shrink()
+                                        : Padding(
+                                            padding: const EdgeInsets.only(
+                                                top: AppSpacing.s2),
+                                            child: Text(
+                                              context.l10n.txnV2EndOfList,
+                                              textAlign: TextAlign.center,
+                                              style: AppTypography.caption(
+                                                  context.colors.textMuted),
+                                            ),
+                                          );
                                   }
                                   if (itemIndex >= sections.length) {
                                     return const Padding(
@@ -400,8 +549,11 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                         _DateHeader(
                                           label: Formatters.dateGroupLabel(
                                               section.day, context),
+                                          transactions: section.transactions,
+                                          privacyMode: privacyMode,
                                         ),
-                                        const SizedBox(height: AppSpacing.s2),
+                                        // v2: one Group card per day, rows
+                                        // inside it (never a card per row).
                                         MaliCard(
                                           style: MaliSurfaceStyle.floating,
                                           padding: const EdgeInsets.symmetric(
@@ -448,10 +600,15 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                       ],
                                     ),
                                   );
-                                },
+                                  },
+                                ),
                               ),
-                            )
-                          : ListView(
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : ListView(
                               padding: const EdgeInsets.fromLTRB(
                                 AppSpacing.gutter,
                                 AppSpacing.s3,
@@ -468,25 +625,72 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                   ),
                                   error: (error, _) =>
                                       Text(context.l10n.txnError),
-                                  data: (bills) => _BillsTab(
-                                    type: _billType,
-                                    view: bills,
-                                    currencyLabel: currencyLabel,
-                                    // F-027 — the display currency must come from
-                                    // the user's base currency, never from
-                                    // `bills.first`, which made the total depend on
-                                    // list ORDER and silently dropped every bill in
-                                    // another currency.
-                                    baseCurrency: ref
+                                  data: (bills) {
+                                    // F-027 — the display currency must come
+                                    // from the user's base currency, never
+                                    // from `bills.first`, which made the total
+                                    // depend on list ORDER and silently
+                                    // dropped every bill in another currency.
+                                    final baseCurrency = ref
                                             .watch(baseCurrencyProvider)
                                             .valueOrNull ??
-                                        'SAR',
-                                  ),
+                                        'SAR';
+                                    final scopeAccountName = ref
+                                        .watch(billsScopeAccountProvider)
+                                        .valueOrNull
+                                        ?.name;
+                                    // Active instalments only: the metric
+                                    // applies no filter of its own.
+                                    final instalmentsMonthly =
+                                        monthlyEquivalentsTotalMoney(
+                                      bills.bills.where((b) =>
+                                          b.type == BillType.installment &&
+                                          b.status == BillStatus.active),
+                                      baseCurrency,
+                                    );
+                                    return BillsOverview(
+                                      bills: bills.bills,
+                                      instalmentsMonthly: instalmentsMonthly,
+                                      subscriptionsExtraStat: instalmentsMonthly
+                                                  .minorUnits >
+                                              0
+                                          ? QirshSummaryStat(
+                                              value: Text(
+                                                  '${formatMoney(instalmentsMonthly)} ${Currency.label(context, baseCurrency)}',
+                                                  maxLines: 1),
+                                              label: context
+                                                  .l10n.subsMonthlyInstCommit,
+                                            )
+                                          : null,
+                                      suggestions: bills.suggestions,
+                                      baseCurrency: baseCurrency,
+                                      subscriptionsMonthly:
+                                          subscriptionMonthlyTotalMoney(
+                                              bills.bills, baseCurrency),
+                                      subscriptionsLabel: scopeAccountName ==
+                                              null
+                                          ? context.l10n.subsMonthlyTotal
+                                          : context.l10n.subsMonthlyScoped(
+                                              scopeAccountName),
+                                    );
+                                  },
                                 ),
                               ],
                             ),
-                    ),
-                  )));
+            ),
+            ),
+          );
+
+          // Both tabs share the section photo and its status band, so
+          // switching Transactions ↔ Bills never changes the page's look.
+          return QirshSectionBackdrop(
+            child: SafeArea(
+              // Immersive: the photo runs under the status bar.
+              top: false,
+              bottom: false,
+              child: scrollView,
+            ),
+          );
         },
       ),
     );
@@ -530,7 +734,11 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
 }
 
 class _ActiveAccountPicker extends ConsumerWidget {
-  const _ActiveAccountPicker();
+  const _ActiveAccountPicker({this.onBlue = true});
+
+  /// White-on-photo for the bills section hero; canvas tone on the v2
+  /// activity page.
+  final bool onBlue;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -548,88 +756,27 @@ class _ActiveAccountPicker extends ConsumerWidget {
           orElse: () => defaultAccount,
         );
         return GlassSelector(
-          onBlue: true,
+          onBlue: onBlue,
           icon: AppLucideIcons.walletCards,
           label:
               '${account.name} · ${Currency.label(context, account.currency)}',
-          onTap: () => _showAccountSheet(context, ref, account.id),
+          onTap: () => showAccountScopeSheet(context, ref, account.id),
         );
       },
       orElse: () => const SizedBox.shrink(),
     );
   }
-
-  Future<void> _showAccountSheet(
-    BuildContext context,
-    WidgetRef ref,
-    String currentId,
-  ) {
-    final c = context.colors;
-    final container = ProviderScope.containerOf(context, listen: false);
-    final accounts =
-        ref.read(accountsProvider).valueOrNull ?? <AccountEntity>[];
-    return showGlassSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => navySheetTheme(Directionality(
-        textDirection: Directionality.of(context),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.gutter,
-            0,
-            AppSpacing.gutter,
-            AppSpacing.gutter,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Align(
-                alignment: AlignmentDirectional.centerStart,
-                child: Text(
-                  context.l10n.txnPickAccount,
-                  style: AppTypography.sectionTitle(c.textPrimary),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.s3),
-              for (final account in accounts)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    AppLucideIcons.walletCards,
-                    color: account.id == currentId ? c.cta : c.textMuted,
-                  ),
-                  title: Text(account.name),
-                  subtitle: Text(Currency.label(context, account.currency)),
-                  trailing: account.id == currentId
-                      ? Icon(AppLucideIcons.checkCircle, color: c.cta)
-                      : null,
-                  onTap: () async {
-                    HapticFeedback.selectionClick();
-                    Navigator.of(context).pop();
-                    // F-020: viewing an account is UI/filter state only — it
-                    // must NOT call setDefault() (persistent preference +
-                    // server command). The explicit make-default action lives
-                    // in the account form sheet.
-                    container.read(activeAccountIdProvider.notifier).state =
-                        account.id;
-                    container.invalidate(accountsProvider);
-                    container.invalidate(baseCurrencyProvider);
-                    container.invalidate(transactionsListProvider);
-                    container.invalidate(billsViewProvider);
-                  },
-                ),
-            ],
-          ),
-        ),
-      )),
-    );
-  }
 }
 
 class TransactionSearchField extends ConsumerStatefulWidget {
-  const TransactionSearchField({super.key, this.onPhoto = false});
+  const TransactionSearchField(
+      {super.key, this.onPhoto = false, this.autofocus = false});
 
   final bool onPhoto;
+
+  /// Focus on insert — the header's search icon reveals the field and the
+  /// keyboard rises with it.
+  final bool autofocus;
 
   @override
   ConsumerState<TransactionSearchField> createState() =>
@@ -689,10 +836,14 @@ class TransactionSearchFieldState
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final query = ref.watch(transactionSearchQueryProvider);
-    return TextField(
+    // v2 field on canvas: dark = Inset well; light = white + 1px stroke.soft
+    // + e1 (the old canvas-coloured field was invisible in light, L2).
+    final field = TextField(
       controller: _controller,
       focusNode: _focusNode,
+      autofocus: widget.autofocus,
       textInputAction: TextInputAction.search,
       onChanged: _onQueryChanged,
       decoration: InputDecoration(
@@ -720,30 +871,50 @@ class TransactionSearchFieldState
                 icon: const Icon(AppLucideIcons.x),
               ),
         filled: true,
-        fillColor:
-            widget.onPhoto ? c.surface : c.surface2.withValues(alpha: 0.45),
+        fillColor: widget.onPhoto
+            ? c.surface
+            : isDark
+                ? c.surfaceMuted
+                : c.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.pill),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(AppRadius.pill),
-          borderSide: BorderSide(color: c.border.withValues(alpha: 0.4)),
+          borderSide: BorderSide(
+              color: widget.onPhoto
+                  ? c.border.withValues(alpha: 0.4)
+                  : c.strokeSoft),
         ),
       ),
+    );
+    if (widget.onPhoto || isDark) return field;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        boxShadow: AppShadows.e1,
+      ),
+      child: field,
     );
   }
 }
 
 class _DateRangeChips extends ConsumerWidget {
-  const _DateRangeChips({required this.range});
+  const _DateRangeChips({required this.range, this.onBlue = true});
 
   final TransactionsDateRange range;
+  final bool onBlue;
+
+  /// Opens the same period picker (the summary card's scope chip uses it).
+  static Future<void> open(BuildContext context, WidgetRef ref,
+          TransactionsDateRange range) =>
+      _DateRangeChips(range: range)._showRangeSheet(context, ref, range);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GlassSelector(
-          onBlue: true,
+      onBlue: onBlue,
       icon: AppLucideIcons.calendarDays,
       label: range.labelIn(Localizations.localeOf(context).languageCode),
       onTap: () {
@@ -898,21 +1069,51 @@ class _DateRangeChips extends ConsumerWidget {
 }
 
 class _FilterBar extends StatelessWidget {
-  const _FilterBar();
+  const _FilterBar({required this.filtersOpen, required this.onFilter});
+
+  final bool filtersOpen;
+  final VoidCallback onFilter;
 
   @override
   Widget build(BuildContext context) {
-    return const SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none,
-      child: Row(
-        children: [
-          _KindFilterChips(),
-          SizedBox(width: 8),
-          _PendingFilterChip(),
-          SizedBox(width: 8),
-          _CategoryFilterButton(),
-        ],
+    // v2: horizontally scrollable with a 24pt fade on the trailing edge
+    // instead of a hard clip of the last chip.
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    return ShaderMask(
+      blendMode: BlendMode.dstIn,
+      shaderCallback: (rect) {
+        final fade = rect.width <= 0 ? 0.0 : (24 / rect.width).clamp(0.0, 1.0);
+        return LinearGradient(
+          begin: rtl ? Alignment.centerLeft : Alignment.centerRight,
+          end: rtl ? Alignment.centerRight : Alignment.centerLeft,
+          colors: const [Color(0x00000000), Color(0xFF000000)],
+          stops: [0, fade],
+        ).createShader(rect);
+      },
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+        child: Row(
+          children: [
+            const _KindFilterChips(),
+            const _PendingFilterChip(),
+            const SizedBox(width: 8),
+            const _CategoryFilterButton(),
+            const SizedBox(width: 8),
+            // The account / date filters (was the header's filter icon).
+            ActivityChip(
+              label: '',
+              semanticLabel: context.l10n.txnV2Filters,
+              selected: filtersOpen,
+              onTap: onFilter,
+              leading: Icon(AppLucideIcons.filter,
+                  size: 16,
+                  color: filtersOpen
+                      ? context.colors.actionText
+                      : context.colors.textSecondary),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -936,7 +1137,7 @@ class _KindFilterChips extends ConsumerWidget {
         for (final entry in items.entries)
           Padding(
             padding: const EdgeInsetsDirectional.only(end: 8),
-            child: CalmChip(
+            child: ActivityChip(
               label: entry.value,
               selected: filter == entry.key,
               onTap: () => ref
@@ -969,9 +1170,14 @@ class _PendingFilterChip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final active = ref.watch(transactionsPendingFilterProvider);
-    return CalmChip(
+    // v2: the review count rides on the chip (it used to sit in the header
+    // subtitle).
+    final pending =
+        ref.watch(transactionsListProvider).valueOrNull?.pendingCount ?? 0;
+    return ActivityChip(
       label: context.l10n.txnPendingReview,
       selected: active,
+      badge: pending,
       onTap: () =>
           ref.read(transactionsPendingFilterProvider.notifier).state = !active,
     );
@@ -991,40 +1197,21 @@ class _CategoryFilterButton extends ConsumerWidget {
     final selected = catalog?.byId(selectedId);
     final active = selectedId != null;
 
-    return Material(
-      color: active ? c.cta : c.surfaceElevated,
-      borderRadius: BorderRadius.circular(AppRadius.pill),
-      child: InkWell(
-        onTap: () => _showCategoryFilterSheet(context, ref),
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CategoryGlyph(
-                  name: selected?.iconName ?? 'shapes',
-                  size: 15,
-                  color: active ? c.onCta : c.textSecondary),
-              const SizedBox(width: 6),
-              Text(
-                selected?.name ?? context.l10n.txnCategory,
-                style: AppTypography.caption(active ? c.onCta : c.textSecondary)
-                    .copyWith(fontWeight: FontWeight.bold),
-              ),
-              if (active) ...[
-                const SizedBox(width: 4),
-                GestureDetector(
-                  onTap: () => ref
-                      .read(transactionCategoryFilterProvider.notifier)
-                      .state = null,
-                  child: Icon(AppLucideIcons.x, size: 14, color: c.onCta),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
+    final fg = active ? c.actionText : c.textSecondary;
+    return ActivityChip(
+      label: selected?.name ?? context.l10n.txnCategory,
+      selected: active,
+      onTap: () => _showCategoryFilterSheet(context, ref),
+      leading: CategoryGlyph(
+          name: selected?.iconName ?? 'shapes', size: 15, color: fg),
+      trailing: active
+          ? GestureDetector(
+              onTap: () => ref
+                  .read(transactionCategoryFilterProvider.notifier)
+                  .state = null,
+              child: Icon(AppLucideIcons.x, size: 14, color: fg),
+            )
+          : null,
     );
   }
 
@@ -1151,748 +1338,66 @@ class _CategoryFilterRow extends StatelessWidget {
   }
 }
 
-class _BillsTab extends StatelessWidget {
-  const _BillsTab({
-    required this.type,
-    required this.view,
-    required this.currencyLabel,
-    required this.baseCurrency,
-  });
-
-  final BillType type;
-  final BillsView view;
-  final String currencyLabel;
-  final String baseCurrency;
-
-  @override
-  Widget build(BuildContext context) {
-    final bills = view.bills
-        .where((bill) => bill.type == type)
-        .toList(growable: false)
-      ..sort((a, b) {
-        final active = (a.status == BillStatus.active ? 0 : 1)
-            .compareTo(b.status == BillStatus.active ? 0 : 1);
-        if (active != 0) return active;
-        final due = a.nextDueDate.compareTo(b.nextDueDate);
-        return due != 0 ? due : a.id.compareTo(b.id);
-      });
-    final activeCount = bills.where((bill) => bill.isConfirmed).length;
-    // F-027 — this used `monthlyEquivalentsTotalMoney`, which applies NO status
-    // filter, so a paused subscription was still billed into the total here
-    // while the Subscriptions screen (using `subscriptionMonthlyTotalMoney`)
-    // correctly excluded it. Two surfaces, one label, different numbers.
-    //
-    // It also derived the target currency from `bills.first`, so the total
-    // depended on list ORDER and every bill in a different currency was silently
-    // dropped from it — with no indication to the user. The base currency is now
-    // passed in explicitly.
-    final monthlyTotal = type == BillType.subscription
-        ? subscriptionMonthlyTotalMoney(bills, baseCurrency)
-        : monthlyEquivalentsTotalMoney(
-            bills.where((b) => b.status == BillStatus.active),
-            baseCurrency,
-          );
-    final nextThisWeek = bills.where((bill) {
-      final now = DateTime.now();
-      final weekEnd = now.add(const Duration(days: 7));
-      return !bill.nextDueDate.isBefore(now) &&
-          bill.nextDueDate.isBefore(weekEnd);
-    }).length;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _BillsHero(
-          type: type,
-          monthlyTotal: monthlyTotal,
-          activeCount: activeCount,
-          nextThisWeek: nextThisWeek,
-          currencyLabel: currencyLabel,
-        ),
-        const SizedBox(height: AppSpacing.s4),
-        if (bills.isEmpty)
-          AppEmptyState(
-            illustration:
-                const QirshIllustration(name: 'bills', width: 210, height: 158),
-            icon: type == BillType.subscription
-                ? AppLucideIcons.repeat
-                : AppLucideIcons.receipt,
-            title: type == BillType.subscription
-                ? context.l10n.txnSubsEmptyTitle
-                : context.l10n.txnInstEmptyTitle,
-            subtitle: type == BillType.subscription
-                ? context.l10n.txnSubsEmptyBody
-                : context.l10n.txnInstEmptyBody,
-            primaryLabel: type == BillType.subscription
-                ? context.l10n.txnAddSub
-                : context.l10n.txnAddInstalment,
-            onPrimary: () => BillFormSheet.show(
-              context,
-              initialType: type,
-            ),
-          )
-        else
-          for (final bill in bills) ...[
-            _BillCard(bill: bill),
-            const SizedBox(height: AppSpacing.s3),
-          ],
-        TextButton.icon(
-          onPressed: () => _showBillsHelp(context, type),
-          icon: const Icon(AppLucideIcons.helpCircle, size: 18),
-          label: Text(context.l10n.txnLearnBills),
-        ),
-        const SizedBox(height: AppSpacing.s3),
-        if (type == BillType.subscription &&
-            view.suggestions.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.s4),
-          _DateHeader(label: context.l10n.txnSuggestionsTitle),
-          for (final suggestion in view.suggestions.take(3)) ...[
-            _SuggestionCard(
-              suggestion: suggestion,
-              currencyLabel: currencyLabel,
-              onAdd: () => BillFormSheet.show(
-                context,
-                initialType: BillType.subscription,
-                initialName: suggestion.name,
-              ),
-            ),
-            const SizedBox(height: AppSpacing.s3),
-          ],
-        ],
-      ],
-    );
-  }
-
-  void _showBillsHelp(BuildContext context, BillType type) {
-    final c = context.colors;
-    showGlassSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (context) => navySheetTheme(Directionality(
-        textDirection: Directionality.of(context),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.gutter),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                type == BillType.subscription
-                    ? context.l10n.txnHowSubsTitle
-                    : context.l10n.txnHowInstTitle,
-                style: AppTypography.cardTitle(c.textMain),
-              ),
-              const SizedBox(height: AppSpacing.s3),
-              Text(
-                type == BillType.subscription
-                    ? context.l10n.txnHowSubsBody
-                    : context.l10n.txnHowInstBody,
-                style: AppTypography.callout(c.textLight),
-              ),
-              const SizedBox(height: AppSpacing.s4),
-            ],
-          ),
-        ),
-      )),
-    );
-  }
-}
-
-class _BillsHero extends StatelessWidget {
-  const _BillsHero({
-    required this.type,
-    required this.monthlyTotal,
-    required this.activeCount,
-    required this.nextThisWeek,
-    required this.currencyLabel,
-  });
-
-  final BillType type;
-  final Money monthlyTotal;
-  final int activeCount;
-  final int nextThisWeek;
-  final String currencyLabel;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final isSubscription = type == BillType.subscription;
-    return MaliCard(
-      style: MaliSurfaceStyle.raised,
-      radius: AppRadius.card,
-      padding: const EdgeInsets.all(AppSpacing.s4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  isSubscription
-                      ? context.l10n.txnTotalMonthlySubs
-                      : context.l10n.txnTotalMonthlyInst,
-                  style: AppTypography.caption(c.textSecondary),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.s2),
-              Icon(
-                isSubscription ? AppLucideIcons.repeat : AppLucideIcons.receipt,
-                color: c.textSecondary,
-                size: 18,
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${formatMoney(monthlyTotal)} $currencyLabel',
-            style: AppTypography.title1(c.textPrimary)
-                .copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: AppSpacing.s4),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.s3, vertical: 8),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppRadius.card),
-              color: c.bg,
-            ),
-            child: LayoutBuilder(builder: (context, constraints) {
-              final number = TextPainter(
-                text: TextSpan(
-                    text: '${formatMoney(monthlyTotal * 12)} $currencyLabel',
-                    style: AppTypography.bodyStrong(c.textPrimary)),
-                textDirection: Directionality.of(context),
-                textScaler: MediaQuery.textScalerOf(context),
-              )..layout();
-              final cells = isSubscription ? 3 : 2;
-              final needsWrap =
-                  number.width > (constraints.maxWidth - (cells - 1)) / cells;
-              number.dispose();
-              if (needsWrap) {
-                return Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  spacing: AppSpacing.s4,
-                  runSpacing: AppSpacing.s3,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    _HeroMetric(
-                        value: '$activeCount', label: context.l10n.txnActive),
-                    _HeroMetric(
-                        value:
-                            '${formatMoney(monthlyTotal * 12)} $currencyLabel',
-                        label: context.l10n.txnPerYear),
-                    if (isSubscription)
-                      _HeroMetric(
-                          value: '$nextThisWeek',
-                          label: context.l10n.txnRangeThisWeek),
-                  ],
-                );
-              }
-              return Row(
-                children: [
-                  Expanded(
-                    child: _HeroMetric(
-                        value: '$activeCount', label: context.l10n.txnActive),
-                  ),
-                  _Divider(color: c.divider),
-                  Expanded(
-                    child: _HeroMetric(
-                      value: '${formatMoney(monthlyTotal * 12)} $currencyLabel',
-                      label: context.l10n.txnPerYear,
-                    ),
-                  ),
-                  if (isSubscription) ...[
-                    _Divider(color: c.divider),
-                    Expanded(
-                      child: _HeroMetric(
-                          value: '$nextThisWeek',
-                          label: context.l10n.txnRangeThisWeek),
-                    ),
-                  ],
-                ],
-              );
-            }),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeroMetric extends StatelessWidget {
-  const _HeroMetric({required this.value, required this.label});
-
-  final String value;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Column(
-      children: [
-        Text(value,
-            textAlign: TextAlign.center,
-            style: AppTypography.bodyStrong(c.textPrimary)),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: AppTypography.caption(c.textSecondary),
-        ),
-      ],
-    );
-  }
-}
-
-class _Divider extends StatelessWidget {
-  const _Divider({required this.color});
-
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(width: 1, height: 34, color: color);
-  }
-}
-
-class _BillCard extends StatelessWidget {
-  const _BillCard({required this.bill});
-
-  final BillEntity bill;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final daysLeft = bill.nextDueDate.difference(DateTime.now()).inDays;
-    final currLabel = Currency.label(context, bill.currency);
-
-    final Color dueColor;
-    final String dueLabel;
-    final IconData dueIcon;
-
-    if (daysLeft < 0) {
-      dueColor = c.danger;
-      dueLabel = context.l10n.txnOverdueDays(daysLeft.abs());
-      dueIcon = AppLucideIcons.alertTriangle;
-    } else if (daysLeft == 0) {
-      dueColor = c.danger;
-      dueLabel = context.l10n.txnDueToday;
-      dueIcon = AppLucideIcons.alertCircle;
-    } else if (daysLeft <= 3) {
-      dueColor = c.accent;
-      dueLabel = context.l10n.txnInDays(daysLeft);
-      dueIcon = AppLucideIcons.calendarClock;
-    } else {
-      dueColor = c.textLight;
-      dueLabel = context.l10n.txnInDays(daysLeft);
-      dueIcon = AppLucideIcons.calendarDays;
-    }
-
-    if (bill.type == BillType.subscription) {
-      final statusColor = switch (bill.status) {
-        BillStatus.active => c.success,
-        BillStatus.paused => c.accent,
-        BillStatus.cancelled => c.textLight,
-      };
-      final statusLabel = switch (bill.status) {
-        BillStatus.active => context.l10n.txnActive,
-        BillStatus.paused => context.l10n.txnPaused,
-        BillStatus.cancelled => context.l10n.txnCancelled,
-      };
-      final freqLabel = switch (bill.frequency) {
-        BillFrequency.weekly => context.l10n.txnCycleWeekly,
-        BillFrequency.monthly => context.l10n.txnCycleMonthly,
-        BillFrequency.yearly => context.l10n.txnCycleYearly,
-        BillFrequency.custom => context.l10n.txnRangeCustom,
-      };
-
-      return Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.s2),
-        child: Material(
-          color: c.surfaceCard,
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            side: BorderSide(color: c.border),
-          ),
-          child: InkWell(
-            onTap: () => BillDetailsSheet.show(context, bill),
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.s4),
-              child: Row(
-                children: [
-                  AppAvatar.brand(name: bill.name),
-                  const SizedBox(width: AppSpacing.s3),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                bill.name,
-                                style: AppTypography.bodyStrong(c.textMain),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: statusColor.withValues(alpha: 0.10),
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.pill),
-                                border: Border.all(
-                                    color: statusColor.withValues(alpha: 0.20)),
-                              ),
-                              child: Text(
-                                statusLabel,
-                                style: AppTypography.caption(statusColor)
-                                    .copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Icon(dueIcon, size: 13, color: dueColor),
-                            const SizedBox(width: 4),
-                            Flexible(
-                              child: Text(
-                                '$freqLabel · $dueLabel',
-                                style: AppTypography.caption(dueColor),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.s3),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        formatMoney(bill.amountMoney),
-                        style: AppTypography.bodyStrong(c.textMain),
-                      ),
-                      Text(
-                        Currency.label(context, bill.currency),
-                        style: AppTypography.caption(c.textLight),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    } else {
-      // Installment style
-      final hasProg =
-          bill.totalInstallments != null && bill.totalInstallments! > 0;
-      final progressVal = bill.installmentProgress;
-      final remaining = bill.remainingInstallments;
-
-      return Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.s2),
-        child: Material(
-          color: c.surfaceCard,
-          clipBehavior: Clip.antiAlias,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppRadius.card),
-            side: BorderSide(color: c.border),
-          ),
-          child: InkWell(
-            onTap: () => BillDetailsSheet.show(context, bill),
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.s4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      AppAvatar.brand(name: bill.lenderName ?? bill.name),
-                      const SizedBox(width: AppSpacing.s3),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              bill.name,
-                              style: AppTypography.bodyStrong(c.textMain),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (bill.lenderName != null) ...[
-                              const SizedBox(height: 2),
-                              Text(
-                                bill.lenderName!,
-                                style: AppTypography.caption(c.textLight),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.s2),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            formatMoney(bill.amountMoney),
-                            style: AppTypography.bodyStrong(c.primary),
-                          ),
-                          Text(
-                            context.l10n.txnPerInstalment(currLabel),
-                            style: AppTypography.caption(c.textLight),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  if (hasProg) ...[
-                    const SizedBox(height: AppSpacing.s4),
-                    Row(
-                      children: [
-                        Text(
-                          context.l10n.txnPaidOfTotal(
-                              bill.paidCount ?? 0, bill.totalInstallments ?? 0),
-                          style: AppTypography.caption(c.textLight),
-                        ),
-                        const Spacer(),
-                        Text(
-                          context.l10n.txnRemainingInstalments(remaining),
-                          style: AppTypography.caption(c.primary)
-                              .copyWith(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(AppRadius.pill),
-                      child: SizedBox(
-                        height: 6,
-                        child: LinearProgressIndicator(
-                          value: progressVal,
-                          backgroundColor: c.surface2,
-                          valueColor: AlwaysStoppedAnimation(
-                            progressVal >= 1.0 ? c.success : c.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                  if (bill.totalPurchaseAmount != null) ...[
-                    const SizedBox(height: AppSpacing.s3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: c.bg,
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(color: c.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Text(
-                            context.l10n.txnTotalValueLabel,
-                            style: AppTypography.caption(c.textLight),
-                          ),
-                          Text(
-                            '${formatMoney(bill.totalPurchaseMoney!)} $currLabel',
-                            style: AppTypography.caption(c.textMain).copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          if (bill.interestRate != null) ...[
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: c.accent.withValues(alpha: 0.10),
-                                borderRadius:
-                                    BorderRadius.circular(AppRadius.pill),
-                              ),
-                              child: Text(
-                                context.l10n.txnInterestRate(
-                                    (bill.interestRate! * 100)
-                                        .toStringAsFixed(1)),
-                                style: AppTypography.caption(c.accent)
-                                    .copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                  if (bill.safeManualPaidAmount > 0) ...[
-                    const SizedBox(height: AppSpacing.s3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: c.success.withValues(alpha: 0.08),
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(
-                          color: c.success.withValues(alpha: 0.28),
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(AppLucideIcons.banknote,
-                              size: 16, color: c.success),
-                          const SizedBox(width: 6),
-                          Text(
-                            context.l10n.txnPaidManuallyLabel,
-                            style: AppTypography.caption(c.textLight),
-                          ),
-                          Text(
-                            '${formatMoney(bill.safeManualPaidMoney)} $currLabel',
-                            style: AppTypography.caption(c.success).copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: AppSpacing.s3),
-                  Row(
-                    children: [
-                      Icon(dueIcon, size: 14, color: dueColor),
-                      const SizedBox(width: 4),
-                      Text(
-                        context.l10n.txnNextInstalment(dueLabel),
-                        style: AppTypography.caption(dueColor).copyWith(
-                            fontWeight:
-                                dueColor == c.danger ? FontWeight.bold : null),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-  }
-}
-
-class _SuggestionCard extends StatelessWidget {
-  const _SuggestionCard({
-    required this.suggestion,
-    required this.currencyLabel,
-    required this.onAdd,
-  });
-
-  final BillSuggestion suggestion;
-  final String currencyLabel;
-  final VoidCallback onAdd;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.s2),
-      child: Material(
-        color: c.surfaceCard.withValues(alpha: 0.6),
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          side: BorderSide(
-            color: c.border.withValues(alpha: 0.5),
-          ),
-        ),
-        child: InkWell(
-          onTap: onAdd,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.s4),
-            child: Row(
-              children: [
-                AppAvatar.brand(name: suggestion.name),
-                const SizedBox(width: AppSpacing.s3),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        suggestion.name,
-                        style: AppTypography.bodyStrong(c.textMain),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        context.l10n.txnRecurredMonths(suggestion.monthsSeen),
-                        style: AppTypography.caption(c.textLight),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.s3),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      context.l10n.txnEstPerMonth(
-                          formatMoney(suggestion.estimatedAmountMoney),
-                          currencyLabel),
-                      style: AppTypography.caption(c.textMain).copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: c.cta.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(AppLucideIcons.plus, size: 12, color: c.cta),
-                          const SizedBox(width: 2),
-                          Text(
-                            context.l10n.txnAdd,
-                            style: AppTypography.caption(c.cta)
-                                .copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _DateHeader extends StatelessWidget {
-  const _DateHeader({required this.label});
+  const _DateHeader({
+    required this.label,
+    this.transactions = const <TransactionEntity>[],
+    this.privacyMode = false,
+  });
 
   final String label;
+
+  /// The day's SHOWN rows; their net sits at the trailing end.
+  final List<TransactionEntity> transactions;
+  final bool privacyMode;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    // Net of the SHOWN rows: debits subtract, credits add. Money refuses to
+    // mix currencies, so a day is folded per currency and only the first
+    // row's currency is stated (same rule as the Home transactions panel).
+    String? net;
+    if (transactions.isNotEmpty) {
+      final currency = transactions.first.amountMoney.currency;
+      var sum = Money.zero(currency);
+      for (final tx in transactions) {
+        if (tx.amountMoney.currency != currency) continue;
+        sum = transactionIsDebit(tx) ? sum - tx.amountMoney : sum + tx.amountMoney;
+      }
+      net = privacyMode
+          ? '••••'
+          // v2: a true minus (U+2212) leads the digits.
+          : sum.isNegative
+              ? '−${formatMoney(-sum)}'
+              : '+${formatMoney(sum)}';
+    }
+    // v2 day header: `subhead` text.secondary, aligned with the card.
     return Padding(
-      padding: const EdgeInsets.only(
-          top: AppSpacing.s2, bottom: AppSpacing.s2, right: 4),
-      child: Text(
-        label,
-        textAlign: TextAlign.start,
-        style: AppTypography.caption(c.textMuted)
-            .copyWith(fontWeight: FontWeight.w600),
+      padding: const EdgeInsetsDirectional.only(
+          top: AppSpacing.s3, bottom: AppSpacing.s2, start: 4, end: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              textAlign: TextAlign.start,
+              style: AppTypography.subhead(c.textSecondary),
+            ),
+          ),
+          if (net != null)
+            Text(
+              net,
+              textDirection: TextDirection.ltr,
+              style: AppTypography.custom(
+                size: 13,
+                weight: FontWeight.w600,
+                height: 1.3,
+                tabular: true,
+                color: c.textSecondary,
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -1915,116 +1420,100 @@ class _AddButton extends StatelessWidget {
   }
 }
 
-// The HTML's Out/In cards use complete, canonical, currency-isolated totals.
-// A not-yet-loaded/failed aggregate is unknown (—), never an invented zero.
-class _TransactionFlowTotals extends StatelessWidget {
-  const _TransactionFlowTotals(
-      {required this.total, required this.privacyMode});
+/// Activity summary (v3 `QirshSummaryCard`): the period's net, with Out / In
+/// beneath. Complete, canonical, currency-isolated totals; a not-yet-loaded or
+/// failed aggregate is unknown (—), never an invented zero; privacy masks all.
+class _TransactionsSummary extends StatelessWidget {
+  const _TransactionsSummary({
+    required this.total,
+    required this.privacyMode,
+    required this.periodLabel,
+    required this.thisMonth,
+    required this.onPeriodTap,
+  });
   final TransactionsPeriodTotal? total;
   final bool privacyMode;
+  final String periodLabel;
+  final bool thisMonth;
+  final VoidCallback onPeriodTap;
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     final value = total;
     final expense = privacyMode
         ? '••••'
         : value == null
             ? '—'
-            : '${formatMoney(-value.netExpense)} ${value.currency}';
+            : '${formatMoney(-value.netExpense).replaceFirst('-', '−')} ${value.currency}';
     final income = privacyMode
         ? '••••'
         : value == null
             ? '—'
             : '${value.income.minorUnits > 0 ? "+" : ""}${formatMoney(value.income)} ${value.currency}';
-    final c = context.colors;
-    Widget metric(String key, String label, String amount, bool incoming) {
-      final accent = incoming ? c.income : c.danger;
-      return Padding(
-        key: ValueKey(key),
-        padding: const EdgeInsets.all(AppSpacing.s3),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: BoxDecoration(
-                    color: accent.withValues(alpha: .12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(incoming ? Icons.south_west : Icons.north_east,
-                      size: 14, color: accent),
-                ),
-                const SizedBox(width: 7),
-                Expanded(
-                    child: Text(label,
-                        style: AppTypography.caption(c.textSecondary))),
-              ],
-            ),
-            const SizedBox(height: 8),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(amount,
-                  textDirection: TextDirection.ltr,
-                  style: AppTypography.custom(
-                      size: 19,
-                      height: 1.25,
-                      weight: FontWeight.w700,
-                      tabular: true,
-                      color: incoming ? c.income : c.textPrimary)),
-            ),
-          ],
+    // Net = in − out, exact Money in the period's single currency.
+    final net = value == null ? null : value.income - value.netExpense;
+    final netText = privacyMode
+        ? '••••'
+        : net == null
+            ? '—'
+            : '${net.isNegative ? '−${formatMoney(-net)}' : '${net.minorUnits > 0 ? "+" : ""}${formatMoney(net)}'} ${value!.currency}';
+    final netColor = privacyMode || net == null || net.isZero
+        ? c.textPrimary
+        : net.isNegative
+            ? c.expense
+            : c.income;
+    return QirshSummaryCard(
+      label: thisMonth
+          ? context.l10n.txnV3NetThisMonth
+          : context.l10n.txnV3NetThisPeriod,
+      scopeLabel: periodLabel,
+      onScopeTap: onPeriodTap,
+      amount: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: AlignmentDirectional.centerStart,
+        child: Text(
+          netText,
+          key: const ValueKey('activity-period-net'),
+          maxLines: 1,
+          textDirection: TextDirection.ltr,
+          style: TextStyle(color: netColor),
         ),
-      );
-    }
-
-    return MaliCard(
-      padding: EdgeInsets.zero,
-      child: LayoutBuilder(builder: (context, constraints) {
-        final out =
-            metric('activity-period-out', context.l10n.cardOut, expense, false);
-        final incoming =
-            metric('activity-period-in', context.l10n.cardIn, income, true);
-        if (constraints.maxWidth < 250 ||
-            MediaQuery.textScalerOf(context).scale(19) > 27) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [out, const SizedBox(height: 8), incoming],
-          );
-        }
-        return IntrinsicHeight(
-            child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(child: out),
-            VerticalDivider(width: 1, thickness: 1, color: c.border),
-            Expanded(child: incoming)
-          ],
-        ));
-      }),
+      ),
+      stats: [
+        QirshSummaryStat(
+          value: Text(expense,
+              key: const ValueKey('activity-period-out'),
+              textDirection: TextDirection.ltr,
+              style: TextStyle(color: privacyMode ? null : c.expense)),
+          label: context.l10n.cardOut,
+        ),
+        QirshSummaryStat(
+          value: Text(income,
+              key: const ValueKey('activity-period-in'),
+              textDirection: TextDirection.ltr,
+              style: TextStyle(color: privacyMode ? null : c.income)),
+          label: context.l10n.cardIn,
+        ),
+      ],
     );
   }
 }
 
+/// The activity / bills section header: the SAME photo hero on both tabs —
+/// large title, subtitle, small round search + add, and the one
+/// Transactions | Bills control underneath.
 class _TransactionsHeader extends StatelessWidget {
   const _TransactionsHeader({
-    required this.tab,
-    required this.rangeLabel,
-    required this.hasMoreTransactions,
-    required this.transactionsCount,
-    required this.pendingCount,
-    required this.controls,
+    required this.subtitle,
+    required this.tabs,
+    required this.onSearch,
     required this.onAdd,
   });
 
-  final int tab;
-  final String rangeLabel;
-  final bool hasMoreTransactions;
-  final int transactionsCount;
-  final int pendingCount;
-  final Widget controls;
+  final String? subtitle;
+  final Widget tabs;
+  final VoidCallback onSearch;
   final VoidCallback onAdd;
 
   @override
@@ -2034,20 +1523,214 @@ class _TransactionsHeader extends StatelessWidget {
     return CalmPageHeader(
       // شرائح متعددة: الأزرق ميمتدّش تحت (هيغطّي المحتوى) — الذوبان جوّه.
       meltOverflow: 0,
-      sectionPhoto:
-          tab == 0 ? QirshSectionPhoto.transactions : QirshSectionPhoto.bills,
-      coverBottom: controls,
-      title: tab == 0
-          ? context.l10n.txnTabTransactions
-          : context.l10n.txnBillsAndSubs,
-      subtitle: tab == 0
-          ? '$rangeLabel ${context.l10n.txnCountSuffix(transactionsCount.toString())}${hasMoreTransactions ? "+" : ""} · ${context.l10n.txnPendingReview} $pendingCount'
-          : null,
+      sectionPhoto: QirshSectionPhoto.transactions,
+      coverBottom: tabs,
+      title: context.l10n.txnTabTransactions,
+      subtitle: subtitle,
       leading: Navigator.of(context).canPop() ? const BackButton() : null,
-      trailing: _AddButton(onTap: onAdd),
-      // Bills already have one exact summary directly above their list.
-      // Keep the photo compact so the first bill is visible on arrival.
-      sectionHeight: tab == 0 ? 245 : 220,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _HeroGlassAction(
+            icon: AppLucideIcons.search,
+            semanticLabel: context.l10n.txnSearchHint,
+            onTap: onSearch,
+          ),
+          const SizedBox(width: AppSpacing.s2),
+          _AddButton(onTap: onAdd),
+        ],
+      ),
+      sectionHeight: 150,
+    );
+  }
+}
+
+/// Small round glass button for the photo hero (white glyph on a frosted
+/// white tint), the secondary sibling of the primary «+».
+class _HeroGlassAction extends StatelessWidget {
+  const _HeroGlassAction({
+    required this.icon,
+    required this.onTap,
+    required this.semanticLabel,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final String semanticLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: semanticLabel,
+      child: ClipOval(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Material(
+            color: Colors.white.withValues(alpha: .14),
+            shape: CircleBorder(
+                side: BorderSide(color: Colors.white.withValues(alpha: .22))),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onTap,
+              child: SizedBox(
+                width: 42,
+                height: 42,
+                child: Icon(icon, size: 20, color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Lays its child out at full height but reports [by] px less and paints it
+/// [by] px higher — so a photo hero that follows the activity list's pinned
+/// status band still starts at y = 0, under the clock.
+class _PullUnder extends SingleChildRenderObjectWidget {
+  const _PullUnder({required this.by, required Widget super.child});
+
+  final double by;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderPullUnder(by);
+
+  @override
+  void updateRenderObject(BuildContext context, _RenderPullUnder renderObject) {
+    renderObject.by = by;
+  }
+}
+
+class _RenderPullUnder extends RenderProxyBox {
+  _RenderPullUnder(this._by);
+
+  double _by;
+  set by(double value) {
+    if (value == _by) return;
+    _by = value;
+    markNeedsLayout();
+  }
+
+  @override
+  void performLayout() {
+    final child = this.child!;
+    child.layout(constraints, parentUsesSize: true);
+    size = constraints.constrain(Size(child.size.width,
+        (child.size.height - _by).clamp(0.0, double.infinity)));
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    context.paintChild(child!, offset.translate(0, -_by));
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    return result.addWithPaintOffset(
+      offset: Offset(0, -_by),
+      position: position,
+      hitTest: (result, transformed) =>
+          child!.hitTest(result, position: transformed),
+    );
+  }
+
+  @override
+  void applyPaintTransform(RenderBox child, Matrix4 transform) {
+    transform.translate(0.0, -_by);
+  }
+
+  @override
+  double computeMinIntrinsicHeight(double width) =>
+      (super.computeMinIntrinsicHeight(width) - _by).clamp(0.0, double.infinity);
+
+  @override
+  double computeMaxIntrinsicHeight(double width) =>
+      (super.computeMaxIntrinsicHeight(width) - _by).clamp(0.0, double.infinity);
+
+  @override
+  Size computeDryLayout(covariant BoxConstraints constraints) {
+    final size = child!.getDryLayout(constraints);
+    return constraints.constrain(
+        Size(size.width, (size.height - _by).clamp(0.0, double.infinity)));
+  }
+}
+
+/// v2 sticky filter row: the chips pin under the status bar; while content
+/// scrolls beneath them they sit on glass with a bottom hairline.
+class _PinnedFilterBarDelegate extends SliverPersistentHeaderDelegate {
+  const _PinnedFilterBarDelegate(
+      {required this.filtersOpen, required this.onFilter});
+
+  /// The filter chip (end of the row) toggles the account / date panel.
+  final bool filtersOpen;
+  final VoidCallback onFilter;
+
+  static const double _extent = 56;
+
+  @override
+  double get minExtent => _extent;
+
+  @override
+  double get maxExtent => _extent;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final c = context.colors;
+    final pinned = overlapsContent || shrinkOffset > 0;
+    final bar = Center(
+        child: _FilterBar(filtersOpen: filtersOpen, onFilter: onFilter));
+    if (!pinned) return ColoredBox(color: Colors.transparent, child: bar);
+    return ClipRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: c.bg.withValues(alpha: .62),
+            border: Border(
+              bottom: BorderSide(color: c.border, width: .5),
+            ),
+          ),
+          child: bar,
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedFilterBarDelegate oldDelegate) =>
+      oldDelegate.filtersOpen != filtersOpen ||
+      oldDelegate.onFilter != onFilter;
+}
+
+/// Top inset of the immersive activity list that catches up with the status
+/// band. The list's overlap injector covers only the chips; while the header
+/// scrolls its last [statusTop] px the chips are already docked under the
+/// status bar but the list keeps rising, so this grows 0 → [statusTop] in
+/// step and the first row stays glued under the chips (no gap at rest, and
+/// nothing hidden behind the glass once docked).
+class _StatusBandCatchUp extends StatelessWidget {
+  const _StatusBandCatchUp({required this.outer, required this.statusTop});
+
+  final ScrollPosition? outer;
+  final double statusTop;
+
+  @override
+  Widget build(BuildContext context) {
+    final outer = this.outer;
+    if (outer == null) return const SliverToBoxAdapter(child: SizedBox());
+    return ListenableBuilder(
+      listenable: outer,
+      builder: (context, _) {
+        final height = outer.hasContentDimensions && outer.hasPixels
+            ? (statusTop - (outer.maxScrollExtent - outer.pixels))
+                .clamp(0.0, statusTop)
+            : 0.0;
+        return SliverToBoxAdapter(child: SizedBox(height: height));
+      },
     );
   }
 }

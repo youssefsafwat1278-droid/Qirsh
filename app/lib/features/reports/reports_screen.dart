@@ -1,4 +1,7 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../transactions/transactions_providers.dart';
 import '../common/money_text.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,11 +10,15 @@ import '../../core/utils/async_reload_safe.dart';
 
 import '../../core/di/app_providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/theme/widgets/merchant_bar.dart' show ChartBar;
 import '../../core/theme/app_spacing.dart';
 import '../ads/ad_placement.dart';
 import '../ads/qirsh_ad_banner.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/widgets/calm_page_header.dart';
+import '../../core/theme/widgets/glass_sheet.dart';
+import '../../core/theme/widgets/navy_sheet_theme.dart';
 import '../../core/theme/widgets/mali_card.dart';
 import '../common/app_pill_tab_bar.dart';
 import '../../core/utils/app_lucide_icons.dart';
@@ -22,6 +29,7 @@ import '../../domain/finance/money_format.dart';
 import '../common/charts/spending_charts.dart';
 import '../common/motion.dart';
 import '../common/premium_loading.dart';
+import '../common/qirsh_summary_card.dart';
 import '../common/widgets.dart';
 import '../dashboard/dashboard_providers.dart' show CategorySlice;
 import '../settings/settings_providers.dart';
@@ -40,12 +48,81 @@ Future<void> _openReport(BuildContext context, WidgetRef ref) async {
       context.mounted && await showReportAdNotice(context));
 }
 
-class ReportsScreen extends ConsumerWidget {
+/// The three periods the Insights summary chip offers.
+const _reportPresets = [
+  TransactionsDatePreset.thisMonth,
+  TransactionsDatePreset.previousMonth,
+  TransactionsDatePreset.last90Days,
+];
+
+class ReportsScreen extends ConsumerStatefulWidget {
   const ReportsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ReportsScreen> createState() => _ReportsScreenState();
+}
+
+class _ReportsScreenState extends ConsumerState<ReportsScreen> {
+  /// The (period, account) scope whose figures this mount has already shown
+  /// fresh. `reportsProvider` is kept alive and reloads with
+  /// `skipLoadingOnReload`, so on a period switch — or on arriving while a
+  /// recompute is pending — it still holds the PREVIOUS scope's bundle. Those
+  /// figures are dimmed until the fresh bundle lands instead of being shown as
+  /// if they belonged to the chip's new period. Presentation only.
+  Object? _freshFor;
+
+  Future<void> _pickPeriod(TransactionsDatePreset? current) async {
+    final picked = await showGlassSheet<TransactionsDatePreset>(
+      context: context,
+      builder: (sheetContext) {
+        final c = sheetContext.colors;
+        final language = Localizations.localeOf(sheetContext).languageCode;
+        return navySheetTheme(Padding(
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.gutter, 0, AppSpacing.gutter, AppSpacing.gutter),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: Text(sheetContext.l10n.rngPickPeriod,
+                    style: AppTypography.title2(c.textPrimary)),
+              ),
+              const SizedBox(height: AppSpacing.s3),
+              for (final preset in _reportPresets)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(AppLucideIcons.calendarDays,
+                      color: preset == current ? c.cta : c.textMuted),
+                  title: Text(transactionsRangeForPreset(preset)
+                      .labelIn(language)),
+                  trailing: preset == current
+                      ? Icon(AppLucideIcons.checkCircle, color: c.cta)
+                      : null,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    Navigator.of(sheetContext).pop(preset);
+                  },
+                ),
+            ],
+          ),
+        ));
+      },
+    );
+    if (picked == null || !mounted) return;
+    ref.read(transactionsDateRangeProvider.notifier).state =
+        transactionsRangeForPreset(picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final async = ref.watch(reportsProvider);
+    final scope = (
+      ref.watch(transactionsDateRangeProvider),
+      ref.watch(activeAccountIdProvider),
+    );
+    if (async.hasValue && !async.isLoading) _freshFor = scope;
+    final settling = async.isLoading && _freshFor != scope;
     final privacyMode = ref.watch(userSettingsProvider).dataOrWhen(
           data: (settings) => settings.privacyModeEnabled,
           orElse: () => false,
@@ -69,16 +146,16 @@ class ReportsScreen extends ConsumerWidget {
           ))),
           data: (bundle) {
             final section = bundle.monthly;
-            const presets = [
-              TransactionsDatePreset.thisMonth,
-              TransactionsDatePreset.previousMonth,
-              TransactionsDatePreset.last90Days,
-            ];
-            final preset = effectiveTransactionsRange(
+            final range = effectiveTransactionsRange(
               ref.watch(transactionsDateRangeProvider),
-            ).preset;
+            );
+            final preset = range.preset;
+            final periodLabel = range
+                .labelIn(Localizations.localeOf(context).languageCode);
             return QirshSectionBackdrop(
                 child: SafeArea(
+                    // Immersive: the photo runs under the status bar.
+                    top: false,
                     bottom: false,
                     child: NestedScrollView(
                       headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -89,67 +166,32 @@ class ReportsScreen extends ConsumerWidget {
                               children: [
                                 CalmPageHeader(
                                   sectionPhoto: QirshSectionPhoto.reports,
-                                  sectionHeight: 225,
-                                  useSafeAreaTop: false,
-                                  title: context.l10n.rptInsightsTitle,
+                                  // v3: title row + one segmented control.
+                                  sectionHeight: 190,
+                                  // v2: one title, matching the tab — «التحليلات».
+                                  title: context.l10n.navAnalytics,
                                   subtitle: context.l10n.rptInsightsSub,
                                   leading: Navigator.of(context).canPop()
                                       ? const BackButton()
                                       : null,
+                                  trailing: _ReportPill(
+                                    onTap: () => _openReport(context, ref),
+                                  ),
                                   coverBottom: Builder(builder: (context) {
                                     final controller =
                                         DefaultTabController.of(context);
-                                    final language =
-                                        Localizations.localeOf(context)
-                                            .languageCode;
-                                    return Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        FilledButton.icon(
-                                          onPressed: () =>
-                                              _openReport(context, ref),
-                                          icon: const Icon(
-                                              AppLucideIcons.fileText,
-                                              size: 17),
-                                          label:
-                                              Text(context.l10n.rcCreateReport),
-                                        ),
-                                        const SizedBox(height: AppSpacing.s2),
-                                        AppPillTabBar(
-                                          onPhoto: true,
-                                          tabs: [
-                                            for (final datePreset in presets)
-                                              transactionsRangeForPreset(
-                                                      datePreset)
-                                                  .labelIn(language),
-                                          ],
-                                          selectedIndex: presets.indexWhere(
-                                              (value) => value == preset),
-                                          onSelected: (index) => ref
-                                                  .read(
-                                                      transactionsDateRangeProvider
-                                                          .notifier)
-                                                  .state =
-                                              transactionsRangeForPreset(
-                                                  presets[index]),
-                                        ),
-                                        const SizedBox(height: AppSpacing.s2),
-                                        AnimatedBuilder(
-                                          animation: controller,
-                                          builder: (context, _) =>
-                                              AppPillTabBar(
-                                            onPhoto: true,
-                                            tabs: [
-                                              context.l10n.rptTabOverview,
-                                              context.l10n.rptTabTrends,
-                                              context.l10n.rptTabDetails,
-                                            ],
-                                            selectedIndex: controller.index,
-                                            onSelected: controller.animateTo,
-                                          ),
-                                        ),
-                                      ],
+                                    return AnimatedBuilder(
+                                      animation: controller,
+                                      builder: (context, _) => AppPillTabBar(
+                                        onPhoto: true,
+                                        tabs: [
+                                          context.l10n.rptTabOverview,
+                                          context.l10n.rptTabTrends,
+                                          context.l10n.rptTabDetails,
+                                        ],
+                                        selectedIndex: controller.index,
+                                        onSelected: controller.animateTo,
+                                      ),
                                     );
                                   }),
                                 ),
@@ -160,10 +202,18 @@ class ReportsScreen extends ConsumerWidget {
                                     AppSpacing.gutter,
                                     0,
                                   ),
-                                  child: _PeriodCard(
-                                    section: section,
-                                    currencyLabel: currencyLabel,
-                                    privacyMode: privacyMode,
+                                  child: _Settling(
+                                    settling: settling,
+                                    child: _PeriodCard(
+                                      section: section,
+                                      currencyLabel: currencyLabel,
+                                      privacyMode: privacyMode,
+                                      periodLabel: periodLabel,
+                                      onPeriodTap: () {
+                                        HapticFeedback.selectionClick();
+                                        _pickPeriod(preset);
+                                      },
+                                    ),
                                   ),
                                 ),
                                 const Padding(
@@ -177,7 +227,9 @@ class ReportsScreen extends ConsumerWidget {
                           ),
                         ];
                       },
-                      body: TabBarView(
+                      body: _Settling(
+                        settling: settling,
+                        child: TabBarView(
                         children: [
                           _OverviewTab(
                             section: section,
@@ -197,7 +249,7 @@ class ReportsScreen extends ConsumerWidget {
                             privacyMode: privacyMode,
                           ),
                         ],
-                      ),
+                      )),
                     )));
           },
         ),
@@ -236,6 +288,44 @@ class _OverviewTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // v3: the daily-average / highest-day / count stats live in the summary
+    // card above; the cards below keep its s4 rhythm.
+    final cards = <Widget>[
+      if (section.topCategories.isNotEmpty)
+        _Enter(
+          delay: const Duration(milliseconds: 120),
+          child: _CategoryDistributionCard(
+            section: section,
+            currencyLabel: currencyLabel,
+            privacyMode: privacyMode,
+          ),
+        ),
+      if (section.anomaly case final SpendingAnomaly anomaly)
+        _Enter(
+          child: _AnomalyCard(
+            anomaly: anomaly,
+            currencyLabel: currencyLabel,
+            privacyMode: privacyMode,
+          ),
+        ),
+      if (!weekly.total.isZero && !weekly.total.isNegative)
+        _Enter(
+          child: _WeeklyInsightCard(
+            weekly: weekly,
+            currencyLabel: currencyLabel,
+            privacyMode: privacyMode,
+          ),
+        ),
+      if (section.topMerchants.isNotEmpty)
+        _Enter(
+          delay: const Duration(milliseconds: 160),
+          child: _MerchantRankingCard(
+            section: section,
+            currencyLabel: currencyLabel,
+            privacyMode: privacyMode,
+          ),
+        ),
+    ];
     return MeltTail(
         startAt: 0,
         child: ListView(
@@ -246,58 +336,9 @@ class _OverviewTab extends StatelessWidget {
             120,
           ),
           children: [
-            CalmKpiTiles(margin: EdgeInsets.zero, metrics: [
-              CalmMetric(label: context.l10n.rptDailyAverage,
-                value: _money(section.averageDaily, currencyLabel: currencyLabel, privacyMode: privacyMode)),
-              CalmMetric(label: context.l10n.rptHighestDay,
-                value: _money(section.highestDaily, currencyLabel: currencyLabel, privacyMode: privacyMode)),
-              CalmMetric(label: context.l10n.rptExpenseCountLabel,
-                value: privacyMode ? '••••' : section.transactionCount?.toString() ?? '—'),
-            ]),
-            const SizedBox(height: 16),
-            if (section.topCategories.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.s4),
-              PremiumMotion(
-                delay: const Duration(milliseconds: 120),
-                child: _CategoryDistributionCard(
-                  section: section,
-                  currencyLabel: currencyLabel,
-                  privacyMode: privacyMode,
-                ),
-              ),
-            ],
-            if (section.anomaly case final SpendingAnomaly anomaly) ...[
-              _InsightCard(
-                icon: AppLucideIcons.alertTriangle,
-                title: context.l10n.rptUnusualSpend,
-                body: privacyMode ? context.l10n.rptAnomalyPrivate(_dateLabel(anomaly.day))
-                  : context.l10n.rptAnomalyDetail(_dateLabel(anomaly.day),
-                    _money(anomaly.total, currencyLabel: currencyLabel, privacyMode: false),
-                    anomaly.ratio.toStringAsFixed(1)),
-                color: context.colors.danger,
-              ),
-              const SizedBox(height: 16),
-            ],
-            if (!weekly.total.isZero && !weekly.total.isNegative) ...[
-              PremiumMotion(
-                child: _WeeklyInsightCard(
-                  weekly: weekly,
-                  currencyLabel: currencyLabel,
-                  privacyMode: privacyMode,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.s4),
-            ],
-            if (section.topMerchants.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.s4),
-              PremiumMotion(
-                delay: const Duration(milliseconds: 160),
-                child: _MerchantRankingCard(
-                  section: section,
-                  currencyLabel: currencyLabel,
-                  privacyMode: privacyMode,
-                ),
-              ),
+            for (var i = 0; i < cards.length; i++) ...[
+              if (i > 0) const SizedBox(height: AppSpacing.s4),
+              cards[i],
             ],
           ],
         ));
@@ -345,7 +386,7 @@ class _TrendsTab extends StatelessWidget {
                   averageLabel: context.l10n.rptDailyAverage,
                 )),
             const SizedBox(height: 16),
-            PremiumMotion(
+            _Enter(
               delay: const Duration(milliseconds: 70),
               child: _WeeklySpendCard(
                 section: weekly,
@@ -363,17 +404,10 @@ class _TrendsTab extends StatelessWidget {
               const SizedBox(height: AppSpacing.s4),
             ],
             if (anomaly != null) ...[
-              _InsightCard(
-                icon: AppLucideIcons.alertTriangle,
-                title: context.l10n.rptUnusualSpend,
-                body: privacyMode
-                    ? context.l10n.rptAnomalyPrivate(_dateLabel(anomaly.day))
-                    : context.l10n.rptAnomalyDetail(
-                        _dateLabel(anomaly.day),
-                        _money(anomaly.total,
-                            currencyLabel: currencyLabel, privacyMode: false),
-                        anomaly.ratio.toStringAsFixed(1)),
-                color: c.danger,
+              _AnomalyCard(
+                anomaly: anomaly,
+                currencyLabel: currencyLabel,
+                privacyMode: privacyMode,
               ),
               const SizedBox(height: AppSpacing.s4),
             ],
@@ -387,7 +421,8 @@ class _TrendsTab extends StatelessWidget {
                   : delta <= 0
                       ? context.l10n.rptSpendLower((delta.abs() * 100).round())
                       : context.l10n.rptSpendHigher((delta.abs() * 100).round()),
-              color: delta == null || delta <= 0 ? c.success : c.danger,
+              // v2: red is reserved for over-budget/failed/destructive.
+              color: delta == null || delta <= 0 ? c.success : c.warningText,
             ),
             const SizedBox(height: AppSpacing.s4),
             _InsightCard(
@@ -406,7 +441,7 @@ class _TrendsTab extends StatelessWidget {
                   ? context.l10n.rptAddMoreTx
                   : context.l10n.rptTopCategoryHint(
                       section.topCategories.first.category.name),
-              color: c.cta,
+              color: c.actionText,
             ),
           ],
         ));
@@ -495,7 +530,7 @@ class _CategoryComparisonRow extends StatelessWidget {
         ]),
         const SizedBox(height: AppSpacing.s2),
         for (final entry in [
-          (context.l10n.rptSelectedPeriod, slice.total, c.primary),
+          (context.l10n.rptSelectedPeriod, slice.total, c.cta),
           if (previous != null) (context.l10n.rptPreviousPeriod, previous, c.textLight),
         ]) ...[
           Row(children: [
@@ -561,86 +596,111 @@ class _DetailsTab extends StatelessWidget {
   }
 }
 
+/// v3 Insights summary: ONE [QirshSummaryCard] — the net once, its refund
+/// breakdown as a caption, and the period's three stats in the strip. The
+/// period is the card's scope chip (the hero no longer carries a selector).
 class _PeriodCard extends StatelessWidget {
   const _PeriodCard({
     required this.section,
     required this.currencyLabel,
     required this.privacyMode,
+    required this.periodLabel,
+    required this.onPeriodTap,
   });
 
   final ReportSection section;
   final String currencyLabel;
   final bool privacyMode;
+  final String periodLabel;
+  final VoidCallback onPeriodTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return MaliCard(
-      style: MaliSurfaceStyle.floating,
-      padding: const EdgeInsets.all(AppSpacing.s4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(context.l10n.rptSelectedPeriod, style: AppTypography.subhead(c.textLight)),
-          const SizedBox(height: AppSpacing.s2),
-          Text(
-              _money(section.total,
-                  currencyLabel: currencyLabel, privacyMode: privacyMode),
-              style: AppTypography.custom(size: 30, weight: FontWeight.w700,
-                height: 1.2, color: c.textMain, tabular: true)),
-          Text(
-              section.hasRefunds ? context.l10n.rptNetPeriodSpend : context.l10n.rptSelectedPeriodSpend,
-              style: AppTypography.caption(c.textLight)),
-          // UX-022 — explain the netting instead of asking the user to trust it.
-          //
-          // Refunds subtract silently under the documented contract
-          // (net = payments + withdrawals − refunds), so the QA's real case
-          // showed 2,120.00 for transactions of 420.00 + 1,899.00 with a 199.00
-          // refund, and nothing on screen accounted for the 199. The three
-          // figures below are that same contract, written out.
-          //
-          // Shown ONLY when a refund exists, so a period without one keeps the
-          // single clean headline it has today.
-          if (section.hasRefunds) ...[
-            const SizedBox(height: AppSpacing.s3),
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.s3, vertical: AppSpacing.s2),
-              decoration: BoxDecoration(
-                color: c.surfaceMuted,
-                borderRadius: BorderRadius.circular(AppRadius.card),
-              ),
-              child: Column(
-                children: [
-                  _RefundLine(
-                    label: context.l10n.rptTotalExpenses,
-                    amount: section.grossExpense,
-                    currencyLabel: currencyLabel,
-                    privacyMode: privacyMode,
-                  ),
-                  const SizedBox(height: 4),
-                  _RefundLine(
-                    label: context.l10n.rptRefunds,
-                    amount: section.refunds,
-                    currencyLabel: currencyLabel,
-                    privacyMode: privacyMode,
-                    negative: true,
-                    color: c.success,
-                  ),
-                  const Divider(height: AppSpacing.s3),
-                  _RefundLine(
-                    label: context.l10n.rptNet,
-                    amount: section.total,
-                    currencyLabel: currencyLabel,
-                    privacyMode: privacyMode,
-                    strong: true,
-                  ),
-                ],
-              ),
+    final count = section.transactionCount;
+    // Stats render their final, exact values at once. The old strip counted
+    // up from zero on every mount, which read as the numbers changing right
+    // after the tab appeared (4,939.33 → 5,210.27, 44 → 48 mid-animation).
+    String figure(Money value) => privacyMode ? '••••' : formatMoney(value);
+    return QirshSummaryCard(
+      label: section.hasRefunds
+          ? context.l10n.rptNetPeriodSpend
+          : context.l10n.rptSelectedPeriodSpend,
+      scopeLabel: periodLabel,
+      onScopeTap: onPeriodTap,
+      amount: Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: Directionality(
+            textDirection: TextDirection.ltr,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                if (privacyMode)
+                  Text('••••', style: AppTypography.amountLarge(c.textPrimary))
+                else
+                  MoneyText(section.total,
+                      style: AppTypography.amountLarge(c.textPrimary)),
+                const SizedBox(width: AppSpacing.s1),
+                Text(currencyLabel,
+                    style: AppTypography.caption(c.textSecondary)),
+              ],
             ),
-          ],
-        ],
+          ),
+        ),
       ),
+      // UX-022 — explain the netting instead of asking the user to trust it.
+      //
+      // Refunds subtract silently under the documented contract
+      // (net = payments + withdrawals − refunds), so the QA's real case
+      // showed 2,120.00 for transactions of 420.00 + 1,899.00 with a 199.00
+      // refund, and nothing on screen accounted for the 199. The caption is
+      // that same contract written out: gross expenses · refunds → the net
+      // headline above.
+      //
+      // Shown ONLY when a refund exists, so a period without one keeps the
+      // single clean headline it has today.
+      caption: section.hasRefunds
+          ? Wrap(
+              spacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text(context.l10n.rptTotalExpenses),
+                _RefundLine(
+                  amount: section.grossExpense,
+                  privacyMode: privacyMode,
+                ),
+                const Text('·'),
+                Text(context.l10n.rptRefunds),
+                _RefundLine(
+                  amount: section.refunds,
+                  privacyMode: privacyMode,
+                  negative: true,
+                  color: c.income,
+                ),
+              ],
+            )
+          : null,
+      stats: [
+        QirshSummaryStat(
+          value: Text(figure(section.averageDaily), maxLines: 1),
+          label: context.l10n.rptDailyAverage,
+        ),
+        QirshSummaryStat(
+          value: Text(figure(section.highestDaily), maxLines: 1),
+          label: context.l10n.rptHighestDay,
+        ),
+        QirshSummaryStat(
+          value: Text(
+              privacyMode ? '••••' : count == null ? '—' : '$count',
+              maxLines: 1),
+          label: context.l10n.rptExpenseCountLabel,
+        ),
+      ],
     );
   }
 }
@@ -710,7 +770,7 @@ class _WeeklySpendCard extends StatelessWidget {
   }
 }
 
-class _CategoryDistributionCard extends StatelessWidget {
+class _CategoryDistributionCard extends StatefulWidget {
   const _CategoryDistributionCard({
     required this.section,
     required this.currencyLabel,
@@ -722,7 +782,20 @@ class _CategoryDistributionCard extends StatelessWidget {
   final bool privacyMode;
 
   @override
+  State<_CategoryDistributionCard> createState() =>
+      _CategoryDistributionCardState();
+}
+
+class _CategoryDistributionCardState extends State<_CategoryDistributionCard> {
+  int? _selected;
+
+  void _select(int? index) => setState(() => _selected = index);
+
+  @override
   Widget build(BuildContext context) {
+    final section = widget.section;
+    final currencyLabel = widget.currencyLabel;
+    final privacyMode = widget.privacyMode;
     final slices = [
       for (final slice in section.topCategories)
         SpendingChartSlice(
@@ -730,11 +803,15 @@ class _CategoryDistributionCard extends StatelessWidget {
           total: slice.total.toDouble(),
           percent: slice.percent,
           count: slice.count,
+          amount: slice.total,
         ),
     ];
+    final top = section.topCategories.fold<double>(
+        0, (max, slice) => math.max(max, slice.total.toDouble()));
     return MaliCard(
       style: MaliSurfaceStyle.floating,
-      padding: const EdgeInsets.all(AppSpacing.s4),
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.s4, AppSpacing.s4, AppSpacing.s4, AppSpacing.s2),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -744,39 +821,42 @@ class _CategoryDistributionCard extends StatelessWidget {
             subtitle: _money(section.total,
                 currencyLabel: currencyLabel, privacyMode: privacyMode),
           ),
-          const SizedBox(height: AppSpacing.s3),
+          const SizedBox(height: AppSpacing.s5),
+          // v2 donut: 200pt, v2 category palette, clockwise draw-in from 12
+          // o'clock with the centre total counting up (m.chart). Tapping an arc
+          // or a legend row lifts it and swaps the centre to its amount.
           CategoryDonutChart(
             slices: slices,
             currencyLabel: currencyLabel,
             centerLabel: privacyMode ? '••••' : formatMoney(section.total),
             centerCurrency: currencyLabel,
+            centerAmount: section.total,
             compactCenter: true,
             framed: false,
             showLegend: false,
-            height: 174,
+            height: 200,
+            privacyMode: privacyMode,
+            selectedIndex: _selected,
+            onSelectionChanged: _select,
           ),
-          const SizedBox(height: AppSpacing.s3),
-          LayoutBuilder(builder: (context, constraints) {
-            final twoColumns = constraints.maxWidth >= 385 &&
-                MediaQuery.textScalerOf(context).scale(14) <= 17;
-            return Wrap(
-              spacing: AppSpacing.s3,
-              runSpacing: AppSpacing.s3,
-              children: [
-                for (final slice in section.topCategories)
-                  SizedBox(
-                    width: twoColumns
-                        ? (constraints.maxWidth - AppSpacing.s3) / 2
-                        : constraints.maxWidth,
-                    child: _CategoryLegendTile(
-                      slice: slice,
-                      currencyLabel: currencyLabel,
-                      privacyMode: privacyMode,
-                    ),
-                  ),
-              ],
-            );
-          }),
+          const SizedBox(height: AppSpacing.s4),
+          for (var i = 0; i < section.topCategories.length; i++)
+            _Enter(
+              delay: AppMotion.rowStagger * math.min(i, 8),
+              child: _CategoryLegendTile(
+                slice: section.topCategories[i],
+                share: top <= 0
+                    ? 0
+                    : section.topCategories[i].total.toDouble() / top,
+                currencyLabel: currencyLabel,
+                privacyMode: privacyMode,
+                dimmed: _selected != null && _selected != i,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  _select(_selected == i ? null : i);
+                },
+              ),
+            ),
         ],
       ),
     );
@@ -916,15 +996,16 @@ class _MerchantRankingCard extends StatelessWidget {
             Text(context.l10n.rptMerchantsEmpty,
                 style: AppTypography.caption(c.textLight))
           else
-            for (final merchant in section.topMerchants.take(8)) ...[
+            for (final (i, merchant) in section.topMerchants.take(8).indexed) ...[
               _MerchantBarRow(
                 merchant: merchant,
                 maxTotal: maxTotal,
                 currencyLabel: currencyLabel,
                 privacyMode: privacyMode,
+                index: i,
               ),
               if (merchant != section.topMerchants.take(8).last)
-                const SizedBox(height: AppSpacing.s3),
+                const SizedBox(height: AppSpacing.s4),
             ],
         ],
       ),
@@ -970,7 +1051,8 @@ class _VisualSectionTitle extends StatelessWidget {
     final c = context.colors;
     return Row(
       children: [
-        Icon(icon, color: c.success, size: 22),
+        // v2: blue = "you are here"; green stays reserved for money/health.
+        Icon(icon, color: c.actionText, size: 22),
         const SizedBox(width: AppSpacing.s2),
         Expanded(
           child: Column(
@@ -993,45 +1075,89 @@ class _VisualSectionTitle extends StatelessWidget {
 class _CategoryLegendTile extends StatelessWidget {
   const _CategoryLegendTile({
     required this.slice,
+    required this.share,
     required this.currencyLabel,
     required this.privacyMode,
+    required this.dimmed,
+    required this.onTap,
   });
 
   final CategorySlice slice;
+  final double share;
   final String currencyLabel;
   final bool privacyMode;
+  final bool dimmed;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Row(
-      children: [
-        AppAvatar.category(category: slice.category, size: AppSpacing.avatarSm),
-        const SizedBox(width: AppSpacing.s2),
-        Expanded(
+    final accent = slice.category.accent(Theme.of(context).brightness);
+    // v2 legend row: name first, then amount, then share — never «32% تسوق».
+    // UX-022 item 2 — «تسوق 1,700.00» matched no transaction: an
+    // expense of 1,899.00 with a 199.00 refund netted into it. The
+    // row now carries the refund, so the figure is explainable
+    // without changing the contract that produced it. (The refund
+    // string carries its own « · » separator.)
+    final meta = [
+      if (slice.count > 0) context.l10n.rptMerchantTxCount(slice.count),
+      if (slice.hasRefunds && !privacyMode)
+        '${context.l10n.rptIncludesRefund}${formatMoney(slice.refunds!)}',
+    ].join().trim();
+    return AnimatedOpacity(
+      duration: AppMotion.micro,
+      opacity: dimmed ? .35 : 1,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppRadius.button),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.s2),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                Localizations.localeOf(context).languageCode == 'en'
-                    ? '${(slice.percent * 100).round()}% ${slice.category.name}'
-                    : '%${(slice.percent * 100).round()} ${slice.category.name}',
-                style: AppTypography.subhead(c.textMain),
+              Row(
+                children: [
+                  AppAvatar.category(category: slice.category, size: 40),
+                  const SizedBox(width: AppSpacing.s3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(slice.category.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodyStrong(c.textMain)),
+                        if (meta.isNotEmpty)
+                          Text(meta,
+                              style: AppTypography.caption(c.textLight)),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.s2),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _AmountText(
+                        amount: slice.total,
+                        currencyLabel: currencyLabel,
+                        privacyMode: privacyMode,
+                      ),
+                      Text('${(slice.percent * 100).round()}%',
+                          textDirection: TextDirection.ltr,
+                          style: AppTypography.caption(c.textLight)),
+                    ],
+                  ),
+                ],
               ),
-              // UX-022 item 2 — «تسوق 1,700.00» matched no transaction: an
-              // expense of 1,899.00 with a 199.00 refund netted into it. The
-              // row now carries the refund, so the figure is explainable
-              // without changing the contract that produced it.
-              Text(
-                '${_money(slice.total, currencyLabel: currencyLabel, privacyMode: privacyMode)}'
-                '${slice.count > 0 ? ' · ${context.l10n.rptMerchantTxCount(slice.count)}' : ''}'
-                '${slice.hasRefunds && !privacyMode ? '${context.l10n.rptIncludesRefund}${formatMoney(slice.refunds!)}' : ''}',
-                style: AppTypography.caption(c.textLight),
+              const SizedBox(height: AppSpacing.s1),
+              Padding(
+                padding: const EdgeInsetsDirectional.only(start: 52),
+                child: ChartBar(value: share, height: 3, color: accent),
               ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -1042,12 +1168,14 @@ class _MerchantBarRow extends StatelessWidget {
     required this.maxTotal,
     required this.currencyLabel,
     required this.privacyMode,
+    this.index = 0,
   });
 
   final MerchantSpend merchant;
   final double maxTotal;
   final String currencyLabel;
   final bool privacyMode;
+  final int index;
 
   @override
   Widget build(BuildContext context) {
@@ -1055,70 +1183,208 @@ class _MerchantBarRow extends StatelessWidget {
     final ratio = maxTotal <= 0
         ? 0.0
         : (merchant.total.toDouble() / maxTotal).clamp(0.0, 1.0);
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AppAvatar.brand(name: merchant.name),
-        const SizedBox(width: AppSpacing.s3),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+        Row(
+          children: [
+            AppAvatar.brand(name: merchant.name),
+            const SizedBox(width: AppSpacing.s3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      merchant.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTypography.subhead(c.textMain),
-                    ),
-                  ),
                   Text(
-                    _money(merchant.total,
-                        currencyLabel: currencyLabel, privacyMode: privacyMode),
-                    style: AppTypography.caption(c.textSecondary)
-                        .copyWith(fontWeight: FontWeight.w700),
+                    // v2: the merchant's natural case («Carrefour», not
+                    // «CARREFOUR»).
+                    _naturalCase(merchant.name),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.bodyStrong(c.textMain),
                   ),
+                  // UX-022 item 4 — «نون · 1,700.00 · 2 عمليات» matched no
+                  // transaction, because one of the two rows was a 199.00 refund
+                  // netted into the total. The count was never wrong: the refund
+                  // genuinely is one of the transactions the total is built from.
+                  // What was missing was the refund, which is what made the pair
+                  // impossible to reconcile. Stating it makes the count coherent
+                  // rather than dropping it and hiding the netting further.
+                  if (merchant.count > 0)
+                    Wrap(
+                      children: [
+                        Text(context.l10n.rptMerchantTxCount(merchant.count),
+                            style: AppTypography.caption(c.textLight)),
+                        if (merchant.hasRefunds && !privacyMode) ...[
+                          Text(context.l10n.rptIncludesRefund,
+                              style: AppTypography.caption(c.textLight)),
+                          MoneyText(
+                            merchant.refunds!,
+                            style: AppTypography.caption(c.textLight),
+                          ),
+                        ],
+                      ],
+                    ),
                 ],
               ),
-              const SizedBox(height: 7),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(AppRadius.pill),
-                child: LinearProgressIndicator(
-                  value: ratio,
-                  minHeight: 6,
-                  backgroundColor: c.surface2,
-                  valueColor: AlwaysStoppedAnimation(c.primary),
-                ),
-              ),
-              // UX-022 item 4 — «نون · 1,700.00 · 2 عمليات» matched no
-              // transaction, because one of the two rows was a 199.00 refund
-              // netted into the total. The count was never wrong: the refund
-              // genuinely is one of the transactions the total is built from.
-              // What was missing was the refund, which is what made the pair
-              // impossible to reconcile. Stating it makes the count coherent
-              // rather than dropping it and hiding the netting further.
-              if (merchant.count > 0) ...[
-                const SizedBox(height: 3),
-                Row(
-                  children: [
-                    Text(context.l10n.rptMerchantTxCount(merchant.count),
-                        style: AppTypography.caption(c.textLight)),
-                    if (merchant.hasRefunds && !privacyMode) ...[
-                      Text(context.l10n.rptIncludesRefund,
-                          style: AppTypography.caption(c.textLight)),
-                      MoneyText(
-                        merchant.refunds!,
-                        style: AppTypography.caption(c.textLight),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ],
+            ),
+            const SizedBox(width: AppSpacing.s2),
+            _AmountText(
+              amount: merchant.total,
+              currencyLabel: currencyLabel,
+              privacyMode: privacyMode,
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.s2),
+        // v2 merchant bar: 6pt, spans the row under the text, anchored at the
+        // leading edge; draws in with a 30ms stagger (m.chart).
+        Padding(
+          padding: const EdgeInsetsDirectional.only(
+              start: AppSpacing.avatar + AppSpacing.s3),
+          child: ChartBar(
+            value: ratio.toDouble(),
+            delay: Duration(milliseconds: 30 * math.min(index, 8)),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// «CARREFOUR» → «Carrefour»; short acronyms («KFC») and mixed-case names are
+/// left exactly as they are.
+String _naturalCase(String name) {
+  final letters = name.replaceAll(RegExp(r'[^A-Za-z]'), '');
+  if (letters.length <= 3 || letters != letters.toUpperCase()) return name;
+  return name.splitMapJoin(RegExp(r'[A-Za-z]+'),
+      onMatch: (m) {
+        final word = m[0]!;
+        return word[0] + word.substring(1).toLowerCase();
+      },
+      onNonMatch: (n) => n);
+}
+
+/// A row amount: `amount.row` figure + the currency as a muted caption run.
+class _AmountText extends StatelessWidget {
+  const _AmountText({
+    required this.amount,
+    required this.currencyLabel,
+    required this.privacyMode,
+  });
+
+  final Money amount;
+  final String currencyLabel;
+  final bool privacyMode;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Text.rich(
+      TextSpan(children: [
+        TextSpan(
+          text: privacyMode ? '••••' : formatMoney(amount),
+          style: AppTypography.amountSmall(c.textMain),
+        ),
+        TextSpan(
+          text: ' $currencyLabel',
+          style: AppTypography.caption(c.textLight),
+        ),
+      ]),
+      textAlign: TextAlign.end,
+      maxLines: 1,
+    );
+  }
+}
+
+/// v2 unusual-spend card — Tinted role: `warningBg` (+1px warning@24% in
+/// dark), warning glyph tile that wiggles once, «3.4×» in warning text.
+class _AnomalyCard extends StatelessWidget {
+  const _AnomalyCard({
+    required this.anomaly,
+    required this.currencyLabel,
+    required this.privacyMode,
+  });
+
+  final SpendingAnomaly anomaly;
+  final String currencyLabel;
+  final bool privacyMode;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ratio = anomaly.ratio.toStringAsFixed(1);
+    final body = privacyMode
+        ? context.l10n.rptAnomalyPrivate(_dateLabel(anomaly.day))
+        : context.l10n.rptAnomalyDetail(
+            _dateLabel(anomaly.day),
+            _money(anomaly.total,
+                currencyLabel: currencyLabel, privacyMode: false),
+            ratio);
+    final bodyStyle = AppTypography.callout(c.textSecondary);
+    final highlight = '$ratio×';
+    final at = privacyMode ? -1 : body.indexOf(highlight);
+    Widget tile = Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: c.warning.withValues(alpha: .20),
+        borderRadius: BorderRadius.circular(AppRadius.md),
+      ),
+      child: Icon(AppLucideIcons.alertTriangle, color: c.warningText, size: 22),
+    );
+    if (!shouldReduceMotion(context)) {
+      // One 6° wiggle on enter (spring.lively), no loop.
+      final glyph = tile;
+      tile = TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.linear,
+        builder: (context, v, child) => Transform.rotate(
+          angle: math.sin(v * math.pi * 3) * (1 - v) * 6 * math.pi / 180,
+          child: child,
+        ),
+        child: glyph,
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.s4),
+      decoration: BoxDecoration(
+        color: c.warningBg,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: isDark
+            ? Border.all(color: c.warning.withValues(alpha: .24))
+            : null,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          tile,
+          const SizedBox(width: AppSpacing.s3),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(context.l10n.rptUnusualSpend,
+                    style: AppTypography.cardTitle(c.textMain)),
+                const SizedBox(height: 4),
+                if (at < 0)
+                  Text(body, style: bodyStyle)
+                else
+                  Text.rich(TextSpan(style: bodyStyle, children: [
+                    TextSpan(text: body.substring(0, at)),
+                    TextSpan(
+                        text: highlight,
+                        style: bodyStyle.copyWith(
+                            color: c.warningText,
+                            fontWeight: FontWeight.w600)),
+                    TextSpan(text: body.substring(at + highlight.length)),
+                  ])),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1186,7 +1452,8 @@ class _WeeklyInsightCard extends StatelessWidget {
     final c = context.colors;
     final delta = weekly.deltaPercent;
     final deltaSign = (delta ?? 0) < 0 ? '↓' : '↑';
-    final deltaColor = (delta ?? 0) < 0 ? c.success : c.danger;
+    // v2: red is reserved for over-budget/failed — a rise reads in warning.
+    final deltaColor = (delta ?? 0) < 0 ? c.success : c.warningText;
     final deltaText = delta == null
         ? null
         : context.l10n.rptVsLastWeek(
@@ -1209,7 +1476,7 @@ class _WeeklyInsightCard extends StatelessWidget {
         (
           AppLucideIcons.shapes,
           context.l10n.rptTopCategoryWeek(topCat.category.name),
-          c.cta,
+          c.actionText,
         ),
       if (bestDay != null)
         (
@@ -1230,94 +1497,183 @@ class _WeeklyInsightCard extends StatelessWidget {
 
     if (insights.isEmpty) return const SizedBox.shrink();
 
+    // v2: a Group holding a 2×2 grid of Inset mini-tiles instead of a wall
+    // of text lines.
+    final inset = Theme.of(context).brightness == Brightness.dark
+        ? c.surfaceMuted
+        : c.surfaceElevated;
+    Widget tile((IconData, String, Color) item) => Container(
+          padding: const EdgeInsets.all(AppSpacing.s3),
+          decoration: BoxDecoration(
+            color: inset,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(item.$1, size: 20, color: item.$3),
+              const SizedBox(height: AppSpacing.s2),
+              Text(item.$2, style: AppTypography.subhead(c.textMain)),
+            ],
+          ),
+        );
     return AppCard(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(context.l10n.rptWeekSummary, style: AppTypography.bodyStrong(c.textMain)),
+          Text(context.l10n.rptWeekSummary,
+              style: AppTypography.cardTitle(c.textMain)),
           const SizedBox(height: AppSpacing.s3),
-          ...insights.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.s2),
+          for (var i = 0; i < insights.length; i += 2) ...[
+            if (i > 0) const SizedBox(height: AppSpacing.s2),
+            IntrinsicHeight(
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Icon(item.$1, size: 15, color: item.$3),
+                  Expanded(child: tile(insights[i])),
                   const SizedBox(width: AppSpacing.s2),
                   Expanded(
-                    child: Text(
-                      item.$2,
-                      style: AppTypography.caption(c.textMain),
-                    ),
+                    child: i + 1 < insights.length
+                        ? tile(insights[i + 1])
+                        : const SizedBox.shrink(),
                   ),
                 ],
               ),
             ),
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
-/// One line of the UX-022 refund breakdown. Amounts render through [MoneyText]
-/// so the three figures are exact and therefore always reconcile on screen.
+/// One figure of the UX-022 refund caption. Amounts render through [MoneyText]
+/// so gross, refunds and net are exact and therefore always reconcile on
+/// screen. Inherits the caption style of the summary card.
 class _RefundLine extends StatelessWidget {
   const _RefundLine({
-    required this.label,
     required this.amount,
-    required this.currencyLabel,
     required this.privacyMode,
     this.negative = false,
-    this.strong = false,
     this.color,
   });
 
-  final String label;
   final Money amount;
-  final String currencyLabel;
   final bool privacyMode;
   final bool negative;
-  final bool strong;
   final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    final tone = color ?? (strong ? c.textMain : c.textSecondary);
-    final style =
-        strong ? AppTypography.bodyStrong(tone) : AppTypography.callout(tone);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Expanded(child: Text(label, style: AppTypography.callout(c.textLight))),
-        const SizedBox(width: AppSpacing.s2),
-        if (privacyMode)
-          Text('••••', style: style)
-        else
-          Flexible(
-            child: Wrap(
-              alignment: WrapAlignment.end,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 3,
-              children: [
-                Directionality(
-                  textDirection: TextDirection.ltr,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (negative) Text('−', style: style),
-                        MoneyText(amount, style: style),
-                      ],
-                    ),
-                  ),
-                ),
-                Text(currencyLabel, style: AppTypography.caption(c.textLight)),
-              ],
+    final base = DefaultTextStyle.of(context).style;
+    final style = color == null ? base : base.copyWith(color: color);
+    if (privacyMode) return Text('••••', style: style);
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (negative) Text('−', style: style),
+          MoneyText(amount,
+              style: style, fractionScale: 1, fractionOpacity: 1),
+        ],
+      ),
+    );
+  }
+}
+
+/// v3 hero action: a small glass pill on the section photo. Runs the same
+/// report flow the old full-width «Create report» button did.
+class _ReportPill extends StatelessWidget {
+  const _ReportPill({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.pill),
+      side: BorderSide(color: Colors.white.withValues(alpha: .18)),
+    );
+    return Semantics(
+      button: true,
+      label: context.l10n.rcCreateReport,
+      excludeSemantics: true,
+      child: Material(
+        color: Colors.white.withValues(alpha: .14),
+        shape: shape,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: shape,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 40),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(AppLucideIcons.fileText,
+                      size: 17, color: Colors.white),
+                  const SizedBox(width: AppSpacing.s1),
+                  Text(context.l10n.insV3Report,
+                      style: AppTypography.caption(Colors.white)
+                          .copyWith(fontWeight: FontWeight.w600)),
+                ],
+              ),
             ),
           ),
-      ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Dims figures that belong to the previous (period, account) scope while the
+/// fresh bundle loads — see [_ReportsScreenState._freshFor].
+class _Settling extends StatelessWidget {
+  const _Settling({required this.settling, required this.child});
+
+  final bool settling;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      duration: AppMotion.micro,
+      opacity: settling ? .45 : 1,
+      child: child,
+    );
+  }
+}
+
+/// v2 `m.enter` (fade + 12pt rise on ease.out, after [delay]) without timers
+/// and without swapping the subtree when it finishes. `PremiumMotion` replaces
+/// its child once played, which remounts it — that restarted the chart
+/// draw-ins (donut, bars, rings) mid-sweep. Reduce Motion renders it in place.
+class _Enter extends StatelessWidget {
+  const _Enter({required this.child, this.delay = Duration.zero});
+
+  final Widget child;
+  final Duration delay;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduce = shouldReduceMotion(context);
+    final total = AppMotion.moderate + delay;
+    final start = delay.inMicroseconds / total.inMicroseconds;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: reduce ? 1 : 0, end: 1),
+      duration: reduce ? Duration.zero : total,
+      curve: Interval(start, 1, curve: AppMotion.easeOut),
+      child: child,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, AppMotion.enterRise * (1 - t)),
+          child: child,
+        ),
+      ),
     );
   }
 }

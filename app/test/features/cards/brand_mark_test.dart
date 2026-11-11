@@ -98,4 +98,28 @@ void main() {
     expect(find.byType(SvgPicture), findsOneWidget); // bundled, local
     expect(find.byType(Image), findsNothing); // never a network request
   });
+
+  testWidgets('a remote logo loads over the merchant MONOGRAM, never the '
+      'category fallback', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: <Override>[
+          remoteMerchantLogosAllowedProvider.overrideWithValue(true),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: BrandMark(
+                name: 'InstaPay',
+                fallback: Icon(Icons.swap_horiz),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.text('I'), findsOneWidget); // monogram placeholder
+    expect(find.byIcon(Icons.swap_horiz), findsNothing);
+    expect(find.byType(Image), findsWidgets); // the logo request is in flight
+  });
 }

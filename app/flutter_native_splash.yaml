@@ -1,8 +1,18 @@
+# The native launch resources are hand-generated, NOT produced by
+# `dart run flutter_native_splash:create`: the gold coin
+# (assets/qirsh/qirsh_coin_gold.png) at 118pt/118dp, centred on
+# AppBrandBlue.deep (#011341), identical in light and dark, so the native
+# launch screen matches the first frame of `AppBootLoader` pixel-for-pixel.
+# Running the generator would rescale the image and break that match.
+# Files: ios/Runner/Assets.xcassets/{LaunchImage,LaunchBackground}.imageset,
+# ios/Runner/Base.lproj/LaunchScreen.storyboard,
+# android/app/src/main/res/drawable*/{splash,background}.png,
+# drawable/launch_splash_icon.xml and values*-v31/styles.xml.
 flutter_native_splash:
-  color: "#021B79"
-  image: assets/qirsh/qirsh_logo_full.png
-  color_dark: "#021B79"
-  image_dark: assets/qirsh/qirsh_logo_full.png
+  color: "#011341"
+  image: assets/qirsh/qirsh_coin_gold.png
+  color_dark: "#011341"
+  image_dark: assets/qirsh/qirsh_coin_gold.png
   android: true
   ios: true
   web: false

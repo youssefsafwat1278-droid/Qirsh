@@ -22,7 +22,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('search chooses USD and editor targets the real shared template', (tester) async {
+  testWidgets('search chooses USD and editor targets its own published shortcut', (tester) async {
     Uri? opened;
     await show(tester, open: (uri) async { opened = uri; return true; });
     await tester.enterText(find.byKey(const Key('shortcut_search')), 'USD');
@@ -35,12 +35,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('shortcut_next')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Message contains to USD'), findsOneWidget);
+    expect(find.textContaining('Message contains'), findsNothing);
+    expect(find.textContaining('Open Qirsh USD in Shortcuts'), findsWidgets);
     expect(find.textContaining('Date Received'), findsNothing);
     await tester.tap(find.byKey(const Key('shortcut_edit')));
     await tester.pump();
     expect(opened?.host, 'open-shortcut');
-    expect(opened?.queryParameters['name'], 'QIRSH');
+    expect(opened?.queryParameters['name'], 'Qirsh USD');
   });
 
   testWidgets('changing currency clears search and selects its matching filter', (tester) async {
@@ -63,7 +64,8 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('shortcut_begin')));
     await tester.tap(find.byKey(const Key('shortcut_begin')));
     await tester.pumpAndSettle();
-    for (var i = 0; i < 5; i++) {
+    // EGP has a dedicated shortcut, so there is no filter step: 4 steps.
+    for (var i = 0; i < 4; i++) {
       await tester.tap(find.byKey(const Key('shortcut_next')));
       await tester.pumpAndSettle();
     }
@@ -82,10 +84,10 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('shortcut_begin')));
     await tester.tap(find.byKey(const Key('shortcut_begin')));
     await tester.pumpAndSettle();
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < 4; i++) {
       final next = find.byKey(const Key('shortcut_next'));
       expect(tester.getBottomRight(next).dy, lessThanOrEqualTo(568));
-      if (i < 4) {
+      if (i < 3) {
         await tester.tap(next);
         await tester.pumpAndSettle();
       }

@@ -69,8 +69,9 @@ class AppCard extends StatelessWidget {
       gradient: effectiveGradient,
       borderRadius: BorderRadius.circular(effectiveRadius),
       border: effectiveBorder,
+      // v2: Group = e1 (light) / none (dark); elevated = e2 / none.
       boxShadow: variant == AppCardVariant.elevated
-          ? AppShadows.elevatedCard
+          ? AppShadows.raised(Theme.of(context).brightness)
           : t.floatShadow,
     );
 

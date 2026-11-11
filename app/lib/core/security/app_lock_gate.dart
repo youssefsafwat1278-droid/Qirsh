@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../l10n/app_localizations.dart';
-import '../theme/app_colors.dart';
+import '../../features/app/app_boot_loader.dart';
 import '../theme/app_spacing.dart';
 import '../theme/app_typography.dart';
 import '../utils/app_lucide_icons.dart';
@@ -128,87 +128,60 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    if (!_checking && !_locked) return widget.child;
-    return _LockScreen(
-      authenticating: _authenticating || _checking,
-      onUnlock: _unlock,
+    // widget.child is built only once the gate is open; while it checks, and
+    // while the system prompt is up, the loader's coin stays on screen.
+    final open = !_checking && !_locked;
+    final locked = _locked && !_authenticating;
+    return AppBootLoaderReveal(
+      loading: !open,
+      // The loader's composition: the coin on navy, with its ring only while
+      // the check runs. Only once authentication failed or was cancelled
+      // does a short line and the unlock button appear under the coin.
+      loader: BootCoinStage(
+        ring: _checking,
+        footer: locked ? _LockFooter(onUnlock: _unlock) : null,
+      ),
+      child: open ? widget.child : null,
     );
   }
 }
 
-class _LockScreen extends StatelessWidget {
-  const _LockScreen({
-    required this.authenticating,
-    required this.onUnlock,
-  });
+class _LockFooter extends StatelessWidget {
+  const _LockFooter({required this.onUnlock});
 
-  final bool authenticating;
   final VoidCallback onUnlock;
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    return Directionality(
-      textDirection: Directionality.of(context),
-      child: Scaffold(
-        backgroundColor: c.bg,
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.gutter),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 76,
-                    height: 76,
-                    decoration: BoxDecoration(
-                      color: c.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: c.primary.withValues(alpha: 0.22),
-                      ),
-                    ),
-                    child: Icon(
-                      AppLucideIcons.wallet,
-                      color: c.primary,
-                      size: 34,
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.s5),
-                  Text(
-                    context.l10n.lockTitle,
-                    style: AppTypography.headline(c.textMain),
-                  ),
-                  const SizedBox(height: AppSpacing.s2),
-                  Text(
-                    context.l10n.lockBody,
-                    textAlign: TextAlign.center,
-                    style: AppTypography.callout(c.textLight),
-                  ),
-                  const SizedBox(height: AppSpacing.s5),
-                  FilledButton.icon(
-                    onPressed: authenticating ? null : onUnlock,
-                    icon: authenticating
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(AppLucideIcons.unlock),
-                    label: Text(authenticating
-                        ? context.l10n.lockVerifying
-                        : context.l10n.lockUnlock),
-                    // سطح ink الموحّد (كان primary الكحلي القديم).
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size.fromHeight(52),
-                    ),
-                  ),
-                ],
+    return Material(
+      type: MaterialType.transparency,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            context.l10n.lockTitle,
+            textAlign: TextAlign.center,
+            style: AppTypography.footnote(
+                Colors.white.withValues(alpha: 0.62)),
+          ),
+          const SizedBox(height: AppSpacing.s3),
+          TextButton.icon(
+            onPressed: onUnlock,
+            icon: const Icon(AppLucideIcons.unlock, size: 16),
+            label: Text(context.l10n.lockUnlock),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.white,
+              backgroundColor: Colors.white.withValues(alpha: 0.10),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.s5, vertical: AppSpacing.s3),
+              shape: StadiumBorder(
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.16)),
               ),
+              textStyle: AppTypography.subhead(Colors.white)
+                  .copyWith(fontWeight: FontWeight.w600),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

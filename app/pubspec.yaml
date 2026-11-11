@@ -108,8 +108,6 @@ flutter:
   assets:
     - assets/logo/logo_light.png
     - assets/logo/logo_dark.png
-    - assets/brand/branding_light_1024.png
-    - assets/brand/branding_dark_1024.png
     - assets/brand/symbol_green_light.png
     - assets/brand/symbol_green_dark.png
     - assets/qirsh/

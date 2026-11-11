@@ -95,9 +95,18 @@ class AppAvatar extends StatelessWidget {
   final double size;
 
   /// شكل التايل الموحّد — يُستخدم كمان في [BrandMark] عشان الاتنين يقروا واحد.
-  static ShapeBorder shapeFor(double size) => RoundedSuperellipseBorder(
+  static ShapeBorder shapeFor(double size, {BorderSide side = BorderSide.none}) =>
+      RoundedSuperellipseBorder(
         borderRadius: BorderRadius.circular(size * 0.3),
+        side: side,
       );
+
+  /// v2 (light): every white logo tile carries a 1px stroke.soft edge so
+  /// bare glyphs keep the same footprint on white cards.
+  static BorderSide logoEdge(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light
+          ? const BorderSide(color: Color(0xFFD5DBE8))
+          : BorderSide.none;
 
   @override
   Widget build(BuildContext context) {

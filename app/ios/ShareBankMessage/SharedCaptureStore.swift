@@ -661,7 +661,12 @@ enum SharedCaptureStore {
   }
 
   static var notificationLanguage: String {
-    defaults?.string(forKey: notificationLanguageKey) == "ar" ? "ar" : "en"
+    if let stored = defaults?.string(forKey: notificationLanguageKey) {
+      return stored == "ar" ? "ar" : "en"
+    }
+    // Until Qirsh first mirrors its in-app language (e.g. a Shortcut that runs
+    // before the app was ever opened), follow the device language.
+    return Locale.preferredLanguages.first?.lowercased().hasPrefix("ar") == true ? "ar" : "en"
   }
 
   /// CAP-7: mirrors the `capture_notify_v2` flag for the App Intent.
@@ -2273,6 +2278,10 @@ enum SharedCaptureStore {
     var expiryEvidence: ExpiryEvidence? = nil
     /// ASR §7.4: `egressMutationCounter` read under the same lock (receipts).
     var mutationCounter: Int? = nil
+    /// Inspection only: the highest reserved version the owner's stored egress
+    /// entries carry, a retirement's own version included (a layer report shows
+    /// only one of the two). nil when no layer holds an entry of the owner.
+    var egressVersionFrontier: Int? = nil
   }
 
   private enum StateStore: String { case egress, pending }
@@ -2913,6 +2922,15 @@ enum SharedCaptureStore {
   /// snapshots must still match both physical layers exactly under this lock.
   /// A fresh generation above every stored lifetime is published restrictive.
   ///
+  /// `expectedRetiredCopies` (explicit consent only): the independently read
+  /// snapshot of a RETIRED OFF (a lifetime fence's record, or a verified absence
+  /// beside one) must still match both physical layers exactly under this lock,
+  /// every stored entry must be OFF under one and the same retirement, and
+  /// `version` must be strictly above every stored and retired version. A fresh
+  /// generation above every stored and retired lifetime is published
+  /// restrictive. Like every writer other than the expiry mint, it drops expiry
+  /// evidence (§7.3); the mutation counter moves, so a successor chain sees it.
+  ///
   /// ASR §7.5 SE1 `successorOf`: only when the counter is unchanged since the
   /// caller's evidence read, the same uid is the active owner, and both layers
   /// hold exactly that expiry evidence bound to the active owner generation and
@@ -2922,12 +2940,15 @@ enum SharedCaptureStore {
     recover: (transitionGeneration: Int, reservedVersion: Int,
               lifetimeOwnerGeneration: Int?, lifetimeOwnerEpoch: Int?)? = nil,
     successorOf: (evidenceId: String, expectedCounter: Int)? = nil,
-    expectedOffCopies: [LayerReport]? = nil
+    expectedOffCopies: [LayerReport]? = nil,
+    expectedRetiredCopies: [LayerReport]? = nil
   ) throws -> RestrictiveOwnerPublication {
     let owner = normalizedUID(uid)
     guard !owner.isEmpty, version >= 0, expectedEpoch >= 0,
           recover == nil || successorOf == nil,
           expectedOffCopies == nil || (recover == nil && successorOf == nil),
+          expectedRetiredCopies == nil
+            || (recover == nil && successorOf == nil && expectedOffCopies == nil),
           successorOf.map({ validOperationId($0.evidenceId) }) ?? true else {
       throw QueueError.encodingFailed
     }
@@ -2970,6 +2991,24 @@ enum SharedCaptureStore {
               entries.allSatisfy({
                 $0 == nil || ($0!.state == "OFF" && $0!.retirement == nil
                   && $0!.reservedVersion < version)
+              }) else {
+          return RestrictiveOwnerPublication(status: .conflict, owner: nil,
+            ownerEpoch: expectedEpoch, egress: inspectEgress(hash))
+        }
+      }
+      if let expectedRetiredCopies {
+        // Explicit consent only. The retired snapshot is compared again while
+        // holding the write lock; anything else (an ON, a DISABLING, an OFF
+        // without retirement, two retirements, a changed or lower-versioned
+        // copy) is refused with nothing written.
+        let stored = entries.compactMap { $0 }
+        guard expectedRetiredCopies.count == 2,
+              expectedRetiredCopies.map({ $0.layer }) == ["file", "keychain"],
+              inspectEgress(hash) == expectedRetiredCopies,
+              let fence = stored.first?.retirement,
+              stored.allSatisfy({
+                $0.state == "OFF" && $0.retirement == fence
+                  && max($0.reservedVersion, fence.reservedVersion) < version
               }) else {
           return RestrictiveOwnerPublication(status: .conflict, owner: nil,
             ownerEpoch: expectedEpoch, egress: inspectEgress(hash))
@@ -3601,7 +3640,12 @@ enum SharedCaptureStore {
       } else {
         status = .conflict
       }
-      return transition("inspect", status, op: entries.first, barrier: barrier, egress: egress)
+      var reply = transition("inspect", status, op: entries.first, barrier: barrier, egress: egress)
+      reply.egressVersionFrontier = StateLayer.allCases.compactMap { layer -> Int? in
+        guard case let .value(map) = egressLayerRead(layer), let stored = map.owners[hash] else { return nil }
+        return max(stored.reservedVersion, stored.retirement?.reservedVersion ?? 0)
+      }.max()
+      return reply
     }
   }
 

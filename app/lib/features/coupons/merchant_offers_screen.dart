@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/widgets/calm_page_header.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../../core/utils/l10n_ext.dart';
@@ -46,15 +47,10 @@ class MerchantOffersScreen extends ConsumerWidget {
             ? merchant.nameEn!
             : merchant.nameAr);
 
-    return AppScreenScaffold(
-      header: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.gutter,
-          AppSpacing.s3,
-          AppSpacing.gutter,
-          AppSpacing.s2,
-        ),
-        child: Row(
+    // Immersive: the header scrolls with the content, which fills from y = 0
+    // under the status bar (kept legible by the scrim).
+    final topInset = MediaQuery.paddingOf(context).top;
+    final headerRow = Row(
           children: [
             Expanded(
               child: Column(
@@ -75,40 +71,76 @@ class MerchantOffersScreen extends ConsumerWidget {
               icon: const Icon(AppLucideIcons.x),
             ),
           ],
-        ),
-      ),
-      body: grouped.when(
+        );
+    // Non-list states: the header leads, the state fills the rest.
+    Widget withHeader(Widget state) => CustomScrollView(
+          slivers: [
+            SliverPadding(
+              padding: EdgeInsets.only(top: topInset),
+              sliver: SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.gutter,
+                    AppSpacing.s3,
+                    AppSpacing.gutter,
+                    AppSpacing.s2,
+                  ),
+                  child: headerRow,
+                ),
+              ),
+            ),
+            SliverFillRemaining(hasScrollBody: false, child: state),
+          ],
+        );
+
+    return AppScreenScaffold(
+      safeArea: false,
+      body: StatusBarScrim(
+        child: grouped.when(
         skipLoadingOnReload: true,
-        loading: () => AppLoadingState(label: l10n.couponsLoading),
-        error: (_, __) => AppErrorState(
+        loading: () =>
+            withHeader(AppLoadingState(label: l10n.couponsLoading)),
+        error: (_, __) => withHeader(AppErrorState(
           title: l10n.couponsErrorTitle,
           description: l10n.couponsErrorBody,
           retryLabel: l10n.couponsRetry,
           onRetry: () => ref.invalidate(cachedCouponsProvider),
-        ),
+        )),
         data: (byMerchant) {
           final offers = byMerchant[merchantId] ?? const <CouponOffer>[];
           if (offers.isEmpty) {
-            return AppEmptyState(
+            return withHeader(AppEmptyState(
               icon: AppLucideIcons.tag,
               illustration: const QirshIllustration(
                   name: 'offers', width: 220, height: 165),
               title: l10n.couponsMerchantEmptyTitle,
               subtitle: l10n.couponsMerchantEmptyBody,
-            );
+            ));
           }
           return ListView.separated(
-            padding: const EdgeInsets.fromLTRB(
+            padding: EdgeInsets.fromLTRB(
               AppSpacing.gutter,
-              AppSpacing.s2,
+              topInset,
               AppSpacing.gutter,
               AppSpacing.s6,
             ),
-            itemCount: offers.length,
-            separatorBuilder: (_, __) => const SizedBox(height: AppSpacing.s3),
-            itemBuilder: (context, i) => CouponCard(offer: offers[i]),
+            // Item 0 is the header; it scrolls away with the offers.
+            itemCount: offers.length + 1,
+            separatorBuilder: (_, i) => i == 0
+                ? const SizedBox.shrink()
+                : const SizedBox(height: AppSpacing.s3),
+            itemBuilder: (context, i) => i == 0
+                ? Padding(
+                    padding: const EdgeInsets.only(
+                      top: AppSpacing.s3,
+                      bottom: AppSpacing.s2 + AppSpacing.s2,
+                    ),
+                    child: headerRow,
+                  )
+                : CouponCard(offer: offers[i - 1]),
           );
         },
+        ),
       ),
     );
   }

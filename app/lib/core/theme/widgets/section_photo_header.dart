@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -20,8 +22,6 @@ enum QirshSectionPhoto {
   String get asset => 'assets/photos/qirsh-section-$name-v1.webp';
 }
 
-const _sectionStatusColor = Color(0xFF0C1525);
-
 /// Full-width photographic title with the next surface overlapping its foot.
 ///
 /// Owns decoration only. Callers keep their routes, controls and money data.
@@ -38,6 +38,7 @@ class QirshSectionHero extends StatelessWidget {
     this.height = 220,
     this.useSafeAreaTop = true,
     this.expandForText = true,
+    this.fitTitle = false,
   });
 
   final QirshSectionPhoto photo;
@@ -51,9 +52,13 @@ class QirshSectionHero extends StatelessWidget {
   final bool useSafeAreaTop;
   final bool expandForText;
 
+  /// Keep the title on ONE line, scaled down to fit, instead of wrapping.
+  final bool fitTitle;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final safeTop = useSafeAreaTop ? MediaQuery.paddingOf(context).top : 0.0;
     final overlay = Theme.of(context).copyWith(
       iconTheme: const IconThemeData(color: Colors.white),
@@ -89,13 +94,28 @@ class QirshSectionHero extends StatelessWidget {
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
-                              colors: [
-                                _sectionStatusColor,
-                                const Color(0x8A040D20),
-                                bottom == null
-                                    ? const Color(0x22040D20)
-                                    : const Color(0xD9040D20),
-                              ],
+                              // v2 QPhotoHeader: dark — the photo dissolves
+                              // into the black canvas (no sheet edge); light —
+                              // a navy scrim behind the title over a crisp
+                              // canvas sheet.
+                              // Immersive: the photo runs under the status
+                              // bar / Dynamic Island; only a translucent scrim
+                              // keeps the white status icons legible.
+                              colors: isDark
+                                  ? [
+                                      const Color(0x99040D20),
+                                      const Color(0x8A040D20),
+                                      bottom == null
+                                          ? const Color(0xE6000000)
+                                          : const Color(0xF2000000),
+                                    ]
+                                  : [
+                                      const Color(0x99011341),
+                                      const Color(0x8C011341),
+                                      bottom == null
+                                          ? const Color(0x1A011341)
+                                          : const Color(0xD9011341),
+                                    ],
                               stops: const [0, .56, 1],
                             ),
                           ),
@@ -135,19 +155,41 @@ class QirshSectionHero extends StatelessWidget {
                                               CrossAxisAlignment.start,
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
+                                            if (fitTitle)
+                                              // One line that shrinks to fit
+                                              // instead of wrapping.
+                                              FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                alignment: AlignmentDirectional
+                                                    .centerStart,
+                                                child: Text(title,
+                                                    maxLines: 1,
+                                                    softWrap: false,
+                                                    textScaler: MediaQuery
+                                                            .textScalerOf(
+                                                                context)
+                                                        .clamp(
+                                                            maxScaleFactor:
+                                                                1.35),
+                                                    style: AppTypography
+                                                        .titleLarge(
+                                                            Colors.white)),
+                                              )
+                                            else
                                             Text(title,
                                                 maxLines:
                                                     expandForText ? null : 2,
                                                 overflow: expandForText
                                                     ? null
                                                     : TextOverflow.ellipsis,
-                                                style: AppTypography.custom(
-                                                  size: 25,
-                                                  weight: FontWeight.w700,
-                                                  height: 1.25,
-                                                  letterSpacing: -.45,
-                                                  color: Colors.white,
-                                                )),
+                                                // v2: title.large clamps
+                                                // at 1.35× Dynamic Type.
+                                                textScaler: MediaQuery
+                                                        .textScalerOf(context)
+                                                    .clamp(
+                                                        maxScaleFactor: 1.35),
+                                                style: AppTypography
+                                                    .titleLarge(Colors.white)),
                                             if (subtitle?.isNotEmpty ==
                                                 true) ...[
                                               const SizedBox(height: 5),
@@ -157,13 +199,9 @@ class QirshSectionHero extends StatelessWidget {
                                                   overflow: expandForText
                                                       ? null
                                                       : TextOverflow.ellipsis,
-                                                  style: AppTypography.custom(
-                                                    size: 12.5,
-                                                    weight: FontWeight.w400,
-                                                    height: 1.4,
-                                                    color:
-                                                        const Color(0xFFE2E9F4),
-                                                  )),
+                                                  style: AppTypography.callout(
+                                                      Colors.white.withValues(
+                                                          alpha: .80))),
                                             ],
                                           ],
                                         ),
@@ -198,10 +236,21 @@ class QirshSectionHero extends StatelessWidget {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: c.bg,
-                      borderRadius:
-                          const BorderRadius.vertical(top: Radius.circular(26)),
+                      borderRadius: isDark
+                          ? null
+                          : const BorderRadius.vertical(
+                              top: Radius.circular(AppRadius.sheet)),
+                      boxShadow: isDark
+                          ? null
+                          : const [
+                              BoxShadow(
+                                color: Color(0x1F0C1330),
+                                blurRadius: 24,
+                                offset: Offset(0, -8),
+                              ),
+                            ],
                     ),
-                    child: const SizedBox(height: 24),
+                    child: SizedBox(height: isDark ? 1 : 24),
                   ),
                 ),
               ),
@@ -214,27 +263,93 @@ class QirshSectionHero extends StatelessWidget {
   }
 }
 
-/// Extends the section's navy backdrop through the status-bar inset while the
-/// SafeArea continues to keep pinned tabs clear of the clock after scrolling.
-class QirshSectionBackdrop extends StatelessWidget {
-  const QirshSectionBackdrop({super.key, required this.child});
+/// The status-bar region of a section screen (v2 `QNavBar` scroll edge).
+///
+/// While the section photo sits under the clock the band IS the photo's top
+/// stop (seamless, light status icons). Once content scrolls beneath it, it
+/// cross-fades into the canvas glass bar with a hairline and theme-matched
+/// status icons — no opaque navy slab over a pale page. The SafeArea inside
+/// [child] still keeps pinned tabs clear of the clock.
+class QirshSectionBackdrop extends StatefulWidget {
+  const QirshSectionBackdrop(
+      {super.key, required this.child, this.glassFrom = 120});
   final Widget child;
+
+  /// Outer scroll offset where the band starts turning to glass (it is fully
+  /// glass 60px later). Short heroes pass a smaller value so their title
+  /// never slides under the clock on bare photo.
+  final double glassFrom;
+
+  @override
+  State<QirshSectionBackdrop> createState() => _QirshSectionBackdropState();
+}
+
+class _QirshSectionBackdropState extends State<QirshSectionBackdrop> {
+  final ValueNotifier<double> _t = ValueNotifier<double>(0);
+
+  @override
+  void dispose() {
+    _t.dispose();
+    super.dispose();
+  }
+
+  bool _onScroll(ScrollNotification n) {
+    // The outer scrollable only (a NestedScrollView's inner lists are
+    // deeper): the bar turns to glass once the hero has scrolled away.
+    if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
+    _t.value = ((n.metrics.pixels - widget.glassFrom) / 60).clamp(0.0, 1.0);
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
-    if (top <= 0) return child;
+    if (top <= 0) return widget.child;
+    final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Stack(children: [
-      child,
+      NotificationListener<ScrollNotification>(
+        onNotification: _onScroll,
+        child: widget.child,
+      ),
       Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          height: top,
-          child: const AnnotatedRegion<SystemUiOverlayStyle>(
-            value: SystemUiOverlayStyle.light,
-            child: IgnorePointer(child: ColoredBox(color: _sectionStatusColor)),
-          )),
+        top: 0,
+        left: 0,
+        right: 0,
+        height: top,
+        child: IgnorePointer(
+          child: ValueListenableBuilder<double>(
+            valueListenable: _t,
+            builder: (context, t, _) {
+              final style = t < .5 || isDark
+                  ? SystemUiOverlayStyle.light
+                  : SystemUiOverlayStyle.dark;
+              final glass = c.bg.withValues(alpha: .62);
+              return AnnotatedRegion<SystemUiOverlayStyle>(
+                value: style,
+                child: ClipRect(
+                  child: BackdropFilter(
+                    enabled: t > 0,
+                    filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Color.lerp(glass.withValues(alpha: 0), glass, t),
+                        border: Border(
+                          bottom: BorderSide(
+                            color: c.border.withValues(alpha: t),
+                            width: .5,
+                          ),
+                        ),
+                      ),
+                      child: const SizedBox.expand(),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
     ]);
   }
 }

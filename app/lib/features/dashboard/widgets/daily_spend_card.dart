@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/utils/l10n_ext.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/mali_tokens.dart';
@@ -13,10 +14,13 @@ import '../../../domain/finance/money.dart';
 import '../../../domain/finance/money_format.dart';
 import '../../cards/brand_mark.dart';
 import '../../common/app_avatar.dart';
+import '../../common/app_status_pill.dart';
 import '../../common/category_catalog.dart';
 import '../../common/transaction_direction.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/theme/widgets/ring_progress.dart';
+import '../../../core/utils/app_lucide_icons.dart';
+import 'home_v2_style.dart';
 
 /// Home's «المصروفات اليومية» card.
 ///
@@ -102,13 +106,18 @@ class DailySpendCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _headline(context, t),
-          const SizedBox(height: AppSpacing.s4),
-          _SevenDayBars(days: lastSevenDays, privacyMode: privacyMode),
+          const SizedBox(height: AppSpacing.s5),
+          RepaintBoundary(
+            child: _SevenDayBars(
+                days: lastSevenDays,
+                average: averageSevenDays,
+                privacyMode: privacyMode),
+          ),
           const SizedBox(height: AppSpacing.s4),
           _metrics(context, t),
           if (top.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.s4),
-            Divider(height: 1, color: t.strokeSoft),
+            const SizedBox(height: AppSpacing.s3),
+            Divider(height: 1, color: HomeV2.hairline(context)),
             const SizedBox(height: AppSpacing.s3),
             _topHeader(context, t),
             for (final tx in top) _topRow(context, t, tx),
@@ -118,13 +127,41 @@ class DailySpendCard extends StatelessWidget {
     );
   }
 
+  /// Spent ÷ today's allowance. The daily budget when one is set; with none
+  /// (null or zero), what was spent against spent + still available (spec
+  /// «05» item 6 — the ring used to sit empty without a daily budget). Null
+  /// — a muted ring, never a guessed arc — when neither is in today's
+  /// currency, and always under privacy.
+  double? get _ringValue {
+    if (privacyMode) return null;
+    final limit = dailyBudgetLimit;
+    if (limit != null &&
+        limit.currency == todaySpend.currency &&
+        limit.minorUnits > 0) {
+      return todaySpend.minorUnits / limit.minorUnits;
+    }
+    // A positive daily budget in another currency is incompatible: no arc.
+    if (limit != null && limit.minorUnits > 0) return null;
+    final available = availableToday;
+    if (available != null &&
+        available.currency == todaySpend.currency &&
+        !todaySpend.isNegative &&
+        !available.isNegative) {
+      final whole = todaySpend.minorUnits + available.minorUnits;
+      if (whole > 0) return todaySpend.minorUnits / whole;
+    }
+    return null;
+  }
+
   // ── «صرفت اليوم» + مقارنة بأمس ──────────────────────────────────────────
 
   Widget _headline(BuildContext context, MaliTokens t) {
     final c = context.colors;
+    final dark = HomeV2.isDark(context);
     final ratio = todayVsYesterday;
+    final ring = _ringValue;
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
           child: Column(
@@ -133,7 +170,7 @@ class DailySpendCard extends StatelessWidget {
             children: [
               Text(context.l10n.homeSpentToday,
                   style: AppTypography.caption(t.textOnCanvasMuted)),
-              const SizedBox(height: 3),
+              const SizedBox(height: 2),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.baseline,
                 textBaseline: TextBaseline.alphabetic,
@@ -145,13 +182,7 @@ class DailySpendCard extends StatelessWidget {
                       child: Text(
                         privacyMode ? '••••' : formatMoney(todaySpend),
                         maxLines: 1,
-                        style: AppTypography.custom(
-                          size: 26,
-                          weight: FontWeight.w700,
-                          height: 1.15,
-                          tabular: true,
-                          color: t.textOnCanvasPrimary,
-                        ),
+                        style: AppTypography.amountLarge(t.textOnCanvasPrimary),
                       ),
                     ),
                   ),
@@ -161,79 +192,63 @@ class DailySpendCard extends StatelessWidget {
                 ],
               ),
               if (ratio != null) ...[
-                const SizedBox(height: 6),
-                _DeltaChip(
-                    ratio: ratio, color: ratio > 0 ? c.danger : c.income),
+                const SizedBox(height: 8),
+                _DeltaChip(ratio: ratio),
               ],
             ],
           ),
         ),
         if (availableToday != null) ...[
           const SizedBox(width: AppSpacing.s3),
-          Expanded(
-              child: Row(children: [
-            RingProgress(
-              key: const ValueKey('today-budget-ring'),
-              size: 58,
-              strokeWidth: 5,
-              color: c.primary,
-              trackColor: c.surface2,
-              value: privacyMode ||
-                      dailyBudgetLimit == null ||
-                      dailyBudgetLimit!.currency != todaySpend.currency ||
-                      dailyBudgetLimit!.minorUnits <= 0
-                  ? null
-                  : todaySpend.minorUnits / dailyBudgetLimit!.minorUnits,
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 136),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RingProgress(
+                  key: const ValueKey('today-budget-ring'),
+                  size: 72,
+                  strokeWidth: 8,
+                  // v2: arc = action text (dark) / action fill (light).
+                  color: dark ? c.actionText : c.cta,
+                  trackColor: HomeV2.track(context),
+                  value: ring,
+                  child: ring == null
+                      ? null
+                      : Text('${(ring * 100).round().clamp(0, 999)}%',
+                          maxLines: 1,
+                          style: AppTypography.label(t.textOnCanvasPrimary)),
+                ),
+                const SizedBox(height: 6),
+                Text(context.l10n.homeAvailableToday,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.caption(t.textOnCanvasMuted)),
+                FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                        privacyMode ? '••••' : formatMoney(availableToday!),
+                        maxLines: 1,
+                        style:
+                            AppTypography.amountSmall(t.textOnCanvasPrimary))),
+              ],
             ),
-            const SizedBox(width: 8),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                  Text(
-                      availableToday == null
-                          ? context.l10n.homeSetMonthlyBudgetShort
-                          : context.l10n.homeAvailableToday,
-                      style: AppTypography.caption(t.textOnCanvasMuted)),
-                  const SizedBox(height: 4),
-                  FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: AlignmentDirectional.centerStart,
-                      child: Text(
-                          availableToday == null
-                              ? '—'
-                              : privacyMode
-                                  ? '••••'
-                                  : formatMoney(availableToday!),
-                          style: AppTypography.custom(
-                              size: 17,
-                              weight: FontWeight.w700,
-                              height: 1.2,
-                              tabular: true,
-                              color: t.textOnCanvasPrimary))),
-                ])),
-          ])),
+          ),
         ],
       ],
     );
   }
 
-  // ── المقاييس الثلاثة ────────────────────────────────────────────────────────
+  // ── المقاييس ──────────────────────────────────────────────────────────────
 
+  /// v2 `QStat`s: no box, separated by one vertical hairline.
   Widget _metrics(BuildContext context, MaliTokens t) {
     // The count is exact only when the read was not truncated.
     final countLabel = todayIsTruncated
         ? '+${todayTransactions.length}'
         : '${todayTransactions.length}';
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.s3),
-      decoration: BoxDecoration(
-        color: t.surfaceRaised,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: t.cardBorder),
-      ),
+    return IntrinsicHeight(
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _metric(
             context,
@@ -241,7 +256,7 @@ class DailySpendCard extends StatelessWidget {
             value: privacyMode ? '••••' : formatMoney(averageSevenDays),
             label: context.l10n.homeSevenDayAverage,
           ),
-          _divider(t),
+          Container(width: 1, color: HomeV2.hairline(context)),
           _metric(context, t,
               value: countLabel, label: context.l10n.homeTodayTransactions),
         ],
@@ -254,7 +269,6 @@ class DailySpendCard extends StatelessWidget {
     MaliTokens t, {
     required String value,
     required String label,
-    bool muted = false,
   }) =>
       Expanded(
         child: Column(
@@ -267,17 +281,11 @@ class DailySpendCard extends StatelessWidget {
                 child: Text(
                   value,
                   maxLines: 1,
-                  style: AppTypography.custom(
-                    size: 15,
-                    weight: FontWeight.w600,
-                    height: 1.2,
-                    tabular: true,
-                    color: muted ? t.textOnCanvasMuted : t.textOnCanvasPrimary,
-                  ),
+                  style: AppTypography.amountMedium(t.textOnCanvasPrimary),
                 ),
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
@@ -285,20 +293,17 @@ class DailySpendCard extends StatelessWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
-                style: AppTypography.micro(t.textOnCanvasMuted),
+                style: AppTypography.caption(t.textOnCanvasMuted),
               ),
             ),
           ],
         ),
       );
 
-  Widget _divider(MaliTokens t) =>
-      Container(width: 1, height: 30, color: t.cardBorder);
-
   // ── أعلى ٣ اليوم ─────────────────────────────────────────────────────────
 
   Widget _topHeader(BuildContext context, MaliTokens t) => Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.s2),
+        padding: const EdgeInsets.only(bottom: AppSpacing.s1),
         child: Row(
           children: [
             Expanded(
@@ -331,10 +336,10 @@ class DailySpendCard extends StatelessWidget {
         behavior: HitTestBehavior.opaque,
         onTap: onTransactionTap == null ? null : () => onTransactionTap!(tx),
         child: ConstrainedBox(
-          // Accessible touch target even though the row's own content is short.
-          constraints: const BoxConstraints(minHeight: 44),
+          // v2 compact row: 52pt.
+          constraints: const BoxConstraints(minHeight: 52),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5),
+            padding: const EdgeInsets.symmetric(vertical: 6),
             child: Row(
               children: [
                 (logo != null || BrandMark.hasBrand(title))
@@ -346,31 +351,34 @@ class DailySpendCard extends StatelessWidget {
                     : categoryTile,
                 const SizedBox(width: AppSpacing.s3),
                 Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.subhead(t.textOnCanvasPrimary),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.subhead(t.textOnCanvasPrimary),
+                      ),
+                      Text(
+                        category?.name ?? context.l10n.homeUncategorised,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption(t.textOnCanvasMuted),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(width: AppSpacing.s2),
-                Text(
-                  category?.name ?? context.l10n.homeUncategorised,
-                  style: AppTypography.micro(t.textOnCanvasMuted),
                 ),
                 const SizedBox(width: AppSpacing.s3),
                 Text(
+                  // v2 money rule: an expense is neutral with a leading "−".
                   privacyMode
                       ? '••••'
-                      : formatMoney(Money(tx.amountMoney.minorUnits.abs(),
-                          tx.amountMoney.currency)),
-                  style: AppTypography.custom(
-                    size: 14,
-                    weight: FontWeight.w500,
-                    height: 1.3,
-                    tabular: true,
-                    color: t.textOnCanvasPrimary,
-                  ),
+                      : '−${formatMoney(Money(tx.amountMoney.minorUnits.abs(), tx.amountMoney.currency))}',
+                  textDirection: TextDirection.ltr,
+                  style: AppTypography.amountSmall(t.textOnCanvasPrimary)
+                      .copyWith(fontSize: 15),
                 ),
               ],
             ),
@@ -381,17 +389,30 @@ class DailySpendCard extends StatelessWidget {
   }
 }
 
-/// Seven fixed slots. One de-emphasised colour for the week, the accent for
-/// today — the days are ONE series, so colouring each of them separately would
-/// burn the only free channel on information the bar heights already carry.
+/// Seven fixed slots. One de-emphasised colour for the week, the action blue
+/// for today — the days are ONE series, so colouring each of them separately
+/// would burn the only free channel on information the bar heights already
+/// carry. A dashed line marks the seven-day average.
+///
+/// v2 `m.chart`: bars rise from the baseline with a 30ms leading→trailing
+/// stagger, then the average line draws in. Reduce Motion renders the chart
+/// complete.
 class _SevenDayBars extends StatelessWidget {
-  const _SevenDayBars({required this.days, required this.privacyMode});
+  const _SevenDayBars({
+    required this.days,
+    required this.average,
+    required this.privacyMode,
+  });
 
   final List<DailySpend> days;
+  final Money average;
   final bool privacyMode;
 
-  static const double _maxHeight = 56;
+  static const double _plotHeight = 76;
   static const double _minHeight = 3;
+  static const int _barMs = 800;
+  static const int _staggerMs = 30;
+  static const int _lineMs = 400;
 
   @override
   Widget build(BuildContext context) {
@@ -404,42 +425,139 @@ class _SevenDayBars extends StatelessWidget {
       final v = d.total.minorUnits.abs();
       if (v > peak) peak = v;
     }
-    // No fixed total height: the plot area is fixed at [_maxHeight] but the
-    // label below it grows with the text scaler, so the row must size to its
-    // content. A `SizedBox(height: _maxHeight + 18)` here overflowed at 1.6×.
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        for (var i = 0; i < days.length; i++) ...[
-          if (i > 0) const SizedBox(width: 6),
-          Expanded(
-            child: _bar(
-              context,
-              t,
-              day: days[i],
-              isToday: i == days.length - 1,
-              peak: peak,
-              accent: c.cta,
+    final avg = average.minorUnits.abs();
+    final avgRatio =
+        peak <= 0 || avg <= 0 ? null : (avg / peak).clamp(0.0, 1.0);
+    final barsMs = _barMs + _staggerMs * (days.length - 1);
+    final totalMs = barsMs + (avgRatio == null ? 0 : _lineMs);
+    final animate = HomeV2.chart(context) != Duration.zero;
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: animate ? 0 : 1, end: 1),
+      duration: Duration(milliseconds: animate ? totalMs : 0),
+      builder: (context, p, _) {
+        double barProgress(int i) {
+          final start = i * _staggerMs / totalMs;
+          final end = (i * _staggerMs + _barMs) / totalMs;
+          return AppMotion.springSmoothCurve
+              .transform(((p - start) / (end - start)).clamp(0.0, 1.0));
+        }
+
+        final lineProgress = avgRatio == null
+            ? 0.0
+            : AppMotion.easeOut.transform(
+                ((p * totalMs - barsMs) / _lineMs).clamp(0.0, 1.0));
+        final lineY = avgRatio == null
+            ? 0.0
+            : _minHeight + (_plotHeight - _minHeight) * avgRatio;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: _plotHeight,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        for (var i = 0; i < days.length; i++) ...[
+                          if (i > 0) const SizedBox(width: 8),
+                          Expanded(
+                            child: _bar(
+                              context,
+                              day: days[i],
+                              isToday: i == days.length - 1,
+                              peak: peak,
+                              progress: barProgress(i),
+                              accent: c.cta,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  if (avgRatio != null && lineProgress > 0) ...[
+                    PositionedDirectional(
+                      start: 0,
+                      end: 0,
+                      bottom: lineY - 0.75,
+                      child: Opacity(
+                        opacity: 0.8,
+                        child: HomeDashedLine(
+                            color: t.textOnCanvasMuted,
+                            progress: lineProgress),
+                      ),
+                    ),
+                    PositionedDirectional(
+                      end: 0,
+                      bottom: avgRatio > 0.72 ? lineY - 20 : lineY + 4,
+                      child: ExcludeSemantics(
+                        child: Opacity(
+                          opacity: lineProgress,
+                          child: Container(
+                            color: c.surface,
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Text(
+                              '${context.l10n.homeSevenDayAverage} ${privacyMode ? '••••' : formatMoney(average)}',
+                              maxLines: 1,
+                              style: AppTypography.overline(
+                                  t.textOnCanvasMuted),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-        ],
-      ],
+            const SizedBox(height: 6),
+            // The weekday letters; each bar already announces its day.
+            ExcludeSemantics(
+              child: Row(
+                children: [
+                  for (var i = 0; i < days.length; i++) ...[
+                    if (i > 0) const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        i == days.length - 1
+                            ? context.l10n.txnRangeToday
+                            : Formatters.weekdayInitial(context, days[i].day),
+                        maxLines: 1,
+                        textAlign: TextAlign.center,
+                        overflow: TextOverflow.visible,
+                        softWrap: false,
+                        style: AppTypography.overline(i == days.length - 1
+                            ? t.textOnCanvasPrimary
+                            : t.textOnCanvasMuted),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 
   Widget _bar(
-    BuildContext context,
-    MaliTokens t, {
+    BuildContext context, {
     required DailySpend day,
     required bool isToday,
     required int peak,
+    required double progress,
     required Color accent,
   }) {
     final magnitude = day.total.minorUnits.abs();
     final height = peak <= 0
         ? _minHeight
-        : (_minHeight + (_maxHeight - _minHeight) * (magnitude / peak))
-            .clamp(_minHeight, _maxHeight)
+        : (_minHeight + (_plotHeight - _minHeight) * (magnitude / peak))
+            .clamp(_minHeight, _plotHeight)
             .toDouble();
     final label = isToday
         ? context.l10n.txnRangeToday
@@ -448,64 +566,46 @@ class _SevenDayBars extends StatelessWidget {
       label: context.l10n.homeDayAmountSemantics(
           label, privacyMode ? '••••' : formatMoney(day.total)),
       excludeSemantics: true,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          // Fixed plot area; the bar grows from its baseline inside it.
-          SizedBox(
-            height: _maxHeight,
-            child: Align(
-              alignment: Alignment.bottomCenter,
-              child: Container(
-                height: height,
-                constraints: const BoxConstraints(maxWidth: 22),
-                decoration: BoxDecoration(
-                  color: isToday ? accent : t.ringTrackNeutral,
-                  // Rounded at the data end, square on the baseline: a fully
-                  // rounded cap lifts the bar off the axis and misstates its
-                  // length.
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(4)),
-                ),
-              ),
-            ),
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Container(
+          height: (height * progress).clamp(0.0, _plotHeight),
+          constraints: const BoxConstraints(maxWidth: 28),
+          decoration: BoxDecoration(
+            color: isToday ? accent : HomeV2.chartOff(context),
+            borderRadius: BorderRadius.circular(8),
           ),
-          const SizedBox(height: 5),
-          Text(
-            label,
-            maxLines: 1,
-            style: AppTypography.micro(
-              isToday ? t.textOnCanvasPrimary : t.textOnCanvasMuted,
-            ).copyWith(fontSize: 10),
-          ),
-        ],
+        ),
       ),
     );
   }
 }
 
 class _DeltaChip extends StatelessWidget {
-  const _DeltaChip({required this.ratio, required this.color});
+  const _DeltaChip({required this.ratio});
 
   final double ratio;
-  final Color color;
 
   @override
   Widget build(BuildContext context) {
     final pct = (ratio.abs() * 100).round();
     // Cap the label so an unusual spike cannot break the row's layout.
     final text = pct > 999 ? '+999%' : '${ratio > 0 ? '+' : '−'}$pct%';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(AppRadius.pill),
-      ),
-      child: Text(
-        context.l10n.homeVsYesterdayValue(text),
-        maxLines: 1,
-        style: AppTypography.micro(color).copyWith(fontWeight: FontWeight.w700),
+    // v2 QStatusChip: spending less is success; more is a warning, never red
+    // (red is reserved for over budget).
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: AlignmentDirectional.centerStart,
+        child: AppStatusPill(
+          label: context.l10n.homeVsYesterdayValue(text),
+          tone: ratio > 0 ? AppStatusTone.warning : AppStatusTone.success,
+          icon: ratio > 0
+              ? AppLucideIcons.trendingUp
+              : AppLucideIcons.trendingDown,
+          compact: true,
+        ),
       ),
     );
   }

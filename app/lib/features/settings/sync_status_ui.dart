@@ -19,7 +19,11 @@ import '../../core/theme/widgets/glass_sheet.dart';
 /// it only reports; it never banners or toasts on a change. Tapping opens
 /// [showSyncStatusSheet].
 class SyncStatusTile extends ConsumerWidget {
-  const SyncStatusTile({super.key});
+  const SyncStatusTile({super.key, this.banner = false});
+
+  /// v2 «بيانات حسابك»: the same status as a tinted card on the canvas
+  /// (infoBg when nothing is wrong) instead of a row inside a group.
+  final bool banner;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,6 +40,57 @@ class SyncStatusTile extends ConsumerWidget {
       SyncStatusKind.failed => (AppLucideIcons.alertTriangle, c.danger),
       SyncStatusKind.needsAttention => (AppLucideIcons.alertTriangle, c.accent),
     };
+    if (banner) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      final (Color bg, Color accent) = switch (status.kind) {
+        SyncStatusKind.allSynced => (c.successBg, c.success),
+        SyncStatusKind.failed => (c.dangerBg, c.danger),
+        SyncStatusKind.needsAttention ||
+        SyncStatusKind.waiting => (c.warningBg, c.warning),
+        _ => (c.infoBg, c.info),
+      };
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.gutter, 0, AppSpacing.gutter, 0),
+        child: Material(
+          color: bg,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadius.card),
+            side: isDark
+                ? BorderSide(color: accent.withValues(alpha: 0.24))
+                : BorderSide.none,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            key: const ValueKey('sync-status-tile'),
+            splashFactory: NoSplash.splashFactory,
+            onTap: () => showSyncStatusSheet(context),
+            child: Padding(
+              padding: const EdgeInsetsDirectional.fromSTEB(
+                  AppSpacing.s4, AppSpacing.s3 + 2, AppSpacing.s3,
+                  AppSpacing.s3 + 2),
+              child: Row(children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: isDark ? 0.22 : 0.16),
+                    borderRadius: BorderRadius.circular(AppRadius.control),
+                  ),
+                  child: Icon(icon, size: 18, color: color),
+                ),
+                const SizedBox(width: AppSpacing.s3),
+                Expanded(
+                  child: Text(syncStatusLabel(context, status),
+                      style: AppTypography.subhead(c.textPrimary)),
+                ),
+                DirectionalChevron(color: c.textMuted, size: 18),
+              ]),
+            ),
+          ),
+        ),
+      );
+    }
     return ListTile(
       key: const ValueKey('sync-status-tile'),
       visualDensity: VisualDensity.compact,

@@ -152,9 +152,27 @@ void main() {
       expect(intent, contains('case captureFailed(SharedCaptureStore.FailureKind)'));
     });
 
-    test('the copy is exactly the approved text, Arabic or English by device language', () {
+    test('the copy is exactly the approved text, Arabic or English by app language', () {
       final copy = body(store, 'var userMessage: String');
-      expect(copy, contains('Locale.preferredLanguages.first'));
+      // Since 2d2b2df1 the copy follows the language chosen in Qirsh (the same
+      // one capture notifications use), not the device language: Flutter
+      // mirrors it to the App Group and the native side reads it back.
+      expect(copy, contains('let arabic = notificationLanguage == "ar"'));
+      expect(copy, isNot(contains('Locale.preferredLanguages')));
+      // The stored in-app choice wins; only while nothing was mirrored yet (a
+      // Shortcut run before Qirsh was ever opened) does the device decide.
+      final language = body(store, 'static var notificationLanguage: String');
+      expect(language, contains(
+          'if let stored = defaults?.string(forKey: notificationLanguageKey) {'));
+      expect(language, contains('return stored == "ar" ? "ar" : "en"'));
+      expect(language, contains(
+          'return Locale.preferredLanguages.first?.lowercased().hasPrefix("ar") == true ? "ar" : "en"'));
+      expect(
+          File('ios/ShareBankMessage/SharedCaptureStore.swift').readAsStringSync(),
+          store,
+          reason: 'the Share extension copy must stay identical');
+      expect(File('lib/core/i18n/locale_provider.dart').readAsStringSync(),
+          contains('NativeCaptureBridge.setNotificationLanguage(code)'));
       for (final text in const [
         'لم يصل نص رسالة البنك إلى قِرش. تأكد أن الاختصار يمرّر نص الرسالة، ثم حاول مرة أخرى.',
         "Qirsh didn't receive the bank message text. Make sure the Shortcut passes the message text, then try again.",

@@ -31,9 +31,14 @@ void main() {
     final paragraph = tester.renderObject<RenderParagraph>(amount);
     expect(paragraph.textDirection, TextDirection.ltr);
     final sign = paragraph.getBoxesForSelection(const TextSelection(baseOffset: 0, extentOffset: 1)).single;
-    final digits = paragraph.getBoxesForSelection(const TextSelection(baseOffset: 1, extentOffset: 6)).single;
-    expect(sign.left, lessThan(digits.left),
-        reason: 'The rendered minus must be on the physical left in Arabic.');
+    // v2 dims the decimals in their own span, so the digits may lay out as
+    // more than one box; the minus must sit left of every one of them.
+    final digits = paragraph.getBoxesForSelection(const TextSelection(baseOffset: 1, extentOffset: 6));
+    expect(digits, isNotEmpty);
+    for (final box in digits) {
+      expect(sign.left, lessThan(box.left),
+          reason: 'The rendered minus must be on the physical left in Arabic.');
+    }
     expect(tester.takeException(), isNull);
   });
 

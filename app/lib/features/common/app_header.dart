@@ -1,8 +1,12 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/widgets/section_photo_header.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+
+final _navBlur = ImageFilter.blur(sigmaX: 12, sigmaY: 12);
 
 class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   const AppHeader({
@@ -57,10 +61,25 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
         ),
       );
     }
+    // v2 QNavBar scroll edge (immersive): clear at rest, frosted glass once
+    // content scrolls beneath it. Screens that extend their body behind the
+    // bar let that content pass under the status bar / Dynamic Island.
+    final glass = c.bg.withValues(alpha: .62);
     return AppBar(
-      backgroundColor: c.bg,
+      backgroundColor: WidgetStateColor.resolveWith((states) =>
+          states.contains(WidgetState.scrolledUnder)
+              ? glass
+              : c.bg.withValues(alpha: 0)),
+      surfaceTintColor: Colors.transparent,
+      shadowColor: c.border,
+      flexibleSpace: ClipRect(
+        child: BackdropFilter(
+          filter: _navBlur,
+          child: const SizedBox.expand(),
+        ),
+      ),
       elevation: 0,
-      scrolledUnderElevation: 0,
+      scrolledUnderElevation: .5,
       automaticallyImplyLeading: leading == null && showBack,
       leading: leading,
       iconTheme: IconThemeData(color: c.textPrimary),

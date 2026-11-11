@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ splash icon. The system draws this drawable in a 288dp box;
+     the 29.5% inset leaves the gold coin at 118dp, the size the Flutter
+     AppBootLoader draws it at, so the hand-off does not jump. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/splash"
+    android:inset="29.5%" />

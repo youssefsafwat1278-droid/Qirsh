@@ -146,11 +146,28 @@ void main() {
       await tester.pumpAndSettle();
       final screen = find.byType(SettingsScreen);
       expect(screen, findsOneWidget);
-      final scoped = ProviderScope.containerOf(tester.element(screen));
+      final scoped = ProviderScope.containerOf(tester.element(screen.last));
       expect(identical(scoped.read(themeModeProvider.notifier), originalTheme),
           isFalse);
-      expect(Localizations.localeOf(tester.element(screen)).languageCode, 'en');
+      expect(Localizations.localeOf(tester.element(screen.last)).languageCode, 'en');
 
+      // v2: the More hub links to sub-pages; language lives on «بيانات
+      // حسابك» and the theme on «المظهر». Same controls, same writes.
+      Future<void> openPage(String key) async {
+        // The hub is a lazy list: scroll the row into existence first.
+        await tester.scrollUntilVisible(find.byKey(ValueKey(key)), 240,
+            scrollable: find
+                .descendant(
+                    of: find.byType(SettingsScreen).last,
+                    matching: find.byType(Scrollable))
+                .first);
+        await tester.ensureVisible(find.byKey(ValueKey(key)));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(ValueKey(key)));
+        await tester.pumpAndSettle();
+      }
+
+      await openPage('settings-page-account');
       for (final language in ['ar', 'en']) {
         await tester
             .ensureVisible(find.byKey(const ValueKey('settings-language')));
@@ -164,9 +181,9 @@ void main() {
             (await container.read(userSettingsRepositoryProvider).getSettings())
                 .language,
             language);
-        expect(Localizations.localeOf(tester.element(screen)).languageCode,
+        expect(Localizations.localeOf(tester.element(screen.last)).languageCode,
             language);
-        expect(Directionality.of(tester.element(screen)),
+        expect(Directionality.of(tester.element(screen.last)),
             language == 'ar' ? TextDirection.rtl : TextDirection.ltr);
         expect(
             await SecureStorageOptions.storage
@@ -174,7 +191,10 @@ void main() {
             language);
         _onlyLanguageAndTimestampChanged(before, await _snapshot(db), language);
       }
-      final l10n = AppL10n.of(tester.element(screen));
+      final l10n = AppL10n.of(tester.element(screen.last));
+      Navigator.of(tester.element(find.byType(SettingsScreen).last)).pop();
+      await tester.pumpAndSettle();
+      await openPage('settings-page-appearance');
       for (final entry in [
         (l10n.setThemeAuto, ThemeMode.system, Brightness.light),
         (l10n.setThemeLight, ThemeMode.light, Brightness.light),
@@ -185,11 +205,13 @@ void main() {
         await tester.tap(find.text(entry.$1));
         await tester.pumpAndSettle();
         expect(scoped.read(themeModeProvider), entry.$2);
-        expect(Theme.of(tester.element(screen)).brightness, entry.$3);
+        expect(Theme.of(tester.element(screen.last)).brightness, entry.$3);
         expect(container.read(themeModeProvider), parentTheme);
         _onlyLanguageAndTimestampChanged(before, await _snapshot(db), 'en');
       }
       expect(tester.takeException(), isNull);
+      Navigator.of(tester.element(find.byType(SettingsScreen).last)).pop();
+      await tester.pumpAndSettle();
       // Outer route close is the same controller operation used in native QA;
       // the helper's independent MaterialApp owns all actual picker overlays.
       router.routerDelegate.navigatorKey.currentState!.pop();

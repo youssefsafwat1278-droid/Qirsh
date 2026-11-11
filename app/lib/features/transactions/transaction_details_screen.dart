@@ -33,6 +33,8 @@ import 'manual_transaction_sheet.dart';
 import 'transactions_providers.dart';
 import 'widgets/change_category_sheet.dart';
 import '../common/motion.dart';
+import '../common/money_text.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/widgets/app_toast.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../common/repo_error_messages.dart';
@@ -74,6 +76,7 @@ class TransactionDetailsScreen extends ConsumerWidget {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
+      barrierColor: context.colors.scrim,
       builder: (_) => navySheetTheme(
           _TransactionDetailsSheet(transactionId: transactionId)),
     );
@@ -145,10 +148,12 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
         final merchantTitle = tx.rawMerchant?.trim().isNotEmpty == true
             ? tx.rawMerchant!.trim()
             : category?.name ?? context.l10n.txnTransactionWord;
-        final statusColor = switch (tx.status) {
-          TransactionStatus.confirmed => c.success,
-          TransactionStatus.pending => c.accent,
-          TransactionStatus.ignored => c.textMuted,
+        // v2 QStatusChip: warningBg/warningText for review, successBg for
+        // confirmed (the old beige-on-beige chip failed contrast in light).
+        final statusTone = switch (tx.status) {
+          TransactionStatus.confirmed => AppStatusTone.success,
+          TransactionStatus.pending => AppStatusTone.warning,
+          TransactionStatus.ignored => AppStatusTone.neutral,
         };
         final statusLabel = switch (tx.status) {
           TransactionStatus.confirmed => context.l10n.txdConfirmed,
@@ -164,6 +169,46 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
           icon: Icon(AppLucideIcons.pencil, color: c.textPrimary),
         );
 
+        final displayMoney =
+            (tx.pricingState == TransactionPricingState.awaitingFx)
+                ? tx.foreignMoney!
+                : tx.amountMoney;
+        final displayCurrency =
+            (tx.pricingState == TransactionPricingState.awaitingFx)
+                ? '${tx.foreignCurrency}'
+                : Currency.label(context, tx.currency);
+        final isDark = Theme.of(context).brightness == Brightness.dark;
+        // v2 hero aurora: the category colour as a faint radial wash
+        // (dark @14% on black, light @10% on the paper canvas).
+        final wash = (category?.accent(Theme.of(context).brightness) ??
+                c.actionText)
+            .withValues(alpha: isDark ? 0.14 : 0.10);
+        final confirmAction = tx.status == TransactionStatus.confirmed
+            ? null
+            : SizedBox(
+                width: double.infinity,
+                height: AppSpacing.buttonHeight,
+                child: FilledButton.icon(
+                  onPressed: _busy ? null : () => _confirmTransaction(context, ref, tx.id),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: c.cta,
+                    foregroundColor: c.onCta,
+                    disabledBackgroundColor: c.disabled,
+                    disabledForegroundColor: c.textMuted,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.button)),
+                  ),
+                  icon: _confirming
+                      ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)))
+                      : const Icon(AppLucideIcons.check),
+                  label: Text(
+                    tx.status == TransactionStatus.ignored
+                        ? context.l10n.txdConfirmIgnored
+                        : context.l10n.txdConfirmTx,
+                  ),
+                ),
+              );
+
         final body = Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.gutter,
@@ -174,67 +219,77 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // هيرو متمركز بدون كارت: التايل، اسم التاجر، وحالة العملية،
-              // والمبلغ هو أكبر عنصر في الشيت.
-              Center(
+              // v2 hero (no card): 64pt tile → merchant → signed amount with
+              // the currency AFTER it → date → status chip, on a faint
+              // category-coloured wash.
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0, -0.35),
+                    radius: 0.9,
+                    colors: [wash, wash.withValues(alpha: 0)],
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(
+                      top: AppSpacing.s2, bottom: AppSpacing.s2),
+                  child: Center(
                 child: Column(
                   children: [
                     (tx.rawMerchant != null &&
                             BrandMark.hasBrand(tx.rawMerchant!))
                         ? AppAvatar.brand(
                             name: tx.rawMerchant!,
-                            size: AppSpacing.avatarLg,
+                            size: _heroTile,
                             fallback: AppAvatar.category(
                                 category: category,
-                                size: AppSpacing.avatarLg))
+                                size: _heroTile))
                         : AppAvatar.category(
-                            category: category, size: AppSpacing.avatarLg),
+                            category: category, size: _heroTile),
                     const SizedBox(height: AppSpacing.s3),
                     Text(
                       merchantTitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
-                      style: AppTypography.cardTitle(c.textPrimary),
+                      style: AppTypography.cardTitle(c.textSecondary),
                     ),
-                    const SizedBox(height: AppSpacing.s2),
+                    const SizedBox(height: AppSpacing.s1),
                     FittedBox(
                       fit: BoxFit.scaleDown,
-                      child: AnimatedAmountText.money(
-                        value:
-                            (tx.pricingState == TransactionPricingState.awaitingFx)
-                                ? tx.foreignMoney!
-                                : tx.amountMoney,
-                        color: amountColor,
-                        suffix:
-                            (tx.pricingState == TransactionPricingState.awaitingFx)
-                                ? ' ${tx.foreignCurrency}'
-                                : ' ${Currency.label(context, tx.currency)}',
-                        style: AppTypography.custom(size: 36,
-                            weight: FontWeight.w700, height: 1.15,
-                            letterSpacing: -0.7, tabular: true, color: amountColor),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          _HeroAmount(
+                            money: displayMoney,
+                            isDebit: isDebit,
+                            color: amountColor,
+                          ),
+                          const SizedBox(width: AppSpacing.s2),
+                          Text(
+                            displayCurrency,
+                            style: AppTypography.subhead(c.textMuted),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: AppSpacing.s2),
+                    const SizedBox(height: AppSpacing.s1),
                     Text(
                       '${Formatters.dateWithWeekday(tx.occurredAt, context)} · ${Formatters.time(tx.occurredAt, context)}',
                       textAlign: TextAlign.center,
-                      style: AppTypography.caption(c.textSecondary),
+                      style: AppTypography.caption(c.textMuted),
                     ),
                     const SizedBox(height: AppSpacing.s3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: statusColor.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                      ),
-                      child: Text(
-                        statusLabel,
-                        style: AppTypography.caption(tx.status == TransactionStatus.pending
-                            ? c.textPrimary : statusColor)
-                            .copyWith(fontWeight: FontWeight.w700),
-                      ),
+                    AppStatusPill(
+                      label: statusLabel,
+                      tone: statusTone,
+                      icon: tx.status == TransactionStatus.pending
+                          ? AppLucideIcons.clock
+                          : tx.status == TransactionStatus.confirmed
+                              ? AppLucideIcons.check
+                              : null,
                     ),
                     if (tx.pricingState == TransactionPricingState.awaitingFx &&
                         tx.foreignCurrency != null) ...[
@@ -250,45 +305,57 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
                   ],
                 ),
               ),
+                ),
+              ),
               const SizedBox(height: AppSpacing.s5),
-              // صف إجراءات: تعديل / تغيير التصنيف — بدل ما يبقوا مبعترين
-              // جوه صفوف التفاصيل.
-              Row(
-                children: [
-                  Expanded(
-                    child: _QuickAction(
-                      icon: AppLucideIcons.pencil,
-                      label: context.l10n.cardEdit,
-                      onTap: () =>
-                          ManualTransactionSheet.show(context, transaction: tx),
-                    ),
-                  ),
-                  if (catalog != null) ...[
+              // v2: the category is the one editable thing that matters during
+              // review — its own Group row with a tinted «تغيير التصنيف». Edit
+              // lives ONLY in the nav bar (no duplicate «تعديل» button).
+              AppCard(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.s4, vertical: AppSpacing.s3),
+                child: Row(
+                  children: [
+                    AppAvatar.category(category: category),
                     const SizedBox(width: AppSpacing.s3),
                     Expanded(
-                      child: _QuickAction(
-                        icon: AppLucideIcons.shapes,
-                        label: context.l10n.txnChangeCategory,
-                        onTap: () =>
-                            showChangeCategorySheet(context, tx, catalog),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            category?.name ?? context.l10n.txdUncategorised,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.bodyStrong(c.textPrimary),
+                          ),
+                          Text(
+                            context.l10n.txnCategory,
+                            style: AppTypography.caption(c.textMuted),
+                          ),
+                        ],
                       ),
                     ),
+                    if (catalog != null) ...[
+                      const SizedBox(width: AppSpacing.s2),
+                      Flexible(
+                        child: _TintedPill(
+                          label: context.l10n.txnChangeCategory,
+                          onTap: () =>
+                              showChangeCategorySheet(context, tx, catalog),
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
-              const SizedBox(height: AppSpacing.s4),
+              const SizedBox(height: AppSpacing.s3),
 
-              // Details Card
+              // Details Group
               AppCard(
                 padding: EdgeInsets.zero,
                 child: Column(
                   children: [
-                    _buildDetailRow(
-                      context,
-                      context.l10n.txnCategory,
-                      category?.name ?? context.l10n.txdUncategorised,
-                    ),
-                    _divider(c),
                     _buildDetailRow(
                       context,
                       context.l10n.txdType,
@@ -331,7 +398,7 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         child: Text(context.l10n.txdChange,
-                            style: AppTypography.footnote(c.cta)),
+                            style: AppTypography.subhead(c.actionText)),
                       ),
                     ),
                     _divider(c),
@@ -379,51 +446,48 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.s4),
+              const SizedBox(height: AppSpacing.s3),
 
-              // Raw text
-              Theme(
-                data: Theme.of(context)
-                    .copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  tilePadding: const EdgeInsets.symmetric(horizontal: 8),
-                  title: Text(context.l10n.txdOriginalText,
-                      style: AppTypography.subhead(c.textSecondary)),
-                  collapsedIconColor: c.textSecondary,
-                  iconColor: c.primary,
-                  children: [
-                    AppCard(
-                      padding: const EdgeInsets.all(16),
-                      child: SizedBox(
+              // Raw text — a disclosure row in its own Group; the message
+              // itself sits in an Inset well, monospaced.
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: Theme(
+                  data: Theme.of(context)
+                      .copyWith(dividerColor: Colors.transparent),
+                  child: ExpansionTile(
+                    tilePadding:
+                        const EdgeInsets.symmetric(horizontal: AppSpacing.s4),
+                    childrenPadding: const EdgeInsets.fromLTRB(
+                        AppSpacing.s3, 0, AppSpacing.s3, AppSpacing.s3),
+                    shape: const Border(),
+                    collapsedShape: const Border(),
+                    title: Text(context.l10n.txdOriginalText,
+                        style: AppTypography.callout(c.textPrimary)),
+                    collapsedIconColor: c.textMuted,
+                    iconColor: c.actionText,
+                    children: [
+                      Container(
                         width: double.infinity,
+                        padding: const EdgeInsets.all(AppSpacing.s3),
+                        decoration: BoxDecoration(
+                          // v2 Inset: dark well #0C0D11; light #EEF1F8.
+                          color: isDark ? c.surfaceMuted : c.surfaceElevated,
+                          borderRadius: BorderRadius.circular(AppRadius.button),
+                        ),
                         child: SelectableText(
                           tx.rawMessage,
-                          style: AppTypography.footnote(c.textPrimary)
-                              .copyWith(height: 1.4),
+                          style: AppTypography.mono(
+                              size: 13, height: 1.5, color: c.textPrimary),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.s4),
-              if (tx.status != TransactionStatus.confirmed) ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _busy ? null : () => _confirmTransaction(context, ref, tx.id),
-                    icon: _confirming
-                        ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.38)))
-                        : const Icon(AppLucideIcons.badgeCheck),
-                    label: Text(
-                      tx.status == TransactionStatus.ignored
-                          ? context.l10n.txdConfirmIgnored
-                          : context.l10n.txdConfirmTx,
-                    ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: AppSpacing.s2),
-              ],
+              ),
+              const SizedBox(height: AppSpacing.s5),
+              // Destructive = plain danger text, well away from the primary
+              // (which now lives in the sticky dock).
               TextButton.icon(
                 onPressed: _busy ? null : () => _confirmDelete(context, ref, tx.id),
                 style: TextButton.styleFrom(foregroundColor: c.danger),
@@ -436,7 +500,9 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
         );
 
         return _buildScaffold(context, c, body,
-            title: context.l10n.txdTitle, trailing: editButton);
+            title: context.l10n.txdTitle,
+            trailing: editButton,
+            bottomAction: confirmAction);
       },
     );
   }
@@ -660,11 +726,13 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
   }
 
   Widget _buildScaffold(BuildContext context, AppColors c, Widget body,
-      {String? title, Widget? trailing}) {
+      {String? title, Widget? trailing, Widget? bottomAction}) {
     if (isSheet) {
       return AppSheetScaffold(
         title: title ?? context.l10n.txdTitle,
         trailing: trailing,
+        // v2 QStickyDock: the one primary stays pinned under the content.
+        bottomAction: bottomAction,
         showCloseButton: false,
         leading: IconButton(
           tooltip: context.l10n.annClose,
@@ -681,7 +749,14 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
           action: trailing,
           showBack: true,
         ),
-        body: SingleChildScrollView(child: body),
+        // Immersive: scrolls under the glass bar; content starts below it.
+        body: Builder(
+          builder: (bodyContext) => SingleChildScrollView(
+            padding: EdgeInsets.only(top: MediaQuery.paddingOf(bodyContext).top),
+            child: body,
+          ),
+        ),
+        bottomArea: bottomAction,
       );
     }
   }
@@ -767,14 +842,17 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
   Widget _buildDetailRow(BuildContext context, String label, String value,
       {Widget? trailing, bool isPending = false, TextDirection? valueTextDirection}) {
     final c = context.colors;
-    return Padding(
+    // v2 details row: 52pt, label muted leading, value body.strong trailing.
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 52),
+      child: Padding(
       padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.s4, vertical: AppSpacing.s3),
       child: Row(
         children: [
           Text(
             label,
-            style: AppTypography.callout(c.textSecondary),
+            style: AppTypography.callout(c.textMuted),
           ),
           const SizedBox(width: AppSpacing.s3),
           Expanded(
@@ -782,7 +860,8 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
               value,
               textDirection: valueTextDirection,
               textAlign: TextAlign.end,
-              style: AppTypography.subhead(c.textPrimary),
+              style: AppTypography.callout(c.textPrimary)
+                  .copyWith(fontWeight: FontWeight.w500),
             ),
           ),
           if (trailing != null) ...[
@@ -790,6 +869,7 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
             trailing,
           ],
         ],
+      ),
       ),
     );
   }
@@ -805,15 +885,61 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
   }
 }
 
-/// زرار إجراء مربّع صغير في صف الإجراءات فوق التفاصيل.
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({
-    required this.icon,
-    required this.label,
-    required this.onTap,
+/// v2 hero tile: 64pt (the list row's 40pt tile, enlarged).
+const double _heroTile = 64;
+
+/// v2 hero amount (`amount.hero`): the sign leads the digits, decimals at 62%
+/// (via [MoneyText]), counting up once from 0 (`m.count`; final value
+/// immediately under Reduce Motion). The sign is its own run so the digits
+/// stay one exact, LTR text.
+class _HeroAmount extends StatelessWidget {
+  const _HeroAmount({
+    required this.money,
+    required this.isDebit,
+    required this.color,
   });
 
-  final IconData icon;
+  final Money money;
+  final bool isDebit;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final magnitude = money.isNegative ? -money : money;
+    final style = AppTypography.amountHero(color);
+    final sign = magnitude.isZero ? '' : isDebit ? '\u2212' : '+';
+    final duration = shouldReduceMotion(context)
+        ? Duration.zero
+        : AppMotion.countFor(magnitude.minorUnits / 100);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      textDirection: TextDirection.ltr,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        if (sign.isNotEmpty)
+          Text(sign, textDirection: TextDirection.ltr, style: style),
+        TweenAnimationBuilder<int>(
+          tween: IntTween(begin: 0, end: 1000),
+          duration: duration,
+          curve: AppMotion.easeOut,
+          builder: (context, progress, _) {
+            final minor = (BigInt.from(magnitude.minorUnits) *
+                    BigInt.from(progress) ~/
+                    BigInt.from(1000))
+                .toInt();
+            return MoneyText(Money(minor, magnitude.currency), style: style);
+          },
+        ),
+      ],
+    );
+  }
+}
+
+/// v2 tinted pill button (`action.soft` fill + `action.text` label).
+class _TintedPill extends StatelessWidget {
+  const _TintedPill({required this.label, required this.onTap});
+
   final String label;
   final VoidCallback onTap;
 
@@ -821,32 +947,25 @@ class _QuickAction extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     return Material(
-      color: c.surfaceElevated,
-      borderRadius: BorderRadius.circular(AppRadius.md),
+      color: c.ctaSoft,
+      borderRadius: BorderRadius.circular(AppRadius.pill),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.md),
-        child: Container(
-          height: 46,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppRadius.md),
-            border: Border.all(color: c.divider),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 18, color: c.textPrimary),
-              const SizedBox(width: AppSpacing.s2),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.subhead(c.textPrimary),
-                ),
+        borderRadius: BorderRadius.circular(AppRadius.pill),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 36),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.s3, vertical: 6),
+            child: Center(
+              widthFactor: 1,
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.subhead(c.actionText),
               ),
-            ],
+            ),
           ),
         ),
       ),

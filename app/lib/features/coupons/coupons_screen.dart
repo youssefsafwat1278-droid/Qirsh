@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -9,6 +10,7 @@ import '../common/app_header.dart';
 import '../common/app_avatar.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../core/utils/l10n_ext.dart';
+import '../common/motion.dart';
 import '../common/widgets.dart';
 import 'coupon_models.dart';
 import 'coupon_widgets.dart';
@@ -61,24 +63,29 @@ class _CouponsScreenState extends ConsumerState<CouponsScreen> {
 
     return AppScreenScaffold(
       header: AppHeader(title: l10n.couponsTitle),
-      body: coupons.when(
+      // Immersive: the body runs under the glass bar; every state starts
+      // below it (this context sees the bar's top inset).
+      body: Builder(builder: (bodyContext) => coupons.when(
         skipLoadingOnReload: true,
-        loading: () => AppLoadingState(label: l10n.couponsLoading),
-        error: (_, __) => AppErrorState(
-          title: l10n.couponsErrorTitle,
-          description: l10n.couponsErrorBody,
-          retryLabel: l10n.couponsRetry,
+        loading: () => Padding(
+          padding: EdgeInsets.only(top: MediaQuery.paddingOf(bodyContext).top),
+          child: AppLoadingState(label: l10n.couponsLoading),
+        ),
+        error: (_, __) => _CouponsErrorState(
           onRetry: () => ref.invalidate(cachedCouponsProvider),
         ),
         data: (offers) {
           _maybeOpenHighlight(offers);
           if (offers.isEmpty) {
-            return AppEmptyState(
-              icon: AppLucideIcons.tag,
-              illustration: const QirshIllustration(
-                  name: 'offers', width: 220, height: 165),
-              title: l10n.couponsEmptyTitle,
-              subtitle: l10n.couponsEmptyBody,
+            return Padding(
+              padding: EdgeInsets.only(top: MediaQuery.paddingOf(bodyContext).top),
+              child: AppEmptyState(
+                icon: AppLucideIcons.tag,
+                illustration: const QirshIllustration(
+                    name: 'offers', width: 220, height: 165),
+                title: l10n.couponsEmptyTitle,
+                subtitle: l10n.couponsEmptyBody,
+              ),
             );
           }
 
@@ -98,9 +105,9 @@ class _CouponsScreenState extends ConsumerState<CouponsScreen> {
               filtered.where((o) => !o.featured).toList(growable: false);
 
           return ListView(
-            padding: const EdgeInsets.fromLTRB(
+            padding: EdgeInsets.fromLTRB(
               AppSpacing.gutter,
-              AppSpacing.s2,
+              MediaQuery.paddingOf(bodyContext).top + AppSpacing.s2,
               AppSpacing.gutter,
               120,
             ),
@@ -182,6 +189,69 @@ class _CouponsScreenState extends ConsumerState<CouponsScreen> {
             ],
           );
         },
+      )),
+    );
+  }
+}
+
+/// v2 QEmptyState, error variant (spec 21): a 72pt `dangerBg` tile with the
+/// warning glyph in `danger`, section title, muted callout and ONE tinted
+/// retry action, centred at the optical centre (44% from the top). On first
+/// show the tile does one small horizontal shake (skipped with Reduce Motion).
+class _CouponsErrorState extends StatelessWidget {
+  const _CouponsErrorState({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final l10n = context.l10n;
+    Widget tile = Container(
+      width: 72,
+      height: 72,
+      decoration: BoxDecoration(
+        color: c.dangerBg,
+        borderRadius: BorderRadius.circular(AppRadius.xl),
+      ),
+      child: Icon(AppLucideIcons.alertTriangle, size: 32, color: c.danger),
+    );
+    if (!shouldReduceMotion(context)) {
+      tile = tile.animate().shakeX(
+          duration: const Duration(milliseconds: 240), hz: 8, amount: 6);
+    }
+    final top = MediaQuery.paddingOf(context).top;
+    return LayoutBuilder(
+      builder: (context, box) => SingleChildScrollView(
+        padding: EdgeInsets.only(top: top),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+              minHeight: (box.maxHeight - top).clamp(0.0, double.infinity)),
+          child: Align(
+            alignment: const Alignment(0, -.12),
+            child: Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppEmptyState(
+                    icon: AppLucideIcons.alertTriangle,
+                    illustration: tile,
+                    title: l10n.couponsErrorTitle,
+                    subtitle: l10n.couponsErrorBody,
+                  ),
+                  AppSecondaryButton(
+                    label: l10n.couponsRetry,
+                    icon: AppLucideIcons.refreshCw,
+                    onTap: onRetry,
+                    height: 44,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

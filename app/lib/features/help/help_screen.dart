@@ -5,14 +5,15 @@ import '../../core/theme/widgets/glass_sheet.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
-import '../common/app_header.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../../core/session/app_session.dart';
 import '../../core/utils/l10n_ext.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../core/theme/widgets/app_toast.dart';
-import '../common/app_card.dart';
-import '../common/app_screen_scaffold.dart';
+import '../../core/theme/app_motion.dart';
+import '../common/app_button.dart';
+import '../common/motion.dart';
+import '../settings/widgets/settings_v2.dart';
 
 /// V1 guidance, Layer B (charter: REQUIRED_PRODUCT_CHANGE_5).
 ///
@@ -62,124 +63,182 @@ class HelpScreen extends StatelessWidget {
       ]),
     ];
 
-    return AppScreenScaffold(
-      header: AppHeader(title: l10n.helpTitle),
-      body: ListView(
-        children: [
-          const Center(
-            child: QirshIllustration(name: 'help', width: 220, height: 165),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.s3),
-            child: Text(l10n.helpSubtitle,
-                textAlign: TextAlign.center,
-                style: AppTypography.callout(c.textMuted)),
-          ),
-          for (final section in sections) ...[
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-              child: Text(section.title,
-                  style: AppTypography.caption(c.textMuted)
-                      .copyWith(fontWeight: FontWeight.w700)),
-            ),
-            AppCard(
-              padding: EdgeInsets.zero,
-              child: Column(
-                children: [
-                  for (final entry in section.entries) ...[
-                    if (entry != section.entries.first)
-                      Divider(height: 1, color: c.border, indent: 16, endIndent: 16),
-                    ExpansionTile(
-                      initiallyExpanded: entry == sections.first.entries.first,
-                      maintainState: true,
-                      shape: const Border(),
-                      collapsedShape: const Border(),
-                      iconColor: c.textMuted,
-                      collapsedIconColor: c.textMuted,
-                      tilePadding: const EdgeInsets.symmetric(horizontal: 16),
-                      childrenPadding: const EdgeInsetsDirectional.fromSTEB(
-                          16, 0, 16, 16),
-                      title: Text(entry.title,
-                          style: AppTypography.custom(size: 14,
-                              weight: FontWeight.w500, height: 1.4,
-                              color: c.textPrimary)),
-                      children: [
-                        Align(
-                          alignment: AlignmentDirectional.centerStart,
-                          child: Text(entry.body,
-                              style: AppTypography.custom(size: 13,
-                                  weight: FontWeight.w400, height: 1.7,
-                                  color: c.textMuted)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 14),
-          FilledButton.tonalIcon(
-            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(44)),
-            icon: const Icon(AppLucideIcons.messageSquare, size: 18),
-            label: Text(l10n.setContactUs),
-            onPressed: () => showGlassSheet<void>(
-              context: context,
-              showDragHandle: true,
-              builder: (sheetContext) => Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(l10n.setContactUs,
-                        style: AppTypography.sectionTitle(c.textPrimary)),
-                    const SizedBox(height: 12),
-                    Text(l10n.setSupportBody,
-                        style: AppTypography.callout(c.textSecondary)),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () async {
-                        await Clipboard.setData(const ClipboardData(
-                            text: 'support@money-companion.app'));
-                        if (sheetContext.mounted) Navigator.of(sheetContext).pop();
-                      },
-                      child: Text(l10n.setCopyEmail),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.s4),
-          // Someone who dismissed the first-use tour should not be locked out
-          // of it forever — this is the only way back to Layer A.
-          AppCard(
-            onTap: () async {
-              await AppSession.instance.resetCoachMarks();
-              if (!context.mounted) return;
-              AppToast.show(context, l10n.helpReplayTourDone);
-            },
-            child: Row(
+    void contactUs() => showGlassSheet<void>(
+          context: context,
+          showDragHandle: true,
+          builder: (sheetContext) => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Icon(AppLucideIcons.refreshCw, size: 20, color: c.primary),
-                const SizedBox(width: AppSpacing.s3),
-                Expanded(
-                  child: Text(l10n.helpReplayTour,
-                      style: AppTypography.bodyStrong(c.textMain)),
+                Text(l10n.setContactUs,
+                    style: AppTypography.sectionTitle(c.textPrimary)),
+                const SizedBox(height: 12),
+                Text(l10n.setSupportBody,
+                    style: AppTypography.callout(c.textSecondary)),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () async {
+                    await Clipboard.setData(const ClipboardData(
+                        text: 'support@money-companion.app'));
+                    if (sheetContext.mounted) Navigator.of(sheetContext).pop();
+                  },
+                  child: Text(l10n.setCopyEmail),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: AppSpacing.s4),
-          Text(
-            l10n.helpFooter,
-            textAlign: TextAlign.center,
-            style: AppTypography.caption(c.textMuted),
+        );
+
+    // v2 §25: QNavBar + QLargeTitle, 140pt illustration, accordion Groups
+    // inside the 20pt gutters, then the two actions 12pt apart.
+    return SettingsV2Page(
+      title: l10n.helpTitle,
+      subtitle: l10n.helpSubtitle,
+      children: [
+        const SizedBox(height: AppSpacing.s3),
+        const Center(
+          child: QirshIllustration(name: 'help', width: 187, height: 140),
+        ),
+        for (var i = 0; i < sections.length; i++)
+          SettingsV2Group(
+            label: sections[i].title,
+            children: [
+              _HelpAccordion(
+                entries: sections[i].entries,
+                initiallyOpen: i == 0 ? 0 : null,
+              ),
+            ],
           ),
-          const SizedBox(height: AppSpacing.s6),
+        const SizedBox(height: AppSpacing.s7),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppPrimaryButton(
+                label: l10n.setContactUs,
+                icon: AppLucideIcons.messageSquare,
+                onTap: contactUs,
+              ),
+              const SizedBox(height: AppSpacing.s3),
+              // Someone who dismissed the first-use tour should not be locked
+              // out of it forever — this is the only way back to Layer A.
+              AppSecondaryButton(
+                label: l10n.helpReplayTour,
+                icon: AppLucideIcons.refreshCw,
+                onTap: () async {
+                  await AppSession.instance.resetCoachMarks();
+                  if (!context.mounted) return;
+                  AppToast.show(context, l10n.helpReplayTourDone);
+                },
+              ),
+              const SizedBox(height: AppSpacing.s3),
+              Text(
+                l10n.helpFooter,
+                textAlign: TextAlign.center,
+                style: AppTypography.caption(c.textMuted),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One Group's questions. Opening one closes the other in the same Group; the
+/// chevron turns 180° over dur.base, the height moves over dur.moderate and
+/// the answer fades in during the last 60%.
+class _HelpAccordion extends StatefulWidget {
+  const _HelpAccordion({required this.entries, this.initiallyOpen});
+
+  final List<_HelpEntry> entries;
+  final int? initiallyOpen;
+
+  @override
+  State<_HelpAccordion> createState() => _HelpAccordionState();
+}
+
+class _HelpAccordionState extends State<_HelpAccordion> {
+  late int? _open = widget.initiallyOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final reduce = shouldReduceMotion(context);
+    final moderate = reduce ? AppMotion.micro : AppMotion.moderate;
+    return Column(
+      children: [
+        for (var i = 0; i < widget.entries.length; i++) ...[
+          if (i > 0) Divider(height: 1, indent: 60, color: c.divider),
+          Semantics(
+            button: true,
+            expanded: _open == i,
+            child: InkWell(
+              splashFactory: NoSplash.splashFactory,
+              highlightColor: c.surfaceElevated,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                setState(() => _open = _open == i ? null : i);
+              },
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.fromSTEB(
+                      AppSpacing.s4, AppSpacing.s2, AppSpacing.s3, AppSpacing.s2),
+                  child: Row(children: [
+                    SettingsV2Tile(icon: widget.entries[i].icon),
+                    const SizedBox(width: AppSpacing.s3),
+                    Expanded(
+                      child: Text(widget.entries[i].title,
+                          style: AppTypography.bodyStrong(c.textPrimary)),
+                    ),
+                    AnimatedRotation(
+                      turns: _open == i ? 0.5 : 0,
+                      duration: reduce ? AppMotion.micro : AppMotion.base,
+                      curve: AppMotion.easeInOut,
+                      child: Icon(AppLucideIcons.chevronDown,
+                          size: 20, color: c.textMuted),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+          ClipRect(
+            child: AnimatedSize(
+              duration: moderate,
+              curve: AppMotion.easeInOut,
+              alignment: AlignmentDirectional.topStart,
+              child: _open == i
+                  ? TweenAnimationBuilder<double>(
+                      key: ValueKey('help-answer-$i'),
+                      tween: Tween(begin: 0, end: 1),
+                      duration: moderate,
+                      builder: (context, t, child) => Opacity(
+                        opacity: ((t - 0.4) / 0.6).clamp(0.0, 1.0),
+                        child: child,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsetsDirectional.fromSTEB(
+                            60, 0, AppSpacing.s4, AppSpacing.s4),
+                        child: Align(
+                          alignment: AlignmentDirectional.centerStart,
+                          child: Text(
+                            widget.entries[i].body,
+                            style: AppTypography.callout(c.textSecondary)
+                                .copyWith(height: 26 / 15),
+                          ),
+                        ),
+                      ),
+                    )
+                  : const SizedBox(width: double.infinity),
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 }

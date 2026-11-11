@@ -20,6 +20,6 @@ class CaptureCapabilityReview extends StatelessWidget {
                 isAutomaticSmsCaptureEnabled: mode == 'On',
               )),
         ],
-        child: const SettingsScreen(),
+        child: const SettingsScreen(page: SettingsPage.capture),
       );
 }

@@ -78,6 +78,18 @@ _Family _familyFor(String icon) {
 /// the prototype's `:root` and `:root[data-theme="dark"]` blocks.
 CategoryTone categoryTone(String icon, Brightness brightness) {
   final dark = brightness == Brightness.dark;
+  // Calm Capital v2 (spec §2.1): the six headline categories use the v2
+  // palette — ink at 100%, tile = the colour @16% (dark) / @12% (light) over
+  // the card surface.
+  final v2 = _v2Ink[icon];
+  if (v2 != null) {
+    final ink = Color(dark ? v2[0] : v2[1]);
+    final ground = dark ? const Color(0xFF121317) : const Color(0xFFFFFFFF);
+    return CategoryTone(
+      Color.alphaBlend(ink.withValues(alpha: dark ? .16 : .12), ground),
+      ink,
+    );
+  }
   switch (_familyFor(icon)) {
     case _Family.food:
       return dark
@@ -104,6 +116,16 @@ CategoryTone categoryTone(String icon, Brightness brightness) {
       // for an icon box with no category of its own.
       return dark
           ? const CategoryTone(Color(0xFF0E1D33), Color(0xFF9DB9FF))
-          : const CategoryTone(Color(0xFFD3DDF8), Color(0xFF022686));
+          : const CategoryTone(Color(0xFFEAF0FE), Color(0xFF0336BF));
   }
 }
+
+/// v2 category palette by icon key: [dark, light].
+const Map<String, List<int>> _v2Ink = {
+  'shopping-bag': [0xFFA78BFA, 0xFF7C4DDB],
+  'shopping-basket': [0xFF5EC8E5, 0xFF0E94B8],
+  'utensils-crossed': [0xFFFF8A5B, 0xFFE0622B],
+  'coffee': [0xFFD4A373, 0xFF9C6B3F],
+  'car-taxi-front': [0xFF6E9BFF, 0xFF2F6BE0],
+  'repeat': [0xFFF472B6, 0xFFD0398A],
+};

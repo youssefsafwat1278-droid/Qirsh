@@ -62,7 +62,7 @@
          passphrase-encrypted cloud backup (backup_snapshot_builder /
          restore_backup_usecase), not Android Auto Backup. -->
     <application
-        android:label="قرش"
+        android:label="Qirsh"
         android:name="${applicationName}"
         android:allowBackup="false"
         android:fullBackupContent="false"

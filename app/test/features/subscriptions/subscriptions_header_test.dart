@@ -7,15 +7,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/di/app_providers.dart';
 import 'package:money_companion/core/theme/app_theme.dart';
 import 'package:money_companion/core/theme/widgets/calm_page_header.dart';
-import 'package:money_companion/core/theme/widgets/qirsh_visuals.dart';
 import 'package:money_companion/core/theme/widgets/section_photo_header.dart';
 import 'package:money_companion/domain/entities/account_entity.dart';
 import 'package:money_companion/domain/entities/bill_entity.dart';
 import 'package:money_companion/domain/finance/money.dart';
 import 'package:money_companion/domain/repositories/account_repository.dart';
+import 'package:money_companion/core/utils/currency.dart';
+import 'package:money_companion/features/common/qirsh_summary_card.dart';
 import 'package:money_companion/features/ads/ad_placement.dart';
 import 'package:money_companion/features/ads/banner_ads_providers.dart';
-import 'package:money_companion/features/common/app_header.dart';
 import 'package:money_companion/features/subscriptions/bill_form_sheet.dart';
 import 'package:money_companion/features/subscriptions/subscriptions_providers.dart';
 import 'package:money_companion/features/subscriptions/subscriptions_screen.dart';
@@ -83,13 +83,18 @@ Future<AppL10n> _open(WidgetTester tester, Future<List<BillEntity>> Function() l
 }
 
 void _header(WidgetTester tester, AppL10n l10n) {
-  expect(find.byType(AppHeader), findsOneWidget);
+  // v3: loading, error and data all open with the SAME photo hero (Back,
+  // one-line title, Add) — no AppHeader bar that changes once data arrives.
   final cover = find.byType(QirshSectionHero);
   expect(cover, findsOneWidget);
   expect(tester.widget<QirshSectionHero>(cover).photo, QirshSectionPhoto.bills);
-  final title = find.descendant(of: cover, matching: find.text(l10n.subsTitle));
-  expect(tester.widget<Text>(title).style!.fontSize, 25);
+  // One page name everywhere: «الفواتير والاشتراكات» / "Bills & subscriptions".
+  final title = find.descendant(of: cover, matching: find.text(l10n.txnBillsAndSubs));
+  // v2 title.large (Alexandria 700 30/38), shrunk to fit on ONE line.
+  expect(tester.widget<Text>(title).style!.fontSize, 30);
   expect(tester.widget<Text>(title).style!.color, Colors.white);
+  expect(tester.widget<Text>(title).maxLines, 1);
+  expect(tester.widget<QirshSectionHero>(cover).fitTitle, isTrue);
   expect(find.byType(BackButton), findsOneWidget);
   expect(find.descendant(of: find.byType(QirshSectionHero), matching: find.byType(CalmHeaderAction)),
       findsOneWidget);
@@ -143,27 +148,33 @@ void main() {
       await _addAndBack(tester, l10n);
     });
 
-    testWidgets('subscription data keeps exact monthly metrics and a pinned header in $language',
+    testWidgets('subscription data keeps exact monthly metrics in the shared bills body in $language',
         (tester) async {
       final l10n = await _open(tester, () async => _bills, language: language);
       await tester.pumpAndSettle();
       _header(tester, l10n);
-      final hero = tester.widget<CalmPageHeader>(find.byType(CalmPageHeader));
-      expect(hero.showTitle, isFalse);
-      expect(hero.useSafeAreaTop, isFalse);
-      expect(hero.leading, isNull);
-      expect(hero.trailing, isNull);
-      expect(hero.amount, '13.345', reason: 'active monthly12.345 + yearly12/12, no SAR or paused amount');
-      expect(hero.metrics!.singleWhere((m) => m.label == l10n.txnYearlyTotal).value,
-          '160.140');
-      expect(hero.metrics!.singleWhere((m) => m.label == l10n.subsMonthlyInstCommit).value,
-          '2.345');
-      expect(find.byWidgetPredicate((widget) => widget is QirshIllustration &&
-          widget.name == 'bills'), findsOneWidget);
-      final before = tester.getTopLeft(find.byType(AppHeader));
-      await tester.drag(find.byType(NestedScrollView), const Offset(0, -420));
+      final currency = Currency.label(tester.element(find.byType(SubscriptionsScreen)), 'KWD');
+      final summary = find.byType(QirshSummaryCard);
+      expect(summary, findsOneWidget);
+      expect(find.descendant(of: summary, matching: find.text(l10n.subsMonthlyTotal)),
+          findsOneWidget);
+      // active monthly 12.345 + yearly 12/12, no SAR or paused amount.
+      expect(find.descendant(of: summary, matching: find.text('13.345 $currency')),
+          findsOneWidget);
+      expect(find.descendant(of: summary, matching: find.text('160.140 $currency')),
+          findsOneWidget);
+      expect(find.descendant(of: summary, matching: find.text(l10n.subsMonthlyInstCommit)),
+          findsOneWidget);
+      expect(find.descendant(of: summary, matching: find.text('2.345 $currency')),
+          findsOneWidget);
+      // Every subscription is listed ONCE (no «Upcoming» + «All» duplicate).
+      for (final name in ['Monthly', 'Yearly', 'Paused', 'Foreign']) {
+        expect(find.text(name), findsOneWidget);
+      }
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -420));
       await tester.pumpAndSettle();
-      expect(tester.getTopLeft(find.byType(AppHeader)), before);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, 420));
+      await tester.pumpAndSettle();
       _header(tester, l10n);
       await _addAndBack(tester, l10n);
     });

@@ -1,10 +1,16 @@
 import '../help/coach_marks.dart';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di/app_providers.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shadows.dart';
+import '../../core/theme/widgets/merchant_bar.dart' show ChartBar;
+import '../common/motion.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../domain/entities/budget_entity.dart';
@@ -149,8 +155,9 @@ class BudgetsScreen extends ConsumerWidget {
             notificationPredicate: (n) => n.depth == 1,
             child: QirshSectionBackdrop(
                 child: SafeArea(
-              // Keep the pinned tabs below the status bar while the compact
-              // section cover scrolls with the existing header content.
+              // Immersive: the section photo runs under the status bar /
+              // Dynamic Island; the hero pads its own content below it.
+              top: false,
               bottom: false,
               child: NestedScrollView(
                 headerSliverBuilder: (context, innerBoxIsScrolled) {
@@ -161,8 +168,6 @@ class BudgetsScreen extends ConsumerWidget {
                           ? QirshSectionPhoto.goals
                           : QirshSectionPhoto.budgets,
                       sectionHeight: 190,
-                      useSafeAreaTop: false,
-                      topInset: 8,
                       title: switch (tab) {
                         1 => context.l10n.bdgTabHistory,
                         2 => context.l10n.bdgTabGoals,
@@ -179,6 +184,9 @@ class BudgetsScreen extends ConsumerWidget {
                           : null,
                       trailing: CoachAnchor(target: 'budgetAdd',
                           child: _AddButton(
+                              label: tab == 2
+                                  ? context.l10n.bdgAddGoal
+                                  : context.l10n.bdgAddBudget,
                               onTap: () => tab == 2
                                   ? GoalFormScreen.showSheet(context)
                                   : BudgetFormScreen.showSheet(context))),
@@ -367,26 +375,59 @@ class BudgetsScreen extends ConsumerWidget {
         ),
       ];
     }
+    // v2: worst first, all rows inside ONE Group (never a card per row).
+    final sorted = [...entries]..sort((a, b) => b.ratio.compareTo(a.ratio));
+    final c = context.colors;
     return [
-      for (final entry in entries) ...[
-        _BudgetCard(
-          entry: entry,
-          category: data.catalog.byId(entry.budget.categoryId),
-          accountName: data.accountName(
-            entry.budget.accountId,
-            showGlobalLabel: showGlobalAccountLabel,
-            globalLabel: context.l10n.budgetsAllAccounts,
-          ),
-          currencyLabel:
-              _entryCurrencyLabel(context, data, entry, currencyLabel),
-          onTap: () => BudgetFormScreen.showSheet(
-            context,
-            budgetId: entry.budget.id,
-          ),
-          onDelete: () => _confirmDeleteBudget(context, ref, entry),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(0, AppSpacing.s3, 0, AppSpacing.s3),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Text(context.l10n.bdgV2YourBudgets,
+                  style: AppTypography.sectionTitle(c.textPrimary)),
+            ),
+            Text(context.l10n.bdgV2WorstFirst,
+                style: AppTypography.caption(c.textMuted)),
+          ],
         ),
-        const SizedBox(height: AppSpacing.s4),
-      ],
+      ),
+      AppCard(
+        padding: EdgeInsets.zero,
+        child: Column(
+          children: [
+            for (var i = 0; i < sorted.length; i++) ...[
+              if (i > 0)
+                Divider(
+                    height: 1,
+                    thickness: 1,
+                    indent: 16 + 56 + AppSpacing.s3,
+                    color: c.border),
+              _Enter(
+                delay: AppMotion.stagger * math.min(i, 6),
+                child: _BudgetCard(
+                  entry: sorted[i],
+                  category: data.catalog.byId(sorted[i].budget.categoryId),
+                  accountName: data.accountName(
+                    sorted[i].budget.accountId,
+                    showGlobalLabel: showGlobalAccountLabel,
+                    globalLabel: context.l10n.budgetsAllAccounts,
+                  ),
+                  currencyLabel:
+                      _entryCurrencyLabel(context, data, sorted[i], currencyLabel),
+                  onTap: () => BudgetFormScreen.showSheet(
+                    context,
+                    budgetId: sorted[i].budget.id,
+                  ),
+                  onDelete: () => _confirmDeleteBudget(context, ref, sorted[i]),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      const SizedBox(height: AppSpacing.s4),
     ];
   }
 
@@ -486,25 +527,33 @@ class _HistoryPeriodFilterRow extends StatelessWidget {
       children: [
         for (final (period, label) in options) ...[
           GestureDetector(
-            onTap: () => ref
-                .read(budgetsHistoryPeriodFilterProvider.notifier)
-                .state = period,
+            onTap: () {
+              if (selected != period) HapticFeedback.selectionClick();
+              ref.read(budgetsHistoryPeriodFilterProvider.notifier).state =
+                  period;
+            },
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.s3, vertical: AppSpacing.s1 + 2),
+              // v2 QChip: selected = action.soft + action.text + 1px
+              // action@40%; idle = card + hairline (light: white + strokeSoft).
               decoration: BoxDecoration(
-                color: selected == period ? c.cta : c.surfaceCard,
+                color: selected == period ? c.ctaSoft : c.surfaceCard,
                 borderRadius: BorderRadius.circular(AppRadius.pill),
                 border: Border.all(
-                  color: selected == period ? c.cta : c.border,
+                  color: selected == period
+                      ? c.cta.withValues(alpha: .40)
+                      : Theme.of(context).brightness == Brightness.dark
+                          ? c.border
+                          : c.strokeSoft,
                 ),
               ),
               child: Text(
                 label,
                 style: AppTypography.caption(
-                  selected == period ? c.onCta : c.textSecondary,
-                ).copyWith(fontWeight: FontWeight.w700),
+                  selected == period ? c.actionText : c.textSecondary,
+                ).copyWith(fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -514,19 +563,35 @@ class _HistoryPeriodFilterRow extends StatelessWidget {
   }
 }
 
+/// v2: the «+» is a 44pt tinted icon button in the bar — not a FAB-like
+/// filled circle competing with the page's one primary.
 class _AddButton extends StatelessWidget {
-  const _AddButton({required this.onTap});
+  const _AddButton({required this.onTap, required this.label});
   final VoidCallback onTap;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return CalmHeaderAction(
-      icon: AppLucideIcons.plus,
-      primary: true,
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
+    final c = context.colors;
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: Material(
+        color: c.ctaSoft,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: () {
+            HapticFeedback.selectionClick();
+            onTap();
+          },
+          child: SizedBox.square(
+            dimension: 44,
+            child: Icon(AppLucideIcons.plus, size: 22, color: c.actionText),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -569,6 +634,8 @@ class _BudgetsHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final isGoals = tab == 2;
     final isAllLog = tab == 1;
     final totalLabel = switch (tab) {
@@ -576,47 +643,234 @@ class _BudgetsHeader extends StatelessWidget {
       2 => context.l10n.bdgStatTotalSaved,
       _ => context.l10n.bdgStatTotalBudgeted,
     };
-    final metrics = isGoals
+    final unit = isAllLog ? context.l10n.bdgBudgetWord : currencyLabel;
+    // v2: one row of EQUAL counters — never the old 3 + 2 orphan grid.
+    final chips = isGoals
         ? [
-            CalmMetric(
-                label: context.l10n.bdgStatActiveGoals, value: '$goalsCount'),
-            CalmMetric(
-                label: context.l10n.bdgStatProgress, value: '$progress%'),
-            CalmMetric(
+            _SummaryChip(
+                value: '$goalsCount',
+                label: context.l10n.bdgStatActiveGoals,
+                background: c.surfaceMuted,
+                foreground: c.textSecondary),
+            _SummaryChip(
+                value: '$progress%',
+                label: context.l10n.bdgStatProgress,
+                background: c.surfaceMuted,
+                foreground: c.textSecondary),
+            _SummaryChip(
+                value: formatMoney(target),
                 label: context.l10n.bdgStatTargetSavings,
-                value: formatMoney(target)),
+                background: c.surfaceMuted,
+                foreground: c.textSecondary),
           ]
-        : isAllLog
-            ? [
-                CalmMetric(
-                    label: context.l10n.bdgStateSafeF, value: '$safeCount'),
-                CalmMetric(
-                    label: context.l10n.bdgStateNear, value: '$warningCount'),
-                CalmMetric(
-                    label: context.l10n.bdgStateOverF, value: '$overCount'),
-              ]
-            : [
-                CalmMetric(
-                    label: context.l10n.bdgBudgetsWord, value: '$budgetsCount'),
-                CalmMetric(
-                    label: context.l10n.bdgUsageRate, value: '$usedRatio%'),
-                CalmMetric(
-                    label: context.l10n.bdgStateSafeF, value: '$safeCount'),
-                CalmMetric(
-                    label: context.l10n.bdgStateNear, value: '$warningCount'),
-                CalmMetric(
-                    label: context.l10n.bdgStateOverF, value: '$overCount'),
-              ];
-    return CalmFinancialSummary(
-      label: totalLabel,
-      amount: isAllLog ? '$budgetsCount' : formatMoney(isGoals ? saved : limit),
-      footnote: isGoals || isAllLog
-          ? null
-          : '${context.l10n.bdgActualSpend} ${formatMoney(usedAmount)} · '
-              '${context.l10n.bdgRemaining} ${formatMoney(limit - usedAmount)}'
-              '${daysLeft == null ? '' : ' · ${context.l10n.goalDaysLeft(daysLeft!)}'}',
-      currency: isAllLog ? context.l10n.bdgBudgetWord : currencyLabel,
-      metrics: metrics,
+        : [
+            _SummaryChip(
+                value: '$safeCount',
+                label: context.l10n.bdgStateSafeF,
+                background: c.successBg,
+                foreground: c.success),
+            _SummaryChip(
+                value: '$warningCount',
+                label: context.l10n.bdgStateNear,
+                background: c.warningBg,
+                foreground: c.warningText),
+            _SummaryChip(
+                value: '$overCount',
+                label: context.l10n.bdgStateOverF,
+                background: c.dangerBg,
+                foreground: c.danger),
+            if (!isAllLog)
+              _SummaryChip(
+                  value: '$budgetsCount',
+                  label: context.l10n.bdgBudgetsWord,
+                  background: c.surfaceMuted,
+                  foreground: c.textSecondary),
+          ];
+    final amountStyle = AppTypography.amountLarge(c.textMain);
+    final remaining = limit - usedAmount;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.s2, AppSpacing.gutter, 0),
+      child: _Enter(
+        child: _SoftHeroCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Hero amounts carry the currency on the label line.
+              Text('$totalLabel · $unit',
+                  style: AppTypography.caption(c.textLight)),
+              const SizedBox(height: 2),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: isAllLog
+                      ? Text('$budgetsCount', style: amountStyle)
+                      : AnimatedAmountText.money(
+                          value: isGoals ? saved : limit,
+                          color: c.textMain,
+                          style: amountStyle,
+                          textAlign: TextAlign.start,
+                        ),
+                ),
+              ),
+              if (!isGoals && !isAllLog) ...[
+                const SizedBox(height: AppSpacing.s3),
+                Semantics(
+                  label: '${context.l10n.bdgUsageRate} $usedRatio%',
+                  excludeSemantics: true,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ChartBar(
+                          value: usedRatio / 100,
+                          height: 10,
+                          color: c.cta,
+                          trackColor: isDark
+                              ? Colors.white.withValues(alpha: .12)
+                              : c.surfaceMuted,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.s2),
+                      Text('$usedRatio%',
+                          textDirection: TextDirection.ltr,
+                          style: AppTypography.caption(c.textSecondary)
+                              .copyWith(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.s2),
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  spacing: AppSpacing.s3,
+                  runSpacing: 2,
+                  children: [
+                    Text(
+                        '${context.l10n.bdgActualSpend} ${formatMoney(usedAmount)}',
+                        style: AppTypography.caption(c.textLight)),
+                    Text(
+                        '${context.l10n.bdgRemaining} ${formatMoney(remaining)}'
+                        '${daysLeft == null ? '' : ' · ${context.l10n.goalDaysLeft(daysLeft!)}'}',
+                        style: AppTypography.caption(c.textLight)),
+                  ],
+                ),
+              ],
+              const SizedBox(height: AppSpacing.s4),
+              Row(
+                children: [
+                  for (var i = 0; i < chips.length; i++) ...[
+                    if (i > 0) const SizedBox(width: AppSpacing.s2),
+                    Expanded(
+                      child: _Enter(
+                        delay: AppMotion.stagger * (i + 1),
+                        child: chips[i],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// v2 Soft hero (summary cards on 08/13/15): dark #181A20 + 10% hairline +
+/// a top-leading aurora; light white + e2 + a 3pt action top edge, no aurora.
+class _SoftHeroCard extends StatelessWidget {
+  const _SoftHeroCard({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final radius = BorderRadius.circular(AppRadius.card);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: isDark ? c.surfaceElevated : c.surface,
+        borderRadius: radius,
+        border: isDark ? Border.all(color: c.strokeSoft) : null,
+        boxShadow: AppShadows.raised(Theme.of(context).brightness),
+      ),
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Stack(
+          children: [
+            if (isDark)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: AlignmentDirectional(-1, -1),
+                        radius: 1.1,
+                        colors: [Color(0x3D2E6BFF), Color(0x002E6BFF)],
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: 3,
+                child: ColoredBox(color: c.cta),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.s5),
+              child: child,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One equal-width status counter in the summary card.
+class _SummaryChip extends StatelessWidget {
+  const _SummaryChip({
+    required this.value,
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String value;
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.s1, vertical: AppSpacing.s2),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppRadius.button),
+      ),
+      child: Column(
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value,
+                maxLines: 1,
+                textDirection: TextDirection.ltr,
+                style: AppTypography.amountSmall(foreground)),
+          ),
+          Text(label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption(foreground)),
+        ],
+      ),
     );
   }
 }
@@ -638,124 +892,212 @@ class _BudgetCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onDelete;
 
+  Future<void> _openMenu(BuildContext context) async {
+    final value = await showGlassActions<String>(context: context, actions: [
+      GlassAction(
+          value: 'delete',
+          label: context.l10n.setDelete,
+          icon: AppLucideIcons.trash2,
+          destructive: true)
+    ]);
+    if (value == 'delete') onDelete?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final progressColor = c.budgetState(entry.ratio,
         warnAtPercent: entry.budget.alertThresholdPercent);
-    final progress = entry.ratio.clamp(0, 1).toDouble();
     final percent = (entry.ratio * 100).round();
     final isOver = entry.remaining.isNegative;
     final isGeneral = entry.budget.isAllExpenses;
-    final statusLabel = isOver
-        ? context.l10n.bdgOver
-        : entry.health == BudgetHealth.warning
-            ? context.l10n.bdgStateNear
-            : context.l10n.bdgSafe;
     final periodLabel = switch (entry.budget.period) {
       BudgetPeriod.daily => context.l10n.bdgFilterDaily,
       BudgetPeriod.weekly => context.l10n.bdgFilterWeekly,
       BudgetPeriod.monthly => context.l10n.bdgFilterMonthly,
       BudgetPeriod.yearly => context.l10n.bdgFilterYearly,
     };
-    return AppCard(
+    final meta = [periodLabel, if (accountName.isNotEmpty) accountName]
+        .join(' · ');
+    // v2 budget row (one Group, 96pt): ring with % · name + one meta line ·
+    // «باقي»/«تجاوز» amount over «spent / limit». Status is carried by the
+    // ring and the amount colour — the separate pill is gone.
+    return InkWell(
       onTap: onTap,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          RingProgress(
-              value: progress,
-              size: 54,
-              strokeWidth: 5,
-              color: progressColor,
-              trackColor: c.surface2,
-              child: Text('$percent%',
-                  style: AppTypography.custom(
-                      size: 12,
-                      weight: FontWeight.w700,
-                      height: 1.2,
-                      color: c.textPrimary))),
-          const SizedBox(width: 12),
-          Expanded(
-              child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      onLongPress: onDelete == null
+          ? null
+          : () {
+              HapticFeedback.selectionClick();
+              _openMenu(context);
+            },
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 96),
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(16, 12, 4, 12),
+          child: Row(
             children: [
-              Text(
-                  isGeneral
-                      ? context.l10n.bdgAllExpenses
-                      : category?.name ?? context.l10n.bdgCategory,
-                  style: AppTypography.custom(
-                      size: 14.5,
-                      weight: FontWeight.w600,
-                      height: 1.35,
-                      color: c.textPrimary)),
-              const SizedBox(height: 4),
-              Text(
-                  '${formatMoney(entry.spent)} / ${formatMoney(entry.budget.amountMoney)} $currencyLabel · $periodLabel',
-                  style: AppTypography.custom(
-                      size: 11,
-                      weight: FontWeight.w400,
-                      height: 1.4,
-                      color: c.textMuted)),
-              if (accountName.isNotEmpty)
-                Text(accountName,
+              _BudgetHealthRing(
+                ratio: entry.ratio,
+                color: progressColor,
+                over: isOver,
+                warnKey: entry.budget.id,
+                child: Text('$percent%',
+                    textDirection: TextDirection.ltr,
                     style: AppTypography.custom(
-                        size: 10,
-                        weight: FontWeight.w400,
-                        height: 1.3,
-                        color: c.textMuted)),
-            ],
-          )),
-          const SizedBox(width: 6),
-          Flexible(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                      color: progressColor.withValues(alpha: .12),
-                      borderRadius: BorderRadius.circular(999)),
-                  child: Text(statusLabel,
-                      style: AppTypography.custom(
-                          size: 10,
-                          weight: FontWeight.w500,
-                          height: 1.3,
-                          color: progressColor))),
-              const SizedBox(height: 4),
-              Text(
-                  '${formatMoney(isOver ? -entry.remaining : entry.remaining)} ${isOver ? context.l10n.bdgOver : context.l10n.bdgRemaining}',
-                  style: AppTypography.custom(
-                      size: 11,
-                      weight: FontWeight.w600,
-                      height: 1.3,
-                      color: isOver ? c.danger : c.textPrimary)),
+                        size: 13,
+                        weight: FontWeight.w700,
+                        height: 1.2,
+                        tabular: true,
+                        color: c.textPrimary)),
+              ),
+              const SizedBox(width: AppSpacing.s3),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        isGeneral
+                            ? context.l10n.bdgAllExpenses
+                            : category?.name ?? context.l10n.bdgCategory,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.cardTitle(c.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text(meta,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.caption(c.textMuted)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.s2),
+              Flexible(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Text(
+                          '${isOver ? context.l10n.bdgOver : context.l10n.bdgRemaining} '
+                          '${formatMoney(isOver ? -entry.remaining : entry.remaining)}',
+                          maxLines: 1,
+                          style: AppTypography.amountSmall(
+                              isOver ? c.danger : c.success)),
+                    ),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: Text(
+                          '${formatMoney(entry.spent)} / ${formatMoney(entry.budget.amountMoney)} $currencyLabel',
+                          maxLines: 1,
+                          style: AppTypography.caption(c.textMuted)),
+                    ),
+                  ],
+                ),
+              ),
               if (onDelete != null)
                 SizedBox(
                     height: 44,
-                    width: 44,
+                    width: 40,
                     child: IconButton(
                         padding: EdgeInsets.zero,
                         tooltip: context.l10n.setDelete,
                         icon: Icon(AppLucideIcons.moreVertical,
-                            color: c.textMuted, size: 17),
-                        onPressed: () async {
-                          final value = await showGlassActions<String>(
-                              context: context,
-                              actions: [
-                                GlassAction(
-                                    value: 'delete',
-                                    label: context.l10n.setDelete,
-                                    icon: AppLucideIcons.trash2,
-                                    destructive: true)
-                              ]);
-                          if (value == 'delete') onDelete?.call();
-                        })),
-            ]),
+                            color: c.textMuted, size: 18),
+                        onPressed: () => _openMenu(context)))
+              else
+                const SizedBox(width: AppSpacing.s3),
+            ],
           ),
-        ],
+        ),
       ),
+    );
+  }
+}
+
+/// The budget's health ring (56pt, stroke 6): sweeps in as the row appears
+/// (`m.chart` ring). Over budget it sweeps past full and pulses once — a soft
+/// danger glow in dark, a 1.06 scale in light — with one warning haptic per
+/// budget per session. Reduce Motion shows the final state.
+class _BudgetHealthRing extends StatefulWidget {
+  const _BudgetHealthRing({
+    required this.ratio,
+    required this.color,
+    required this.over,
+    required this.warnKey,
+    required this.child,
+  });
+
+  final double ratio;
+  final Color color;
+  final bool over;
+  final String warnKey;
+  final Widget child;
+
+  static final Set<String> _warned = <String>{};
+
+  @override
+  State<_BudgetHealthRing> createState() => _BudgetHealthRingState();
+}
+
+class _BudgetHealthRingState extends State<_BudgetHealthRing>
+    with SingleTickerProviderStateMixin {
+  // 0–0.5: wait out the 700ms sweep; 0.5–1: the single pulse.
+  late final AnimationController _pulse = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1400));
+  bool _scheduled = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_scheduled || !widget.over) return;
+    _scheduled = true;
+    if (shouldReduceMotion(context)) return;
+    _pulse.addListener(_onPulse);
+    _pulse.forward();
+  }
+
+  void _onPulse() {
+    if (_pulse.value < .5) return;
+    _pulse.removeListener(_onPulse);
+    if (_BudgetHealthRing._warned.add(widget.warnKey)) {
+      HapticFeedback.mediumImpact();
+    }
+  }
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AnimatedBuilder(
+      animation: _pulse,
+      builder: (context, child) {
+        final t = ((_pulse.value - .5) * 2).clamp(0.0, 1.0);
+        final wave = math.sin(t * math.pi);
+        final ring = RingProgress(
+          value: widget.ratio,
+          size: 56,
+          strokeWidth: 6,
+          color: widget.color,
+          allowOverflow: widget.over,
+          glowColor: isDark && widget.over && wave > 0
+              ? widget.color.withValues(alpha: .40 * wave)
+              : null,
+          child: child,
+        );
+        if (isDark || wave == 0) return ring;
+        return Transform.scale(scale: 1 + .06 * wave, child: ring);
+      },
+      child: widget.child,
     );
   }
 }
@@ -1406,29 +1748,35 @@ class _AllocateIncomeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // v2: demoted to a Tinted card (action.soft, + a 30% action hairline in
+    // dark) so it is no longer the loudest thing on the page; the action
+    // colour lives only in the icon tile.
     return Material(
-      color: Colors.transparent,
-      child: InkWell(
+      color: c.ctaSoft,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(AppRadius.card),
+        side: isDark
+            ? BorderSide(color: c.cta.withValues(alpha: .30))
+            : BorderSide.none,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
         onTap: () {
           HapticFeedback.selectionClick();
           onTap();
         },
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.s4),
-          // الفعل الأساسي للتبويب — سطح ink بدل التدرّج الأزرق القديم.
-          decoration: BoxDecoration(
-            color: c.ink,
-            borderRadius: BorderRadius.circular(AppRadius.card),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.s4, vertical: 14),
           child: Row(
             children: [
               Container(
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: c.onInk.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(14),
+                  color: c.ink,
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(AppLucideIcons.pieChart, color: c.onInk, size: 22),
               ),
@@ -1438,19 +1786,49 @@ class _AllocateIncomeButton extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(context.l10n.bdgEnvelopeTitle,
-                        style: AppTypography.bodyStrong(c.onInk)),
+                        style: AppTypography.cardTitle(c.textPrimary)),
                     const SizedBox(height: 2),
                     Text(
                       context.l10n.bdgEnvelopeBody,
-                      style: AppTypography.caption(
-                          c.onInk.withValues(alpha: 0.72)),
+                      style: AppTypography.caption(c.textSecondary),
                     ),
                   ],
                 ),
               ),
-              DirectionalChevron(color: c.onInk),
+              DirectionalChevron(color: c.textMuted),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// v2 `m.enter` (fade + 12pt rise on ease.out, after [delay]) without timers
+/// and without swapping the subtree when it finishes. `PremiumMotion` replaces
+/// its child once played, which remounts it — that restarted the chart
+/// draw-ins (donut, bars, rings) mid-sweep. Reduce Motion renders it in place.
+class _Enter extends StatelessWidget {
+  const _Enter({required this.child, this.delay = Duration.zero});
+
+  final Widget child;
+  final Duration delay;
+
+  @override
+  Widget build(BuildContext context) {
+    final reduce = shouldReduceMotion(context);
+    final total = AppMotion.moderate + delay;
+    final start = delay.inMicroseconds / total.inMicroseconds;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: reduce ? 1 : 0, end: 1),
+      duration: reduce ? Duration.zero : total,
+      curve: Interval(start, 1, curve: AppMotion.easeOut),
+      child: child,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          offset: Offset(0, AppMotion.enterRise * (1 - t)),
+          child: child,
         ),
       ),
     );

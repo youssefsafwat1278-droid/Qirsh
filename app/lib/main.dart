@@ -4,6 +4,7 @@ import 'core/startup/install_presentation_store.dart';
 import 'core/security/lock_prompt_language.dart';
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,9 +28,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'core/utils/l10n_ext.dart';
 import 'core/theme/widgets/native_glass.dart';
+import 'core/theme/widgets/qirsh_error_boundary.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // v2 error boundary: a calm placeholder instead of the framework's error
+  // box when a widget throws during build (debug keeps the red screen).
+  if (!kDebugMode) ErrorWidget.builder = qirshErrorWidget;
   // The bundled fonts' OFL notices. Registered here rather than lazily so the
   // obligation is discharged on every launch path, including the one that skips
   // Sentry. The generator is lazy internally, so this costs nothing until the

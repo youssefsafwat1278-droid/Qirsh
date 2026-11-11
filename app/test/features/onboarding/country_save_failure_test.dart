@@ -30,7 +30,7 @@ void main() {
     final settings=FailureOnlyCountrySettings(db);final before=await snapshot(db);
     await tester.pumpWidget(ProviderScope(overrides:[appDatabaseProvider.overrideWithValue(db),userSettingsRepositoryProvider.overrideWithValue(settings),saveCountryCurrencyUseCaseProvider.overrideWithValue(SaveCountryCurrencyUseCase(settings,DriftAccountRepository(db),DriftTransactionRepository(db)))],child:MaterialApp(theme:dark?AppTheme.dark:AppTheme.light,locale:Locale(lang),supportedLocales:AppL10n.supportedLocales,localizationsDelegates:AppL10n.localizationsDelegates,home:const OnboardingSetupScreen())));
     await tester.runAsync(() async=>Future<void>.delayed(const Duration(milliseconds:60)));await tester.pumpAndSettle();
-    final l=AppL10n.of(tester.element(find.byType(OnboardingSetupScreen)));final egypt=find.text('🇪🇬 ${l.countryEG} · EGP');
+    final l=AppL10n.of(tester.element(find.byType(OnboardingSetupScreen)));final egypt=find.text('${l.countryEG}\n🇪🇬 EGP');
     await tester.ensureVisible(egypt);await tester.pumpAndSettle();await tester.tap(egypt);
     for(var i=0;i<4;i++){await tester.runAsync(() async=>Future<void>.delayed(const Duration(milliseconds:30)));await tester.pump();}
     expect(settings.calls,1);final pill=find.ancestor(of:egypt,matching:find.byType(InkWell)).first;expect(tester.widget<InkWell>(pill).onTap,isNull);

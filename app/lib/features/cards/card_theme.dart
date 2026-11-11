@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_shadows.dart';
 
 /// خيار ثيم تصميم البطاقة: مفتاح ثابت (يُخزَّن على البطاقة) + تسمية + تدرّج.
 /// الألوان مُنتقاة لتُقرأ جيدًا مع نص أبيض (النهاية أغمق دائمًا).
@@ -70,7 +71,13 @@ Gradient cardGradient(
   final accent = parseAccent(accentHex);
   final preset = cardThemeByKey(themeKey);
   if (preset == null) {
-    final base = context.colors.primaryGradient;
+    // v2 bank card (spec §3.0 19): brand → action → sky at 135°, identical in
+    // both themes (the card is always-dark imagery).
+    const base = LinearGradient(
+      begin: AlignmentDirectional.topStart,
+      end: AlignmentDirectional.bottomEnd,
+      colors: [AppBrandBlue.brand, AppBrandBlue.mid, AppBrandBlue.light],
+    );
     if (accent == null) return base;
     return LinearGradient(
       begin: base.begin,
@@ -84,3 +91,20 @@ Gradient cardGradient(
     colors: accent == null ? preset.colors : [preset.colors.first, accent],
   );
 }
+
+/// v2 bank-card lift (spec §3.0 19): `heroGlow` on the dark canvas, a navy
+/// drop shadow `0 16 32 #022686@28%` on the light one.
+List<BoxShadow> bankCardShadow(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? AppShadows.heroGlow
+        : const [
+            BoxShadow(
+                color: Color(0x47022686), blurRadius: 32, offset: Offset(0, 16)),
+          ];
+
+/// The EMV chip's gold gradient (`gold.lit → gold → gold.deep`).
+const LinearGradient bankCardChipGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [AppBrandAccent.goldLit, AppBrandAccent.gold, AppBrandAccent.goldDeep],
+);

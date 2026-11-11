@@ -20,11 +20,12 @@ import '../capture/services/capture_device_registration_service.dart';
 import '../consent/smart_analysis_consent_sheet.dart';
 import 'consent_status.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
-import '../common/app_header.dart';
+import '../common/app_card.dart';
+import '../common/app_status_pill.dart';
+import 'widgets/settings_v2.dart';
 import 'settings_providers.dart';
 import '../../core/theme/widgets/app_toast.dart';
 import '../../core/utils/app_lucide_icons.dart';
-import '../../core/theme/widgets/directional_chevron.dart';
 import '../common/repo_error_messages.dart';
 import '../../core/theme/widgets/glass_dialog.dart';
 
@@ -39,130 +40,137 @@ class PrivacyScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
     final l10n = context.l10n;
-    return Scaffold(
-      backgroundColor: c.bg,
-      body: Column(
-        children: [
-          const _PrivacyHeader(),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(AppSpacing.gutter),
-              children: [
-                const Center(
-                  child: QirshIllustration(
-                    name: 'privacy', width: 230, height: 172.5,
-                  ),
-                ),
-                Text(
-                  l10n.helpPrivacyTitle,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.custom(size: 20, weight: FontWeight.w700,
-                      height: 1.35, color: c.textPrimary),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  l10n.helpPrivacyBody,
-                  textAlign: TextAlign.center,
-                  style: AppTypography.callout(c.textMuted),
-                ),
-                const SizedBox(height: 8),
-                Text(l10n.privIntro, textAlign: TextAlign.center,
-                  style: AppTypography.caption(c.textMuted)),
-                const SizedBox(height: AppSpacing.s5),
-                _PrivacyCard(
-                  icon: AppLucideIcons.fileText,
-                  title: context.l10n.privPolicy,
-                  onTap: () => _openExternalLink(context, _privacyPolicyUrl),
-                ),
-                _PrivacyCard(
-                  icon: AppLucideIcons.gavel,
-                  title: context.l10n.privTerms,
-                  onTap: () => _openExternalLink(context, _termsUrl),
-                ),
-                _PrivacyCard(
-                  icon: AppLucideIcons.arrowUpDown,
-                  title: context.l10n.privTransferMyData,
-                  onTap: () => context.push('/data-transfer'),
-                ),
-                const SizedBox(height: AppSpacing.s5),
-                Text(context.l10n.privDataProcessing,
-                    style: AppTypography.subhead(c.textMain)),
-                const SizedBox(height: AppSpacing.s2),
-                ref.watch(userSettingsProvider).maybeWhen(
-                      skipLoadingOnReload: true,
-                      data: (settings) => Column(
-                        children: [
-                          // Cloud sync and Smart Analysis are one disclosed
-                          // permission: a status the person can trust and
-                          // deliberate actions, not a daily switch. Re-consent
-                          // reopens the existing disclosure; withdrawal is
-                          // confirmed and stops both together.
-                          _ConsentManagementCard(
-                            settings: settings,
-                            withdraw: _withdrawConsent,
-                          ),
-                          if (settings.cloudProcessingEnabled &&
-                              ref
-                                      .watch(captureRegistrationStatusProvider)
-                                      .phase !=
-                                  CaptureRegistrationPhase.notRequested)
-                            const Padding(
-                              padding: EdgeInsets.only(bottom: AppSpacing.s3),
-                              child: SmartAnalysisRegistrationStatus(),
-                            ),
-                          // COUPONS Phase 1 — merchant personalization.
-                          //
-                          // Sits here, next to the cloud and AI consents,
-                          // because it is the same KIND of decision even though
-                          // it involves no server: it is the user choosing
-                          // whether their spending shapes what they are shown.
-                          // Burying it in the Offers screen would make it look
-                          // like a display preference rather than a data one.
-                          //
-                          // Only shown when the capability flag is on — asking
-                          // about a feature that cannot run would be noise.
-                          // Unlike the two above it never leaves the device, so
-                          // the copy says so plainly rather than describing an
-                          // upload that does not happen.
-                          if (ref.watch(merchantOffersEnabledProvider))
-                            _ConsentSwitchCard(
-                              icon: AppLucideIcons.store,
-                              title: l10n.couponsPersonalizationTitle,
-                              subtitle: l10n.couponsPersonalizationBody,
-                              value: settings.merchantPersonalizationEnabled,
-                              onChanged: (value) =>
-                                  _setMerchantPersonalization(ref, value),
-                            ),
-                        ],
-                      ),
-                      orElse: () => const SizedBox.shrink(),
-                    ),
-                const SizedBox(height: AppSpacing.s5),
-                Text(context.l10n.privDangerZone,
-                    style: AppTypography.subhead(c.danger)),
-                const SizedBox(height: AppSpacing.s2),
-                ref.watch(accountDeletionStatusProvider).maybeWhen(
-                      data: (status) => status.isPending
-                          ? _PendingDeletionCard(
-                              scheduledAt: status.scheduledAt!,
-                              onCancel: () =>
-                                  _confirmCancelDeletion(context, ref),
-                            )
-                          : const SizedBox.shrink(),
-                      orElse: () => const SizedBox.shrink(),
-                    ),
-                const SizedBox(height: AppSpacing.s2),
-                _PrivacyCard(
-                  icon: AppLucideIcons.trash2,
-                  title: context.l10n.privDeleteAccountAll,
-                  onTap: () => context.push('/delete-account'),
-                  danger: true,
-                ),
-              ],
-            ),
+    // v2 §24: QNavBar + QLargeTitle, shield illustration, the control
+    // statement as a success-tinted card, link rows in ONE Group, the
+    // processing card, then a danger Group. Copy is unchanged and nothing is
+    // folded away.
+    return SettingsV2Page(
+      title: l10n.privTitle,
+      showBack: Navigator.of(context).canPop(),
+      children: [
+        const SizedBox(height: AppSpacing.s2),
+        const Center(
+          child: QirshIllustration(
+            name: 'privacy', width: 187, height: 140,
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: AppSpacing.s3),
+        SettingsV2Tinted(
+          background: c.successBg,
+          accent: c.success,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.helpPrivacyTitle,
+                style: AppTypography.custom(size: 18, weight: FontWeight.w700,
+                    height: 1.35, color: c.textPrimary),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                l10n.helpPrivacyBody,
+                style: AppTypography.callout(c.textSecondary),
+              ),
+              const SizedBox(height: 8),
+              Text(l10n.privIntro,
+                style: AppTypography.caption(c.textSecondary)),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.s4),
+        SettingsV2Group(children: [
+          _PrivacyCard(
+            icon: AppLucideIcons.fileText,
+            title: context.l10n.privPolicy,
+            onTap: () => _openExternalLink(context, _privacyPolicyUrl),
+          ),
+          _PrivacyCard(
+            icon: AppLucideIcons.gavel,
+            title: context.l10n.privTerms,
+            onTap: () => _openExternalLink(context, _termsUrl),
+          ),
+          _PrivacyCard(
+            icon: AppLucideIcons.arrowUpDown,
+            title: context.l10n.privTransferMyData,
+            onTap: () => context.push('/data-transfer'),
+          ),
+        ]),
+        SettingsV2Label(context.l10n.privDataProcessing),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+          child: ref.watch(userSettingsProvider).maybeWhen(
+                skipLoadingOnReload: true,
+                data: (settings) => Column(
+                  children: [
+                    // Cloud sync and Smart Analysis are one disclosed
+                    // permission: a status the person can trust and
+                    // deliberate actions, not a daily switch. Re-consent
+                    // reopens the existing disclosure; withdrawal is
+                    // confirmed and stops both together.
+                    _ConsentManagementCard(
+                      settings: settings,
+                      withdraw: _withdrawConsent,
+                    ),
+                    if (settings.cloudProcessingEnabled &&
+                        ref
+                                .watch(captureRegistrationStatusProvider)
+                                .phase !=
+                            CaptureRegistrationPhase.notRequested)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: AppSpacing.s3),
+                        child: SmartAnalysisRegistrationStatus(),
+                      ),
+                    // COUPONS Phase 1 — merchant personalization.
+                    //
+                    // Sits here, next to the cloud and AI consents, because
+                    // it is the same KIND of decision even though it involves
+                    // no server: it is the user choosing whether their
+                    // spending shapes what they are shown. Burying it in the
+                    // Offers screen would make it look like a display
+                    // preference rather than a data one.
+                    //
+                    // Only shown when the capability flag is on — asking
+                    // about a feature that cannot run would be noise. Unlike
+                    // the two above it never leaves the device, so the copy
+                    // says so plainly rather than describing an upload that
+                    // does not happen.
+                    if (ref.watch(merchantOffersEnabledProvider))
+                      _ConsentSwitchCard(
+                        icon: AppLucideIcons.store,
+                        title: l10n.couponsPersonalizationTitle,
+                        subtitle: l10n.couponsPersonalizationBody,
+                        value: settings.merchantPersonalizationEnabled,
+                        onChanged: (value) =>
+                            _setMerchantPersonalization(ref, value),
+                      ),
+                  ],
+                ),
+                orElse: () => const SizedBox.shrink(),
+              ),
+        ),
+        SettingsV2Label(context.l10n.privDangerZone, color: c.danger),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+          child: ref.watch(accountDeletionStatusProvider).maybeWhen(
+                data: (status) => status.isPending
+                    ? _PendingDeletionCard(
+                        scheduledAt: status.scheduledAt!,
+                        onCancel: () => _confirmCancelDeletion(context, ref),
+                      )
+                    : const SizedBox.shrink(),
+                orElse: () => const SizedBox.shrink(),
+              ),
+        ),
+        SettingsV2Group(children: [
+          _PrivacyCard(
+            icon: AppLucideIcons.trash2,
+            title: context.l10n.privDeleteAccountAll,
+            subtitle: context.l10n.setDeleteAccountSub,
+            onTap: () => context.push('/delete-account'),
+            danger: true,
+          ),
+        ]),
+      ],
     );
   }
 
@@ -429,7 +437,7 @@ class _ConsentManagementCardState
     final l10n = context.l10n;
     final facts = ref.watch(consentLiveFactsProvider).valueOrNull;
     final status = deriveConsentStatus(widget.settings, facts);
-    final (label, body, icon, tone) = switch (status) {
+    final (label, body, icon, _) = switch (status) {
       ConsentStatus.active => (
           l10n.consentStatusActive,
           l10n.consentStatusActiveBody,
@@ -496,33 +504,36 @@ class _ConsentManagementCardState
             status == ConsentStatus.turningOff);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: c.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+      // v2 Group card (light white + e1 / dark hairline).
+      child: AppCard(
+        padding: const EdgeInsets.all(AppSpacing.s4),
+        child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(children: [
-                Icon(icon, color: c.primary),
-                const SizedBox(width: AppSpacing.s2),
+                SettingsV2Tile(icon: icon),
+                const SizedBox(width: AppSpacing.s3),
                 Expanded(
                   child: Text(l10n.consentMgmtTitle,
-                      style: AppTypography.bodyStrong(c.textMain)),
+                      style: AppTypography.cardTitle(c.textMain)),
                 ),
               ]),
-              const SizedBox(height: AppSpacing.s2),
+              const SizedBox(height: AppSpacing.s3),
               Row(
                 key: const Key('consentStatus'),
                 children: [
-                  Icon(Icons.circle, size: 10, color: tone),
-                  const SizedBox(width: AppSpacing.s2),
-                  Text(label, style: AppTypography.bodyStrong(tone)),
+                  AppStatusPill(
+                    label: label,
+                    tone: switch (status) {
+                      ConsentStatus.active => AppStatusTone.success,
+                      ConsentStatus.off => AppStatusTone.neutral,
+                      _ => AppStatusTone.warning,
+                    },
+                  ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.s1),
-              Text(body, style: AppTypography.caption(c.textLight)),
+              const SizedBox(height: AppSpacing.s2),
+              Text(body, style: AppTypography.subhead(c.textSecondary)),
               // Field diagnostic: which site froze egress (a constant tag only).
               if (settled &&
                   facts.frozen &&
@@ -541,10 +552,10 @@ class _ConsentManagementCardState
               ],
               const SizedBox(height: AppSpacing.s2),
               Text(l10n.privCloudProcessingBody,
-                  style: AppTypography.caption(c.textMuted)),
+                  style: AppTypography.caption(c.textSecondary)),
               const SizedBox(height: AppSpacing.s1),
               Text(l10n.privAiAnalysisBody,
-                  style: AppTypography.caption(c.textMuted)),
+                  style: AppTypography.caption(c.textSecondary)),
               if (canTurnOn || canTurnOff || canRefresh) ...[
                 const SizedBox(height: AppSpacing.s2),
                 Wrap(
@@ -579,7 +590,6 @@ class _ConsentManagementCardState
               ],
             ],
           ),
-        ),
       ),
     );
   }
@@ -602,11 +612,11 @@ class _PendingDeletionCard extends StatelessWidget {
     final label =
         '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')}';
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.s3),
+      padding: const EdgeInsets.all(AppSpacing.s4),
       margin: const EdgeInsets.only(bottom: AppSpacing.s3),
       decoration: BoxDecoration(
         color: c.danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         border: Border.all(color: c.danger.withValues(alpha: 0.3)),
       ),
       child: Column(
@@ -618,9 +628,9 @@ class _PendingDeletionCard extends StatelessWidget {
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: TextButton(
-              style: Theme.of(context).brightness == Brightness.dark
-                  ? TextButton.styleFrom(foregroundColor: c.primary)
-                  : null,
+              // v2: the theme's light action blue (#155DFC) is 4.3:1 on the
+              // danger tint; actionText keeps the cancel link at AA.
+              style: TextButton.styleFrom(foregroundColor: c.actionText),
               onPressed: onCancel,
               child: Text(context.l10n.privCancelDeletion),
             ),
@@ -629,15 +639,6 @@ class _PendingDeletionCard extends StatelessWidget {
       ),
     );
   }
-}
-
-class _PrivacyHeader extends StatelessWidget {
-  const _PrivacyHeader();
-  @override
-  Widget build(BuildContext context) => SafeArea(
-    bottom: false,
-    child: SizedBox(height: 56, child: AppHeader(title: context.l10n.privTitle)),
-  );
 }
 
 /// Revocable data-processing consent switch (MALI-001) — same card language
@@ -663,20 +664,16 @@ class _ConsentSwitchCard extends StatelessWidget {
     final c = context.colors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: c.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: SwitchListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          secondary: Icon(icon, color: c.primary),
+      child: AppCard(
+        padding: EdgeInsets.zero,
+        child: SwitchListTile.adaptive(
+          contentPadding: const EdgeInsetsDirectional.fromSTEB(
+              AppSpacing.s4, 4, AppSpacing.s3, 4),
+          secondary: SettingsV2Tile(icon: icon),
           title: Text(title, style: AppTypography.bodyStrong(c.textMain)),
           subtitle: Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Text(subtitle, style: AppTypography.caption(c.textLight)),
+            child: Text(subtitle, style: AppTypography.caption(c.textSecondary)),
           ),
           value: value,
           activeThumbColor: c.onCta,
@@ -693,44 +690,24 @@ class _PrivacyCard extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.onTap,
+    this.subtitle,
     this.danger = false,
   });
 
   final IconData icon;
   final String title;
+  final String? subtitle;
   final VoidCallback onTap;
   final bool danger;
 
+  /// A row inside a v2 Group; danger rows carry the tinted danger tile and
+  /// danger label.
   @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final color = danger ? c.danger : c.primary;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: danger ? c.danger.withValues(alpha: 0.05) : c.surface,
-        clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color:
-                danger ? c.danger.withValues(alpha: 0.3) : Colors.transparent,
-          ),
-        ),
-        child: ListTile(
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: Icon(icon, color: color),
-          title: Text(
-            title,
-            style: AppTypography.bodyStrong(danger ? c.danger : c.textMain),
-          ),
-          trailing: DirectionalChevron(color: c.textMuted),
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          onTap: onTap,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => SettingsV2Row(
+        icon: icon,
+        title: title,
+        subtitle: subtitle,
+        danger: danger,
+        onTap: onTap,
+      );
 }

@@ -81,10 +81,14 @@ class MoneyApp extends ConsumerWidget {
                       appDataRestoring,
                       AutomaticSessionRecovery.restoringSession,
                     ]),
-                    builder: (context, _) => appDataRestoring.value ||
-                            AutomaticSessionRecovery.restoringSession.value
-                        ? const Positioned.fill(child: AppBootLoader())
-                        : const SizedBox.shrink(),
+                    // The loader leaves with its exit motion over the app
+                    // (already built behind it); the condition is unchanged.
+                    builder: (context, _) => Positioned.fill(
+                      child: AppBootLoaderReveal(
+                        loading: appDataRestoring.value ||
+                            AutomaticSessionRecovery.restoringSession.value,
+                      ),
+                    ),
                   ),
                 ],
               ),

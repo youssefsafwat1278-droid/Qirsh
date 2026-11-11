@@ -37,8 +37,10 @@ class LiquidBar extends StatelessWidget {
     final isIndeterminate = value == null;
     final target = isIndeterminate ? 0.0 : value!.clamp(0.0, 1.0);
     final fill = color ?? MaliTokens.accentStart;
-    final track =
-        trackColor ?? (isIndeterminate ? t.ringTrackNeutral : t.surfaceRaised);
+    // v2 progress track: #FFFFFF@12% (dark) / #E6EAF2-family (light).
+    final track = trackColor ?? t.ringTrackNeutral;
+    // v2: the glow is a dark-theme cue only; light bars sit flat.
+    final glow = Theme.of(context).brightness == Brightness.dark;
     final radius = BorderRadius.circular(height);
 
     Widget bar(double v) {
@@ -60,13 +62,15 @@ class LiquidBar extends StatelessWidget {
                           end: AlignmentDirectional.centerEnd,
                           colors: [fill.withValues(alpha: 0.62), fill],
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: fill.withValues(alpha: 0.34),
-                            blurRadius: height,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                        boxShadow: glow
+                            ? [
+                                BoxShadow(
+                                  color: fill.withValues(alpha: 0.30),
+                                  blurRadius: height,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ]
+                            : null,
                       ),
                       // The meniscus: a bright top edge that makes the fill
                       // read as a liquid surface rather than a flat block.
@@ -95,8 +99,9 @@ class LiquidBar extends StatelessWidget {
     if (!animate || _reduceMotion(context)) return bar(target);
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: target),
-      duration: AppMotion.chartAnimation,
-      curve: AppMotion.standardCurve,
+      // v2 linear progress: width 0→value over 600ms, ease.out.
+      duration: const Duration(milliseconds: 600),
+      curve: AppMotion.easeOut,
       builder: (context, v, _) => bar(v),
     );
   }

@@ -79,7 +79,7 @@ Future<bool> openVisualParityCountryFailure(
       .push<void>(MaterialPageRoute<void>(
           builder: (_) => UncontrolledProviderScope(
                 container: container,
-                child: key == 'countrySaveFailure' ? const OnboardingSetupScreen() : const SettingsScreen(),
+                child: key == 'countrySaveFailure' ? const OnboardingSetupScreen() : const SettingsScreen(page: SettingsPage.account),
               )))
       .whenComplete(() {
     service.release();

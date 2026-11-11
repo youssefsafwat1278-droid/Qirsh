@@ -157,22 +157,24 @@ class MaliTokens {
     surfaceFloating: Color(0xFFFFFFFF),
     surfaceGlassFill: Color(0xB8FFFFFF), // white @ ~72%
     surfaceGlassStroke: Color(0x0F0F172A), // ink @ ~6%
-    glassFillTop: Color(0x85FFFFFF), // white @ ~52% (matches nav fallback)
-    glassFillBottom: Color(0x9EFFFFFF), // white @ ~62% (matches nav fallback)
+    // v2: 78% → 88% (was 52/62% — content ghosted through the tab bar).
+    glassFillTop: Color(0xC7FFFFFF), // white @ 78%
+    glassFillBottom: Color(0xE0FFFFFF), // white @ 88%
     glassStroke: Color(0x1A0F172A), // ink @ ~10% — definition, not white glow
     glassSheen: Color(0xE6FFFFFF), // white @ ~90% — top specular edge
     glassSheetFill: Color(0xC7FFFFFF), // white @ 78% — liquid, forms legible
-    strokeSoft: Color(0xFFEAF0F7),
-    cardBorder: Color(0xFFEDF1F7),
+    strokeSoft: Color(0xFFD5DBE8),
+    // v2: light Group cards carry no border — the e1 shadow is the edge.
+    cardBorder: Color(0x00EDF1F7),
     textOnCanvasPrimary: Color(0xFF0C1330),
     textOnCanvasSecondary: Color(0xFF3D4660),
     textOnCanvasMuted: Color(0xFF67708A),
     ringTrackNeutral: Color(0xFFE7ECF5),
     ringIndeterminate: Color(0x330F172A), // ink @ ~20%
-    // Approved HTML --shadow-1: restrained ambient card elevation.
+    // v2 e1 (#0C1330): 0 1 2 @4% + 0 4 12 @5% — the light Group card edge.
     floatShadow: [
       BoxShadow(color: Color(0x0A0C1330), blurRadius: 2, offset: Offset(0, 1)),
-      BoxShadow(color: Color(0x0A0C1330), blurRadius: 8, offset: Offset(0, 2)),
+      BoxShadow(color: Color(0x0D0C1330), blurRadius: 12, offset: Offset(0, 4)),
     ],
     auroraTop: Color(0x1A2E6BFF), // accent @ ~10% (subtler in light)
     auroraA: Color(0x142E6BFF), // accent @ ~8%

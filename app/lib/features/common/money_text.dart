@@ -44,8 +44,9 @@ class MoneyText extends StatelessWidget {
     this.money, {
     super.key,
     required this.style,
-    this.fractionScale = 0.7,
-    this.fractionOpacity = 0.6,
+    // v2 MoneyText: decimals at 62% size, dimmed.
+    this.fractionScale = 0.62,
+    this.fractionOpacity = 0.62,
     this.textAlign,
   });
 
@@ -83,7 +84,8 @@ class MoneyText extends StatelessWidget {
       TextSpan(
         children: [
           const TextSpan(text: _fsi),
-          if (parts.negative) TextSpan(text: '-', style: base),
+          // v2: a true minus sign (U+2212), always leading the digits.
+          if (parts.negative) TextSpan(text: '\u2212', style: base),
           TextSpan(text: parts.integerPart, style: base),
           if (parts.fraction.isNotEmpty)
             TextSpan(text: '.${parts.fraction}', style: fractionStyle),

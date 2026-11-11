@@ -353,7 +353,8 @@ void main() {
           };
       final err = await accept(service());
       expect(err, isA<CloudEnableIncompleteException>());
-      expect((err as CloudEnableIncompleteException).reason, 'preflight_uncertain');
+      expect((err as CloudEnableIncompleteException).reason,
+          startsWith('preflight_uncertain'));
       expect((rig.pendingSecure.value, rig.pendingFile.value,
           rig.secure.value, rig.file.value), before);
       expect(sim.of('beginCloudEgressEnable').length, begins);

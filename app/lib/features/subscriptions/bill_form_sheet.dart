@@ -914,7 +914,9 @@ class _BillServicePickerState extends State<_BillServicePicker> {
               crossAxisCount: 4,
               mainAxisSpacing: 16,
               crossAxisSpacing: 12,
-              childAspectRatio: 0.78,
+              // v2 captions are 13/18 (the Arabic floor): two-line names
+              // need the taller tile.
+              childAspectRatio: 0.68,
             ),
             itemBuilder: (context, index) {
               final name = items[index];

@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../core/privacy/gated_url_launcher.dart';
 import '../../core/theme/widgets/app_toast.dart';
 import '../../core/theme/app_assets.dart';
 import '../../core/theme/app_colors.dart';
@@ -13,19 +15,24 @@ const qirshShortcutInstallUrl =
     'https://www.icloud.com/shortcuts/55c2b08ad6a94b11b34e328fadf22a20';
 const qirshShortcutProbe = 'QIRSH_SETUP_CHECK_V1';
 
-Uri qirshShortcutTestUrl() =>
+Uri qirshShortcutTestUrl({String name = qirshTemplateShortcutName}) =>
     Uri(scheme: 'shortcuts', host: 'run-shortcut', queryParameters: {
-      'name': 'QIRSH',
+      'name': name,
       'input': 'text',
       'text': qirshShortcutProbe
     });
 
 class ShortcutSetupActions extends StatefulWidget {
   const ShortcutSetupActions(
-      {super.key, this.openUrl, this.readProbe, this.currencyCode = 'EGP'});
+      {super.key,
+      this.openUrl,
+      this.readProbe,
+      this.currencyCode = 'EGP',
+      this.store = const ShortcutSetupStore()});
   final String currencyCode;
   final Future<bool> Function(Uri)? openUrl;
   final Future<int> Function()? readProbe;
+  final ShortcutSetupStore store;
   @override
   State<ShortcutSetupActions> createState() => _ShortcutSetupActionsState();
 }
@@ -34,6 +41,7 @@ class _ShortcutSetupActionsState extends State<ShortcutSetupActions> {
   String _query = '';
   final _search = TextEditingController();
   final Set<String> _reviewed = {};
+  Map<String, ShortcutSetupRecord> _records = {};
   late String _currency;
   late ShortcutKeyword _selected;
 
@@ -52,6 +60,32 @@ class _ShortcutSetupActionsState extends State<ShortcutSetupActions> {
             : 'EGP';
     _selected =
         qirshShortcutKeywords.firstWhere((k) => k.currency == _currency);
+    unawaited(widget.store.load().then((records) {
+      if (mounted) setState(() => _records = records);
+    }));
+  }
+
+  void _record(String term,
+      ShortcutSetupRecord Function(ShortcutSetupRecord) update) {
+    if (!mounted) return;
+    setState(() => _records = {
+          ..._records,
+          term: update(_records[term] ?? const ShortcutSetupRecord())
+        });
+    unawaited(widget.store.save(_records));
+  }
+
+  /// Another keyword of the same currency already set up: two automations
+  /// can both fire for one SMS and queue it twice.
+  ShortcutKeyword? _overlapFor(ShortcutKeyword keyword) {
+    for (final other in qirshShortcutKeywords) {
+      if (other.term == keyword.term || other.currency != keyword.currency) {
+        continue;
+      }
+      final record = _records[other.term];
+      if (record?.testedAt != null || record?.confirmedAt != null) return other;
+    }
+    return null;
   }
 
   Future<void> _show(ShortcutKeyword keyword) async {
@@ -65,7 +99,15 @@ class _ShortcutSetupActionsState extends State<ShortcutSetupActions> {
             child: _ShortcutWalkthrough(
                 keyword: keyword,
                 openUrl: widget.openUrl,
-                readProbe: widget.readProbe)));
+                readProbe: widget.readProbe,
+                onTested: (at) => _record(
+                    keyword.term,
+                    (r) => ShortcutSetupRecord(
+                        testedAt: at, confirmedAt: r.confirmedAt)),
+                onConfirmed: (at) => _record(
+                    keyword.term,
+                    (r) => ShortcutSetupRecord(
+                        testedAt: r.testedAt, confirmedAt: at)))));
     if (mounted && reviewed == true) {
       setState(() => _reviewed.add(keyword.term));
     }
@@ -177,10 +219,27 @@ class _ShortcutSetupActionsState extends State<ShortcutSetupActions> {
             ]),
             const SizedBox(height: 12),
             _KeywordExample(keyword: _selected),
-            if (_reviewed.contains(_selected.term))
+            if (_records[_selected.term]?.confirmedAt != null)
+              Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(l.shortcutStateConfirmed,
+                      key: const Key('shortcut_state_confirmed')))
+            else if (_records[_selected.term]?.testedAt != null)
+              Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(l.shortcutStateTested,
+                      key: const Key('shortcut_state_tested')))
+            else if (_reviewed.contains(_selected.term))
               Padding(
                   padding: const EdgeInsets.only(top: 10),
                   child: Text(l.shortcutCatalogReviewed)),
+            if (_overlapFor(_selected) case final other?)
+              Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(l.shortcutOverlapWarning(other.term),
+                      key: const Key('shortcut_overlap'),
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error))),
             const SizedBox(height: 14),
             FilledButton.icon(
                 key: const Key('shortcut_begin'),
@@ -189,7 +248,10 @@ class _ShortcutSetupActionsState extends State<ShortcutSetupActions> {
                 label: Text(l.shortcutStudioBegin(_selected.term))),
           ])),
       const SizedBox(height: 12),
-      Text(l.shortcutCatalogSingleTemplate,
+      Text(
+          _selected.hasDedicatedShortcut
+              ? l.shortcutCatalogDedicated(_selected.term)
+              : l.shortcutCatalogSingleTemplate,
           style: Theme.of(context).textTheme.bodySmall),
     ]);
   }
@@ -221,26 +283,142 @@ class _RouteNode extends StatelessWidget {
       ]));
 }
 
+/// The shared template's name in Shortcuts; also what the connection test runs
+/// for a keyword that has no dedicated shortcut yet.
+const qirshTemplateShortcutName = 'QIRSH';
+
+/// One SMS keyword and the Apple Shortcut that captures it.
+///
+/// [installUrl] is set only for a published iCloud link whose shortcut already
+/// carries "Message contains [term]" — the user then has nothing to type. The
+/// signed files come from `tools/shortcuts/build_qirsh_shortcuts.py`; a link is
+/// added here only after it is imported into Shortcuts and shared from there.
+/// Without one, the keyword falls back to the shared QIRSH template plus the
+/// edit-the-filter step.
 class ShortcutKeyword {
-  const ShortcutKeyword(this.term, this.currency);
+  const ShortcutKeyword(this.term, this.currency,
+      {required this.shortcutName, this.installUrl});
   final String term;
   final String currency;
+  final String shortcutName;
+  final String? installUrl;
+
+  bool get hasDedicatedShortcut => installUrl != null;
+
+  /// The name Shortcuts knows this keyword's shortcut by.
+  String get runName =>
+      hasDedicatedShortcut ? shortcutName : qirshTemplateShortcutName;
+
+  String get installLink => installUrl ?? qirshShortcutInstallUrl;
 }
 
 const qirshShortcutKeywords = [
-  ShortcutKeyword('EGP', 'EGP'),
-  ShortcutKeyword('جم', 'EGP'),
-  ShortcutKeyword('جنيه', 'EGP'),
-  ShortcutKeyword('ج.م', 'EGP'),
-  ShortcutKeyword('USD', 'USD'),
-  ShortcutKeyword('EUR', 'EUR'),
-  ShortcutKeyword('SAR', 'SAR'),
-  ShortcutKeyword('ر.س', 'SAR'),
-  ShortcutKeyword('AED', 'AED'),
-  ShortcutKeyword('د.إ', 'AED'),
-  ShortcutKeyword('KWD', 'KWD'),
-  ShortcutKeyword('د.ك', 'KWD'),
+  // The published QIRSH link is itself the EGP shortcut: its trigger is
+  // "Message contains EGP" and existing users already have it under this name.
+  ShortcutKeyword('EGP', 'EGP',
+      shortcutName: qirshTemplateShortcutName,
+      installUrl: qirshShortcutInstallUrl),
+  ShortcutKeyword('جم', 'EGP',
+      shortcutName: 'Qirsh جم',
+      installUrl:
+          'https://www.icloud.com/shortcuts/f4427bb0ae21448eb6b621586d21d1c7'),
+  ShortcutKeyword('جنيه', 'EGP',
+      shortcutName: 'Qirsh جنيه',
+      installUrl:
+          'https://www.icloud.com/shortcuts/fc8937c697834e039242e4525b04b9da'),
+  ShortcutKeyword('ج.م', 'EGP',
+      shortcutName: 'Qirsh ج.م',
+      installUrl:
+          'https://www.icloud.com/shortcuts/f1b358880ece40c48ef27cf471bcffbb'),
+  ShortcutKeyword('USD', 'USD',
+      shortcutName: 'Qirsh USD',
+      installUrl:
+          'https://www.icloud.com/shortcuts/48e9741970124e459d24d59882ebfe5f'),
+  ShortcutKeyword('EUR', 'EUR',
+      shortcutName: 'Qirsh EUR',
+      installUrl:
+          'https://www.icloud.com/shortcuts/d6eeae970aa6427d892a93da483cf620'),
+  ShortcutKeyword('SAR', 'SAR',
+      shortcutName: 'Qirsh SAR',
+      installUrl:
+          'https://www.icloud.com/shortcuts/e95495d9fbea4f788fb1ea4afd30d2d3'),
+  ShortcutKeyword('ر.س', 'SAR',
+      shortcutName: 'Qirsh ر.س',
+      installUrl:
+          'https://www.icloud.com/shortcuts/5f4cfd84db674faf8593a3ab0c4f48e8'),
+  ShortcutKeyword('AED', 'AED',
+      shortcutName: 'Qirsh AED',
+      installUrl:
+          'https://www.icloud.com/shortcuts/1086750a822242959694c7f916a3777b'),
+  // Shortcuts stored this name decomposed (alef + U+0655 hamza below), so
+  // runName matches the installed shortcut exactly; the trigger text is 'د.إ'.
+  ShortcutKeyword('د.إ', 'AED',
+      shortcutName: 'Qirsh \u062F.\u0627\u0655',
+      installUrl:
+          'https://www.icloud.com/shortcuts/069ddee8430b4c858db38d952d0f021d'),
+  ShortcutKeyword('KWD', 'KWD',
+      shortcutName: 'Qirsh KWD',
+      installUrl:
+          'https://www.icloud.com/shortcuts/5fb21c20eecb4b75814c243829398842'),
+  ShortcutKeyword('د.ك', 'KWD',
+      shortcutName: 'Qirsh د.ك',
+      installUrl:
+          'https://www.icloud.com/shortcuts/4ae1c26d5be844cb83be057c3fd0abc2'),
 ];
+
+/// What Qirsh knows about one keyword's setup. iOS offers no API to read a
+/// Personal Automation, so the strongest states are a fresh probe from the
+/// shortcut ([testedAt]) and the user's own word ([confirmedAt]).
+class ShortcutSetupRecord {
+  const ShortcutSetupRecord({this.testedAt, this.confirmedAt});
+  final int? testedAt;
+  final int? confirmedAt;
+
+  Map<String, int> toJson() => {
+        if (testedAt != null) 'tested': testedAt!,
+        if (confirmedAt != null) 'confirmed': confirmedAt!,
+      };
+
+  static ShortcutSetupRecord fromJson(Object? json) {
+    if (json is! Map) return const ShortcutSetupRecord();
+    int? read(String key) => (json[key] as num?)?.toInt();
+    return ShortcutSetupRecord(
+        testedAt: read('tested'), confirmedAt: read('confirmed'));
+  }
+}
+
+/// Per-keyword setup state, kept on this device only: it describes this
+/// phone's Shortcuts, and holds keywords and times, never message text.
+class ShortcutSetupStore {
+  const ShortcutSetupStore();
+  static const _key = 'shortcut_setup_v1';
+
+  Future<Map<String, ShortcutSetupRecord>> load() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_key);
+      if (raw == null) return {};
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return {};
+      return {
+        for (final entry in decoded.entries)
+          '${entry.key}': ShortcutSetupRecord.fromJson(entry.value)
+      };
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> save(Map<String, ShortcutSetupRecord> records) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_key,
+          jsonEncode({for (final e in records.entries) e.key: e.value.toJson()}));
+    } catch (_) {
+      // State is a convenience; capture itself never depends on it.
+    }
+  }
+}
 
 class _KeywordExample extends StatelessWidget {
   const _KeywordExample({required this.keyword});
@@ -271,12 +449,20 @@ class _KeywordExample extends StatelessWidget {
   }
 }
 
+enum _WalkStep { install, filter, arrow, automation, test }
+
 class _ShortcutWalkthrough extends StatefulWidget {
   const _ShortcutWalkthrough(
-      {required this.keyword, this.openUrl, this.readProbe});
+      {required this.keyword,
+      this.openUrl,
+      this.readProbe,
+      required this.onTested,
+      required this.onConfirmed});
   final ShortcutKeyword keyword;
   final Future<bool> Function(Uri)? openUrl;
   final Future<int> Function()? readProbe;
+  final void Function(int at) onTested;
+  final void Function(int at) onConfirmed;
   @override
   State<_ShortcutWalkthrough> createState() => _ShortcutWalkthroughState();
 }
@@ -308,6 +494,7 @@ class _ShortcutWalkthroughState extends State<_ShortcutWalkthrough> {
         NativeCaptureBridge.shortcutSetupProbeStatus)();
     if (mounted && _testStartedAt == started && received >= started) {
       setState(() => _verified = true);
+      widget.onTested(received);
     }
   }
 
@@ -321,8 +508,7 @@ class _ShortcutWalkthroughState extends State<_ShortcutWalkthrough> {
     });
     bool opened;
     try {
-      opened = await (widget.openUrl?.call(uri) ??
-          launchUrl(uri, mode: LaunchMode.externalApplication));
+      opened = await (widget.openUrl?.call(uri) ?? launchShortcutSetupUrl(uri));
     } catch (_) {
       opened = false;
     }
@@ -344,20 +530,37 @@ class _ShortcutWalkthroughState extends State<_ShortcutWalkthrough> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    final titles = [
-      l.shortcutVisualInstallTitle,
-      l.shortcutVisualFilterTitle,
-      l.shortcutVisualArrowTitle,
-      l.shortcutVisualAutomationTitle,
-      l.shortcutVisualTestTitle
+    final keyword = widget.keyword;
+    // A dedicated shortcut already carries "Message contains <term>", so the
+    // edit-the-filter step only exists for the shared template.
+    final steps = [
+      _WalkStep.install,
+      if (!keyword.hasDedicatedShortcut) _WalkStep.filter,
+      _WalkStep.arrow,
+      _WalkStep.automation,
+      _WalkStep.test
     ];
-    final bodies = [
-      l.shortcutVisualInstallBody,
-      l.shortcutVisualFilterBody(widget.keyword.term),
-      l.shortcutVisualArrowBody,
-      l.shortcutVisualAutomationBody,
-      l.shortcutVisualTestBody
-    ];
+    final kind = steps[_step];
+    final last = steps.length - 1;
+    final title = switch (kind) {
+      _WalkStep.install => l.shortcutVisualInstallTitle,
+      _WalkStep.filter => l.shortcutVisualFilterTitle,
+      _WalkStep.arrow => l.shortcutVisualArrowTitle,
+      _WalkStep.automation => l.shortcutVisualAutomationTitle,
+      _WalkStep.test => l.shortcutVisualTestTitle,
+    };
+    final body = switch (kind) {
+      _WalkStep.install => keyword.hasDedicatedShortcut
+          ? l.shortcutVisualInstallDedicatedBody(keyword.term)
+          : l.shortcutVisualInstallBody,
+      _WalkStep.filter => l.shortcutVisualFilterBody(keyword.term),
+      _WalkStep.arrow => l.shortcutVisualArrowBody(keyword.runName),
+      _WalkStep.automation => l.shortcutVisualAutomationBody,
+      _WalkStep.test => l.shortcutVisualTestBody,
+    };
+    final editing = kind == _WalkStep.filter ||
+        kind == _WalkStep.arrow ||
+        kind == _WalkStep.automation;
     return Scaffold(
       appBar: AppBar(
           automaticallyImplyLeading: false,
@@ -390,7 +593,7 @@ class _ShortcutWalkthroughState extends State<_ShortcutWalkthrough> {
                                 style: const TextStyle(color: Colors.white))),
                         const SizedBox(width: 12),
                         Expanded(
-                            child: Text(l.shortcutVisualStep(_step + 1, 5),
+                            child: Text(l.shortcutVisualStep(_step + 1, steps.length),
                                 key: const Key('shortcut_step'),
                                 style: Theme.of(context).textTheme.labelLarge)),
                       ]),
@@ -400,25 +603,26 @@ class _ShortcutWalkthroughState extends State<_ShortcutWalkthrough> {
                           child: LinearProgressIndicator(
                               key: const Key('shortcut_progress'),
                               minHeight: 5,
-                              value: (_step + 1) / 5,
+                              value: (_step + 1) / steps.length,
                               color: AppBrandAccent.gold,
                               backgroundColor: Theme.of(context)
                                   .colorScheme
                                   .outlineVariant)),
                       const SizedBox(height: 24),
-                      Text(titles[_step],
+                      Text(title,
                           style: Theme.of(context).textTheme.headlineSmall),
                       const SizedBox(height: 12),
-                      Text(bodies[_step]),
+                      Text(body),
                       const SizedBox(height: 20),
-                      if (_step == 0) _KeywordExample(keyword: widget.keyword),
-                      if (_step >= 1 && _step <= 3) ...[
-                        _ShortcutScreenshot(focus: _step),
+                      if (kind == _WalkStep.install)
+                        _KeywordExample(keyword: keyword),
+                      if (editing) ...[
+                        _ShortcutScreenshot(focus: kind.index),
                         const SizedBox(height: 12),
                         Text(l.shortcutVisualImageCaption,
                             style: Theme.of(context).textTheme.bodySmall)
                       ],
-                      if (_step == 4) ...[
+                      if (kind == _WalkStep.test) ...[
                         Icon(
                             _verified
                                 ? Icons.check_circle_outline
@@ -446,16 +650,15 @@ class _ShortcutWalkthroughState extends State<_ShortcutWalkthrough> {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (_step == 0)
+                      if (kind == _WalkStep.install)
                         FilledButton.icon(
                             key: const Key('shortcut_install'),
                             onPressed: _opening
                                 ? null
-                                : () =>
-                                    _open(Uri.parse(qirshShortcutInstallUrl)),
+                                : () => _open(Uri.parse(keyword.installLink)),
                             icon: const Icon(Icons.add),
                             label: Text(l.shortcutAddReady)),
-                      if (_step >= 1 && _step <= 3)
+                      if (editing)
                         OutlinedButton.icon(
                             key: const Key('shortcut_edit'),
                             onPressed: _opening
@@ -463,18 +666,35 @@ class _ShortcutWalkthroughState extends State<_ShortcutWalkthrough> {
                                 : () => _open(Uri(
                                     scheme: 'shortcuts',
                                     host: 'open-shortcut',
-                                    queryParameters: {'name': 'QIRSH'})),
+                                    queryParameters: {
+                                      'name': keyword.runName
+                                    })),
                             icon: const Icon(Icons.open_in_new),
-                            label: Text(l.shortcutOpenEditor)),
-                      if (_step == 4)
+                            label: Text(l.shortcutOpenEditor(keyword.runName))),
+                      if (kind == _WalkStep.test) ...[
                         OutlinedButton.icon(
                             key: const Key('shortcut_test'),
                             onPressed: _opening
                                 ? null
-                                : () =>
-                                    _open(qirshShortcutTestUrl(), test: true),
+                                : () => _open(
+                                    qirshShortcutTestUrl(
+                                        name: keyword.runName),
+                                    test: true),
                             icon: const Icon(Icons.play_arrow),
                             label: Text(l.shortcutTestConnection)),
+                        const SizedBox(height: 8),
+                        // iOS cannot report whether the Personal Automation is
+                        // on; this records only the user's own confirmation.
+                        OutlinedButton.icon(
+                            key: const Key('shortcut_confirm'),
+                            onPressed: () {
+                              widget.onConfirmed(
+                                  DateTime.now().millisecondsSinceEpoch);
+                              Navigator.pop(context, true);
+                            },
+                            icon: const Icon(Icons.check),
+                            label: Text(l.shortcutConfirmAutomation)),
+                      ],
                       const SizedBox(height: 8),
                       Row(children: [
                         if (_step > 0) ...[
@@ -488,14 +708,14 @@ class _ShortcutWalkthroughState extends State<_ShortcutWalkthrough> {
                             child: FilledButton(
                                 key: const Key('shortcut_next'),
                                 onPressed: () {
-                                  if (_step < 4) {
+                                  if (_step < last) {
                                     _move(1);
                                   } else {
                                     Navigator.pop(context, true);
                                   }
                                 },
                                 child:
-                                    Text(_step == 4 ? l.rcStepDone : l.next))),
+                                    Text(_step == last ? l.rcStepDone : l.next))),
                       ]),
                     ]))),
       ]),

@@ -11,6 +11,7 @@ import '../../core/session/app_session.dart';
 import '../../core/theme/app_assets.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../core/theme/widgets/app_toast.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/l10n_ext.dart';
@@ -283,33 +284,53 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
                 : null,
           ),
           const SizedBox(width: AppSpacing.s3),
+          // v2: «الخطوة 1 من 6» sits above the bar's leading edge; each
+          // segment fills from the leading edge (dur.moderate) when reached.
           Expanded(
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                for (var i = 0; i < _stepCount; i++) ...[
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      child: SizedBox(
-                        height: 4,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          color: _done[i] || i < _currentStep
-                              ? context.colors.cta
-                              : context.colors.border,
+                Text(
+                  l10n.setupStepLabel(_currentStep + 1, _stepCount),
+                  style: AppTypography.caption(context.colors.textMuted)
+                      .copyWith(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    for (var i = 0; i < _stepCount; i++) ...[
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: SizedBox(
+                            height: 4,
+                            child: ColoredBox(
+                              color: context.colors.surfaceMuted,
+                              child: TweenAnimationBuilder<double>(
+                                tween: Tween(
+                                    end: _done[i] || i <= _currentStep
+                                        ? 1
+                                        : 0),
+                                duration: AppMotion.moderate,
+                                curve: AppMotion.easeOut,
+                                builder: (context, fill, _) =>
+                                    FractionallySizedBox(
+                                  alignment: AlignmentDirectional.centerStart,
+                                  widthFactor: fill,
+                                  child: ColoredBox(color: context.colors.cta),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                  if (i < _stepCount - 1) const SizedBox(width: 6),
-                ],
+                      if (i < _stepCount - 1) const SizedBox(width: 6),
+                    ],
+                  ],
+                ),
               ],
             ),
-          ),
-          const SizedBox(width: AppSpacing.s3),
-          Text(
-            l10n.setupStepLabel(_currentStep + 1, _stepCount),
-            style: AppTypography.caption(context.colors.textMuted),
           ),
         ],
       ),
@@ -426,7 +447,7 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
               size: 20,
               weight: FontWeight.w700,
               height: 1.2,
-              color: context.colors.cta,
+              color: context.colors.actionText,
             ),
           ),
           const SizedBox(height: 4),
@@ -439,19 +460,27 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
       ),
       // Explicit pill surfaces keep selected and unselected contrast independent
       // of Material chip defaults in both themes.
-      control: Wrap(
-        alignment: WrapAlignment.center,
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final choice in _countriesIn(context))
-            _CountryPill(
-              choice: choice,
-              selected: _countryCode == choice.code,
-              onTap: _busy ? null : () => _saveCountry(choice),
-            ),
-        ],
-      ),
+      // v2: a fixed 3-column grid of equal 52pt chips (was ragged 2/3/3).
+      control: LayoutBuilder(builder: (context, constraints) {
+        const gap = 8.0;
+        final width = (constraints.maxWidth - gap * 2) / 3;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final choice in _countriesIn(context))
+              SizedBox(
+                width: width,
+                height: 52,
+                child: _CountryPill(
+                  choice: choice,
+                  selected: _countryCode == choice.code,
+                  onTap: _busy ? null : () => _saveCountry(choice),
+                ),
+              ),
+          ],
+        );
+      }),
     );
   }
 
@@ -585,9 +614,10 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
             foregroundColor: context.colors.onCta,
             disabledBackgroundColor: context.colors.disabled,
           ),
+          // v2 disabled label = text.muted (readable, still clearly off).
           child: Text(l10n.setupFinishCta,
               style: AppTypography.bodyStrong(
-                ready ? context.colors.onCta : context.colors.disabledFg,
+                ready ? context.colors.onCta : context.colors.textMuted,
               )),
         ),
       ).animate(target: _completed == _stepCount ? 1 : 0).scaleXY(
@@ -618,37 +648,43 @@ class _CountryPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final fill = selected ? c.cta : c.surface;
-    final border = selected ? c.cta : c.border;
-    final foreground = selected ? c.onCta : c.textPrimary;
+    // v2 chip: card + soft stroke; selected = action.soft fill, 1.5pt action
+    // stroke, action.text label (§3.0 02–03).
+    final fill = selected ? c.ctaSoft : c.surface;
+    final border = selected ? c.cta : c.strokeSoft;
+    final foreground = selected ? c.actionText : c.textPrimary;
     return Material(
       type: MaterialType.transparency,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.chip),
+        borderRadius: BorderRadius.circular(AppRadius.button),
         child: Ink(
           decoration: ShapeDecoration(
             color: fill,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.chip),
-              side: BorderSide(color: border),
+              borderRadius: BorderRadius.circular(AppRadius.button),
+              side: BorderSide(color: border, width: selected ? 1.5 : 1),
             ),
           ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (selected) ...[
-                  Icon(Icons.check, size: 16, color: foreground),
-                  const SizedBox(width: 6),
-                ],
-                Flexible(
-                    child: Text(
-                  '${choice.flag} ${choice.name} · ${choice.currency}',
-                  style: AppTypography.caption(foreground),
-                )),
-              ],
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text.rich(
+                  TextSpan(children: [
+                    TextSpan(text: '${choice.name}\n'),
+                    TextSpan(
+                      text: '${choice.flag} ${choice.currency}',
+                      style: AppTypography.overline(
+                          selected ? c.actionText : c.textMuted),
+                    ),
+                  ]),
+                  textAlign: TextAlign.center,
+                  style: AppTypography.caption(foreground)
+                      .copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
             ),
           ),
         ),

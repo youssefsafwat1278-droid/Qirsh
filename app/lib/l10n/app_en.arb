@@ -3256,10 +3256,10 @@
   "consentWithdrawFailed": "We couldn't confirm turning this off. Sharing stays paused. Please try again.",
   "signOutDataStays": "Your data stays on this device and comes back when you sign in again.",
   "deleteAccountTitle": "Delete account",
-  "deleteAccountIntro": "Permanently delete your Qirsh account and the data saved with it. You’ll confirm your identity first.",
+  "deleteAccountIntro": "Permanently and immediately delete your Qirsh account and the data saved with it. You’ll confirm your identity first, with Apple or the method you signed in with.",
   "deleteAccountAction": "Delete account",
   "deleteAccountConfirmTitle": "Delete your account?",
-  "deleteAccountConfirmBody": "This permanently deletes your account and its data. Confirm your identity to continue. This cannot be undone.",
+  "deleteAccountConfirmBody": "This permanently and immediately deletes your account and its data. Confirm your identity with Apple or the method you signed in with to continue. This cannot be undone.",
   "deleteAccountConfirmAction": "Delete permanently",
   "deleteAccountProgress": "Deleting your account…",
   "deleteAccountSuccess": "Your account was deleted.",
@@ -3645,9 +3645,50 @@
   "shortcutCatalogReviewed": "Steps reviewed",
   "shortcutCatalogNoMatches": "No matches. Try a currency code such as EGP or USD.",
   "shortcutCatalogSingleTemplate": "All choices use the same QIRSH template. You’ll change its existing filter in Shortcuts. Reviewing the steps does not confirm that iOS Automation is on.",
-  "shortcutOpenEditor": "Open QIRSH in Shortcuts",
+  "shortcutVisualInstallDedicatedBody": "Tap Add Qirsh Shortcut, then Add Shortcut in iOS. This shortcut already listens for messages containing {keyword}, so there is nothing to type.",
+  "@shortcutVisualInstallDedicatedBody": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutCatalogDedicated": "{keyword} has its own ready shortcut with the keyword already filled in. iOS still asks you to turn its Automation on yourself, and Qirsh cannot see whether it is on.",
+  "@shortcutCatalogDedicated": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutConfirmAutomation": "I turned Automation on",
+  "shortcutStateConfirmed": "You confirmed Automation is on. Qirsh can’t check this in iOS.",
+  "shortcutStateTested": "Connection tested. Turn Automation on to capture texts automatically.",
+  "shortcutOverlapWarning": "You already set up {keyword} for this currency. Keep one keyword per currency so a single text isn’t captured twice.",
+  "@shortcutOverlapWarning": {
+    "placeholders": {
+      "keyword": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutOpenEditor": "Open {name} in Shortcuts",
+  "@shortcutOpenEditor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "shortcutVisualArrowTitle": "Open the automation controls",
-  "shortcutVisualArrowBody": "Open QIRSH in Shortcuts. Tap the small blue arrow beside “where”, under “When I receive a message”.",
+  "shortcutVisualArrowBody": "Open {name} in Shortcuts. Tap the small blue arrow beside “where”, under “When I receive a message”.",
+  "@shortcutVisualArrowBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "shortcutVisualStep": "Step {current} of {total}",
   "@shortcutVisualStep": {
     "placeholders": {
@@ -3697,5 +3738,33 @@
   "authCreateEmailExplanation": "Enter your email. Confirm the code to finish creating your Qirsh account.",
   "deleteAccountEmailProofTitle": "Email confirmation code",
   "deleteAccountEmailProofBody": "We sent a one-time code to the verified email on this Qirsh account. Enter it to authorize deletion.",
-  "authGoogleSignupRequired": "This Google account is new to Qirsh. Choose Create an account to register."
+  "authGoogleSignupRequired": "This Google account is new to Qirsh. Choose Create an account to register.",
+  "accV2Balance": "Balance",
+  "accV2YourAccounts": "Your accounts",
+  "subsV2Upcoming": "Upcoming",
+  "subsV2AllSubs": "All subscriptions",
+  "gfV2Preview": "Preview",
+  "gdV2DaysCount": "{days, plural, =1{1 day} other{{days} days}}",
+  "gdV2MoreActions": "Goal options",
+  "setV2Tools": "Tools",
+  "setV2Version": "Qirsh {version}",
+  "setV2AppearanceLead": "Choose how Qirsh looks — it changes right away.",
+  "setV2CaptureNeedsCheck": "Needs a check",
+  "bdgV2YourBudgets": "Your budgets",
+  "bdgV2WorstFirst": "Worst first",
+  "bfsV2ShowAll": "Show all",
+  "bfsV2ShowLess": "Show less",
+  "couponsV2BrowseOffers": "Browse offers",
+  "txnV2EndOfList": "— That's every transaction in this period —",
+  "txnV2Filters": "Filters",
+  "pasteV2DetectedCount": "{count, plural, =1{1 message detected} other{{count} messages detected}}",
+  "pasteV2Clear": "Clear text",
+  "smsV2Step1": "Open the bank message",
+  "smsV2Step2": "Tap Share",
+  "smsV2Step3": "Choose Qirsh",
+  "smsV2PrivacyLine": "Without SMS read permission · The text is analysed on your device only.",
+  "insV3Report": "Report",
+  "txnV3NetThisMonth": "Net this month",
+  "txnV3NetThisPeriod": "Net this period",
+  "billsV3Counts": "{subs} subscriptions · {instalments} instalments"
 }

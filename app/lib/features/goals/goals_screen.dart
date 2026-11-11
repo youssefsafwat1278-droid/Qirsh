@@ -1,6 +1,7 @@
+import 'dart:ui' show FontFeature;
+
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
-import '../common/money_text.dart';
 import '../../domain/finance/goal_pacing.dart';
 import '../../core/utils/l10n_ext.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +12,6 @@ import '../../core/theme/widgets/section_photo_header.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/widgets/calm_page_header.dart';
-import '../../core/theme/widgets/liquid_bar.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../core/theme/widgets/mali_card.dart';
 import '../../core/utils/currency.dart';
@@ -22,6 +22,11 @@ import '../ads/ad_placement.dart';
 import '../ads/qirsh_ad_banner.dart';
 import '../common/planning_repair_gate.dart';
 import '../common/premium_loading.dart';
+import '../common/app_button.dart';
+import '../common/money_text.dart';
+import '../common/motion.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shadows.dart';
 import '../common/app_error_state.dart';
 import '../budgets/budgets_providers.dart';
 import '../budgets/widgets/planning_hero_tabs.dart';
@@ -46,7 +51,6 @@ class GoalsScreen extends ConsumerWidget {
     final hero = CalmPageHeader(
       sectionPhoto: QirshSectionPhoto.goals,
       sectionHeight: 174,
-      useSafeAreaTop: false,
       title: context.l10n.bdgTabGoals,
       leading: Navigator.of(context).canPop() ? const BackButton() : null,
       trailing: IconButton(
@@ -63,10 +67,21 @@ class GoalsScreen extends ConsumerWidget {
         },
       ),
     );
+    final hasGoals = async.valueOrNull?.any((goal) =>
+            goal.currency.toUpperCase() == displayCurrency.toUpperCase()) ??
+        false;
     return Scaffold(
       backgroundColor: context.colors.bg,
+      // v2 QStickyDock: the one primary «+ إضافة هدف», pinned above the home
+      // indicator (it was cut off at the foot of the list). The empty state
+      // keeps its own call to action instead.
+      bottomNavigationBar: hasGoals
+          ? _GoalsDock(onAdd: () => GoalFormScreen.showSheet(context))
+          : null,
       body: QirshSectionBackdrop(
         child: SafeArea(
+          // Immersive: the photo runs under the status bar.
+          top: false,
           bottom: false,
           child: async.when(
             skipLoadingOnReload: true,
@@ -144,10 +159,12 @@ class GoalsScreen extends ConsumerWidget {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
                           AppSpacing.gutter, AppSpacing.gutter, 0),
-                      child: _GoalCard(
-                        goal: visibleGoals.first,
-                        currencyLabel: Currency.label(
-                            context, visibleGoals.first.currency),
+                      child: PremiumMotion(
+                        child: _GoalCard(
+                          goal: visibleGoals.first,
+                          currencyLabel: Currency.label(
+                              context, visibleGoals.first.currency),
+                        ),
                       ),
                     ),
                     // A DIRECT child of the ListView, bracketed by real content:
@@ -168,26 +185,21 @@ class GoalsScreen extends ConsumerWidget {
                             horizontal: AppSpacing.gutter),
                         child: Column(
                           children: [
-                            for (final goal in visibleGoals.skip(1)) ...[
-                              _GoalCard(
-                                goal: goal,
-                                currencyLabel:
-                                    Currency.label(context, goal.currency),
+                            for (final (i, goal)
+                                in visibleGoals.skip(1).indexed) ...[
+                              PremiumMotion(
+                                delay: AppMotion.stagger * (i + 1).clamp(1, 5),
+                                child: _GoalCard(
+                                  goal: goal,
+                                  currencyLabel:
+                                      Currency.label(context, goal.currency),
+                                ),
                               ),
-                              const SizedBox(height: AppSpacing.s4),
+                              const SizedBox(height: AppSpacing.s3),
                             ],
                           ],
                         ),
                       ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, 0,
-                          AppSpacing.gutter, AppSpacing.s4),
-                      child: FilledButton.tonalIcon(
-                        onPressed: () => GoalFormScreen.showSheet(context),
-                        icon: const Icon(AppLucideIcons.plus, size: 18),
-                        label: Text(context.l10n.bdgAddGoal),
-                      ),
-                    ),
                     // The nav-bar clearance that used to close the Column above.
                     // Moved out so it sits BELOW the banner rather than between the
                     // last goal and it — an ad the floating bar covers is an
@@ -227,15 +239,16 @@ class _GoalCard extends StatelessWidget {
       now: DateTime.now(),
     );
     final remaining = pacing.remaining;
-    final tone = remaining.isZero ? c.success : c.cta;
+    final complete = remaining.isZero;
+    final muted = AppTypography.caption(c.textLight);
     return MaliCard(
       style: MaliSurfaceStyle.floating,
       padding: EdgeInsets.zero,
       child: InkWell(
-        borderRadius: BorderRadius.circular(AppRadius.xxl),
+        borderRadius: BorderRadius.circular(AppRadius.card),
         onTap: () => GoalDetailsScreen.showSheet(context, goal.id),
         child: Padding(
-          padding: const EdgeInsetsDirectional.fromSTEB(6, 6, 16, 6),
+          padding: const EdgeInsets.all(12),
           child: Row(
             children: [
               ClipRRect(
@@ -246,64 +259,80 @@ class _GoalCard extends StatelessWidget {
                   height: 96,
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(goal.name, style: AppTypography.cardTitle(c.textMain)),
-                    const SizedBox(height: 3),
+                    Text(goal.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.cardTitle(c.textMain)),
+                    const SizedBox(height: 2),
+                    // One run on ONE baseline: «باقي 9 أشهر · 1,055.56/شهر».
+                    // It used to be three Wrap children (text, MoneyText,
+                    // text), each on its own baseline; the money stays a
+                    // MoneyText (R-8), placed on the run's alphabetic baseline.
                     if (pacing.requiredPerMonth case final rate?)
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 2,
-                        children: [
-                          Text(
-                            _goalDeadlineLabel(context, pacing.daysRemaining),
-                            style: AppTypography.caption(c.textLight),
+                      Text.rich(
+                        TextSpan(children: [
+                          TextSpan(
+                              text:
+                                  '${_goalDeadlineLabel(context, pacing.daysRemaining)} · '),
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.baseline,
+                            baseline: TextBaseline.alphabetic,
+                            child: MoneyText(rate,
+                                style: muted.copyWith(fontFeatures: const [
+                                  FontFeature.tabularFigures()
+                                ])),
                           ),
-                          MoneyText(rate,
-                              style: AppTypography.caption(c.textLight)),
-                          Text(context.l10n.goalPerMonth,
-                              style: AppTypography.caption(c.textLight)),
-                        ],
+                          TextSpan(text: context.l10n.goalPerMonth),
+                        ]),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: muted,
                       ),
                     Text(
-                      remaining.isZero
+                      complete
                           ? context.l10n.bdgGoalDone
                           : context.l10n.goalRemainingToReach(
                               formatMoney(remaining), currencyLabel),
                       style: AppTypography.caption(
-                          pacing.isOverdue ? c.warning : c.textLight),
+                          pacing.isOverdue ? c.warningText : c.textLight),
                     ),
-                    if (pacing.isOverdue && !remaining.isZero)
+                    if (pacing.isOverdue && !complete)
                       Text(context.l10n.goalOverdue,
-                          style: AppTypography.caption(c.warning)),
-                    const SizedBox(height: 9),
-                    LiquidBar(value: clampedProgress, color: tone, height: 6),
+                          style: AppTypography.caption(c.warningText)),
+                    const SizedBox(height: 10),
+                    _GoalBar(value: clampedProgress, complete: complete),
                     const SizedBox(height: 6),
                     Row(
                       children: [
                         Expanded(
-                          child: Text.rich(
-                            TextSpan(children: [
-                              TextSpan(
-                                text: formatMoney(goal.savedMoney),
-                                style: AppTypography.caption(c.textMain)
-                                    .copyWith(fontWeight: FontWeight.w700),
-                              ),
-                              TextSpan(
-                                text: ' / ${formatMoney(goal.targetMoney)}',
-                                style: AppTypography.caption(c.textLight),
-                              ),
-                            ]),
-                            maxLines: 2,
-                            textDirection: TextDirection.ltr,
+                          child: Align(
+                            alignment: AlignmentDirectional.centerStart,
+                            child: Text.rich(
+                              TextSpan(children: [
+                                TextSpan(
+                                  text: formatMoney(goal.savedMoney),
+                                  style: AppTypography.caption(c.textMain)
+                                      .copyWith(fontWeight: FontWeight.w600),
+                                ),
+                                TextSpan(
+                                  text: ' / ${formatMoney(goal.targetMoney)}',
+                                  style: muted,
+                                ),
+                              ]),
+                              maxLines: 2,
+                              textDirection: TextDirection.ltr,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 6),
                         Text('$percent%',
-                            style: AppTypography.caption(tone)
+                            style: AppTypography.subhead(
+                                    complete ? c.goldText : c.actionText)
                                 .copyWith(fontWeight: FontWeight.w700)),
                       ],
                     ),
@@ -311,6 +340,96 @@ class _GoalCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// v2 goal bar (spec §3.0 15): 8pt, `action` fill (dark adds a #2E6BFF@30%
+/// glow), track white@12% / `#E6EAF2`; a reached goal turns the gold gradient
+/// in both themes. Fills once from zero (600ms expo-out).
+class _GoalBar extends StatelessWidget {
+  const _GoalBar({required this.value, required this.complete});
+
+  final double value;
+  final bool complete;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final radius = BorderRadius.circular(AppRadius.pill);
+    return ExcludeSemantics(
+      child: Container(
+        height: 8,
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withValues(alpha: 0.12) : c.surfaceMuted,
+          borderRadius: radius,
+        ),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: value),
+          duration: shouldReduceMotion(context)
+              ? Duration.zero
+              : const Duration(milliseconds: 600),
+          curve: AppMotion.easeOut,
+          builder: (context, v, _) => FractionallySizedBox(
+            alignment: AlignmentDirectional.centerStart,
+            widthFactor: v,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: radius,
+                color: complete ? null : c.cta,
+                gradient: complete
+                    ? const LinearGradient(colors: [
+                        AppBrandAccent.goldLit,
+                        AppBrandAccent.gold,
+                        AppBrandAccent.goldDeep,
+                      ])
+                    : null,
+                boxShadow: isDark && !complete
+                    ? const [
+                        BoxShadow(
+                            color: Color(0x4D2E6BFF),
+                            blurRadius: 8,
+                            offset: Offset(0, 2)),
+                      ]
+                    : null,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// v2 QStickyDock holding the one primary action.
+class _GoalsDock extends StatelessWidget {
+  const _GoalsDock({required this.onAdd});
+
+  final VoidCallback onAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: isDark ? c.surface.withValues(alpha: 0.92) : c.surface,
+        border: Border(top: BorderSide(color: c.border)),
+        boxShadow: isDark ? null : AppShadows.e2,
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+              AppSpacing.gutter, AppSpacing.s3, AppSpacing.gutter, AppSpacing.s3),
+          child: AppPrimaryButton(
+            label: context.l10n.bdgAddGoal,
+            icon: AppLucideIcons.plus,
+            onTap: onAdd,
           ),
         ),
       ),

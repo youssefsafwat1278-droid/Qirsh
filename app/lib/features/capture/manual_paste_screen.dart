@@ -10,6 +10,8 @@ import '../../core/utils/id_generator.dart';
 import '../../data/repositories/drift_smart_inbox_repository.dart';
 import '../../core/session/app_session.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shadows.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/widgets/mali_glass.dart';
@@ -29,6 +31,7 @@ import '../transactions/widgets/confirm_transaction_sheet.dart';
 import '../common/top_banner.dart';
 import 'manual_paste_splitter.dart';
 import '../common/app_header.dart';
+import '../common/app_status_pill.dart';
 
 class ManualPasteScreen extends ConsumerStatefulWidget {
   const ManualPasteScreen({super.key, this.onTransactionAdded});
@@ -46,6 +49,7 @@ class ManualPasteScreen extends ConsumerStatefulWidget {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
+      barrierColor: context.colors.scrim,
       builder: (_) => navySheetTheme(
         _ManualPasteSheet(onTransactionAdded: onTransactionAdded),
       ),
@@ -79,31 +83,35 @@ class _ManualPasteSheet extends StatelessWidget {
               children: [
                 const SizedBox(height: AppSpacing.s3),
                 Container(
-                  width: 44,
+                  width: 36,
                   height: 5,
                   decoration: BoxDecoration(
-                    color: c.textLight.withValues(alpha: 0.3),
+                    color: c.textMuted.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(99),
                   ),
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
                     AppSpacing.gutter,
-                    AppSpacing.s4,
+                    AppSpacing.s3,
                     AppSpacing.gutter,
-                    AppSpacing.s2,
+                    0,
                   ),
                   child: Row(
                     children: [
                       Expanded(
                         child: Text(context.l10n.pasteTitle,
-                            style: AppTypography.title2(c.textMain)),
+                            style: AppTypography.sectionTitle(c.textPrimary)),
                       ),
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
-                        icon: const Icon(AppLucideIcons.x),
+                        icon: const Icon(AppLucideIcons.x, size: 20),
                         style: IconButton.styleFrom(
-                          backgroundColor: c.surface.withValues(alpha: 0.4),
+                          foregroundColor: c.textSecondary,
+                          backgroundColor:
+                              Theme.of(context).brightness == Brightness.dark
+                                  ? c.surfaceMuted
+                                  : c.surfaceElevated,
                         ),
                       ),
                     ],
@@ -141,6 +149,7 @@ class _ManualPasteContent extends ConsumerStatefulWidget {
 
 class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
   final _controller = TextEditingController();
+  final _fieldFocus = FocusNode();
   bool _busy = false;
   int _processedCount = 0;
   int _totalCount = 0;
@@ -149,6 +158,7 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
   @override
   void dispose() {
     _controller.dispose();
+    _fieldFocus.dispose();
     super.dispose();
   }
 
@@ -156,6 +166,7 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
     final data = await Clipboard.getData(Clipboard.kTextPlain);
     if (data?.text != null) {
       _controller.text = data!.text!;
+      HapticFeedback.lightImpact();
     }
   }
 
@@ -424,56 +435,138 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final summary = _BatchSummary.from(_batchItems);
 
-    final content = SingleChildScrollView(
-      padding: const EdgeInsets.all(AppSpacing.gutter),
+
+    // v2 field on the canvas: dark = Inset well; light = white + 1px
+    // stroke.soft + e1 (the old field was nearly invisible in light, L2).
+    final field = ListenableBuilder(
+      listenable: Listenable.merge([_controller, _fieldFocus]),
+      builder: (context, _) {
+        final hasText = _controller.text.trim().isNotEmpty;
+        // The SAME split the analyse path runs — a count, no new parsing.
+        final detected =
+            hasText ? ManualPasteSplitter.split(_controller.text).length : 0;
+        final focused = _fieldFocus.hasFocus;
+        return AnimatedContainer(
+          duration: AppMotion.micro,
+          decoration: BoxDecoration(
+            color: isDark ? c.surfaceMuted : c.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: focused
+                  ? c.cta
+                  : isDark
+                      ? Colors.transparent
+                      : c.strokeSoft,
+              width: focused ? 1.5 : 1,
+            ),
+            boxShadow: isDark ? null : AppShadows.e1,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _controller,
+                focusNode: _fieldFocus,
+                minLines: 7,
+                maxLines: 12,
+                style: AppTypography.callout(c.textPrimary),
+                decoration: InputDecoration(
+                  hintText: context.l10n.pasteFieldHint,
+                  hintStyle: AppTypography.callout(c.textFaint),
+                  filled: false,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.fromLTRB(
+                      AppSpacing.s4, AppSpacing.s3, AppSpacing.s4, 0),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.s2),
+                child: Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: AppSpacing.s2,
+                  runSpacing: AppSpacing.s2,
+                  children: [
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        if (detected > 0)
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: AppStatusPill(
+                              label:
+                                  context.l10n.pasteV2DetectedCount(detected),
+                              tone: AppStatusTone.info,
+                              icon: AppLucideIcons.messageSquare,
+                            ),
+                          ),
+                        if (hasText)
+                          IconButton(
+                            tooltip: context.l10n.pasteV2Clear,
+                            onPressed: _busy ? null : _controller.clear,
+                            icon: Icon(AppLucideIcons.x,
+                                size: 18, color: c.textMuted),
+                          ),
+                      ],
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _pasteFromClipboard,
+                      icon: const Icon(AppLucideIcons.clipboardPaste, size: 16),
+                      label: Text(context.l10n.pasteFromClipboard),
+                      // v2 tinted pill inside the field's corner.
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 36),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.s3),
+                        backgroundColor: c.ctaSoft,
+                        foregroundColor: c.actionText,
+                        textStyle: AppTypography.subhead(c.actionText),
+                        side: BorderSide.none,
+                        shape: const StadiumBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    // [topInset]: the full-screen page runs under the glass nav bar, so its
+    // content starts below it (0 in the sheet).
+    Widget scroll(double topInset) => SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(AppSpacing.gutter,
+          topInset + AppSpacing.s3, AppSpacing.gutter, AppSpacing.gutter),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
             context.l10n.pasteHint,
-            style: AppTypography.caption(c.textMuted),
+            style: AppTypography.callout(c.textSecondary),
           ),
-          const SizedBox(height: AppSpacing.s2),
-          Text(context.l10n.pasteAnalysisHowItWorks,
-              style: AppTypography.caption(c.textMuted)),
-          const SizedBox(height: AppSpacing.s2),
-          TextField(
-            controller: _controller,
-            minLines: 5,
-            maxLines: 8,
-            style: AppTypography.body(c.textMain),
-            decoration: InputDecoration(
-              hintText: context.l10n.pasteFieldHint,
-              filled: true,
-              fillColor: isDark
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : c.surface2.withValues(alpha: 0.5),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: c.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: c.border.withValues(alpha: 0.5)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16),
-                borderSide: BorderSide(color: c.cta, width: 2),
-              ),
-            ),
-          ),
+          const SizedBox(height: AppSpacing.s4),
+          field,
           const SizedBox(height: AppSpacing.s3),
-          OutlinedButton.icon(
-            onPressed: _pasteFromClipboard,
-            icon: const Icon(AppLucideIcons.clipboardPaste, size: 18),
-            label: Text(context.l10n.pasteFromClipboard),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(52),
-              side: BorderSide(color: c.border.withValues(alpha: 0.5)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
+          // Privacy note — the same copy, now a compact info row.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 1),
+                child: Icon(AppLucideIcons.shieldCheck,
+                    size: 16, color: c.actionText),
               ),
-            ),
+              const SizedBox(width: AppSpacing.s2),
+              Expanded(
+                child: Text(context.l10n.pasteAnalysisHowItWorks,
+                    style: AppTypography.caption(c.textMuted)),
+              ),
+            ],
           ),
           if (_busy) ...[
             const SizedBox(height: AppSpacing.s3),
@@ -484,15 +577,43 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
               summary: summary,
             ),
           ],
-          const SizedBox(height: AppSpacing.s5),
-          SizedBox(
-            height: 52,
-            child: FilledButton(
-              onPressed: _busy ? null : _analyze,
+        ],
+      ),
+    );
+
+    // v2 QStickyDock: the one primary, disabled until there is text; in the
+    // sheet it rides above the keyboard.
+    final insets = MediaQuery.viewInsetsOf(context).bottom;
+    final dock = DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: c.border, width: .5)),
+      ),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.gutter,
+          AppSpacing.s3,
+          AppSpacing.gutter,
+          AppSpacing.s3 +
+              (widget.fullScreen
+                  ? MediaQuery.paddingOf(context).bottom
+                  : insets > 0
+                      ? insets
+                      : MediaQuery.paddingOf(context).bottom),
+        ),
+        child: SizedBox(
+          height: AppSpacing.buttonHeight,
+          child: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _controller,
+            builder: (context, value, _) => FilledButton(
+              onPressed:
+                  _busy || value.text.trim().isEmpty ? null : _analyze,
               style: FilledButton.styleFrom(
                 backgroundColor: c.cta,
+                foregroundColor: c.onCta,
+                disabledBackgroundColor: c.disabled,
+                disabledForegroundColor: c.textMuted,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+                    borderRadius: BorderRadius.circular(AppRadius.button)),
               ),
               child: _busy
                   ? const SizedBox(
@@ -502,16 +623,27 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
                           strokeWidth: 2.5, color: Colors.white),
                     )
                   : Text(context.l10n.pasteAnalyse,
-                      style: AppTypography.bodyStrong(Colors.white)),
+                      style: AppTypography.bodyStrong(
+                          value.text.trim().isEmpty ? c.textMuted : c.onCta)),
             ),
           ),
-        ],
+        ),
       ),
     );
-    if (!widget.fullScreen) return content;
+
+    Widget content(double topInset) => Column(
+      children: [
+        Expanded(child: scroll(topInset)),
+        dock,
+      ],
+    );
+    if (!widget.fullScreen) return content(0);
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppHeader(title: context.l10n.pasteTitle),
-      body: content,
+      body: Builder(
+        builder: (bodyContext) => content(MediaQuery.paddingOf(bodyContext).top),
+      ),
     );
   }
 }

@@ -15,6 +15,11 @@ class _HeldRecovery extends Fake implements AutomaticSessionRecovery {
   @override
   Future<void> quiesced() => done.future;
 
+  /// The production default: the shell's wait is bounded only by this, far
+  /// beyond the slow case, so the loader is held until [done] completes.
+  @override
+  Duration get presentationDeadline => const Duration(seconds: 30);
+
   @override
   void trigger() {
     retries++;

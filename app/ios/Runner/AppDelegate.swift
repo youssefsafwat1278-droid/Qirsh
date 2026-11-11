@@ -368,6 +368,7 @@ enum ApnsEnvironment {
       if let epoch = r.ownerEpoch { map["ownerEpoch"] = epoch }
       if let evidence = r.expiryEvidence { map["expiryEvidence"] = evidenceMap(evidence) }
       if let counter = r.mutationCounter { map["mutationCounter"] = counter }
+      if let frontier = r.egressVersionFrontier { map["egressVersionFrontier"] = frontier }
       return map
     }
     func barrierMap(_ barrier: SharedCaptureStore.RemovalBarrier?) -> [String: Any]? {
@@ -602,9 +603,39 @@ enum ApnsEnvironment {
                 ownerEpoch: copy["ownerEpoch"] as? Int)
             }
           }
+          var expectedRetiredCopies: [SharedCaptureStore.LayerReport]? = nil
+          if let raw = args["expectedRetiredCopies"] {
+            guard let copies = raw as? [[String: Any]], copies.count == 2 else {
+              throw SharedCaptureStore.QueueError.encodingFailed
+            }
+            expectedRetiredCopies = try copies.map { copy -> SharedCaptureStore.LayerReport in
+              guard let layer = copy["layer"] as? String else {
+                throw SharedCaptureStore.QueueError.encodingFailed
+              }
+              // An absent layer names only itself.
+              if copy.count == 1 {
+                return SharedCaptureStore.LayerReport(layer: layer, outcome: .absent,
+                  state: nil, transitionGeneration: nil, reservedVersion: nil,
+                  operationId: nil, ownerGeneration: nil, ownerEpoch: nil)
+              }
+              guard copy.count == 6,
+                    let operationId = copy["operationId"] as? String,
+                    let generation = copy["transitionGeneration"] as? Int, generation >= 0,
+                    let reserved = copy["reservedVersion"] as? Int, reserved >= 0,
+                    let ownerGeneration = copy["ownerGeneration"] as? Int, ownerGeneration > 0,
+                    let ownerEpoch = copy["ownerEpoch"] as? Int, ownerEpoch >= 0 else {
+                throw SharedCaptureStore.QueueError.encodingFailed
+              }
+              return SharedCaptureStore.LayerReport(layer: layer, outcome: .verified,
+                state: "OFF", transitionGeneration: generation, reservedVersion: reserved,
+                operationId: operationId, ownerGeneration: ownerGeneration,
+                ownerEpoch: ownerEpoch)
+            }
+          }
           let receipt = try SharedCaptureStore.publishRestrictiveCaptureOwner(
             uid: uid, version: version, expectedEpoch: expectedEpoch, recover: recover,
-            successorOf: successorOf, expectedOffCopies: expectedOffCopies)
+            successorOf: successorOf, expectedOffCopies: expectedOffCopies,
+            expectedRetiredCopies: expectedRetiredCopies)
           var reply = SharedCaptureStore.EnableTransitionResult(
             operation: "publishRestrictive", status: receipt.status, operationId: nil,
             transitionGeneration: nil, reservedVersion: nil,

@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/di/app_providers.dart';
 import 'package:money_companion/core/theme/app_theme.dart';
 import 'package:money_companion/core/theme/widgets/calm_page_header.dart';
-import 'package:money_companion/core/theme/widgets/qirsh_visuals.dart';
 import 'package:money_companion/core/theme/widgets/ring_progress.dart';
+import 'package:money_companion/core/utils/currency.dart';
 import 'package:money_companion/data/db/planning_cutover.dart';
 import 'package:money_companion/domain/entities/budget_entity.dart';
 import 'package:money_companion/domain/entities/category_entity.dart';
@@ -21,6 +21,7 @@ import 'package:money_companion/features/budgets/budgets_screen.dart';
 import 'package:money_companion/features/ads/ad_placement.dart';
 import 'package:money_companion/features/ads/banner_ads_providers.dart';
 import 'package:money_companion/features/common/category_catalog.dart';
+import 'package:money_companion/features/common/motion.dart';
 import 'package:money_companion/features/dashboard/widgets/daily_spend_card.dart';
 import 'package:money_companion/features/goals/goals_providers.dart';
 import 'package:money_companion/features/goals/goals_screen.dart';
@@ -183,11 +184,34 @@ Future<AppL10n> _budgets(WidgetTester tester,
   return AppL10n.of(tester.element(find.byType(BudgetsScreen)));
 }
 
+/// The v2 planning summary card (BudgetsScreen's soft hero, under the photo
+/// header): the nearest Column around its «label · currency» caption.
+Finder _planningSummary(String caption) {
+  final label = find.text(caption);
+  expect(label, findsOneWidget);
+  return find.ancestor(of: label, matching: find.byType(Column)).first;
+}
+
+/// The value printed in the same counter cell as [label] — a metric's number
+/// is only meaningful next to its own label.
+String _counterValue(WidgetTester tester, Finder summary, String label) {
+  final labelText =
+      find.descendant(of: summary, matching: find.text(label));
+  expect(labelText, findsOneWidget);
+  final cell =
+      find.ancestor(of: labelText, matching: find.byType(Column)).first;
+  return tester
+      .widgetList<Text>(find.descendant(of: cell, matching: find.byType(Text)))
+      .map((text) => text.data)
+      .where((data) => data != label)
+      .single!;
+}
+
 void main() {
   for (final language in ['ar', 'en']) {
     for (final dark in [false, true]) {
       testWidgets(
-          'today has precise availability, a58px ring and intact rows in $language dark=$dark',
+          'today has precise availability, a72px ring and intact rows in $language dark=$dark',
           (tester) async {
         TransactionEntity? tapped;
         final available = Money(9007199254740993, 'KWD');
@@ -201,9 +225,10 @@ void main() {
             dark: dark);
         final ring = tester.widget<RingProgress>(
             find.byKey(const ValueKey('today-budget-ring')));
-        expect(ring.size, 58);
+        // v2 spec «05» item 6: the today ring is 72pt.
+        expect(ring.size, 72);
         expect(tester.getSize(find.byKey(const ValueKey('today-budget-ring'))),
-            const Size(58, 58));
+            const Size(72, 72));
         expect(ring.value, .5);
         expect(find.text(formatMoney(available)), findsOneWidget,
             reason:
@@ -221,23 +246,25 @@ void main() {
           (tester) async {
         final l10n =
             await _budgets(tester, goals: true, language: language, dark: dark);
-        final header = tester
-            .widgetList<CalmPageHeader>(find.byType(CalmPageHeader))
-            .singleWhere((header) => header.photo == QirshPhoto.goals);
-        expect(header.subtitle, l10n.bdgStatTotalSaved);
-        expect(header.amount, '13.345');
         expect(
-            header.metrics!
-                .singleWhere(
-                    (metric) => metric.label == l10n.bdgStatTargetSavings)
-                .value,
+            tester.widget<CalmPageHeader>(find.byType(CalmPageHeader))
+                .sectionPhoto,
+            QirshSectionPhoto.goals);
+        // v2: the saved total is the soft summary card's hero amount, captioned
+        // «Total saved · KWD»; the target is a separate counter beside it.
+        final summary = _planningSummary(
+            '${l10n.bdgStatTotalSaved} · ${Currency.labelFor('KWD', language)}');
+        expect(
+            tester
+                .widget<AnimatedAmountText>(find.descendant(
+                    of: summary, matching: find.byType(AnimatedAmountText)))
+                .money,
+            Money(13345, 'KWD'));
+        expect(find.descendant(of: summary, matching: find.text('13.345')),
+            findsOneWidget);
+        expect(_counterValue(tester, summary, l10n.bdgStatTargetSavings),
             '70.000');
-        expect(
-            header.metrics!
-                .singleWhere(
-                    (metric) => metric.label == l10n.bdgStatActiveGoals)
-                .value,
-            '2');
+        expect(_counterValue(tester, summary, l10n.bdgStatActiveGoals), '2');
         expect(
             find.textContaining('13.345', findRichText: true), findsOneWidget);
         expect(find.text('70.000'), findsOneWidget);
@@ -288,23 +315,37 @@ void main() {
         'budget count and exact photo footnote scope currencies; mixedEnds=$mixedEnds',
         (tester) async {
       final l10n = await _budgets(tester, goals: false, mixedEnds: mixedEnds);
-      final header = tester
-          .widgetList<CalmPageHeader>(find.byType(CalmPageHeader))
-          .singleWhere((header) => header.photo == QirshPhoto.wallet);
-      expect(header.amount, '30.000');
       expect(
-          header.metrics!
-              .singleWhere((metric) => metric.label == l10n.bdgOver)
-              .value,
-          '1');
-      expect(header.amountFootnote, contains('${l10n.bdgActualSpend} 14.345'));
-      expect(header.amountFootnote, contains('${l10n.bdgRemaining} 15.655'));
-      if (mixedEnds) {
-        expect(header.amountFootnote, isNot(contains(l10n.goalDaysLeft(8))));
-      } else {
-        expect(header.amountFootnote, contains(l10n.goalDaysLeft(8)));
-      }
-      expect(find.text(header.amountFootnote!), findsOneWidget);
+          tester.widget<CalmPageHeader>(find.byType(CalmPageHeader))
+              .sectionPhoto,
+          QirshSectionPhoto.budgets);
+      // v2: the budgeted total is the soft summary card's hero amount; the
+      // spend / remaining footnote is two runs of one wrap inside that card.
+      final summary = _planningSummary(
+          '${l10n.bdgStatTotalBudgeted} · ${Currency.labelFor('KWD', 'en')}');
+      expect(
+          tester
+              .widget<AnimatedAmountText>(find.descendant(
+                  of: summary, matching: find.byType(AnimatedAmountText)))
+              .money,
+          Money(30000, 'KWD'));
+      expect(find.descendant(of: summary, matching: find.text('30.000')),
+          findsOneWidget);
+      expect(_counterValue(tester, summary, l10n.bdgStateOverF), '1');
+      final spend = '${l10n.bdgActualSpend} 14.345';
+      final remaining = '${l10n.bdgRemaining} 15.655'
+          '${mixedEnds ? '' : ' · ${l10n.goalDaysLeft(8)}'}';
+      expect(find.descendant(of: summary, matching: find.text(spend)),
+          findsOneWidget);
+      expect(find.descendant(of: summary, matching: find.text(remaining)),
+          findsOneWidget);
+      expect(
+          find.descendant(
+              of: summary,
+              matching: find.textContaining(l10n.goalDaysLeft(8))),
+          mixedEnds ? findsNothing : findsOneWidget);
+      expect(find.text(spend), findsOneWidget);
+      expect(find.text(remaining), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -346,16 +387,23 @@ void main() {
             language: language,
             dark: language == 'ar');
         final l10n = AppL10n.of(tester.element(find.byType(GoalsScreen)));
-        final header =
-            tester.widget<CalmPageHeader>(find.byType(CalmPageHeader));
+        // v2: the photo hero (CalmPageHeader) carries only title, back and
+        // tabs; the saved / target figures live in the CalmFinancialSummary.
+        expect(
+            tester.widget<CalmPageHeader>(find.byType(CalmPageHeader))
+                .sectionPhoto,
+            QirshSectionPhoto.goals);
+        final header = tester
+            .widget<CalmFinancialSummary>(find.byType(CalmFinancialSummary));
+        expect(header.label, l10n.goalTotalSavedAll);
         expect(header.amount, formatMoney(saved));
         expect(
-            header.metrics!
+            header.metrics
                 .singleWhere((m) => m.label == l10n.goalTargetLabel)
                 .value,
             formatMoney(target));
         expect(
-            header.metrics!
+            header.metrics
                 .singleWhere((m) => m.label == l10n.bdgStatActiveGoals)
                 .value,
             '1');
@@ -382,7 +430,13 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(BottomSheet), findsOneWidget);
         expect(detailReads, 1);
-        expect(find.text(goal.name), findsNWidgets(2));
+        // v2 spec 16: the sheet names the goal in its bar and on its photo
+        // header; the list card underneath keeps its own single name.
+        expect(
+            find.descendant(
+                of: find.byType(BottomSheet), matching: find.text(goal.name)),
+            findsNWidgets(2));
+        expect(find.text(goal.name), findsNWidgets(3));
         expect(tester.takeException(), isNull);
       });
     }

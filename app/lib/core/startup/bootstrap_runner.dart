@@ -332,11 +332,10 @@ class BootstrapRunner {
     // silently proceeding into stub auth / no cloud (MALI-003).
     _assertRuntimeConfig();
 
-    await _loadInitialSettingsLanguage();
-
-    // O: the inert coordinator exists before any recovery, session load or
-    // Drift opener below. It authorizes nothing by existing.
+    // O: prove the inert coordinator before reading persisted preferences or
+    // starting recovery. It authorizes nothing by existing.
     _ensureCoordinator();
+    await _loadInitialSettingsLanguage();
     AppSession.instance.configureLocalRead(LocalReadAuthority(
       store: SecureLocalReadStore(),
       // ASR §12 E7: the status-preserving read of the same Keychain item.

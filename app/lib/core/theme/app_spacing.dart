@@ -15,17 +15,19 @@ class AppSpacing {
   static const double s3 = 12;
   static const double s4 = 16;
   static const double s5 = 20;
-  static const double s6 = 26;
-  static const double s7 = 34;
+  // v2: back on the 4pt grid (were the prototype's 26 / 34).
+  static const double s6 = 24;
+  static const double s7 = 32;
   static const double s8 = 40;
   static const double s9 = 48;
   static const double s10 = 64;
 
   // Semantic spacing — Compact UI system (docs/MALI_COMPACT_UI_SYSTEM_PLAN.md).
   // Evolved toward ~25–35% less vertical whitespace; every screen inherits these.
-  static const double pagePadding = s4; // HTML page gutter: 16
+  // v2: gutter 20 so section titles and card edges share one line.
+  static const double pagePadding = s5; // 20
   static const double pagePaddingCompact = s4; // 16
-  static const double sectionGap = s6; // 24 (was 32)
+  static const double sectionGap = s7; // v2: 32
   static const double sectionGapCompact = s4; // 16 (was 20)
   static const double listGap = s3; // 12
   static const double cardPadding = 16; // (was 20)
@@ -36,7 +38,7 @@ class AppSpacing {
   static const double fieldGap = s3; // 12 (was 16)
   static const double iconGap = s3;
   static const double buttonGap = s3;
-  static const double buttonHeight = 50; // (was 56) — ≥ 48 accessible
+  static const double buttonHeight = 52; // v2 QButton
   static const double buttonHeightCompact = 46; // (was 48) — ≥ 44 accessible
   static const double sheetPadding = s5; // 20 (was 24)
   static const double sheetTopGap = s3; // 12 (was 16)
@@ -51,7 +53,7 @@ class AppSpacing {
       11; // list-row vertical padding (≈ 58–62px row)
   /// `.bnav { height:60px }`. Its buttons are 52 tall inside it, and it sits on
   /// a 16pt inset from the screen edges and the bottom — see [navBarInset].
-  static const double navBarHeight = 60;
+  static const double navBarHeight = 64; // v2 QTabBar
 
   /// `.bnav { inset-inline:16px; bottom:16px }`.
   static const double navBarInset = s4;
@@ -100,10 +102,10 @@ class AppRadius {
   // pinned to the design's values rather than aliased onto the base scale.
 
   /// `--r-ctl: 9px` — small controls and `.btn.sm`.
-  static const double control = 9;
+  static const double control = 10;
 
   /// `--r-row: 13px` — `.btn` and standalone rows.
-  static const double row = 13;
+  static const double row = 14;
 
   /// `--r-card: 18px` — `.card`, `.grp`, `.lgrp`, `.strip`, `.ledger`, `.rank`.
   static const double card = 20;
@@ -113,10 +115,10 @@ class AppRadius {
 
   /// `.screen>.sheet { border-radius:34px 34px 0 0 }` — the white panel that
   /// rises over the hero. A different curve from the modal sheet, on purpose.
-  static const double screenSheet = 34;
+  static const double screenSheet = 28; // v2: hero/sheet radius 28
 
   /// `.screen>.hero:not(.tall) { border-end-*-radius:30px }`.
-  static const double heroBottom = 30;
+  static const double heroBottom = 28;
 
   static const double cardLg = xxl;
   static const double button = row;

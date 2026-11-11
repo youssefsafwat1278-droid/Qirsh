@@ -15,6 +15,7 @@ import '../../cards/brand_mark.dart';
 import '../../common/app_transaction_row.dart';
 import '../../common/category_catalog.dart';
 import '../../common/transaction_direction.dart';
+import 'home_v2_style.dart';
 
 /// One rendered day inside [TransactionsPanel].
 class TransactionDay {
@@ -87,8 +88,10 @@ class TransactionsPanel extends StatelessWidget {
 
     if (compact) {
       final rows = days.expand((day) => day.transactions).toList();
+      // v2 Group: the rows live inside one card (light white + e1, dark
+      // #121317 + hairline), dividers inset to the text edge.
       return MaliCard(
-        style: MaliSurfaceStyle.raised,
+        style: MaliSurfaceStyle.floating,
         padding: const EdgeInsets.symmetric(vertical: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -96,7 +99,10 @@ class TransactionsPanel extends StatelessWidget {
             for (var i = 0; i < rows.length; i++) ...[
               if (i > 0)
                 Divider(
-                    height: 1, indent: 14, endIndent: 14, color: t.strokeSoft),
+                    height: 1,
+                    indent: 66,
+                    endIndent: 14,
+                    color: HomeV2.hairline(context)),
               _row(context, rows[i]),
             ],
           ],
@@ -163,9 +169,12 @@ class TransactionsPanel extends StatelessWidget {
           Text(
             privacyMode
                 ? '••••'
-                : '${net.isNegative ? '' : '+'}${formatMoney(net)}',
+                // v2: a true minus (U+2212) leads the digits.
+                : net.isNegative
+                    ? '\u2212${formatMoney(-net)}'
+                    : '+${formatMoney(net)}',
             style: AppTypography.custom(
-              size: 11.5,
+              size: 13,
               weight: FontWeight.w600,
               height: 1.3,
               tabular: true,

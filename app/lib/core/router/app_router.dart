@@ -151,15 +151,20 @@ final appRouter = GoRouter(
           AutomaticSessionRecovery.restoringSession,
           AutomaticSessionRecovery.recoveryTimedOut,
         ]),
-        builder: (context, _) => AutomaticSessionRecovery.restoringSession.value
-          ? const AppBootLoader()
-          : AutomaticSessionRecovery.recoveryTimedOut.value
-              ? const LocalReadShell()
-          : AppSession.instance.localReadActive
-              ? const LocalReadShell()
-              : AppSession.instance.localReadPresentationRestricted
-                  ? const AppBootLoader()
-                  : const AppShell(),
+        builder: (context, _) {
+          // null = the loader. Same conditions as before; the reveal only
+          // changes how the loader leaves (its exit motion over the screen).
+          final Widget? screen = AutomaticSessionRecovery.restoringSession.value
+            ? null
+            : AutomaticSessionRecovery.recoveryTimedOut.value
+                ? const LocalReadShell()
+            : AppSession.instance.localReadActive
+                ? const LocalReadShell()
+                : AppSession.instance.localReadPresentationRestricted
+                    ? null
+                    : const AppShell();
+          return AppBootLoaderReveal(loading: screen == null, child: screen);
+        },
       ),
     ),
     GoRoute(
@@ -378,7 +383,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/profile',
       name: 'profile',
+      // v2 «بيانات حسابك»: the profile route opens the account sub-page of
+      // the More hub (spec screen 23).
       builder: (context, state) => SettingsScreen(
+        page: SettingsPage.account,
         showBackButton: context.canPop(),
       ),
     ),

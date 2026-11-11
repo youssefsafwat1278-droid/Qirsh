@@ -126,12 +126,10 @@ void main() {
               reason: 'the duplicate aggregate no longer delays the bills list');
           for (final installment in [false, true]) {
             if (installment) {
-              final tab = find.descendant(
-                of: find.byKey(const ValueKey('section-hero-bills')),
-                matching: find.text(l10n.txnBillsInstalments),
-              );
-              // The subtype control now scrolls with the photo. Bring the
-              // photo back before exercising the same canonical money checks.
+              // Subscriptions / Instalments is a chips row under the
+              // summary card now. Bring it back into view before exercising
+              // the same canonical money checks.
+              final tab = find.text(l10n.txnBillsInstalments);
               for (var scroll = 0;
                   scroll < 12 && tab.hitTestable().evaluate().isEmpty;
                   scroll++) {
@@ -145,7 +143,10 @@ void main() {
               await tester.tap(tab);
               await _settle(tester);
             }
-            final caption = installment ? l10n.txnTotalMonthlyInst : l10n.txnTotalMonthlySubs;
+            // UX-023/024 — the subscriptions caption names the scoped account.
+            final caption = installment
+                ? l10n.txnTotalMonthlyInst
+                : l10n.subsMonthlyScoped('QA KWD');
             await tester.scrollUntilVisible(find.text(caption), 140,
                 scrollable: find.byType(Scrollable).last);
             await tester.pumpAndSettle();

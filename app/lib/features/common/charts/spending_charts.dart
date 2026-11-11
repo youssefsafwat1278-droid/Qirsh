@@ -5,13 +5,16 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart' show DateFormat;
 
 import '../../../core/theme/app_colors.dart';
+import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/widgets/donut_chart.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../domain/entities/report_models.dart';
 import '../../../domain/finance/money.dart';
 import '../../../domain/finance/money_format.dart';
 import '../category_catalog.dart';
+import '../motion.dart';
 import '../widgets.dart';
 import '../../../core/utils/l10n_ext.dart';
 
@@ -21,12 +24,16 @@ class SpendingChartSlice {
     required this.total,
     required this.percent,
     this.count = 0,
+    this.amount,
   });
 
   final CategoryView category;
   final double total;
   final double percent;
   final int count;
+
+  /// Exact amount for the centre read-out when this slice is selected.
+  final Money? amount;
 }
 
 class CategoryDonutChart extends StatelessWidget {
@@ -40,6 +47,10 @@ class CategoryDonutChart extends StatelessWidget {
     this.compactCenter = false,
     this.framed = true,
     this.showLegend = true,
+    this.centerAmount,
+    this.selectedIndex,
+    this.onSelectionChanged,
+    this.privacyMode = false,
   });
 
   final List<SpendingChartSlice> slices;
@@ -54,6 +65,18 @@ class CategoryDonutChart extends StatelessWidget {
   final bool compactCenter;
   final bool framed;
   final bool showLegend;
+
+  /// Exact centre total. When set (and not [privacyMode]) the compact centre
+  /// counts up in sync with the draw-in instead of showing [centerLabel].
+  final Money? centerAmount;
+
+  /// Selected slice (lifted, others dimmed; centre shows its amount).
+  final int? selectedIndex;
+
+  /// Tapping a slice reports its index, or null when the selected one is
+  /// tapped again (reset).
+  final ValueChanged<int?>? onSelectionChanged;
+  final bool privacyMode;
 
   @override
   Widget build(BuildContext context) {
@@ -86,6 +109,10 @@ class CategoryDonutChart extends StatelessWidget {
               centerLabel: label,
               centerCurrency: centerCurrency,
               compactCenter: compactCenter,
+              centerAmount: privacyMode ? null : centerAmount,
+              selectedIndex: selectedIndex,
+              onSelectionChanged: onSelectionChanged,
+              privacyMode: privacyMode,
             ),
           );
           final legend = SingleChildScrollView(
@@ -169,15 +196,9 @@ class WeeklyCapsuleBarChart extends StatelessWidget {
       1,
       (max, day) => math.max(max, day.total.toDouble()),
     );
-    final palette = [
-      c.primary,
-      c.accent,
-      c.success,
-      c.cta,
-      c.danger,
-      c.warning,
-      c.textSecondary,
-    ];
+    // v2 7-day bars: the most recent day in the action fill, the others in
+    // the theme's inactive chart colour (never semantic green/red/gold).
+    final inactive = _inactiveBar(context);
     return SizedBox(
       height: height,
       child: Row(
@@ -188,7 +209,8 @@ class WeeklyCapsuleBarChart extends StatelessWidget {
               child: _CapsuleBar(
                 day: visibleDays[i],
                 maxValue: maxValue,
-                color: palette[i % palette.length],
+                color: i == visibleDays.length - 1 ? c.cta : inactive,
+                index: i,
                 currencyLabel: currencyLabel,
                 privacyMode: privacyMode,
                 showCurrencyLabel: showCurrencyLabel,
@@ -234,8 +256,10 @@ class _CapsuleBar extends StatelessWidget {
     required this.showCurrencyLabel,
     required this.barWidth,
     required this.maxBarHeight,
+    this.index = 0,
   });
 
+  final int index;
   final DailySpend day;
   final double maxValue;
   final Color color;
@@ -281,34 +305,34 @@ class _CapsuleBar extends StatelessWidget {
                 if (showCurrencyLabel)
                   Text(
                     currencyLabel,
-                    style: AppTypography.caption(c.textMuted)
-                        .copyWith(fontSize: 10),
+                    style: AppTypography.overline(c.textMuted),
                   ),
               ],
             ),
           ),
         ),
         const SizedBox(height: AppSpacing.s1),
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 280),
-          width: barWidth,
-          height: barHeight,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            boxShadow: [
-              BoxShadow(
-                color: color.withValues(alpha: 0.20),
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-              ),
-            ],
+        // v2 m.chart bars: height from 0, 30ms stagger leading→trailing.
+        TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: barHeight),
+          duration: shouldReduceMotion(context)
+              ? Duration.zero
+              : Duration(milliseconds: 600 + index * 30),
+          curve: Interval(index * 30 / (600 + index * 30), 1,
+              curve: AppMotion.springSmoothCurve),
+          builder: (context, h, _) => Container(
+            width: barWidth,
+            height: h,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+            ),
           ),
         ),
         const SizedBox(height: AppSpacing.s1),
         Text(
           Formatters.weekdayShort(context, day.day),
-          style: AppTypography.caption(c.textMuted).copyWith(fontSize: 10),
+          style: AppTypography.overline(c.textMuted),
           maxLines: 1,
         ),
       ],
@@ -326,6 +350,10 @@ class _Donut extends StatelessWidget {
     required this.centerLabel,
     required this.centerCurrency,
     required this.compactCenter,
+    this.centerAmount,
+    this.selectedIndex,
+    this.onSelectionChanged,
+    this.privacyMode = false,
   });
 
   final List<SpendingChartSlice> slices;
@@ -335,58 +363,101 @@ class _Donut extends StatelessWidget {
   final String centerLabel;
   final String? centerCurrency;
   final bool compactCenter;
+  final Money? centerAmount;
+  final int? selectedIndex;
+  final ValueChanged<int?>? onSelectionChanged;
+  final bool privacyMode;
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        PieChart(
-          PieChartData(
-            centerSpaceRadius: size * 0.26,
-            sectionsSpace: 3,
-            startDegreeOffset: -90,
-            sections: [
-              for (final slice in slices)
-                PieChartSectionData(
-                  value: math.max(slice.total, 0.01),
-                  color: slice.category.color,
-                  radius: size * 0.18,
-                  showTitle: false,
-                ),
-            ],
+    final brightness = Theme.of(context).brightness;
+    final selected = selectedIndex != null &&
+            selectedIndex! >= 0 &&
+            selectedIndex! < slices.length
+        ? slices[selectedIndex!]
+        : null;
+    // v2 donut: stroke ≈13% of the diameter (26 on 200), ~3pt gaps left
+    // transparent so they read in the card colour, v2 category palette.
+    final stroke = size * 0.13;
+    final radius = (size - stroke) / 2;
+    final gapDegrees = radius <= 0 ? 3.0 : 3 / radius * 180 / math.pi;
+    final onTap = onSelectionChanged;
+    return DonutChart(
+      size: size,
+      strokeWidth: stroke,
+      gapDegrees: gapDegrees,
+      selectedIndex: selected == null ? null : selectedIndex,
+      onSegmentTap: onTap == null
+          ? null
+          : (index) => onTap(index == selectedIndex ? null : index),
+      segments: [
+        for (final slice in slices)
+          DonutSegment(
+            value: math.max(slice.total, 0.01),
+            color: slice.category.accent(brightness),
           ),
-        ),
-        SizedBox(
-          width: size * 0.46,
-          height: size * 0.32,
+      ],
+      centerBuilder: (context, progress) {
+        final String caption;
+        final String figure;
+        if (selected != null) {
+          caption = selected.category.name;
+          final amount = selected.amount;
+          figure = privacyMode
+              ? '••••'
+              : amount != null
+                  ? formatMoney(amount)
+                  : Formatters.amount(selected.total);
+        } else if (compactCenter) {
+          caption = context.l10n.chartTotal;
+          final amount = centerAmount;
+          figure = amount == null
+              ? centerLabel
+              : formatMoney(Money(
+                  (BigInt.from(amount.minorUnits) *
+                          BigInt.from((progress * 1000).round()) ~/
+                          BigInt.from(1000))
+                      .toInt(),
+                  amount.currency));
+        } else {
+          caption = slices.first.category.name;
+          figure = '${(slices.first.percent * 100).round()}%';
+        }
+        return SizedBox(
+          width: size - stroke * 2 - 12,
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  compactCenter
-                      ? centerLabel
-                      : '${(slices.first.percent * 100).round()}%',
-                  style: AppTypography.bodyStrong(centerLabelColor).copyWith(
-                    fontSize: compactCenter ? 16 : null,
-                  ),
-                ),
-                if (centerCurrency != null)
-                  Text(centerCurrency!,
+            child: Semantics(
+              // Announce only the final value, never the count-up frames.
+              label: [caption, if (compactCenter && selected == null) centerLabel
+                  else figure, if (centerCurrency != null) centerCurrency!]
+                  .join(' '),
+              excludeSemantics: true,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(caption,
+                      maxLines: 1,
                       style: AppTypography.caption(centerCaptionColor)),
-                Text(
-                  compactCenter
-                      ? context.l10n.chartTotal
-                      : slices.first.category.name,
-                  style: AppTypography.caption(centerCaptionColor),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    figure,
+                    textDirection: TextDirection.ltr,
+                    style: AppTypography.amountMedium(centerLabelColor)
+                        .copyWith(fontFeatures: const [
+                      FontFeature.tabularFigures(),
+                    ]),
+                  ),
+                  if (centerCurrency != null &&
+                      (compactCenter || selected != null))
+                    Text(centerCurrency!,
+                        style: AppTypography.caption(centerCaptionColor)),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        );
+      },
     );
   }
 }
@@ -500,8 +571,7 @@ class DailySpendBarChart extends StatelessWidget {
                         ? DateFormat.MMMd(Localizations.localeOf(context).languageCode)
                             .format(days![index])
                         : '${index + 1}',
-                    style: AppTypography.caption(c.textMuted)
-                        .copyWith(fontSize: 10),
+                    style: AppTypography.overline(c.textMuted),
                   );
                 },
               ),
@@ -516,7 +586,11 @@ class DailySpendBarChart extends StatelessWidget {
                     toY: safeValues[i],
                     width: safeValues.length > 18 ? 7 : 11,
                     borderRadius: BorderRadius.circular(AppRadius.pill),
-                    color: selectedIndex == i ? c.cta : c.primary,
+                    // v2: neutral bars are the action fill; with a
+                    // selection the others step back to the inactive colour.
+                    color: selectedIndex == null || selectedIndex == i
+                        ? c.cta
+                        : _inactiveBar(context),
                     backDrawRodData: BackgroundBarChartRodData(
                       show: false,
                       toY: maxValue * 1.2,
@@ -624,7 +698,7 @@ class _LegendRow extends StatelessWidget {
         ),
         Text(
           '${(slice.percent * 100).round()}%',
-          style: AppTypography.bodyStrong(slice.category.color),
+          style: AppTypography.bodyStrong(c.textSecondary),
         ),
       ],
     );
@@ -658,3 +732,9 @@ class _EmptyChartCard extends StatelessWidget {
     );
   }
 }
+
+/// v2 "chart inactive bar": #FFFFFF@14% (dark) / #D9E0EE (light), spec §2.6.
+Color _inactiveBar(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? Colors.white.withValues(alpha: .14)
+        : const Color(0xFFD9E0EE);

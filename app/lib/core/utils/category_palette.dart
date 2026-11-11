@@ -1,4 +1,5 @@
 import 'package:flutter/painting.dart';
+import 'dart:ui' show Brightness;
 
 /// لون خلفية ثابت (عميق ومكتوم) لتايل كل تصنيف — بدل لون الـ DB المتغيّر.
 ///
@@ -76,4 +77,32 @@ Color categoryTileColor(String key) {
     default:
       return const Color(0xFF23262E);
   }
+}
+
+/// Calm Capital v2 category palette (spec §2.1). None equals the semantic
+/// green/red; dark ≥3:1 on #121317, light ≥3:1 on white. Keyed by the stable
+/// category KEY (`'shopping'`, `'restaurants'`…). Returns null for a key the
+/// palette does not name, so a user-created category keeps its own colour.
+Color? categoryAccent(String key, Brightness brightness) {
+  final dark = brightness == Brightness.dark;
+  const named = <String, List<int>>{
+    'shopping': [0xFFA78BFA, 0xFF7C4DDB],
+    'groceries': [0xFF5EC8E5, 0xFF0E94B8],
+    'restaurants': [0xFFFF8A5B, 0xFFE0622B],
+    'cafes': [0xFFD4A373, 0xFF9C6B3F],
+    'transport': [0xFF6E9BFF, 0xFF2F6BE0],
+    'subscriptions': [0xFFF472B6, 0xFFD0398A],
+  };
+  final hit = named[key];
+  if (hit != null) return Color(dark ? hit[0] : hit[1]);
+  const overflowDark = [0xFF9DB9FF, 0xFFC4B5FD, 0xFF7DD3C0, 0xFFE4BA41];
+  const overflowLight = [0xFF5B7FD6, 0xFF8E7AD8, 0xFF2E9C87, 0xFFB8891A];
+  const systemKeys = [
+    'fuel', 'bills', 'health', 'education', 'entertainment', 'transfers',
+    'cash', 'travel', 'gifts', 'kids', 'home', 'maintenance', 'smoking',
+    'fitness', 'beauty', 'charity', 'pets', 'insurance', 'income', 'other',
+  ];
+  final i = systemKeys.indexOf(key);
+  if (i < 0) return null;
+  return Color((dark ? overflowDark : overflowLight)[i % 4]);
 }

@@ -57,7 +57,9 @@ void main() {
             .pumpWidget(_app(StartupLoadingScreen(onRetry: () {}), c.lang));
         await tester.pump();
 
-        expect(find.byType(CircularProgressIndicator), findsOneWidget);
+        // The launch loader: the coin (and, only if loading runs long, a
+        // ring around it), never a separate spinner.
+        expect(find.byKey(const Key('qirsh_stable_loader')), findsOneWidget);
         expect(find.text(c.preparing), findsNothing);
         expect(find.byType(Text), findsNothing,
             reason: 'normal loading must not flash between languages');

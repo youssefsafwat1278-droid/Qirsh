@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
+import 'package:flutter/services.dart';
+
 import '../app_colors.dart';
+import '../app_motion.dart';
+import '../app_shadows.dart';
+import '../app_spacing.dart';
 import '../app_typography.dart';
-import '../mali_tokens.dart';
 
 /// One option in a [SegmentedControl].
 class SegmentOption<T> {
@@ -13,9 +17,10 @@ class SegmentOption<T> {
   final IconData? icon;
 }
 
-/// SegmentedControl — a calm pill selector (add-sheet type, report tabs). The
-/// selected segment lifts on [MaliTokens.surfaceFloating] (or the solid ink
-/// surface when [accent] is set). Pure presentation + a callback.
+/// SegmentedControl — the v2 `QSegmented` pill selector (add-sheet type,
+/// report tabs). The selected thumb is `surface.top` (or the action fill when
+/// [accent] is set) and slides between segments. Pure presentation + a
+/// callback.
 class SegmentedControl<T> extends StatelessWidget {
   const SegmentedControl({
     super.key,
@@ -32,61 +37,97 @@ class SegmentedControl<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final t = MaliTokens.of(context);
     final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final selected = options.indexWhere((o) => o.value == value);
+    // v2 QSegmented: track = surface.well, pill, 44pt, 4pt inset; thumb =
+    // action fill (primary, [accent]) or surface.top (secondary), sliding on
+    // spring.smooth (m.select).
     Color fg(T v) {
-      if (value == v) return accent ? c.onInk : t.textOnCanvasPrimary;
-      return t.textOnCanvasSecondary;
+      if (value == v) return accent ? c.onCta : c.textPrimary;
+      return c.textSecondary;
     }
 
     return Container(
+      height: 44,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: t.surfaceRaised,
-        borderRadius: BorderRadius.circular(15),
+        color: c.surfaceMuted,
+        borderRadius: BorderRadius.circular(AppRadius.pill),
       ),
-      child: Row(
-        children: [
-          for (final o in options)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onChanged(o.value),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOut,
-                  padding: const EdgeInsets.symmetric(vertical: 11),
-                  decoration: BoxDecoration(
-                    color: value == o.value
-                        ? (accent ? c.ink : t.surfaceFloating)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(11),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (o.icon != null) ...[
-                        Icon(
-                          o.icon,
-                          size: 16,
-                          color: fg(o.value),
-                        ),
-                        const SizedBox(width: 6),
-                      ],
-                      Flexible(
-                        child: Text(
-                          o.label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppTypography.subhead(fg(o.value)),
-                        ),
-                      ),
-                    ],
+      child: LayoutBuilder(
+        builder: (context, box) {
+          final w = box.maxWidth / options.length;
+          final rtl = Directionality.of(context) == TextDirection.rtl;
+          return Stack(
+            children: [
+              if (selected >= 0)
+                AnimatedPositioned(
+                  duration: AppMotion.moderate,
+                  curve: AppMotion.springSmoothCurve,
+                  top: 0,
+                  bottom: 0,
+                  width: w,
+                  left: rtl ? w * (options.length - 1 - selected) : w * selected,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: accent ? c.cta : c.surfaceTop,
+                      borderRadius: BorderRadius.circular(AppRadius.pill),
+                      boxShadow:
+                          accent || isDark ? null : AppShadows.e1,
+                    ),
                   ),
                 ),
+              Row(
+                children: [
+                  for (final o in options)
+                    Expanded(
+                      child: Semantics(
+                        button: true,
+                        selected: value == o.value,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            if (value != o.value) {
+                              HapticFeedback.selectionClick();
+                            }
+                            onChanged(o.value);
+                          },
+                          child: Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (o.icon != null) ...[
+                                  Icon(o.icon, size: 16, color: fg(o.value)),
+                                  const SizedBox(width: 6),
+                                ],
+                                Flexible(
+                                  child: AnimatedDefaultTextStyle(
+                                    duration: AppMotion.micro,
+                                    style: AppTypography.subhead(fg(o.value))
+                                        .copyWith(
+                                      fontWeight: value == o.value
+                                          ? FontWeight.w600
+                                          : FontWeight.w500,
+                                    ),
+                                    child: Text(
+                                      o.label,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
               ),
-            ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

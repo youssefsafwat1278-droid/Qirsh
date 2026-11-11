@@ -40,6 +40,7 @@ import '../../core/session/rebootstrap_service.dart';
 import '../../core/di/rebootstrap_providers.dart';
 import '../../core/sync/sync_wakeup.dart';
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_motion.dart';
 import '../../core/theme/app_shadows.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -2216,23 +2217,9 @@ class _AppShellState extends ConsumerState<AppShell> {
             // محتوى الصفحة الرئيسي — بدون SafeArea علوي حتى يمتد الهيدر
             // المتدرّج خلف شريط الحالة (كل شاشة تتكفّل بالمساحة الآمنة داخليًا).
             IndexedStack(index: index, children: pages),
-            // شريط زجاجي (frosted) بارتفاع شريط الحالة — يضبّب ما يمرّ تحت النوتش
-            // (الهيدر الأزرق وقت الراحة، المحتوى الغامق وقت السكرول) فيتأقلم
-            // تلقائيًا زي iOS بدل ظهور مساحة غامقة حادّة حول النوتش.
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              height: MediaQuery.paddingOf(context).top,
-              child: IgnorePointer(
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
-              ),
-            ),
+            // No shell-wide status-bar blur: it smeared each tab's
+            // immersive photo/content into a flat band. Every tab now draws
+            // its own scroll-edge glass (transparent at rest).
             if (_activeCelebration != null)
               Positioned(
                 top: AppSpacing.s5,
@@ -2378,7 +2365,8 @@ class _BottomNavBar extends StatelessWidget {
           onSelect: (slot) => onSelect(_items[slot].page),
           dark: Theme.of(context).brightness == Brightness.dark,
           rtl: Directionality.of(context) == TextDirection.rtl,
-          tint: context.colors.cta,
+          // v2 QTabBar: selected = action.text (#8FB0FF dark / #0336BF light).
+          tint: context.colors.actionText,
         );
       },
     );
@@ -2436,8 +2424,8 @@ class _BottomNavBar extends StatelessWidget {
             children: [
               if (selectedSlot >= 0)
                 AnimatedPositioned(
-                  duration: const Duration(milliseconds: 260),
-                  curve: Curves.easeOutCubic,
+                  duration: AppMotion.moderate,
+                  curve: AppMotion.springSmoothCurve,
                   left: slotWidth * selectedSlot,
                   top: 0,
                   bottom: 0,
@@ -2445,9 +2433,11 @@ class _BottomNavBar extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 3),
                     child: DecoratedBox(
+                      // v2 lens: white@10% dark / action@10% light.
                       decoration: ShapeDecoration(
-                        color: c.textPrimary
-                            .withValues(alpha: isDark ? 0.14 : 0.07),
+                        color: isDark
+                            ? const Color(0x1AFFFFFF)
+                            : c.cta.withValues(alpha: 0.10),
                         shape: const StadiumBorder(),
                       ),
                     ),
@@ -2491,11 +2481,13 @@ class _BottomNavBar extends StatelessWidget {
           width: _slotHeight,
           child: DecoratedBox(
             decoration: ShapeDecoration(
-              color: c.textPrimary.withValues(alpha: isDark ? 0.14 : 0.07),
+              color: isDark
+                  ? const Color(0x1AFFFFFF)
+                  : c.cta.withValues(alpha: 0.10),
               shape: const StadiumBorder(),
             ),
             child: Center(
-              child: Icon(active.icon, color: c.textPrimary, size: 24),
+              child: Icon(active.icon, color: c.actionText, size: 24),
             ),
           ),
         ),
@@ -2545,8 +2537,8 @@ class _NavTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     // أيقونة بس — الاسم بيفضل في الـ Semantics للقارئ الصوتي.
-    final activeColor = c.cta;
-    final inactiveColor = c.textMuted;
+    final activeColor = c.actionText;
+    final inactiveColor = c.textSecondary;
 
     return Semantics(
       label: item.label(context),

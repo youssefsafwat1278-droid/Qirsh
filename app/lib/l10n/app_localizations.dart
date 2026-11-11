@@ -10822,7 +10822,7 @@ abstract class AppL10n {
   /// No description provided for @deleteAccountIntro.
   ///
   /// In ar, this message translates to:
-  /// **'احذف حساب قرش والبيانات المحفوظة فيه نهائيًا. هتأكّد هويتك الأول.'**
+  /// **'احذف حساب قرش والبيانات المحفوظة فيه نهائيًا وعلى الفور. ستؤكد هويتك أولًا عبر Apple أو طريقة الدخول التي تستخدمها.'**
   String get deleteAccountIntro;
 
   /// No description provided for @deleteAccountAction.
@@ -10840,7 +10840,7 @@ abstract class AppL10n {
   /// No description provided for @deleteAccountConfirmBody.
   ///
   /// In ar, this message translates to:
-  /// **'هيتحذف حسابك وبياناته نهائيًا. أكّد هويتك عشان تكمل. الحذف لا يمكن التراجع عنه.'**
+  /// **'سيُحذف حسابك وبياناته نهائيًا وعلى الفور. أكّد هويتك عبر Apple أو طريقة الدخول التي تستخدمها للمتابعة. لا يمكن التراجع عن الحذف.'**
   String get deleteAccountConfirmBody;
 
   /// No description provided for @deleteAccountConfirmAction.
@@ -11740,7 +11740,7 @@ abstract class AppL10n {
   /// No description provided for @shortcutVisualInstallBody.
   ///
   /// In ar, this message translates to:
-  /// **'اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. احتفظ باسم القالب الجديد QIRSH عشان اختبار الاتصال يقدر يفتحه.'**
+  /// **'اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. احتفظ باسم القالب الجديد QIRSH ليتمكّن اختبار الاتصال من فتحه.'**
   String get shortcutVisualInstallBody;
 
   /// No description provided for @shortcutVisualFilterTitle.
@@ -11794,7 +11794,7 @@ abstract class AppL10n {
   /// No description provided for @shortcutVisualReviewed.
   ///
   /// In ar, this message translates to:
-  /// **'راجعت الخطوات. الالتقاط التلقائي لسه محتاج تفعيل Automation داخل الاختصارات.'**
+  /// **'راجعت الخطوات. يتطلّب الالتقاط التلقائي تفعيل Automation داخل الاختصارات.'**
   String get shortcutVisualReviewed;
 
   /// No description provided for @shortcutCatalogTitle.
@@ -11848,7 +11848,7 @@ abstract class AppL10n {
   /// No description provided for @shortcutCatalogNoMatches.
   ///
   /// In ar, this message translates to:
-  /// **'مفيش نتيجة. جرّب رمز عملة زي EGP أو USD.'**
+  /// **'لا توجد نتائج. جرّب رمز عملة مثل EGP أو USD.'**
   String get shortcutCatalogNoMatches;
 
   /// No description provided for @shortcutCatalogSingleTemplate.
@@ -11857,11 +11857,47 @@ abstract class AppL10n {
   /// **'كل الاختيارات بتستخدم قالب QIRSH نفسه. هتغيّر الفلتر الحالي داخل الاختصارات. مراجعة الخطوات مش تأكيد إن Automation اتفعّل في iOS.'**
   String get shortcutCatalogSingleTemplate;
 
+  /// No description provided for @shortcutVisualInstallDedicatedBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. هذا الاختصار مُعدّ مسبقًا لالتقاط الرسائل التي تحتوي على {keyword}، فلا حاجة إلى كتابة أي شيء.'**
+  String shortcutVisualInstallDedicatedBody(String keyword);
+
+  /// No description provided for @shortcutCatalogDedicated.
+  ///
+  /// In ar, this message translates to:
+  /// **'الكلمة {keyword} لها اختصار جاهز أُضيفت فيه مسبقًا. ما زال iOS يطلب منك تفعيل Automation بنفسك، ولا يستطيع قرش معرفة ما إذا كانت مفعّلة.'**
+  String shortcutCatalogDedicated(String keyword);
+
+  /// No description provided for @shortcutConfirmAutomation.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّلتُ Automation'**
+  String get shortcutConfirmAutomation;
+
+  /// No description provided for @shortcutStateConfirmed.
+  ///
+  /// In ar, this message translates to:
+  /// **'أكّدتَ أن Automation مفعّلة. لا يستطيع قرش التحقق من ذلك داخل iOS.'**
+  String get shortcutStateConfirmed;
+
+  /// No description provided for @shortcutStateTested.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم اختبار الاتصال. فعّل Automation لالتقاط الرسائل تلقائيًا.'**
+  String get shortcutStateTested;
+
+  /// No description provided for @shortcutOverlapWarning.
+  ///
+  /// In ar, this message translates to:
+  /// **'سبق أن أعددت {keyword} لهذه العملة. استخدم كلمة واحدة لكل عملة حتى لا تُلتقط الرسالة نفسها مرتين.'**
+  String shortcutOverlapWarning(String keyword);
+
   /// No description provided for @shortcutOpenEditor.
   ///
   /// In ar, this message translates to:
-  /// **'افتح QIRSH في الاختصارات'**
-  String get shortcutOpenEditor;
+  /// **'افتح {name} في الاختصارات'**
+  String shortcutOpenEditor(String name);
 
   /// No description provided for @shortcutVisualArrowTitle.
   ///
@@ -11872,8 +11908,8 @@ abstract class AppL10n {
   /// No description provided for @shortcutVisualArrowBody.
   ///
   /// In ar, this message translates to:
-  /// **'افتح QIRSH في الاختصارات. اضغط السهم الأزرق الصغير جنب where تحت When I receive a message.'**
-  String get shortcutVisualArrowBody;
+  /// **'افتح {name} في الاختصارات. اضغط السهم الأزرق الصغير جنب where تحت When I receive a message.'**
+  String shortcutVisualArrowBody(String name);
 
   /// No description provided for @shortcutVisualStep.
   ///
@@ -11932,7 +11968,7 @@ abstract class AppL10n {
   /// No description provided for @authEmailExplanation.
   ///
   /// In ar, this message translates to:
-  /// **'اكتب البريد المرتبط بحساب قرش عشان تستلم كود دخول لمرة واحدة.'**
+  /// **'أدخل البريد المرتبط بحساب قرش لاستلام رمز دخول يُستخدم مرة واحدة.'**
   String get authEmailExplanation;
 
   /// No description provided for @authEmailLinkExplanation.
@@ -11974,7 +12010,7 @@ abstract class AppL10n {
   /// No description provided for @authConfirmBothEmails.
   ///
   /// In ar, this message translates to:
-  /// **'اتأكدنا من البريد الجديد. اكتب الكود اللي اتبعت لبريدك الحالي عشان تكمل.'**
+  /// **'تم تأكيد البريد الجديد. أدخل الرمز المُرسل إلى بريدك الحالي للمتابعة.'**
   String get authConfirmBothEmails;
 
   /// No description provided for @authCurrentEmailCode.
@@ -12028,7 +12064,7 @@ abstract class AppL10n {
   /// No description provided for @authExistingAccountHint.
   ///
   /// In ar, this message translates to:
-  /// **'بتستخدم Apple؟ ادخل بيه الأول عشان تربط طريقة دخول جديدة.'**
+  /// **'تستخدم Apple؟ سجّل الدخول به أولًا لربط طريقة دخول جديدة.'**
   String get authExistingAccountHint;
 
   /// No description provided for @authCreateAccount.
@@ -12070,8 +12106,176 @@ abstract class AppL10n {
   /// No description provided for @authGoogleSignupRequired.
   ///
   /// In ar, this message translates to:
-  /// **'حساب Google ده جديد على قرش. اختار «إنشاء حساب» عشان تسجّل.'**
+  /// **'حساب Google هذا جديد على قرش. اختر «إنشاء حساب» للتسجيل.'**
   String get authGoogleSignupRequired;
+
+  /// No description provided for @accV2Balance.
+  ///
+  /// In ar, this message translates to:
+  /// **'الرصيد'**
+  String get accV2Balance;
+
+  /// No description provided for @accV2YourAccounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'حساباتك'**
+  String get accV2YourAccounts;
+
+  /// No description provided for @subsV2Upcoming.
+  ///
+  /// In ar, this message translates to:
+  /// **'قادمة'**
+  String get subsV2Upcoming;
+
+  /// No description provided for @subsV2AllSubs.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل الاشتراكات'**
+  String get subsV2AllSubs;
+
+  /// No description provided for @gfV2Preview.
+  ///
+  /// In ar, this message translates to:
+  /// **'معاينة'**
+  String get gfV2Preview;
+
+  /// No description provided for @gdV2DaysCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'{days, plural, =1{يوم واحد} =2{يومان} few{{days} أيام} many{{days} يومًا} other{{days} يوم}}'**
+  String gdV2DaysCount(int days);
+
+  /// No description provided for @gdV2MoreActions.
+  ///
+  /// In ar, this message translates to:
+  /// **'خيارات الهدف'**
+  String get gdV2MoreActions;
+
+  /// No description provided for @setV2Tools.
+  ///
+  /// In ar, this message translates to:
+  /// **'أدوات'**
+  String get setV2Tools;
+
+  /// No description provided for @setV2Version.
+  ///
+  /// In ar, this message translates to:
+  /// **'قِرش {version}'**
+  String setV2Version(String version);
+
+  /// No description provided for @setV2AppearanceLead.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختار شكل قِرش — بيتغير فورًا.'**
+  String get setV2AppearanceLead;
+
+  /// No description provided for @setV2CaptureNeedsCheck.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتاج مراجعة'**
+  String get setV2CaptureNeedsCheck;
+
+  /// No description provided for @bdgV2YourBudgets.
+  ///
+  /// In ar, this message translates to:
+  /// **'ميزانياتك'**
+  String get bdgV2YourBudgets;
+
+  /// No description provided for @bdgV2WorstFirst.
+  ///
+  /// In ar, this message translates to:
+  /// **'الأسوأ أولًا'**
+  String get bdgV2WorstFirst;
+
+  /// No description provided for @bfsV2ShowAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض الكل'**
+  String get bfsV2ShowAll;
+
+  /// No description provided for @bfsV2ShowLess.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض أقل'**
+  String get bfsV2ShowLess;
+
+  /// No description provided for @couponsV2BrowseOffers.
+  ///
+  /// In ar, this message translates to:
+  /// **'تصفّح العروض'**
+  String get couponsV2BrowseOffers;
+
+  /// No description provided for @txnV2EndOfList.
+  ///
+  /// In ar, this message translates to:
+  /// **'— دي كل عمليات الفترة —'**
+  String get txnV2EndOfList;
+
+  /// No description provided for @txnV2Filters.
+  ///
+  /// In ar, this message translates to:
+  /// **'الفلاتر'**
+  String get txnV2Filters;
+
+  /// No description provided for @pasteV2DetectedCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{رسالة واحدة مكتشفة} =2{رسالتين مكتشفتين} few{{count} رسائل مكتشفة} many{{count} رسالة مكتشفة} other{{count} رسالة مكتشفة}}'**
+  String pasteV2DetectedCount(int count);
+
+  /// No description provided for @pasteV2Clear.
+  ///
+  /// In ar, this message translates to:
+  /// **'مسح النص'**
+  String get pasteV2Clear;
+
+  /// No description provided for @smsV2Step1.
+  ///
+  /// In ar, this message translates to:
+  /// **'افتح رسالة البنك'**
+  String get smsV2Step1;
+
+  /// No description provided for @smsV2Step2.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط «مشاركة»'**
+  String get smsV2Step2;
+
+  /// No description provided for @smsV2Step3.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر قِرش'**
+  String get smsV2Step3;
+
+  /// No description provided for @smsV2PrivacyLine.
+  ///
+  /// In ar, this message translates to:
+  /// **'بدون إذن قراءة الرسائل · سنحلّل النص على جهازك فقط.'**
+  String get smsV2PrivacyLine;
+
+  /// No description provided for @insV3Report.
+  ///
+  /// In ar, this message translates to:
+  /// **'تقرير'**
+  String get insV3Report;
+
+  /// No description provided for @txnV3NetThisMonth.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي الشهر'**
+  String get txnV3NetThisMonth;
+
+  /// No description provided for @txnV3NetThisPeriod.
+  ///
+  /// In ar, this message translates to:
+  /// **'صافي الفترة'**
+  String get txnV3NetThisPeriod;
+
+  /// No description provided for @billsV3Counts.
+  ///
+  /// In ar, this message translates to:
+  /// **'{subs} اشتراك · {instalments} أقساط'**
+  String billsV3Counts(int subs, int instalments);
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {

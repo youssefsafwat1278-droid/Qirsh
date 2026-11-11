@@ -132,6 +132,27 @@ macOS runner) to produce the `.ipa`, then sideload with your usual tool.
   off. Open the **Process Bank SMS** action details and turn **Show When Run**
   off if it appears.
 
+### Preconfigured per-keyword shortcuts
+Since iOS 26 a shared shortcut can carry its own Message trigger, so one link
+per keyword ("Message contains EGP", "… جم", "… USD", …) installs with the
+keyword already set. The published **QIRSH** link is the EGP one.
+
+- Build the variants (macOS, signed in to iCloud), from `app/`:
+  `python3 tools/shortcuts/build_qirsh_shortcuts.py` → signed files in
+  `build/qirsh_shortcuts/`. Each one differs from `tools/shortcuts/qirsh_template.plist`
+  only in the trigger keyword and UUIDs; the Process Bank SMS call is identical.
+- Publishing is manual: open each `Qirsh <keyword>.shortcut`, add it, then
+  **Share → Copy iCloud Link**. Install the link on a phone and confirm the
+  trigger shows the right keyword before using it.
+- Only then add the link as `installUrl` in `qirshShortcutKeywords`
+  (`lib/features/onboarding/shortcut_setup_actions.dart`). A keyword without a
+  link keeps the shared QIRSH template plus the edit-the-filter step.
+- iOS still requires the user to open the automation, turn it on and turn
+  **Confirm Before Run** off; no API can do this or read it back. The app
+  records only a fresh connection test (probe) and the user's own confirmation.
+- Use one keyword per currency: two automations matching one SMS (for example
+  "جم" and "جنيه") each send it, and Qirsh shows the second as a possible duplicate.
+
 ### Share sheet
 - In Messages, long-press the bank SMS → **Share** (or select text → Share) → **Mali**.
 - Mali opens and processes it.

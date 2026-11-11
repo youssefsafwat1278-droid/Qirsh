@@ -159,6 +159,45 @@ void main() {
     expect(await reconcile(), [AchievementCatalog.firstGoal]);
   });
 
+  test('progress is read-only and follows the badge rules', () async {
+    final service = LocalAchievementService(db);
+    final empty = await service.progress();
+    expect(empty[AchievementCatalog.firstTransaction.key], 0);
+    expect(empty[AchievementCatalog.firstGoal.key], 0);
+    // Badges without a gradual measure carry no progress at all.
+    expect(empty.containsKey(AchievementCatalog.firstBudget.key), isFalse);
+    expect(empty.containsKey(AchievementCatalog.saved500.key), isFalse);
+
+    await put('pending', now, status: TransactionStatus.pending);
+    for (var i = 0; i < 4; i++) {
+      await put('tx-$i', now);
+    }
+    await DriftGoalRepository(db).save(GoalEntity(
+      id: 'g',
+      name: 'Trip',
+      currency: 'EGP',
+      targetMoney: Money.parse('500', 'EGP'),
+      savedMoney: Money.parse('125', 'EGP'),
+      lastNotifiedSavedMoney: Money.zero('EGP'),
+      vaultSkin: 'summer_trip',
+      status: 'active',
+      createdAt: now,
+    ));
+    final writesBefore = (await db
+            .customSelect('SELECT total_changes() AS n')
+            .getSingle())
+        .read<int>('n');
+    final progress = await service.progress();
+    expect(progress[AchievementCatalog.firstTransaction.key], 1);
+    expect(progress[AchievementCatalog.tenthTransaction.key], closeTo(.4, 1e-9));
+    expect(progress[AchievementCatalog.centuryTransaction.key], closeTo(.04, 1e-9));
+    expect(progress[AchievementCatalog.firstGoal.key], closeTo(.25, 1e-9));
+    expect(
+        (await db.customSelect('SELECT total_changes() AS n').getSingle())
+            .read<int>('n'),
+        writesBefore);
+  });
+
   test('rollover records a full completed month before advancing the budget',
       () async {
     await saveBudget(DateTime(2026, 10, 1));

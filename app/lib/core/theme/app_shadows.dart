@@ -54,6 +54,43 @@ class AppShadows {
   static const List<BoxShadow> nav = floatingNav;
   static const List<BoxShadow> cta = ctaGlow;
 
+  // ===== Calm Capital v2 light elevation ladder (colour #0C1330) =====
+  // Dark static cards carry NO shadow (invisible on true black); in light
+  // the shadow is the separation. Use [group]/[raised]/[floating] which
+  // resolve per brightness.
+
+  /// e1 — Group cards.
+  static const List<BoxShadow> e1 = [
+    BoxShadow(color: Color(0x0A0C1330), blurRadius: 2, offset: Offset(0, 1)),
+    BoxShadow(color: Color(0x0D0C1330), blurRadius: 12, offset: Offset(0, 4)),
+  ];
+
+  /// e2 — raised cards, sticky dock.
+  static const List<BoxShadow> e2 = [
+    BoxShadow(color: Color(0x0A0C1330), blurRadius: 4, offset: Offset(0, 2)),
+    BoxShadow(color: Color(0x140C1330), blurRadius: 28, offset: Offset(0, 12)),
+  ];
+
+  /// e3 — menus, sheets, floating tab bar.
+  static const List<BoxShadow> e3 = [
+    BoxShadow(color: Color(0x0F0C1330), blurRadius: 16, offset: Offset(0, 8)),
+    BoxShadow(color: Color(0x1F0C1330), blurRadius: 48, offset: Offset(0, 24)),
+  ];
+
+  /// Primary button lift (light only): 0 6 16 #155DFC @28%.
+  static const List<BoxShadow> actionLift = [
+    BoxShadow(color: Color(0x47155DFC), blurRadius: 16, offset: Offset(0, 6)),
+  ];
+
+  static const List<BoxShadow> none = <BoxShadow>[];
+
+  static List<BoxShadow> group(Brightness b) =>
+      b == Brightness.dark ? none : e1;
+  static List<BoxShadow> raised(Brightness b) =>
+      b == Brightness.dark ? none : e2;
+  static List<BoxShadow> floating(Brightness b) =>
+      b == Brightness.dark ? floatSoft : e3;
+
   // ===== Mali flagship system (docs/MALI_DESIGN_SYSTEM.md) =====
   // Additive only — nothing above is modified or retired.
 

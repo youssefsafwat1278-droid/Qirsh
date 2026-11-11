@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shadows.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 
@@ -42,10 +43,14 @@ class AppPrimaryButton extends StatelessWidget {
       backgroundColor: c.ink,
       foregroundColor: c.onInk,
       disabledBg: c.disabled,
-      disabledFg: c.disabledFg,
+      // v2: disabled label is text.muted (legible), fill disabled.fill.
+      disabledFg: c.textMuted,
       side: null,
       gradient: null,
-      shadow: null,
+      // v2 QButton primary: light carries 0 6 16 action@28%; dark none.
+      shadow: Theme.of(context).brightness == Brightness.dark
+          ? null
+          : AppShadows.actionLift,
     );
   }
 }
@@ -82,11 +87,12 @@ class AppSecondaryButton extends StatelessWidget {
       disabled: disabled,
       height: height,
       semanticsLabel: semanticsLabel,
-      backgroundColor: Colors.transparent,
-      foregroundColor: c.cta,
-      disabledBg: Colors.transparent,
-      disabledFg: c.disabledFg,
-      side: BorderSide(color: disabled ? c.border : c.cta, width: 1.5),
+      // v2 QButton tinted: action.soft fill + action.text label.
+      backgroundColor: c.ctaSoft,
+      foregroundColor: c.actionText,
+      disabledBg: c.disabled,
+      disabledFg: c.textMuted,
+      side: null,
       gradient: null,
       shadow: null,
     );
@@ -126,9 +132,9 @@ class AppGhostButton extends StatelessWidget {
       height: height,
       semanticsLabel: semanticsLabel,
       backgroundColor: Colors.transparent,
-      foregroundColor: c.cta,
+      foregroundColor: c.actionText,
       disabledBg: Colors.transparent,
-      disabledFg: c.disabledFg,
+      disabledFg: c.textFaint,
       side: null,
       gradient: null,
       shadow: null,
@@ -180,9 +186,7 @@ class AppDangerButton extends StatelessWidget {
               color: disabled ? c.border : c.danger,
               width: 1.5,
             ),
-      gradient: filled && !disabled
-          ? LinearGradient(colors: [c.danger, c.danger.withValues(alpha: 0.8)])
-          : null,
+      gradient: null,
       shadow: null,
     );
   }
@@ -246,9 +250,11 @@ class _AppButtonBaseState extends State<_AppButtonBase> {
         onTapCancel:
             isEnabled ? () => setState(() => _isPressed = false) : null,
         child: AnimatedScale(
-          scale: _isPressed ? 0.97 : 1.0,
-          duration: AppMotion.buttonPress,
-          curve: AppMotion.buttonCurve,
+          scale: _isPressed ? AppMotion.pressScaleButton : 1.0,
+          duration: _isPressed ? AppMotion.press : AppMotion.base,
+          curve: _isPressed
+              ? AppMotion.buttonCurve
+              : AppMotion.springSnappyCurve,
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: isEnabled ? widget.gradient : null,
@@ -300,7 +306,8 @@ class _AppButtonBaseState extends State<_AppButtonBase> {
                               widget.label,
                               textAlign: TextAlign.center,
                               style: AppTypography.bodyStrong(
-                                  widget.foregroundColor),
+                                      widget.foregroundColor)
+                                  .copyWith(fontWeight: FontWeight.w600),
                             ),
                           ),
                         ],

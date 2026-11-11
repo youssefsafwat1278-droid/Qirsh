@@ -302,6 +302,13 @@ void main() {
       fail('$signature: unbalanced braces');
     }
 
+    final drainWrapper = bodyIn(shell, 'Future<void> _consumeSharedInput() {');
+    expect(drainWrapper, contains('_consumeSharedInputOnce()'),
+        reason: 'the drain wrapper must delegate to the guarded body');
+    expect(RegExp(r'\bref\b').hasMatch(drainWrapper), isFalse,
+        reason: 'the single-flight wrapper must not touch ref; all ref use '
+            'belongs in _consumeSharedInputOnce, which is scanned below');
+
     final engagementBody = bodyIn(shell,
         'Future<bool> _syncEngagementBody(AdmittedLocalWork work, bool Function() current, SyncPhaseBinding phase) async {');
     final engagementWrapper = bodyIn(shell,
@@ -337,7 +344,10 @@ void main() {
       'initState': bodyIn(shell, 'void initState() {'),
       '_onResume': body('_onResume'),
       '_syncEngagementBody': engagementBody + engagementWrapper,
-      '_consumeSharedInput': body('_consumeSharedInput'),
+      // The drain is a single-flight wrapper around `_consumeSharedInputOnce`;
+      // the async body (every `ref` use) lives in the latter. The wrapper is
+      // pinned to stay ref-free below, so the hazard cannot move into it.
+      '_consumeSharedInput': body('_consumeSharedInputOnce'),
       // Paired with its caller: the discipline may live in either, and for
       // these two it lives in the caller's try, covering the whole body.
       '_runLedgerSyncBody': bodyIn(shell, 'Future<void> _runLedgerSyncBody(') +

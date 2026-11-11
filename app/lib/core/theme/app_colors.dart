@@ -121,6 +121,16 @@ class AppColors extends ThemeExtension<AppColors> {
     required this.onDanger,
     required this.onWarning,
     required this.onInfo,
+    // Calm Capital v2 roles
+    required this.actionText,
+    required this.actionPressed,
+    required this.goldText,
+    required this.goldSoft,
+    required this.warningText,
+    required this.strokeSoft,
+    required this.surfaceTop,
+    required this.scrim,
+    required this.textFaint,
     // Legacy tokens for backward compatibility
     required this.gradA,
     required this.gradB,
@@ -193,6 +203,36 @@ class AppColors extends ThemeExtension<AppColors> {
   final Color textSecondary;
   final Color textMuted;
 
+  // ===== Calm Capital v2 roles =====
+  /// Every blue TEXT / ICON that does not sit on a blue fill. [cta] is for
+  /// fills only (buttons, selected thumbs, toggles, progress).
+  final Color actionText;
+
+  /// Pressed state of a [cta] fill.
+  final Color actionPressed;
+
+  /// Gold-coloured text/icons (the [accent] fill fails contrast as text on
+  /// white).
+  final Color goldText;
+
+  /// Gold chip / tinted background.
+  final Color goldSoft;
+
+  /// Warning-coloured TEXT ([warning] is the fill: bars, dots, icons).
+  final Color warningText;
+
+  /// Outlined controls, logo-tile edges, inputs directly on the canvas.
+  final Color strokeSoft;
+
+  /// Menus, tooltips, the secondary segmented thumb.
+  final Color surfaceTop;
+
+  /// Backdrop behind sheets and menus.
+  final Color scrim;
+
+  /// Placeholders, disabled copy and dimmed decimals only.
+  final Color textFaint;
+
   // ===== Legacy Backwards Compatibility =====
   final Color gradA;
   final Color gradB;
@@ -245,11 +285,13 @@ class AppColors extends ThemeExtension<AppColors> {
     surfaceElevated: Color(0xFFEEF1F8),
     surfaceCard: Color(0xFFFFFFFF),
     surfaceMuted: Color(0xFFE6EAF2),
-    primary: AppBrandBlue.brand,
+    // v2: brand navy is never a control/text colour — `primary` is the
+    // action-text blue (#0336BF, 9.2:1 on white).
+    primary: AppBrandBlue.strong,
     onPrimary: Color(0xFFFFFFFF),
     cta: AppBrandBlue.mid,
     onCta: Color(0xFFFFFFFF),
-    ctaSoft: Color(0xFFD3DDF8),
+    ctaSoft: Color(0xFFE1E9FC),
     // UX-002 — the rejected treatment, fixed at its ROOT.
     //
     // `ink` was near-black (#0F1115). It is the surface behind the selected tab
@@ -293,7 +335,7 @@ class AppColors extends ThemeExtension<AppColors> {
     income: Color(0xFF12855C),
     expense: Color(0xFFC4362C),
     success: Color(0xFF12855C),
-    warning: Color(0xFFC9800F),
+    warning: Color(0xFFE0861A),
     danger: Color(0xFFC4362C),
     info: AppBrandBlue.bright,
     neutral: Color(0xFF667085),
@@ -309,12 +351,21 @@ class AppColors extends ThemeExtension<AppColors> {
     onSurfaceMuted: Color(0xFF3D4660),
     successBg: Color(0xFFE1F3EC),
     dangerBg: Color(0xFFFBE7E4),
-    warningBg: Color(0xFFFBF0DE),
-    infoBg: Color(0xFFD3DDF8),
+    warningBg: Color(0xFFFCEBD9),
+    infoBg: Color(0xFFEAF0FE),
     onSuccess: Color(0xFFFFFFFF),
     onDanger: Color(0xFFFFFFFF),
     onWarning: Color(0xFF0C1330),
     onInfo: Color(0xFFFFFFFF),
+    actionText: AppBrandBlue.strong,
+    actionPressed: Color(0xFF0F4AD6),
+    goldText: Color(0xFF8A5A00),
+    goldSoft: Color(0xFFFBF3D9),
+    warningText: Color(0xFF9A5200),
+    strokeSoft: Color(0xFFD5DBE8),
+    surfaceTop: Color(0xFFFFFFFF),
+    scrim: Color(0x5C0C1330),
+    textFaint: Color(0xFF8B94A7),
     gradA: AppBrandBlue.light,
     gradB: AppBrandBlue.brand,
   );
@@ -329,7 +380,7 @@ class AppColors extends ThemeExtension<AppColors> {
     surfaceElevated: Color(0xFF181A20),
     surfaceCard: Color(0xFF121317),
     surfaceMuted: Color(0xFF0C0D11),
-    primary: AppBrandBlue.pale,
+    primary: Color(0xFF8FB0FF),
     onPrimary: Color(0xFF00123A),
     cta: AppBrandBlue.mid,
     onCta: Color(0xFFFFFFFF),
@@ -343,7 +394,7 @@ class AppColors extends ThemeExtension<AppColors> {
     income: Color(0xFF2FCB78),
     expense: Color(0xFFFF6B5E),
     success: Color(0xFF2FCB78),
-    warning: Color(0xFFF59E0B),
+    warning: Color(0xFFFF9F3D),
     danger: Color(0xFFFF6B5E),
     info: AppBrandBlue.light,
     neutral: Color(0xFF9AA3B2),
@@ -358,12 +409,21 @@ class AppColors extends ThemeExtension<AppColors> {
     onSurfaceMuted: Color(0xFFC3C8D2),
     successBg: Color(0xFF0E2A18),
     dangerBg: Color(0xFF2A1113),
-    warningBg: Color(0xFF2A1F0A),
+    warningBg: Color(0xFF2A1A0A),
     infoBg: Color(0xFF0E1D33),
     onSuccess: Color(0xFFFFFFFF),
     onDanger: Color(0xFF111827),
     onWarning: Color(0xFF111827),
     onInfo: Color(0xFFFFFFFF),
+    actionText: Color(0xFF8FB0FF),
+    actionPressed: Color(0xFF0F4AD6),
+    goldText: Color(0xFFFBC926),
+    goldSoft: Color(0xFF2A2208),
+    warningText: Color(0xFFFF9F3D),
+    strokeSoft: Color(0x1AFFFFFF),
+    surfaceTop: Color(0xFF20232B),
+    scrim: Color(0x99000000),
+    textFaint: Color(0xFF5E6573),
     gradA: AppBrandBlue.bright,
     gradB: AppBrandBlue.strong,
   );
@@ -407,6 +467,15 @@ class AppColors extends ThemeExtension<AppColors> {
     Color? onDanger,
     Color? onWarning,
     Color? onInfo,
+    Color? actionText,
+    Color? actionPressed,
+    Color? goldText,
+    Color? goldSoft,
+    Color? warningText,
+    Color? strokeSoft,
+    Color? surfaceTop,
+    Color? scrim,
+    Color? textFaint,
     Color? gradA,
     Color? gradB,
   }) {
@@ -448,6 +517,15 @@ class AppColors extends ThemeExtension<AppColors> {
       onDanger: onDanger ?? this.onDanger,
       onWarning: onWarning ?? this.onWarning,
       onInfo: onInfo ?? this.onInfo,
+      actionText: actionText ?? this.actionText,
+      actionPressed: actionPressed ?? this.actionPressed,
+      goldText: goldText ?? this.goldText,
+      goldSoft: goldSoft ?? this.goldSoft,
+      warningText: warningText ?? this.warningText,
+      strokeSoft: strokeSoft ?? this.strokeSoft,
+      surfaceTop: surfaceTop ?? this.surfaceTop,
+      scrim: scrim ?? this.scrim,
+      textFaint: textFaint ?? this.textFaint,
       gradA: gradA ?? this.gradA,
       gradB: gradB ?? this.gradB,
     );
@@ -494,6 +572,15 @@ class AppColors extends ThemeExtension<AppColors> {
       onDanger: Color.lerp(onDanger, other.onDanger, t)!,
       onWarning: Color.lerp(onWarning, other.onWarning, t)!,
       onInfo: Color.lerp(onInfo, other.onInfo, t)!,
+      actionText: Color.lerp(actionText, other.actionText, t)!,
+      actionPressed: Color.lerp(actionPressed, other.actionPressed, t)!,
+      goldText: Color.lerp(goldText, other.goldText, t)!,
+      goldSoft: Color.lerp(goldSoft, other.goldSoft, t)!,
+      warningText: Color.lerp(warningText, other.warningText, t)!,
+      strokeSoft: Color.lerp(strokeSoft, other.strokeSoft, t)!,
+      surfaceTop: Color.lerp(surfaceTop, other.surfaceTop, t)!,
+      scrim: Color.lerp(scrim, other.scrim, t)!,
+      textFaint: Color.lerp(textFaint, other.textFaint, t)!,
       gradA: Color.lerp(gradA, other.gradA, t)!,
       gradB: Color.lerp(gradB, other.gradB, t)!,
     );

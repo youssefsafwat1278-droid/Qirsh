@@ -15,6 +15,7 @@ import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/creation_policy.dart';
 import 'package:money_companion/data/db/database_access_broker.dart';
 import 'package:money_companion/data/db/replica_store.dart';
+import 'package:money_companion/features/app/app_boot_loader.dart';
 import 'package:money_companion/features/app/app_shell.dart';
 import 'package:money_companion/features/app/local_read_cleanup_notice.dart';
 import 'package:money_companion/l10n/app_localizations.dart';
@@ -42,9 +43,16 @@ class _RouteContext implements BuildContext {
 Widget _selectedHome() {
   final home = appRouter.configuration.routes.whereType<GoRoute>()
       .firstWhere((route) => route.path == '/');
-  return home.builder!(_RouteContext(), GoRouterState(appRouter.configuration,
+  final selected = home.builder!(_RouteContext(), GoRouterState(appRouter.configuration,
       uri: Uri.parse('/'), matchedLocation: '/', fullPath: '/',
       pathParameters: const {}, pageKey: const ValueKey('/')));
+  // Evaluate the reactive root's current selection, as its build would.
+  final root = selected is ListenableBuilder
+      ? selected.builder(_RouteContext(), selected.child)
+      : selected;
+  // The boot reveal only animates the loader away; the selected screen is its
+  // child (null while the loader is selected, so the reveal itself stands in).
+  return root is AppBootLoaderReveal ? root.child ?? root : root;
 }
 
 /// A storage response can be delayed AFTER capturing its value; a dispatched

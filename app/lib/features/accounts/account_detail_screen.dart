@@ -21,8 +21,12 @@ import '../common/category_catalog.dart';
 import '../common/widgets.dart';
 import 'account_form_sheet.dart';
 import 'accounts_providers.dart';
+import 'account_hero_surface.dart';
+import 'day_grouped_transactions.dart';
+import 'accounts_screen.dart' show AccountDefaultChip;
+import '../../core/theme/widgets/mali_card.dart';
+import '../common/motion.dart';
 import '../../core/utils/app_lucide_icons.dart';
-import '../transactions/transaction_details_screen.dart';
 
 /// تفاصيل حساب: بطاقاته المُكتشفة بثقة داخله + آخر عملياته. المسار `/account/:id`.
 class AccountDetailScreen extends ConsumerWidget {
@@ -42,19 +46,28 @@ class AccountDetailScreen extends ConsumerWidget {
     if (account == null) {
       return Scaffold(
         backgroundColor: c.bg,
+        extendBodyBehindAppBar: true,
         appBar: AppHeader(title: context.l10n.commonAccountDefinite),
-        body: accountsAsync.hasError
-            ? SingleChildScrollView(child: AppErrorState(
+        // Immersive: the body sits behind the glass nav bar; its height
+        // arrives as the body's top inset (read inside the Scaffold).
+        body: Builder(builder: (bodyContext) => accountsAsync.hasError
+            ? SingleChildScrollView(
+                padding: EdgeInsets.only(
+                    top: MediaQuery.paddingOf(bodyContext).top),
+                child: AppErrorState(
                 title: context.l10n.txnError,
                 description: context.l10n.annTryAgainSoon,
                 retryLabel: context.l10n.startRetry,
                 onRetry: () => ref.invalidate(accountsProvider),
               ))
-            : Center(
+            : Padding(
+          padding: EdgeInsets.only(top: MediaQuery.paddingOf(bodyContext).top),
+          child: Center(
           child: accountsAsync.isLoading
               ? const CircularProgressIndicator()
               : Text(context.l10n.adNotFound, style: AppTypography.body(c.textMain)),
         ),
+        )),
       );
     }
 
@@ -65,6 +78,7 @@ class AccountDetailScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: c.bg,
+      extendBodyBehindAppBar: true,
       appBar: AppHeader(
         title: account.name,
         // UX-014 — this title is user data, not a screen name. «الراجحي —
@@ -74,24 +88,33 @@ class AccountDetailScreen extends ConsumerWidget {
         titleMaxLines: 2,
         trailing: IconButton(
           tooltip: context.l10n.cardEdit,
-          icon: Icon(AppLucideIcons.pencil, color: c.primary),
+          icon: Icon(AppLucideIcons.pencil, color: c.actionText),
           onPressed: () => showAccountForm(context, ref, account: account),
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(
-            AppSpacing.gutter, AppSpacing.s2, AppSpacing.gutter, 120),
+      // Immersive: the list runs under the glass nav bar, whose height
+      // arrives as the body's top inset (read inside the Scaffold).
+      body: Builder(builder: (bodyContext) => ListView(
+        padding: EdgeInsets.fromLTRB(AppSpacing.gutter,
+            MediaQuery.paddingOf(bodyContext).top + AppSpacing.s2,
+            AppSpacing.gutter, 120),
         children: [
-          _AccountHeaderCard(account: account),
-          const SizedBox(height: AppSpacing.s4),
+          PremiumMotion(child: _AccountHeaderCard(account: account)),
+          const SizedBox(height: AppSpacing.s5),
           Row(
             children: [
-              Text(context.l10n.adCards, style: AppTypography.sectionTitle(c.textMain)),
-              const Spacer(),
+              Expanded(
+                child: Text(context.l10n.adCards,
+                    style: AppTypography.sectionTitle(c.textMain)),
+              ),
               TextButton.icon(
                 onPressed: () =>
                     showCardForm(context, ref, accountId: accountId),
-                style: TextButton.styleFrom(foregroundColor: c.primary),
+                style: TextButton.styleFrom(
+                  foregroundColor: c.actionText,
+                  minimumSize: const Size(44, 40),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 icon: const Icon(AppLucideIcons.plus, size: 18),
                 label: Text(context.l10n.cardAddCard),
               ),
@@ -99,31 +122,31 @@ class AccountDetailScreen extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.s2),
           if (cards.isEmpty)
-            Text(
-                context.l10n.adNoCards,
-                style: AppTypography.caption(c.textLight))
+            _EmptyCardsRow(label: context.l10n.adNoCards)
           else
-            Material(
-              color: c.surface,
-              shape: RoundedRectangleBorder(
+            MaliCard(
+              style: MaliSurfaceStyle.floating,
+              padding: EdgeInsets.zero,
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(AppRadius.card),
-                side: BorderSide(color: c.border),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Column(
-                children: [
-                  for (var i = 0; i < cards.length; i++) ...[
-                    if (i > 0)
-                      Divider(height: 1, indent: AppSpacing.s3,
-                          endIndent: AppSpacing.s3, color: c.divider),
-                    _ManagedCardRow(accountId: accountId, card: cards[i]),
-                  ],
-                ],
+                child: Material(
+                  type: MaterialType.transparency,
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < cards.length; i++) ...[
+                        if (i > 0)
+                          Divider(height: 1, indent: AppSpacing.s3,
+                              endIndent: AppSpacing.s3, color: c.divider),
+                        _ManagedCardRow(accountId: accountId, card: cards[i]),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
-          const SizedBox(height: AppSpacing.s4),
+          const SizedBox(height: AppSpacing.s5),
           Text(context.l10n.adRecentTx, style: AppTypography.sectionTitle(c.textMain)),
-          const SizedBox(height: AppSpacing.s2),
+          const SizedBox(height: AppSpacing.s3),
           txAsync.when(
             skipLoadingOnReload: true,
             loading: () => const Center(
@@ -141,25 +164,94 @@ class AccountDetailScreen extends ConsumerWidget {
                 return Text(context.l10n.cdNoTxYet,
                     style: AppTypography.callout(c.textLight));
               }
-              return Column(
-                children: [
-                  for (final tx in txns)
-                    TransactionRow(
-                      transaction: tx,
-                      category: catalog?.byId(tx.categoryId),
-                      onTap: () => TransactionDetailsScreen.showSheet(
-                          context, tx.id),
-                    ),
-                ],
-              );
+              return DayGroupedTransactions(
+                  transactions: txns, catalog: catalog);
             },
           ),
         ],
+      )),
+    );
+  }
+}
+
+/// Empty «البطاقات» — one dashed-outline Inset row (spec 12 / §3.0): dark
+/// 1px white@14% on the well, light 1px strokeSoft on white.
+class _EmptyCardsRow extends StatelessWidget {
+  const _EmptyCardsRow({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return CustomPaint(
+      painter: _DashedRRectPainter(
+        color: isDark ? Colors.white.withValues(alpha: 0.14) : c.strokeSoft,
+        radius: 16,
+      ),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        decoration: BoxDecoration(
+          color: isDark ? c.surfaceMuted : c.surface,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: c.ctaSoft,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(AppLucideIcons.creditCard,
+                  size: 18, color: c.actionText),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(label, style: AppTypography.subhead(c.textSecondary)),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
+class _DashedRRectPainter extends CustomPainter {
+  _DashedRRectPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1;
+    final path = Path()
+      ..addRRect(RRect.fromRectAndRadius(
+          (Offset.zero & size).deflate(0.5), Radius.circular(radius)));
+    for (final metric in path.computeMetrics()) {
+      var d = 0.0;
+      while (d < metric.length) {
+        canvas.drawPath(metric.extractPath(d, d + 5), paint);
+        d += 9;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRRectPainter old) =>
+      old.color != color || old.radius != radius;
+}
+
+/// v2 account hero (spec 12): bank tile + name + «type · currency», the gold
+/// «افتراضي» chip, and the account's balance — the same
+/// `currentBalanceMoney` the accounts list shows (no new balance logic).
 class _AccountHeaderCard extends StatelessWidget {
   const _AccountHeaderCard({required this.account});
 
@@ -167,50 +259,61 @@ class _AccountHeaderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    return Container(
+    final balance = account.currentBalanceMoney;
+    // Spec 12: a compact 148pt hero — identity row, then the balance.
+    return AccountHeroSurface(
       padding: const EdgeInsets.all(AppSpacing.s4),
-      decoration: BoxDecoration(
-        color: c.surface,
-        borderRadius: BorderRadius.circular(AppRadius.card),
-        border: Border.all(color: c.border),
-      ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          BankMark(
-            accountName: account.name,
-            accountType: account.type,
-            size: 46,
-          ),
-          const SizedBox(width: AppSpacing.s3),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(account.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTypography.bodyStrong(c.textMain)),
-                const SizedBox(height: 2),
-                Text(
-                  '${accountTypeLabel(context, account.type)} · '
-                  '${Currency.labelWithCode(context, account.currency)}',
-                  style: AppTypography.caption(c.textLight),
+          Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(48 * 0.30),
+                  border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.2)),
                 ),
-              ],
-            ),
-          ),
-          if (account.isDefault)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: c.primary.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(AppRadius.pill),
+                child: BankMark(
+                  accountName: account.name,
+                  accountType: account.type,
+                  size: 48,
+                ),
               ),
-              child: Text(context.l10n.accDefault,
-                  style: AppTypography.caption(c.primary)
-                      .copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(width: AppSpacing.s3),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(account.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.bodyStrong(Colors.white)),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${accountTypeLabel(context, account.type)} · '
+                      '${Currency.labelWithCode(context, account.currency)}',
+                      style: AppTypography.caption(
+                          Colors.white.withValues(alpha: 0.72)),
+                    ),
+                  ],
+                ),
+              ),
+              if (account.isDefault) const AccountDefaultChip(onHero: true),
+            ],
+          ),
+          if (balance != null) ...[
+            const SizedBox(height: AppSpacing.s3),
+            Semantics(
+              label: context.l10n.accV2Balance,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: AlignmentDirectional.centerStart,
+                child: CountUpMoneyText(balance,
+                    style: AppTypography.amountHero(Colors.white)),
+              ),
             ),
+          ],
         ],
       ),
     );
@@ -237,7 +340,7 @@ class _ManagedCardRow extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.s3, vertical: 4),
         child: Row(
           children: [
-            Icon(AppLucideIcons.creditCard, color: c.primary, size: 22),
+            Icon(AppLucideIcons.creditCard, color: c.actionText, size: 22),
             const SizedBox(width: AppSpacing.s3),
             Expanded(
               child: Column(
@@ -247,8 +350,11 @@ class _ManagedCardRow extends ConsumerWidget {
                     textDirection: TextDirection.ltr,
                     children: [
                       Text('•••• ${card.last4}',
-                          style: AppTypography.bodyStrong(c.textMain)
-                              .copyWith(letterSpacing: 1.2)),
+                          style: AppTypography.mono(
+                              size: 15,
+                              weight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                              color: c.textMain)),
                       if (card.network != CardNetwork.unknown) ...[
                         const SizedBox(width: 8),
                         CardNetworkBadge(network: card.network, height: 16),

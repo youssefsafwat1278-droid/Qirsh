@@ -135,8 +135,13 @@ void main() {
       expect(bodyText, findsOneWidget);
       final original = find.byWidgetPredicate((widget) => widget is Text &&
           _text(widget).contains('${formatMoney(foreign)} KWD'));
-      expect(original, findsNWidgets(2),
-          reason: 'both the hero and the original-currency detail must be exact');
+      // Calm Capital v2 hero: the currency is its own run AFTER the exact
+      // digits (asserted above), so only the detail row joins them.
+      expect(original, findsOneWidget,
+          reason: 'the original-currency detail must be exact');
+      expect(find.descendant(of: find.byType(FittedBox).first,
+          matching: find.text('KWD')), findsOneWidget,
+          reason: 'the hero names the foreign currency next to its digits');
       expect(tester.takeException(), isNull);
     });
 

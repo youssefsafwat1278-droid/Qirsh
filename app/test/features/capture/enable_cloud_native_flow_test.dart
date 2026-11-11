@@ -39,7 +39,17 @@ class _Settings extends DriftUserSettingsRepository {
   int reads = 0;
   int saved = 0;
   Object? failSave;
+  Object? failReserve;
   Future<void> Function()? beforeSave;
+
+  @override
+  Future<int> reserveConsentVersion(ConsentCapability capability,
+      {required int verifiedFrontier, required String operationId}) {
+    final failure = failReserve;
+    if (failure != null) throw failure;
+    return super.reserveConsentVersion(capability,
+        verifiedFrontier: verifiedFrontier, operationId: operationId);
+  }
 
   void pauseAtRead(int n) {
     _pauseAtRead = n;
@@ -917,7 +927,7 @@ void main() {
       rig.file.failReads = true;
       final err = await enable(service(await freshSettings()), capability);
       expect((err as CloudEnableIncompleteException).reason,
-          'preflight_uncertain');
+          startsWith('preflight_uncertain'));
       expect((await marks()).reserved, 0);
     });
 
@@ -1211,6 +1221,370 @@ void main() {
       expect(await running, isNotNull);
       expect(sim.of('beginCloudEgressEnable'), isEmpty);
       expect(sim.egressState, isNot('ON'));
+    });
+
+    // F1 fixture: a lifetime fence left OFF + retirement in native (sign-out,
+    // account switch, expiry) and no later publication replaced it. The stored
+    // entry is at rv9 while the retirement names rv4, so the layer reports
+    // understate the frontier.
+    void nativeRetiredOff({bool fileAbsent = false}) {
+      nativeOffAt20Rv2();
+      sim
+        ..egressVersion = 9
+        ..retirement = {
+          'operationId': 'c' * 32,
+          'transitionGeneration': 18,
+          'reservedVersion': 4,
+          'ownerGeneration': 5,
+          'ownerEpoch': sim.ownerEpoch,
+        }
+        ..retiredFileAbsent = fileAbsent;
+      rig.native.stored = rigRecord(EgressState.off, 20, 9);
+    }
+
+    Future<void> expectRetiredRefusal(
+        CaptureDeviceRegistrationService svc,
+        _Settings settings,
+        ConsentCapability capability,
+        String reason,
+        {ConsentState stored = ConsentState.unset}) async {
+      final before = (rig.secure.value, rig.file.value);
+      final err = await enable(svc, capability);
+      expect(err, isA<CloudEnableIncompleteException>(), reason: reason);
+      expect((err as CloudEnableIncompleteException).reason, reason);
+      expect(sim.of('publishRestrictiveCaptureOwner'), isEmpty, reason: reason);
+      expect(sim.of('beginCloudEgressEnable'), isEmpty, reason: reason);
+      expect(sim.of('setCloudEgressState'), isEmpty, reason: reason);
+      expect(sim.retirement, isNotNull, reason: 'the retired OFF is untouched');
+      expect(sim.egressState, isNot('ON'));
+      expect((rig.secure.value, rig.file.value), before, reason: reason);
+      expect((await settings.getSettings()).cloudConsentState, stored);
+      expect((await marks()).reserved, 0, reason: 'nothing was reserved');
+    }
+
+    for (final fileAbsent in [false, true]) {
+      test(
+          'a retired OFF (${fileAbsent ? "keychain only" : "both layers"}) is '
+          'republished restrictive over the exact snapshot, then enabled',
+          () async {
+        final capability = await returning();
+        nativeRetiredOff(fileAbsent: fileAbsent);
+        final settings = await freshSettings();
+        final svc = service(settings);
+        productionHook(svc);
+        final order = <String>[];
+        sim.onCall = (m) {
+          if (m == 'publishRestrictiveCaptureOwner' ||
+              m == 'beginCloudEgressEnable' ||
+              m == 'writeCloudEgressEnableOn') {
+            order.add(m);
+          }
+        };
+        expect(await enable(svc, capability), isNull);
+        final publication = Map<String, Object?>.from(
+            sim.of('publishRestrictiveCaptureOwner').single.arguments as Map);
+        final copies = publication['expectedRetiredCopies'] as List;
+        expect(copies, hasLength(2));
+        expect((copies[0] as Map)['layer'], 'file');
+        expect((copies[0] as Map).length, fileAbsent ? 1 : 6);
+        expect((copies[1] as Map)['layer'], 'keychain');
+        expect((copies[1] as Map)['operationId'], 'c' * 32);
+        expect(publication.containsKey('expectedOffCopies'), isFalse);
+        expect(publication.containsKey('expectedTransitionGeneration'), isFalse);
+        expect(publication['version'] as int, greaterThan(9),
+            reason: 'above the true stored frontier, not the retired rv4');
+        // The restrictive publication comes strictly before the barrier flow.
+        expect(order.first, 'publishRestrictiveCaptureOwner');
+        expect(order, contains('beginCloudEgressEnable'));
+        expect(sim.retirement, isNull);
+        expect(sim.egressState, 'ON');
+        final stored = await settings.getSettings();
+        expect(stored.cloudProcessingEnabled, isTrue);
+        expect(stored.consentVersion, greaterThan(9));
+      });
+    }
+
+    test(
+        'a retired OFF beside a stale Dart ON: the Dart ON is restricted '
+        'first, then the normal flow runs', () async {
+      final capability = await returning();
+      nativeRetiredOff();
+      final stale = rigEnvelope(rigRecord(EgressState.on, 19, 3));
+      rig.secure.value = stale;
+      rig.file.value = stale;
+      final settings = await freshSettings();
+      final svc = service(settings);
+      productionHook(svc);
+      List<String?>? atPublication;
+      sim.onCall = (m) {
+        if (m == 'publishRestrictiveCaptureOwner') {
+          atPublication = [rig.secure.value, rig.file.value];
+        }
+      };
+      expect(await enable(svc, capability), isNull);
+      expect(atPublication, isNotNull);
+      expect(
+          atPublication!.every(
+              (raw) => raw != null && raw.contains('"OFF"') && !raw.contains('"ON"')),
+          isTrue,
+          reason: 'no Dart ON survives to the publication');
+      expect(sim.egressState, 'ON');
+      expect((await settings.getSettings()).consentVersion, greaterThan(9));
+    });
+
+    test(
+        'a retired OFF beside a stale Dart ON whose republication is refused '
+        'leaves every layer restrictive', () async {
+      final capability = await returning();
+      nativeRetiredOff();
+      final stale = rigEnvelope(rigRecord(EgressState.on, 19, 3));
+      rig.secure.value = stale;
+      rig.file.value = stale;
+      final settings = await freshSettings();
+      final svc = service(settings);
+      productionHook(svc);
+      sim.fault('publishRestrictiveCaptureOwner', SimFault.conflict);
+      expect(await enable(svc, capability),
+          isA<CloudEnableIncompleteException>());
+      expect((await dartEgress()).every((r) => r.state == EgressState.off),
+          isTrue);
+      expect(sim.egressState, 'OFF');
+      expect(sim.retirement, isNotNull);
+      expect(sim.of('beginCloudEgressEnable'), isEmpty);
+      expect(
+          (await settings.getSettings()).cloudConsentState, ConsentState.unset);
+    });
+
+    test('a retired OFF beside a Dart DISABLING is refused untouched', () async {
+      final capability = await returning();
+      nativeRetiredOff();
+      rig.secure.value = rigEnvelope(rigRecord(EgressState.disabling, 19, 3));
+      final settings = await freshSettings();
+      final svc = service(settings);
+      productionHook(svc);
+      await expectRetiredRefusal(svc, settings, capability,
+          'preflight_conflict/retired_dart_disabling');
+    });
+
+    test('a retired OFF under a stored Cloud ON is refused', () async {
+      final capability = await returning();
+      nativeRetiredOff();
+      final settings = await freshSettings();
+      await settings.saveSettings((await settings.getSettings())
+          .copyWith(cloudConsentState: ConsentState.accepted));
+      final svc = service(settings);
+      productionHook(svc);
+      await expectRetiredRefusal(svc, settings, capability,
+          'preflight_conflict/retired_stored_on',
+          stored: ConsentState.accepted);
+    });
+
+    test('a retired OFF under a native barrier is refused', () async {
+      final capability = await returning();
+      nativeRetiredOff();
+      sim.pending = {
+        'operationId': kSimOperationId,
+        'transitionGeneration': 22,
+        'reservedVersion': 9,
+        'ownerGeneration': 7,
+        'ownerEpoch': sim.ownerEpoch,
+      };
+      final settings = await freshSettings();
+      final svc = service(settings);
+      productionHook(svc);
+      await expectRetiredRefusal(
+          svc, settings, capability, 'preflight_conflict/native_barrier');
+    });
+
+    test('a retired OFF with a Dart pending operation is refused', () async {
+      final capability = await returning();
+      nativeRetiredOff();
+      expect(
+          (await rig.gate.beginPendingEnable(PendingEnableRecord(
+                  ownerUid: kRigOwner,
+                  transitionGeneration: 21,
+                  reservedVersion: 10,
+                  localOperationId: 'd' * 32)))
+              .all,
+          isTrue);
+      final pendingBefore = (rig.pendingSecure.value, rig.pendingFile.value);
+      final settings = await freshSettings();
+      final svc = service(settings);
+      productionHook(svc);
+      await expectRetiredRefusal(
+          svc, settings, capability, 'preflight_conflict/retired_pending');
+      expect((rig.pendingSecure.value, rig.pendingFile.value), pendingBefore);
+    });
+
+    test('a retired OFF during a successor hold or an unsettled successor is '
+        'refused', () async {
+      final capability = await returning();
+      nativeRetiredOff();
+      final settings = await freshSettings();
+      final svc = service(settings);
+      productionHook(svc);
+      rig.gate.asrSuccessorUnsettled = () => true;
+      await expectRetiredRefusal(
+          svc, settings, capability, 'preflight_conflict/retired_successor');
+      rig.gate.asrSuccessorUnsettled = null;
+      final hold = rig.gate.beginTransitionHold();
+      addTearDown(() => rig.gate.endTransitionHold(hold));
+      await expectRetiredRefusal(
+          svc, settings, capability, 'preflight_conflict/retired_successor');
+    });
+
+    test('a retired OFF without the native version frontier is refused',
+        () async {
+      final capability = await returning();
+      nativeRetiredOff();
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        final result = await sim.handle(call);
+        if (call.method != 'getCloudEgressPending') return result;
+        return Map<String, Object?>.from(result as Map)
+          ..remove('egressVersionFrontier');
+      });
+      final settings = await freshSettings();
+      final svc = service(settings);
+      productionHook(svc);
+      await expectRetiredRefusal(svc, settings, capability,
+          'preflight_uncertain[retired_frontier]');
+    });
+
+    // The operation-id check is NOT relaxed: only "every held layer OFF under
+    // the same complete retirement" is recognised.
+    test('any other operation id on a held layer is still refused', () async {
+      final capability = await returning();
+      final settings = await freshSettings();
+      final svc = service(settings);
+      productionHook(svc);
+      // An OFF without retirement beside a retired OFF.
+      nativeRetiredOff();
+      sim.retiredFilePlain = true;
+      await expectRetiredRefusal(svc, settings, capability,
+          'preflight_uncertain[held_fields|keychain:OFF:op]');
+      // Two different retirements.
+      sim.retiredFilePlain = false;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        final result = await sim.handle(call);
+        if (call.method != 'getCloudEgressPending') return result;
+        final reply = Map<String, Object?>.from(result as Map);
+        final layers = [
+          for (final l in reply['egress'] as List)
+            Map<String, Object?>.from(l as Map)
+        ];
+        layers[1]['operationId'] = 'e' * 32;
+        reply['egress'] = layers;
+        return reply;
+      });
+      await expectRetiredRefusal(svc, settings, capability,
+          'preflight_uncertain[held_fields|file:OFF:op]');
+      messenger.setMockMethodCallHandler(channel, sim.handle);
+      // A retirement on anything that is not OFF.
+      for (final state in ['ON', 'DISABLING']) {
+        sim.egressState = state;
+        final err = await enable(svc, capability);
+        expect((err as CloudEnableIncompleteException).reason,
+            'preflight_uncertain[held_fields|file:$state:op]');
+        expect(sim.of('publishRestrictiveCaptureOwner'), isEmpty);
+        expect(sim.of('beginCloudEgressEnable'), isEmpty);
+        expect(sim.retirement, isNotNull);
+      }
+      expect((await marks()).reserved, 0);
+    });
+
+    test(
+        'a retired snapshot that changed before the publication is refused '
+        'natively and nothing is enabled', () async {
+      final capability = await returning();
+      nativeRetiredOff();
+      final settings = await freshSettings();
+      final svc = service(settings);
+      productionHook(svc);
+      final hold = sim.hold('publishRestrictiveCaptureOwner');
+      final running = enable(svc, capability);
+      await sim.reached['publishRestrictiveCaptureOwner']!.future;
+      // Another fence retires the entry again before the dispatch.
+      sim.retirement = {...sim.retirement!, 'operationId': 'e' * 32};
+      hold.complete();
+      expect(await running, isA<CloudEnableIncompleteException>());
+      expect(sim.of('beginCloudEgressEnable'), isEmpty);
+      expect(sim.egressState, 'OFF');
+      expect(sim.retirement, isNotNull);
+      expect(
+          (await settings.getSettings()).cloudConsentState, ConsentState.unset);
+    });
+
+    test('each preflight_uncertain site names its own allowlisted sub-reason',
+        () async {
+      final capability = await returning();
+      final settings = await freshSettings();
+      final svc = service(settings);
+      productionHook(svc);
+      Future<String> reason() async {
+        final err = await enable(svc, capability);
+        expect(err, isA<CloudEnableIncompleteException>());
+        return (err as CloudEnableIncompleteException).reason;
+      }
+
+      nativeOffAt20Rv2();
+      rig.pendingFile.failReads = true;
+      expect(await reason(),
+          'preflight_uncertain[pending_layers|s:absent,f:unreadable]');
+      rig.pendingFile.failReads = false;
+
+      sim.fault('getCloudEgressPending', SimFault.platformError);
+      expect(await reason(),
+          'preflight_uncertain[native_inspect|queue_unavailable]');
+      sim.fault('getCloudEgressPending', SimFault.malformed);
+      expect(await reason(), 'preflight_uncertain[native_inspect|unknown]');
+
+      rig.file.failReads = true;
+      expect(
+          await reason(),
+          'preflight_uncertain[layers|dart|e:verified,verified'
+          '|b:absent,absent|noBarrier]');
+      rig.file.failReads = false;
+      sim.fault('getCloudEgressPending', SimFault.uncertain);
+      expect(await reason(),
+          'preflight_uncertain[layers|eshape|e:|b:absent,absent|uncertain]');
+
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        final result = await sim.handle(call);
+        if (call.method != 'getCloudEgressPending') return result;
+        final reply = Map<String, Object?>.from(result as Map);
+        reply['egress'] = [
+          {'layer': 'file', 'outcome': 'verified', 'state': 'OFF',
+            'transitionGeneration': 20, 'reservedVersion': 2},
+          {'layer': 'keychain', 'outcome': 'absent', 'state': 'OFF'},
+        ];
+        return reply;
+      });
+      expect(await reason(), 'preflight_uncertain[absent_fields|e:keychain]');
+      messenger.setMockMethodCallHandler(channel, sim.handle);
+
+      settings.failReserve = StateError('uid-x secret');
+      expect(await reason(), 'preflight_uncertain[reserve|StateError]');
+      settings.failReserve = null;
+
+      final unreadableOwner = CaptureDeviceRegistrationService(
+        settingsRepository: settings,
+        gate: rig.gate,
+        client: net,
+        isIos: () => true,
+        isBackendConfigured: () => true,
+        readSession: () => (uid: 'uid-x', jwt: 'jwt'),
+        captureWorkAuthority: f.session.captureLocalWorkAuthority,
+        isCurrentScope: () =>
+            identical(f.host.current?.database, settings.database),
+        readReplicaOwnerUid: () async => throw StateError('uid-x'),
+      );
+      final err = await enable(unreadableOwner, capability);
+      expect((err as CloudEnableIncompleteException).reason,
+          'preflight_uncertain[owner_read]');
+
+      expect(sim.of('publishRestrictiveCaptureOwner'), isEmpty);
+      expect(sim.of('beginCloudEgressEnable'), isEmpty);
+      expect((await marks()).reserved, 0);
     });
   });
 

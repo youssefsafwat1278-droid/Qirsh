@@ -27,7 +27,9 @@ import '../../core/utils/l10n_ext.dart';
 import '../../core/theme/widgets/app_toast.dart';
 import '../../core/utils/app_lucide_icons.dart';
 
-const _authDeepNavy = Color(0xFF031322);
+// v2: auth is always-dark art in BOTH themes — the art dissolves into true
+// black, not navy (spec §3.0 row 01).
+const _authCanvas = Color(0xFF000000);
 
 /// Whether this platform can complete Sign in with Apple.
 ///
@@ -180,12 +182,12 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
             .contains(defaultTargetPlatform);
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
-        systemNavigationBarColor: _authDeepNavy,
+        systemNavigationBarColor: _authCanvas,
         systemNavigationBarIconBrightness: Brightness.light,
       ),
       child: Scaffold(
         resizeToAvoidBottomInset: false,
-        backgroundColor: _authDeepNavy,
+        backgroundColor: _authCanvas,
         body: LayoutBuilder(builder: (context, viewport) {
           final compact = viewport.maxHeight < 730;
           final photoHeight = viewport.maxHeight * .72;
@@ -208,17 +210,25 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
+                    // v2 scrim: clear over the hand, coin and jar mouth, then
+                    // a fast fall to black from the jar body down, so the
+                    // ghosted jar logo is hidden and the copy starts right
+                    // under the art (no dead band).
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                       colors: const [
-                        Color(0x55031322),
-                        Color(0x00031322),
-                        Color(0xD9031322),
-                        _authDeepNavy,
-                        _authDeepNavy,
+                        Color(0x55000000),
+                        Color(0x00000000),
+                        Color(0x00000814),
+                        Color(0xC7000610),
+                        Color(0xF5000000),
+                        _authCanvas,
+                        _authCanvas,
                       ],
-                      stops: [0, .18, compact ? .38 : .45, .65, 1],
+                      stops: compact
+                          ? const [0, .18, .28, .39, .50, .60, 1]
+                          : const [0, .18, .33, .44, .56, .66, 1],
                     ),
                   ),
                 ),
@@ -267,8 +277,11 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
   Widget _authPanel(
       {required bool google, required bool email, required bool compact}) {
     final l = context.l10n;
+    // Always-dark screen: these are the DARK v2 values in both themes.
     const foreground = Colors.white;
-    const secondary = Color(0xFFB8C6D9);
+    const secondary = Color(0xFFC3C8D2); // text.secondary (dark)
+    const muted = Color(0xFF8D94A2); // text.muted (dark), 6.6:1 on black
+    const trust = Color(0xFF2FCB78); // income (dark)
     const outline = Color(0xFF747775);
     const appleFill = Colors.white;
     const appleInk = Colors.black;
@@ -276,18 +289,25 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Brand lock-up — replaces the ghosted watermark the scrim now hides.
+        ExcludeSemantics(
+          child: Row(children: [
+            ClipOval(
+              child: Image.asset(AppAssets.qirshCoin,
+                  width: 36, height: 36, cacheWidth: 108),
+            ),
+            const SizedBox(width: 10),
+            Text(l.appTitle, style: AppTypography.sectionTitle(foreground)),
+          ]),
+        ),
+        SizedBox(height: compact ? 16 : 22),
         Text(_creatingAccount ? l.authCreateAccount : l.authTitle,
-            style: AppTypography.custom(
-              size: compact ? 28 : 32,
-              weight: FontWeight.w700,
-              height: 1.2,
-              color: foreground,
-            )),
-        const SizedBox(height: 5),
+            style: AppTypography.titleLarge(foreground)
+                .copyWith(fontSize: compact ? 28 : null)),
+        const SizedBox(height: 8),
         Text(_creatingAccount ? l.authCreateAccountSubtitle : l.authSubtitle,
-            style: AppTypography.caption(secondary)
-                .copyWith(fontSize: 14, height: 1.45)),
-        const SizedBox(height: 22),
+            style: AppTypography.callout(secondary)),
+        const SizedBox(height: 24),
         ValueListenableBuilder<String?>(
             valueListenable: _pendingMethod,
             builder: (context, pending, _) => Column(
@@ -306,9 +326,10 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
                           foregroundColor: appleInk,
                           disabledBackgroundColor: appleFill,
                           disabledForegroundColor: appleInk,
-                          minimumSize: const Size.fromHeight(52),
+                          minimumSize: const Size.fromHeight(54),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.button)),
                         ),
                         icon: _methodIcon(pending == 'apple', appleInk,
                             const Icon(Icons.apple, size: 23)),
@@ -337,9 +358,10 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
                           backgroundColor: Colors.white,
                           foregroundColor: const Color(0xFF1F1F1F),
                           side: const BorderSide(color: outline),
-                          minimumSize: const Size.fromHeight(52),
+                          minimumSize: const Size.fromHeight(54),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
+                              borderRadius:
+                                  BorderRadius.circular(AppRadius.button)),
                         ),
                         icon: _methodIcon(
                             pending == 'google',
@@ -362,11 +384,13 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
                         onPressed: pending == null ? _emailSignIn : null,
                         style: OutlinedButton.styleFrom(
                           foregroundColor: foreground,
-                          backgroundColor: const Color(0x80233850),
-                          side: const BorderSide(color: Color(0xFF60748F)),
-                          minimumSize: const Size.fromHeight(52),
+                          backgroundColor: Colors.white.withValues(alpha: .08),
+                          side: BorderSide(
+                              color: Colors.white.withValues(alpha: .2)),
+                          minimumSize: const Size.fromHeight(54),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius:
+                                BorderRadius.circular(AppRadius.button),
                           ),
                         ),
                         icon: const Icon(Icons.mail_outline, size: 19),
@@ -393,20 +417,20 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
           const SizedBox(height: 5),
           Text(l.authExistingAccountHint,
               textAlign: TextAlign.center,
-              style: AppTypography.micro(secondary).copyWith(height: 1.35)),
+              style: AppTypography.caption(muted)),
         ],
         const SizedBox(height: 16),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          const Icon(AppLucideIcons.shieldCheck, size: 15, color: secondary),
+          const Icon(AppLucideIcons.shieldCheck, size: 16, color: trust),
           const SizedBox(width: 6),
           Flexible(
               child: Text(l.authTrustLocalEncryption,
-                  style: AppTypography.micro(secondary))),
+                  style: AppTypography.caption(secondary))),
         ]),
-        const SizedBox(height: 6),
+        const SizedBox(height: 10),
         Text(l.authTermsNotice,
             textAlign: TextAlign.center,
-            style: AppTypography.micro(secondary).copyWith(height: 1.35)),
+            style: AppTypography.caption(muted).copyWith(height: 20 / 13)),
       ],
     );
   }

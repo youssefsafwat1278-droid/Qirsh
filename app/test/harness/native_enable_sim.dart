@@ -49,6 +49,18 @@ class NativeEnableSim {
   int? egressOwnerGeneration;
   int? egressOwnerEpoch;
 
+  /// A lifetime fence's retirement on the stored entry (operationId,
+  /// transitionGeneration, reservedVersion, ownerGeneration, ownerEpoch). The
+  /// inspection then reports ITS fields in place of the entry's own, and names
+  /// the true stored version maximum as `egressVersionFrontier`.
+  Map<String, Object?>? retirement;
+
+  /// With [retirement]: the App Group file copy is gone (a reinstall).
+  bool retiredFileAbsent = false;
+
+  /// With [retirement]: the file copy is an OFF WITHOUT the retirement.
+  bool retiredFilePlain = false;
+
   /// Native creates the owner HMAC key lazily. Successful restrictive owner
   /// publication or a fresh `begin` establishes it; before either, inspection
   /// reports two physically absent egress layers (see `cloudEgressPending`).
@@ -230,6 +242,45 @@ class NativeEnableSim {
                 requested <= egressVersion)) {
           return _reply('publishRestrictive', 'conflict');
         }
+        final retiredCopies = a['expectedRetiredCopies'] as List?;
+        if (retiredCopies != null) {
+          // Both layers must still hold exactly the inspected retired OFF, and
+          // the version must be above every stored and retired version.
+          final now = _egressNow();
+          bool same(Object? copy, Map<String, Object?> layer) {
+            final c = Map<String, Object?>.from(copy as Map);
+            if (layer['outcome'] == 'absent') return c.length == 1;
+            return c.length == 6 &&
+                [
+                  'operationId',
+                  'transitionGeneration',
+                  'reservedVersion',
+                  'ownerGeneration',
+                  'ownerEpoch'
+                ].every((k) => c[k] == layer[k]);
+          }
+
+          final r = retirement;
+          if (r == null ||
+              retiredFilePlain ||
+              egressState != 'OFF' ||
+              pending != null ||
+              a.containsKey('expectedOffCopies') ||
+              a.containsKey('expectedTransitionGeneration') ||
+              retiredCopies.length != 2 ||
+              !same(retiredCopies[0], now[0]) ||
+              !same(retiredCopies[1], now[1]) ||
+              requested <= egressVersion ||
+              requested <= (r['reservedVersion'] as int)) {
+            return _reply('publishRestrictive', 'conflict');
+          }
+        }
+        if (retirement != null) {
+          // A retired lifetime is never reused: strictly above it.
+          final g = retirement!['ownerGeneration'] as int;
+          if (g > ownerGeneration) ownerGeneration = g;
+          ownerGeneration++;
+        }
         final offCopies = a['expectedOffCopies'] as List?;
         if (offCopies != null) {
           if (offCopies.length != 2 || egressState != 'OFF' || pending != null ||
@@ -245,6 +296,10 @@ class NativeEnableSim {
           ownerGeneration++;
         }
         publishedVersion = requested;
+        // The fresh restrictive lifetime replaces the retired entry in both layers.
+        retirement = null;
+        retiredFileAbsent = false;
+        retiredFilePlain = false;
         ownerAlive = true; // a restrictive publication creates the owner
         // A successful receipt reports the physical OFF records it persisted.
         hashKeyExists = true;
@@ -352,6 +407,35 @@ class NativeEnableSim {
       default:
         throw StateError('unexpected native operation ${call.method}');
     }
+  }
+
+  /// The egress layers as the inspection reports them now.
+  List<Map<String, Object?>> _egressNow() {
+    if (egressState == null) return _egressLayers('absent');
+    final plain = _egressLayers('verified',
+        state: egressState,
+        generation: egressGeneration,
+        version: egressVersion,
+        ownerGeneration: egressOwnerGeneration,
+        ownerEpoch: egressOwnerEpoch);
+    final r = retirement;
+    if (r == null) return plain;
+    return [
+      for (final layer in ['file', 'keychain'])
+        if (layer == 'file' && retiredFileAbsent)
+          {'layer': layer, 'outcome': 'absent'}
+        else if (layer == 'file' && retiredFilePlain)
+          plain[0]
+        else
+          {'layer': layer, 'outcome': 'verified', 'state': egressState, ...r},
+    ];
+  }
+
+  /// The true stored maximum (entry and retirement), when an entry exists.
+  int? _versionFrontier() {
+    if (egressState == null) return null;
+    final retired = retirement?['reservedVersion'] as int? ?? 0;
+    return retired > egressVersion ? retired : egressVersion;
   }
 
   static const _rank = {'ON': 0, 'DISABLING': 1, 'OFF': 2};
@@ -539,16 +623,12 @@ class NativeEnableSim {
   Object? _inspect(SimFault fault) {
     final f = _faulted('inspect', fault);
     if (f is! _NoFault) return f;
-    List<Map<String, Object?>> egress() => egressState == null
-        ? _egressLayers('absent')
-        : _egressLayers('verified',
-            state: egressState,
-            generation: egressGeneration,
-            version: egressVersion,
-            ownerGeneration: egressOwnerGeneration,
-            ownerEpoch: egressOwnerEpoch);
+    List<Map<String, Object?>> egress() => _egressNow();
+    final frontier = _versionFrontier();
+    Map<String, Object?> withFrontier(Map<String, Object?> reply) =>
+        {...reply, if (frontier != null) 'egressVersionFrontier': frontier};
     if (pending == null) {
-      return _reply('inspect', 'noBarrier', egress: egress());
+      return withFrontier(_reply('inspect', 'noBarrier', egress: egress()));
     }
     final binding = _binded();
     final layers = <Map<String, Object?>>[
@@ -570,8 +650,8 @@ class NativeEnableSim {
         : pendingOnlyInLayer != null
             ? 'incomplete'
             : 'pending';
-    return _reply('inspect', status,
-        binding: binding, barrier: layers, egress: egress());
+    return withFrontier(_reply('inspect', status,
+        binding: binding, barrier: layers, egress: egress()));
   }
 }
 

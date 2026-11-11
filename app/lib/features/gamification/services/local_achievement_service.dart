@@ -155,6 +155,44 @@ class LocalAchievementService {
     });
   }
 
+  /// Read-only progress (0..1) toward the badges whose rule in [reconcile]
+  /// accumulates toward a target: confirmed-transaction counts, the current
+  /// streak toward 7 days, and the closest goal toward completion. Badges
+  /// decided by a period comparison or a yes/no fact (first budget, a month
+  /// under budget, saved 500, restaurants −20%) have no gradual measure and
+  /// are deliberately absent. Never writes.
+  Future<Map<String, double>> progress() async {
+    final count = (await db
+            .customSelect(
+              "SELECT COUNT(*) AS n FROM transactions WHERE status = 'confirmed'",
+            )
+            .getSingle())
+        .read<int>('n');
+    final streak = (await db
+                .customSelect('SELECT MAX(current_streak) AS c FROM streaks')
+                .getSingle())
+            .readNullable<int>('c') ??
+        0;
+    final goal = (await db
+                .customSelect(
+                  'SELECT MAX(MIN(CAST(saved_amount_minor AS REAL) / '
+                  'target_amount_minor, 1.0)) AS r FROM goals '
+                  'WHERE deleted_at IS NULL AND target_amount_minor > 0',
+                )
+                .getSingle())
+            .readNullable<double>('r') ??
+        0;
+    double of(num value, num target) =>
+        (value / target).clamp(0, 1).toDouble();
+    return {
+      AchievementCatalog.firstTransaction.key: of(count, 1),
+      AchievementCatalog.tenthTransaction.key: of(count, 10),
+      AchievementCatalog.centuryTransaction.key: of(count, 100),
+      AchievementCatalog.streak7Days.key: of(streak, 7),
+      AchievementCatalog.firstGoal.key: goal.clamp(0, 1).toDouble(),
+    };
+  }
+
   Future<bool> _hasSevenDayStreak(DateTime now) async {
     final longest = await db
         .customSelect(

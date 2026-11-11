@@ -34,39 +34,42 @@ class AppEmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    // v2 QEmptyState: 160pt art (or a 72pt tinted tile), section title,
+    // muted callout ≤280pt wide, one tinted action.
     return Padding(
-      // Compact UI system: tighter vertical rhythm, smaller art + heading.
       padding: const EdgeInsets.symmetric(
         horizontal: 0,
-        vertical: AppSpacing.s5,
+        vertical: AppSpacing.s6,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           illustration ??
               Container(
-                width: 56,
-                height: 56,
+                width: 72,
+                height: 72,
                 decoration: BoxDecoration(
                   color: c.ctaSoft,
-                  borderRadius: BorderRadius.circular(AppRadius.lg),
-                  border: Border.all(color: c.cta.withValues(alpha: 0.16)),
+                  borderRadius: BorderRadius.circular(AppRadius.xl),
                 ),
-                child: Icon(icon, size: 26, color: c.cta),
+                child: Icon(icon, size: 32, color: c.actionText),
               ),
-          const SizedBox(height: AppSpacing.s3),
+          const SizedBox(height: AppSpacing.s4),
           Text(
             title,
             textAlign: TextAlign.center,
             style: AppTypography.sectionTitle(c.textPrimary),
           ),
           const SizedBox(height: AppSpacing.s2),
-          Text(
-            subtitle,
-            textAlign: TextAlign.center,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: AppTypography.footnote(c.textSecondary),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 280),
+            child: Text(
+              subtitle,
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.callout(c.textMuted),
+            ),
           ),
           if (primaryLabel != null && onPrimary != null) ...[
             const SizedBox(height: AppSpacing.s4),

@@ -205,8 +205,11 @@ void main() {
       final before = await rows();
       await tester.enterText(find.byType(TextFormField).at(0), '');
       tester.testTextInput.hide();
-      await tester.scrollUntilVisible(find.text(l10n.gfSaveEdit), 400,
+      // Save sits in the sticky dock (v2), always on screen: scroll the FORM
+      // to its end so the edited fields are offstage before submitting.
+      await tester.scrollUntilVisible(find.byType(Switch), 400,
           scrollable: find.byType(Scrollable).first);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -600));
       await settle(tester);
       expect(find.byType(TextFormField), findsNothing);
       await tester.tap(find.text(l10n.gfSaveEdit));
@@ -234,8 +237,11 @@ void main() {
       final before = await rows();
       await tester.enterText(find.byType(TextFormField).at(1), '-1');
       tester.testTextInput.hide();
-      await tester.scrollUntilVisible(find.text(l10n.gfSaveEdit), 400,
+      // Save sits in the sticky dock (v2), always on screen: scroll the FORM
+      // to its end so the edited fields are offstage before submitting.
+      await tester.scrollUntilVisible(find.byType(Switch), 400,
           scrollable: find.byType(Scrollable).first);
+      await tester.drag(find.byType(Scrollable).first, const Offset(0, -600));
       await settle(tester);
       expect(find.byType(TextFormField), findsNothing);
       await tester.tap(find.text(l10n.gfSaveEdit));

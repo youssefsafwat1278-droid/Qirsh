@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/widgets/section_photo_header.dart';
+import 'app_header.dart';
 
 /// هيكل شاشة قياسي — خلفية مع أوربت مضيئة خافتة للوضع الداكن، SafeArea، وهيدر اختياري.
 class AppScreenScaffold extends StatelessWidget {
@@ -61,6 +62,8 @@ class AppScreenScaffold extends StatelessWidget {
         resizeToAvoidBottomInset: resizeToAvoidBottomInset,
         body: QirshSectionBackdrop(
           child: SafeArea(
+            // Immersive: the section photo runs under the status bar.
+            top: false,
             bottom: false,
             child: NestedScrollView(
               headerSliverBuilder: (context, _) => [
@@ -79,9 +82,15 @@ class AppScreenScaffold extends StatelessWidget {
       );
     }
 
+    // A plain AppHeader nav bar becomes the Scaffold's app bar with the body
+    // extended behind it (immersive): content scrolls beneath its glass and
+    // the status bar. Such bodies add MediaQuery.paddingOf(context).top to
+    // their own scroll padding.
+    final h = header;
+    final navBar = h is AppHeader && h.sectionPhoto == null ? h : null;
     final bodyColumn = Column(
       children: [
-        if (header != null) header!,
+        if (header != null && navBar == null) header!,
         Expanded(child: content),
         if (bottomArea != null)
           Padding(
@@ -148,7 +157,8 @@ class AppScreenScaffold extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
-      extendBodyBehindAppBar: extendBodyBehindHeader,
+      extendBodyBehindAppBar: extendBodyBehindHeader || navBar != null,
+      appBar: navBar,
       body: Stack(
         children: [
           Positioned.fill(child: baseBackground),
@@ -157,6 +167,7 @@ class AppScreenScaffold extends StatelessWidget {
           // applying it here would shrink the whole page viewport.
           _MaybeSafeArea(
             enabled: safeArea,
+            top: navBar == null,
             bottom: false,
             child: bodyColumn,
           ),
@@ -169,17 +180,19 @@ class AppScreenScaffold extends StatelessWidget {
 class _MaybeSafeArea extends StatelessWidget {
   const _MaybeSafeArea({
     required this.enabled,
+    this.top = true,
     required this.bottom,
     required this.child,
   });
 
   final bool enabled;
+  final bool top;
   final bool bottom;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
     if (!enabled) return child;
-    return SafeArea(bottom: bottom, child: child);
+    return SafeArea(top: top, bottom: bottom, child: child);
   }
 }

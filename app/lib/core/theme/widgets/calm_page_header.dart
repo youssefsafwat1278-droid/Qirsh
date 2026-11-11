@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'mali_card.dart';
 import 'qirsh_visuals.dart';
 import 'section_photo_header.dart';
 export 'section_photo_header.dart' show QirshSectionPhoto, QirshSectionBackdrop;
@@ -149,15 +148,15 @@ class CalmPageHeader extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // v2 QLargeTitle: title.large (Alexandria 700 30/38).
                         Text(
                           title,
-                          style: AppTypography.custom(
-                            size: 24,
-                            weight: FontWeight.w700,
-                            height: 1.25,
-                            letterSpacing: -0.45,
-                            color: c.textPrimary,
-                          ),
+                          textScaler: MediaQuery.textScalerOf(context)
+                              .clamp(maxScaleFactor: 1.35),
+                          style: compactTitle
+                              ? AppTypography.titleNav(c.textPrimary)
+                                  .copyWith(fontSize: 20, height: 1.3)
+                              : AppTypography.titleLarge(c.textPrimary),
                         ),
                         if (showSubtitle) ...[
                           const SizedBox(height: 4),
@@ -165,11 +164,7 @@ class CalmPageHeader extends StatelessWidget {
                             subtitle!,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTypography.custom(
-                                size: 14,
-                                weight: FontWeight.w400,
-                                height: 1.35,
-                                color: c.textMuted),
+                            style: AppTypography.callout(c.textSecondary),
                           ),
                         ],
                       ],
@@ -249,15 +244,20 @@ class _FeatureHero extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final onInk = ink ? Colors.white : c.textPrimary;
     final mutedInk = ink ? const Color(0xFFC6D3E5) : c.textMuted;
+    // v2 Soft hero: dark #181A20 + 10% hairline; light white + e2.
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.s4),
+      margin: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       constraints: const BoxConstraints(minHeight: 96),
       padding: EdgeInsetsDirectional.fromSTEB(
-          AppSpacing.s4, AppSpacing.s4, art == null ? AppSpacing.s4 : 6, AppSpacing.s4),
+          AppSpacing.s5, AppSpacing.s4, art == null ? AppSpacing.s5 : 6, AppSpacing.s4),
       decoration: BoxDecoration(
         color: ink ? const Color(0xFF10223C)
-            : isDark ? const Color(0xFF142347) : const Color(0xFFE8EEFE),
-        borderRadius: BorderRadius.circular(AppRadius.xxl),
+            : isDark ? c.surfaceElevated : Colors.white,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: ink || !isDark
+            ? null
+            : Border.all(color: const Color(0x1AFFFFFF)),
+        boxShadow: ink || isDark ? null : AppShadows.e2,
       ),
       child: Row(
         children: [
@@ -727,11 +727,20 @@ class CalmFinancialSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // v2 Soft hero (summary cards on 08 / 13 / 15): dark #181A20 + 10%
+    // hairline; light white + e2.
     return Padding(
       padding: const EdgeInsets.fromLTRB(
           AppSpacing.gutter, AppSpacing.s2, AppSpacing.gutter, 0),
-      child: MaliCard(
-        padding: const EdgeInsets.all(AppSpacing.s4),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.s5),
+        decoration: BoxDecoration(
+          color: isDark ? c.surfaceElevated : Colors.white,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: isDark ? Border.all(color: const Color(0x1AFFFFFF)) : null,
+          boxShadow: isDark ? null : AppShadows.e2,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -741,17 +750,9 @@ class CalmFinancialSummary extends StatelessWidget {
               spacing: AppSpacing.s2,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Text(amount,
-                    style: AppTypography.custom(
-                      size: 30,
-                      weight: FontWeight.w700,
-                      height: 1.2,
-                      color: c.textMain,
-                      tabular: true,
-                    )),
+                Text(amount, style: AppTypography.amountLarge(c.textMain)),
                 if (currency != null)
-                  Text(currency!,
-                      style: AppTypography.caption(c.textSecondary)),
+                  Text(currency!, style: AppTypography.caption(c.textMuted)),
               ],
             ),
             if (footnote != null) ...[
@@ -781,9 +782,9 @@ class CalmFinancialSummary extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(metric.value,
-                                style: AppTypography.bodyStrong(c.textMain)),
+                                style: AppTypography.amountSmall(c.textMain)),
                             Text(metric.label,
-                                style: AppTypography.caption(c.textSecondary)),
+                                style: AppTypography.caption(c.textMuted)),
                           ],
                         ),
                       ),

@@ -35,15 +35,21 @@ class AppStatusPill extends StatelessWidget {
 
     return Semantics(
       label: label,
+      // v2 QStatusChip: 24pt pill, tinted bg + matching text; the hairline
+      // only on the dark canvas (light tints carry no border).
       child: Container(
+        constraints: BoxConstraints(minHeight: compact ? 22 : 24),
+        alignment: Alignment.center,
         padding: EdgeInsetsDirectional.symmetric(
           horizontal: compact ? AppSpacing.s2 : AppSpacing.s3,
-          vertical: compact ? 3 : AppSpacing.s1,
+          vertical: 2,
         ),
         decoration: BoxDecoration(
           color: colors.background,
           borderRadius: BorderRadius.circular(AppRadius.pill),
-          border: Border.all(color: colors.border),
+          border: Theme.of(context).brightness == Brightness.dark
+              ? Border.all(color: colors.border)
+              : null,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -52,14 +58,13 @@ class AppStatusPill extends StatelessWidget {
               Icon(icon, size: compact ? 12 : 14, color: colors.foreground),
               const SizedBox(width: AppSpacing.s1),
             ],
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: (compact
-                      ? AppTypography.micro(colors.foreground)
-                      : AppTypography.caption(colors.foreground))
-                  .copyWith(fontWeight: FontWeight.w700),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTypography.overline(colors.foreground),
+              ),
             ),
           ],
         ),
@@ -82,7 +87,7 @@ class AppStatusPill extends StatelessWidget {
         ),
       AppStatusTone.warning => _PillColors(
           background: c.warningBg,
-          foreground: c.warning,
+          foreground: c.warningText,
           border: c.warning.withValues(alpha: 0.26),
         ),
       AppStatusTone.danger => _PillColors(
@@ -92,7 +97,7 @@ class AppStatusPill extends StatelessWidget {
         ),
       AppStatusTone.info => _PillColors(
           background: c.infoBg,
-          foreground: c.info,
+          foreground: c.actionText,
           border: c.info.withValues(alpha: 0.24),
         ),
       AppStatusTone.neutral => _PillColors(

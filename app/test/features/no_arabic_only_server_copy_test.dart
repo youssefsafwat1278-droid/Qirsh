@@ -91,15 +91,6 @@ void main() {
         // physical-right photo overlay as its label and amount above it.
         "Text(footnote!, textAlign: TextAlign.right,",
       },
-      'lib/features/dashboard/dashboard_screen.dart': {
-        "Text(context.l10n.homeSavingsGrowing, textAlign: TextAlign.right,",
-        ": context.l10n.homeSavingsSurplus(amount), textAlign: TextAlign.right,",
-        "Text(context.l10n.homeSavingsMotivation, textAlign: TextAlign.right,",
-      },
-      'lib/features/reports/reports_screen.dart': {
-        "Text(context.l10n.rptPhotoKicker, textAlign: TextAlign.right,",
-        "Text(context.l10n.rptPhotoTitle, textAlign: TextAlign.right,",
-      },
     };
     final approvedUses = <String, int>{};
     final offenders = <String>[];

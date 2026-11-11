@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,7 @@ import '../../core/theme/widgets/navy_sheet_theme.dart';
 import '../../core/utils/currency.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/utils/id_generator.dart';
+import '../../domain/entities/engagement_entities.dart';
 import '../../domain/entities/goal_entity.dart';
 import '../../domain/errors/repo_exceptions.dart';
 import '../budgets/budgets_providers.dart';
@@ -32,6 +34,11 @@ import 'goals_providers.dart';
 import '../../core/theme/widgets/app_toast.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../common/repo_error_messages.dart';
+import '../common/app_status_pill.dart';
+import '../common/motion.dart';
+import '../../core/theme/app_motion.dart';
+import '../../core/theme/app_shadows.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/widgets/glass_dialog.dart';
 
 class GoalDetailsScreen extends ConsumerWidget {
@@ -51,10 +58,19 @@ class GoalDetailsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final goal = ref.watch(goalDetailsProvider(goalId)).valueOrNull?.goal;
     return Scaffold(
+      extendBodyBehindAppBar: true,
       appBar: AppHeader(
-        title: ref.watch(goalDetailsProvider(goalId)).valueOrNull?.goal.name ??
-            context.l10n.gdTitle,
+        title: goal?.name ?? context.l10n.gdTitle,
+        // v2: edit lives in the nav bar; the screen keeps ONE primary action.
+        trailing: goal == null
+            ? null
+            : IconButton(
+                tooltip: context.l10n.cardEdit,
+                icon: Icon(AppLucideIcons.pencil, color: context.colors.actionText),
+                onPressed: () => GoalFormScreen.showSheet(context, goal: goal),
+              ),
       ),
       body: _GoalDetailsContent(goalId: goalId),
       bottomNavigationBar: SafeArea(
@@ -121,6 +137,14 @@ class _GoalDetailsSheet extends ConsumerWidget {
                               overflow: TextOverflow.ellipsis,
                               style: AppTypography.sectionTitle(c.textMain)),
                         ),
+                        if (ref.watch(goalDetailsProvider(goalId)).valueOrNull?.goal
+                            case final goal?)
+                          IconButton(
+                            tooltip: context.l10n.cardEdit,
+                            onPressed: () =>
+                                GoalFormScreen.showSheet(context, goal: goal),
+                            icon: Icon(AppLucideIcons.pencil, color: c.actionText),
+                          ),
                         IconButton(
                           onPressed: () => Navigator.of(context).pop(),
                           icon: const Icon(AppLucideIcons.x),
@@ -134,6 +158,24 @@ class _GoalDetailsSheet extends ConsumerWidget {
                   Expanded(
                       child:
                           _GoalDetailsContent(goalId: goalId, sheetMode: true)),
+                  // v2 QStickyDock — the one primary action, pinned.
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.gutter,
+                          AppSpacing.s3, AppSpacing.gutter, AppSpacing.s3),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: AppSpacing.buttonHeight,
+                        child: FilledButton.icon(
+                          onPressed: () =>
+                              _showAddContributionSheet(context, ref, goalId),
+                          icon: const Icon(AppLucideIcons.plus),
+                          label: Text(context.l10n.gdAddToGoal),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -156,10 +198,17 @@ class _GoalDetailsContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(goalDetailsProvider(goalId));
+    // Immersive page: the body sits behind the glass nav bar, whose height
+    // arrives as the top inset. The sheet has its own header — no inset.
+    final topInset = sheetMode ? 0.0 : MediaQuery.paddingOf(context).top;
     return async.when(
       skipLoadingOnReload: true,
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, _) => SingleChildScrollView(child: AppErrorState(
+      loading: () => Padding(
+          padding: EdgeInsets.only(top: topInset),
+          child: const Center(child: CircularProgressIndicator())),
+      error: (error, _) => SingleChildScrollView(
+          padding: EdgeInsets.only(top: topInset),
+          child: AppErrorState(
         title: context.l10n.txnError,
         description: context.l10n.annTryAgainSoon,
         retryLabel: context.l10n.startRetry,
@@ -167,7 +216,9 @@ class _GoalDetailsContent extends ConsumerWidget {
       )),
       data: (data) {
         if (data == null) {
-          return Center(child: SingleChildScrollView(child: AppMissingRecordState(
+          return Center(child: SingleChildScrollView(
+            padding: EdgeInsets.only(top: topInset),
+            child: AppMissingRecordState(
             message: context.l10n.gdNotFound, illustration: 'savings')));
         }
         final c = context.colors;
@@ -176,79 +227,274 @@ class _GoalDetailsContent extends ConsumerWidget {
         // has no route without an id and had therefore never been walked.
         final cur = Currency.label(
             context, data.goal.currency);
+        final overdue =
+            data.daysRemaining != null && data.daysRemaining! < 0;
+        final done = data.remainingAmount.minorUnits <= 0;
         return ListView(
-          padding: const EdgeInsets.fromLTRB(
+          padding: EdgeInsets.fromLTRB(
             AppSpacing.gutter,
-            AppSpacing.s4,
+            sheetMode ? AppSpacing.s2 : topInset + AppSpacing.s4,
             AppSpacing.gutter,
-            140,
+            sheetMode ? AppSpacing.s4 : 140,
           ),
           children: [
-            QirshPhotoBanner(
+            _GoalPhotoHeader(
               photo: qirshGoalPhoto(data.goal.vaultSkin),
-              margin: const EdgeInsets.only(bottom: 14),
+              title: data.goal.name,
+              status: AppStatusPill(
+                label: done
+                    ? context.l10n.bdgGoalDone
+                    : overdue
+                        ? context.l10n.goalOverdue
+                        : context.l10n.txnActive,
+                tone: overdue && !done
+                    ? AppStatusTone.warning
+                    : AppStatusTone.success,
+              ),
             ),
+            // Progress card overlaps the photo by 32pt (spec 16).
+            Transform.translate(
+              offset: const Offset(0, -32),
+              child: _GoalProgressCard(data: data, currencyLabel: cur),
+            ),
+            Text(context.l10n.gdContributions,
+                style: AppTypography.sectionTitle(c.textMain)),
+            const SizedBox(height: AppSpacing.s3),
+            if (data.contributions.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.s4),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? c.surfaceMuted
+                      : c.surfaceElevated,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  children: [
+                    Icon(AppLucideIcons.piggyBank, size: 22, color: c.goldText),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        context.l10n.gdNoContributions,
+                        style: AppTypography.subhead(c.textSecondary),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              AppCard(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Column(
+                  children: [
+                    for (var i = 0; i < data.contributions.length; i++) ...[
+                      if (i > 0)
+                        Divider(height: 1, indent: 16, endIndent: 16,
+                            color: c.border),
+                      ListTile(
+                        title: Text(
+                          '${formatMoney(data.contributions[i].amountMoney)} $cur',
+                          textDirection: TextDirection.ltr,
+                          style: AppTypography.amountSmall(c.textMain),
+                        ),
+                        subtitle: Text(
+                          data.contributions[i].note ??
+                              Formatters.fullDate(
+                                  data.contributions[i].createdAt, context),
+                          style: AppTypography.caption(c.textMuted),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            // Delete is a quiet destructive row at the foot — no red button
+            // in the user's face; the confirmation dialog is unchanged.
+            const SizedBox(height: AppSpacing.s6),
             AppCard(
-              child: Row(
+              padding: EdgeInsets.zero,
+              onTap: () => _confirmDeleteGoal(context, ref, goalId),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.s4, vertical: 14),
+                child: Row(
+                  children: [
+                    Icon(AppLucideIcons.trash2, size: 20, color: c.danger),
+                    const SizedBox(width: AppSpacing.s3),
+                    Expanded(
+                      child: Text(context.l10n.gdDeleteGoal,
+                          style: AppTypography.bodyStrong(c.danger)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// Photo header (spec 16 / §3.0): the goal photo with a per-theme scrim —
+/// dark fades to black, light lays `#011341`@0→70% over the lower 45% — and
+/// the title + status chip in white on it.
+class _GoalPhotoHeader extends StatelessWidget {
+  const _GoalPhotoHeader({
+    required this.photo,
+    required this.title,
+    required this.status,
+  });
+
+  final QirshPhoto photo;
+  final String title;
+  final Widget status;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.card),
+      child: SizedBox(
+        height: 236,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: QirshPhotoFrame(photo: photo, height: 236),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    stops: isDark ? const [0.35, 1] : const [0.55, 1],
+                    colors: isDark
+                        ? const [Color(0x00000000), Color(0xE6000000)]
+                        : const [Color(0x00011341), Color(0xB3011341)],
+                  ),
+                ),
+              ),
+            ),
+            PositionedDirectional(
+              start: AppSpacing.s4,
+              end: AppSpacing.s4,
+              bottom: 32 + AppSpacing.s4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  RingProgress(
-                    value: data.progress,
-                    size: 76,
-                    strokeWidth: 7,
-                    color: c.income,
-                    trackColor: c.surface2,
-                    child: Center(
-                      child: Text('${(data.progress * 100).round()}%',
-                          style: AppTypography.caption(c.textMain)
-                              .copyWith(fontWeight: FontWeight.w700)),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(context.l10n.gdSavedLabel,
-                            style: AppTypography.caption(c.textLight)),
-                        const SizedBox(height: 3),
-                        Wrap(
-                          spacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            MoneyText(data.goal.savedMoney,
-                                style: AppTypography.custom(
-                                    size: 26, weight: FontWeight.w700,
-                                    height: 1.25, color: c.textMain)),
-                            Text('/ ${formatMoney(data.goal.targetMoney)} $cur',
-                                textDirection: TextDirection.ltr,
-                                style: AppTypography.caption(c.textLight)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          context.l10n.gdRecommendedDaily(
-                              formatMoney(data.recommendedDailyAmount), cur),
-                          style: AppTypography.caption(c.textLight),
-                        ),
-                      ],
-                    ),
-                  ),
+                  Text(title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.sectionTitle(Colors.white)),
+                  const SizedBox(height: AppSpacing.s2),
+                  status,
                 ],
               ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: _GoalDetailMetric(
-                    label: context.l10n.gfDeadline,
-                    value: data.goal.deadline == null
-                        ? context.l10n.gfOptional
-                        : Formatters.fullDate(data.goal.deadline!, context),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The raised progress card: gold ring with the %, saved / target, ONE pair of
+/// stats (remaining · days to deadline) and the recommended-daily chip — no
+/// wrapped 3-up tiles. Reaching 100% while on screen bursts gold coins once.
+class _GoalProgressCard extends StatefulWidget {
+  const _GoalProgressCard({required this.data, required this.currencyLabel});
+
+  final GoalDetailsEntity data;
+  final String currencyLabel;
+
+  @override
+  State<_GoalProgressCard> createState() => _GoalProgressCardState();
+}
+
+class _GoalProgressCardState extends State<_GoalProgressCard> {
+  int _burst = 0;
+
+  @override
+  void didUpdateWidget(_GoalProgressCard old) {
+    super.didUpdateWidget(old);
+    if (old.data.progress < 1 && widget.data.progress >= 1) {
+      HapticFeedback.heavyImpact();
+      setState(() => _burst++);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final data = widget.data;
+    final cur = widget.currencyLabel;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.s5),
+      decoration: BoxDecoration(
+        color: isDark ? c.surfaceElevated : c.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: isDark
+            ? Border.all(color: Colors.white.withValues(alpha: 0.10))
+            : null,
+        boxShadow: AppShadows.raised(Theme.of(context).brightness),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  RingProgress(
+                    value: data.progress,
+                    size: 96,
+                    strokeWidth: 10,
+                    color: c.accent,
+                    trackColor: isDark
+                        ? Colors.white.withValues(alpha: 0.12)
+                        : c.surfaceMuted,
+                    child: Center(
+                      child: Text('${(data.progress * 100).round()}%',
+                          style: AppTypography.amountMedium(c.textMain)),
+                    ),
                   ),
+                  if (_burst > 0 && !shouldReduceMotion(context))
+                    _CoinBurst(key: ValueKey(_burst)),
+                ],
+              ),
+              const SizedBox(width: AppSpacing.s4),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(context.l10n.gdSavedLabel,
+                        style: AppTypography.caption(c.textLight)),
+                    const SizedBox(height: 2),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerStart,
+                      child: MoneyText(data.goal.savedMoney,
+                          style: AppTypography.amountLarge(c.textMain)),
+                    ),
+                    Text('/ ${formatMoney(data.goal.targetMoney)} $cur',
+                        textDirection: TextDirection.ltr,
+                        style: AppTypography.caption(c.textLight)),
+                  ],
                 ),
-                const SizedBox(width: 8),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.s4),
+            child: Divider(height: 1, color: c.border),
+          ),
+          IntrinsicHeight(
+            child: Row(
+              children: [
                 Expanded(
                   child: _GoalDetailMetric(
                     label: context.l10n.bdgRemaining,
@@ -256,119 +502,103 @@ class _GoalDetailsContent extends ConsumerWidget {
                     valueTextDirection: TextDirection.ltr,
                   ),
                 ),
-                const SizedBox(width: 8),
+                VerticalDivider(width: AppSpacing.s5, color: c.border),
                 Expanded(
                   child: _GoalDetailMetric(
-                    label: context.l10n.txdStatus,
-                    value: data.remainingAmount.minorUnits <= 0
-                        ? context.l10n.bdgGoalDone
-                        : (data.daysRemaining != null && data.daysRemaining! < 0)
+                    label: data.goal.deadline == null
+                        ? context.l10n.gfDeadline
+                        : Formatters.fullDate(data.goal.deadline!, context),
+                    value: data.goal.deadline == null
+                        ? context.l10n.gfOptional
+                        : data.daysRemaining != null && data.daysRemaining! < 0
                             ? context.l10n.goalOverdue
-                            : context.l10n.txnActive,
-                    tone: (data.daysRemaining != null && data.daysRemaining! < 0)
-                        ? c.warning : c.income,
+                            : context.l10n
+                                .gdV2DaysCount(data.daysRemaining ?? 0),
+                    tone: data.daysRemaining != null && data.daysRemaining! < 0
+                        ? c.warningText
+                        : null,
                   ),
                 ),
               ],
             ),
-            if (data.daysRemaining != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                context.l10n.gdRemainingWithDays(
-                    formatMoney(data.remainingAmount),
-                    data.daysRemaining!),
-                style: AppTypography.caption(c.textLight),
-              ),
-            ],
-            // Add is gated on sheet mode because the full screen already has a
-            // FloatingActionButton for it; EDIT and DELETE are not, and used to
-            // be. `/goals/:id` builds this screen with the default
-            // `sheetMode: false`, so anyone arriving by deep link or direct
-            // navigation could add a contribution but could never edit or
-            // delete the goal — the list opens goals as a sheet, which is why
-            // it was never noticed.
+          ),
+          if (data.remainingAmount.minorUnits > 0) ...[
             const SizedBox(height: AppSpacing.s4),
-            Row(
-              children: [
-                if (sheetMode) ...[
-                  Expanded(
-                    child: SizedBox(
-                      height: AppSpacing.buttonHeight,
-                      child: FilledButton.icon(
-                        onPressed: () =>
-                            _showAddContributionSheet(context, ref, goalId),
-                        icon: const Icon(AppLucideIcons.plus),
-                        label: Text(context.l10n.gdAddToGoal),
-                        style: FilledButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
+            // Info chip (infoBg + action.text); wraps instead of clipping on
+            // compact widths / long currency names.
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.s3, vertical: 6),
+              decoration: BoxDecoration(
+                color: c.infoBg,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(AppLucideIcons.sparkles, size: 14, color: c.actionText),
+                  const SizedBox(width: AppSpacing.s1),
+                  Flexible(
+                    child: Text(
+                      context.l10n.gdRecommendedDaily(
+                          formatMoney(data.recommendedDailyAmount), cur),
+                      style: AppTypography.caption(c.actionText)
+                          .copyWith(fontWeight: FontWeight.w600),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.s2),
                 ],
-                Expanded(
-                  child: SizedBox(
-                    height: AppSpacing.buttonHeight,
-                    child: OutlinedButton.icon(
-                      onPressed: () => GoalFormScreen.showSheet(
-                        context,
-                        goal: data.goal,
-                      ),
-                      icon: const Icon(AppLucideIcons.pencil),
-                      label: Text(context.l10n.cardEdit),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(color: c.border),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One-shot celebration: 14 gold coins burst from the ring (700ms). Colours
+/// per theme (spec §3.0 16): dark `#FFE880` / `#FBC926`, light `#E4BA41` /
+/// `#B76F27` so they read on white.
+class _CoinBurst extends StatelessWidget {
+  const _CoinBurst({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final colors = isDark
+        ? const [AppBrandAccent.goldLit, Color(0xFFFBC926)]
+        : const [AppBrandAccent.gold, AppBrandAccent.goldDeep];
+    return IgnorePointer(
+      child: TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 700),
+        curve: AppMotion.easeOut,
+        builder: (context, t, _) => SizedBox(
+          width: 1,
+          height: 1,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              for (var i = 0; i < 14; i++)
+                Transform.translate(
+                  offset: Offset.fromDirection(
+                      i / 14 * 2 * math.pi, t * (70 + (i % 3) * 14)),
+                  child: Opacity(
+                    opacity: (1 - t).clamp(0.0, 1.0),
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: colors[i % 2],
+                        shape: BoxShape.circle,
                       ),
                     ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.s3),
-            OutlinedButton.icon(
-              onPressed: () => _confirmDeleteGoal(context, ref, goalId),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: c.danger,
-                side: BorderSide(color: c.danger),
-                minimumSize: const Size.fromHeight(AppSpacing.buttonHeight),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-              ),
-              icon: const Icon(AppLucideIcons.trash2),
-              label: Text(context.l10n.gdDeleteGoal),
-            ),
-            const SizedBox(height: AppSpacing.s4),
-            Text(context.l10n.gdContributions, style: AppTypography.sectionTitle(c.textMain)),
-            const SizedBox(height: AppSpacing.s3),
-            if (data.contributions.isEmpty)
-              Text(
-                context.l10n.gdNoContributions,
-                style: AppTypography.callout(c.textLight),
-              )
-            else
-              for (final contribution in data.contributions)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(
-                    '${formatMoney(contribution.amountMoney)} $cur',
-                    textDirection: TextDirection.ltr,
-                    style: AppTypography.subhead(c.textMain),
-                  ),
-                  subtitle: Text(
-                    contribution.note ??
-                        Formatters.fullDate(contribution.createdAt, context),
-                  ),
-                ),
-          ],
-        );
-      },
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -389,20 +619,24 @@ class _GoalDetailMetric extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return AppCard(
-      radius: 16,
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: AppTypography.caption(c.textLight)),
-          const SizedBox(height: 5),
-          Text(value,
+    // v2 QStat: value first, label beneath, no box.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(value,
+              maxLines: 1,
               textDirection: valueTextDirection,
-              style: AppTypography.custom(size: 14, weight: FontWeight.w700,
-                  height: 1.35, color: tone ?? c.textMain)),
-        ],
-      ),
+              style: AppTypography.amountSmall(tone ?? c.textMain)),
+        ),
+        const SizedBox(height: 2),
+        Text(label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTypography.caption(c.textLight)),
+      ],
     );
   }
 }

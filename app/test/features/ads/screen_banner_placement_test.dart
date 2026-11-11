@@ -26,6 +26,7 @@ import 'package:money_companion/features/reports/reports_screen.dart';
 import 'package:money_companion/features/settings/settings_providers.dart';
 import 'package:money_companion/features/subscriptions/subscriptions_providers.dart';
 import 'package:money_companion/features/subscriptions/subscriptions_screen.dart';
+import 'package:money_companion/features/transactions/widgets/activity_chip.dart';
 import 'package:money_companion/features/achievements/achievements_providers.dart';
 import 'package:money_companion/features/achievements/achievements_screen.dart';
 import 'package:money_companion/features/ads/ad_placement.dart';
@@ -413,9 +414,8 @@ void main() {
       await _settle(tester);
       expect(_SpyLoader.loadCalls, 1);
 
-      final controller =
-          DefaultTabController.of(tester.element(find.byType(TabBarView)));
-      controller.animateTo(1);
+      // Subscriptions / Instalments is a chips row now (was a TabBarView).
+      await tester.tap(find.byType(ActivityChip).at(1));
       await _settle(tester);
       await tester.pump(const Duration(milliseconds: 400));
 

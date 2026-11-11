@@ -77,16 +77,19 @@ void main() {
         () {
       const c = Color(0xFF000000);
       final body = AppTypography.body(c);
+      // Calm Capital v2 §2.4: Arabic body needs ≥1.6 line height (16/26).
       expect((body.fontFamily, body.fontSize, body.fontWeight, body.height),
-          ('Vazirmatn', 16.0, FontWeight.w400, 1.50));
+          ('Vazirmatn', 16.0, FontWeight.w400, 26 / 16));
       final t2 = AppTypography.title2(c);
       // §7 Title-2: SemiBold. (Size is one step below the spec's 22 by the
       // documented density deviation — see app_typography.dart.)
       expect((t2.fontFamily, t2.fontSize, t2.fontWeight, t2.height),
           ('Vazirmatn', 20.0, FontWeight.w600, 1.24));
+      // v2 amount.hero: Alexandria 600, 48/52.
       final hero = AppTypography.amountHero(c);
-      expect(hero.fontFamily, 'Vazirmatn');
-      expect(hero.fontSize, 40);
+      expect(hero.fontFamily, 'Alexandria');
+      expect(hero.fontSize, 48);
+      expect(hero.fontWeight, FontWeight.w600);
       expect(hero.fontFeatures, contains(const FontFeature.tabularFigures()));
     });
 

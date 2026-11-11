@@ -1878,20 +1878,28 @@ class CaptureDeviceRegistrationService {
       owner = await _readReplicaOwnerUid() ?? '';
     } catch (_) {
       if (!current()) throw const StaleAdmissionException();
-      throw const CloudEnableIncompleteException('preflight_uncertain');
+      throw const CloudEnableIncompleteException(
+          'preflight_uncertain[owner_read]');
     }
     if (!current() || owner != capability.uid) {
       throw const StaleAdmissionException();
     }
+    // TEMPORARY diagnostic suffixes on every `preflight_uncertain` below: which
+    // check refused, as fixed literals, enum names and layer labels only (never
+    // a uid, hash, generation, version or operation id).
     final PendingReadout pendingReadout;
     try {
       pendingReadout = await _gate.readPending();
     } catch (_) {
-      throw const CloudEnableIncompleteException('preflight_uncertain');
+      throw const CloudEnableIncompleteException(
+          'preflight_uncertain[pending_read]');
     }
     if (!current()) throw const StaleAdmissionException();
     if (pendingReadout.unreadable) {
-      throw const CloudEnableIncompleteException('preflight_uncertain');
+      throw CloudEnableIncompleteException(
+          'preflight_uncertain[pending_layers'
+          '|s:${pendingReadout.secure.status.name}'
+          ',f:${pendingReadout.file.status.name}]');
     }
     final pending =
         pendingReadout.agreed(owner) ?? pendingReadout.partial(owner);
@@ -1903,10 +1911,17 @@ class CaptureDeviceRegistrationService {
     try {
       inspected =
           (await NativeCaptureBridge.getCloudEgressPending(ownerUid: owner))!;
+    } catch (e) {
+      if (!current()) throw const StaleAdmissionException();
+      throw CloudEnableIncompleteException('preflight_uncertain[native_inspect'
+          '|${e is CaptureQueueException ? e.safeDiagnostic : e.runtimeType}]');
+    }
+    try {
       dart = await _gate.store.readDartOwnerLayers(owner);
     } catch (_) {
       if (!current()) throw const StaleAdmissionException();
-      throw const CloudEnableIncompleteException('preflight_uncertain');
+      throw const CloudEnableIncompleteException(
+          'preflight_uncertain[dart_layers_read]');
     }
     if (!current()) throw const StaleAdmissionException();
     bool physical(List<CloudEgressLayerReport> reports) =>
@@ -1921,9 +1936,19 @@ class CaptureDeviceRegistrationService {
         [...reports, ...inspected.barrier].any((r) =>
             r.outcome != CloudEgressLayerOutcome.verified &&
             r.outcome != CloudEgressLayerOutcome.absent)) {
-      throw const CloudEnableIncompleteException('preflight_uncertain');
+      String outcomes(List<CloudEgressLayerReport> layers) =>
+          layers.map((r) => r.outcome.name).join(',');
+      final flags = [
+        if (dart.uncertain) 'dart',
+        if (inspected.operation != 'inspect') 'op',
+        if (!physical(reports)) 'eshape',
+        if (!physical(inspected.barrier)) 'bshape',
+      ].join(',');
+      throw CloudEnableIncompleteException('preflight_uncertain[layers|$flags'
+          '|e:${outcomes(reports)}|b:${outcomes(inspected.barrier)}'
+          '|${inspected.status.name}]');
     }
-    for (final r in [...reports, ...inspected.barrier]) {
+    for (final (i, r) in [...reports, ...inspected.barrier].indexed) {
       if (r.outcome == CloudEgressLayerOutcome.absent &&
           (r.state != null ||
               r.transitionGeneration != null ||
@@ -1931,26 +1956,56 @@ class CaptureDeviceRegistrationService {
               r.operationId != null ||
               r.ownerGeneration != null ||
               r.ownerEpoch != null)) {
-        throw const CloudEnableIncompleteException('preflight_uncertain');
+        // `physical` above proved the order file, keychain in both lists.
+        throw CloudEnableIncompleteException('preflight_uncertain[absent_fields'
+            '|${i < 2 ? 'e' : 'b'}:${i.isEven ? 'file' : 'keychain'}]');
       }
     }
     final held = reports
         .where((r) => r.outcome == CloudEgressLayerOutcome.verified)
         .toList();
-    if (held.any((r) =>
-        !const {'ON', 'OFF', 'DISABLING'}.contains(r.state) ||
-        r.transitionGeneration == null ||
-        r.transitionGeneration! < 0 ||
-        r.reservedVersion == null ||
-        r.reservedVersion! < 0 ||
-        r.operationId != null ||
-        (r.ownerGeneration == null) != (r.ownerEpoch == null))) {
-      throw const CloudEnableIncompleteException('preflight_uncertain');
+    // F1: a lifetime fence leaves OFF + retirement in native. That exact shape
+    // (EVERY held layer OFF under the SAME complete retirement) is recognised
+    // here and only here; it is normalised below under strict conditions. Any
+    // other operation id on a held layer stays refused.
+    final retiredOff = held.isNotEmpty &&
+        held.every((r) =>
+            r.state == 'OFF' &&
+            r.operationId != null &&
+            r.operationId == held.first.operationId &&
+            r.transitionGeneration != null &&
+            r.transitionGeneration! >= 0 &&
+            r.transitionGeneration == held.first.transitionGeneration &&
+            r.reservedVersion != null &&
+            r.reservedVersion! >= 0 &&
+            r.reservedVersion == held.first.reservedVersion &&
+            r.ownerGeneration != null &&
+            r.ownerGeneration == held.first.ownerGeneration &&
+            r.ownerEpoch != null &&
+            r.ownerEpoch == held.first.ownerEpoch);
+    if (!retiredOff) {
+      for (final r in held) {
+        final flags = [
+          if (r.transitionGeneration == null || r.transitionGeneration! < 0)
+            'gen',
+          if (r.reservedVersion == null || r.reservedVersion! < 0) 'ver',
+          if (r.operationId != null) 'op',
+          if ((r.ownerGeneration == null) != (r.ownerEpoch == null)) 'life',
+        ];
+        final known = const {'ON', 'OFF', 'DISABLING'}.contains(r.state);
+        if (!known || flags.isNotEmpty) {
+          throw CloudEnableIncompleteException('preflight_uncertain[held_fields'
+              '|${r.layer}:${known ? r.state : 'bad'}:${flags.join(',')}]');
+        }
+      }
     }
     var frontier = 0;
     for (final v in [
       ...dart.records.map((r) => r.reservedVersion),
-      ...held.map((r) => r.reservedVersion!)
+      ...held.map((r) => r.reservedVersion!),
+      // A layer report substitutes a retirement's version for the entry's own;
+      // native names the true stored maximum separately. It can only raise.
+      inspected.egressVersionFrontier ?? 0,
     ]) {
       if (v > frontier) frontier = v;
     }
@@ -1997,7 +2052,7 @@ class CaptureDeviceRegistrationService {
     // restrictive, readable evidence. Normalize them to a verified newer OFF
     // before reserving anything. Different lifetimes use the conditional
     // restrictive publication below.
-    final repairOffCopies = held.isNotEmpty &&
+    final repairOffCopies = !retiredOff && held.isNotEmpty &&
         held.every((r) => r.state == 'OFF' &&
             r.ownerGeneration == held.first.ownerGeneration &&
             r.ownerEpoch == held.first.ownerEpoch) &&
@@ -2008,6 +2063,62 @@ class CaptureDeviceRegistrationService {
         ConsentAuthority.egressFreezeTag ==
             'reconcile_uncertain:native:lifetime_fields_unbound';
     final freezeGeneration = ConsentAuthority.freezeGeneration;
+    if (retiredOff) {
+      // F1: only an explicit enable with NOTHING else unresolved may replace the
+      // retired OFF, and only by a fresh restrictive publication that native
+      // compares against exactly this snapshot under its write lock. Every
+      // refusal leaves all layers untouched; nothing here writes ON.
+      if (pending != null || cleanupPending != null) {
+        throw const CloudEnableIncompleteException(
+            'preflight_conflict/retired_pending');
+      }
+      if (!noBarrier) {
+        throw const CloudEnableIncompleteException(
+            'preflight_conflict/native_barrier');
+      }
+      if (_gate.holdActive || _gate.successorUnsettled) {
+        // The retirement may carry expiry evidence a session-recovery successor
+        // is about to consume: never overwrite it underneath that chain.
+        throw const CloudEnableIncompleteException(
+            'preflight_conflict/retired_successor');
+      }
+      if (!await _storedCloudOff(current)) {
+        throw const CloudEnableIncompleteException(
+            'preflight_conflict/retired_stored_on');
+      }
+      if (inspected.egressVersionFrontier == null) {
+        throw const CloudEnableIncompleteException(
+            'preflight_uncertain[retired_frontier]');
+      }
+      if (dartAhead.isNotEmpty && !repaired) {
+        // A sign-out retires native but leaves the Dart layers' ON behind. The
+        // allocating repair cannot run over a retired native record, so restrict
+        // exactly the observed Dart ON records (the existing exact-record
+        // compensation, read back), then judge again from fresh evidence.
+        if (dart.records.any((r) => r.state == EgressState.disabling)) {
+          throw const CloudEnableIncompleteException(
+              'preflight_conflict/retired_dart_disabling');
+        }
+        for (final r in dart.records) {
+          if (r.state != EgressState.on) continue;
+          final PendingWriteResult restricted;
+          try {
+            restricted = await _gate.restrictDartLayers(r);
+          } catch (_) {
+            if (!current()) throw const StaleAdmissionException();
+            throw const CloudEnableIncompleteException(
+                'preflight_repair_incomplete/retired_dart_write');
+          }
+          if (!current()) throw const StaleAdmissionException();
+          if (!restricted.all) {
+            throw const CloudEnableIncompleteException(
+                'preflight_repair_incomplete/retired_dart_write');
+          }
+        }
+        return _reserveEnableVersion(capability, current, operationId,
+            repaired: true);
+      }
+    }
     if ((dartAhead.isNotEmpty || nativeAhead.isNotEmpty ||
             recoverUnboundFreeze || repairOffCopies) &&
         !repaired &&
@@ -2083,7 +2194,12 @@ class CaptureDeviceRegistrationService {
       return null; // Phase 1 reconciles pending before lifetime acquisition.
     }
     List<CloudEgressLayerReport>? expectedOffCopies;
-    if (held.isNotEmpty) {
+    List<CloudEgressLayerReport>? expectedRetiredCopies;
+    if (retiredOff) {
+      // Both physical reports (a retired OFF, or a verified absence beside one),
+      // exactly as inspected: native republishes only over this snapshot.
+      expectedRetiredCopies = List.unmodifiable(reports);
+    } else if (held.isNotEmpty) {
       final first = held.first;
       if (held.length != 2 ||
           held.any((r) =>
@@ -2116,8 +2232,9 @@ class CaptureDeviceRegistrationService {
           verifiedFrontier: frontier, operationId: operationId);
     } on StaleAdmissionException {
       rethrow;
-    } catch (_) {
-      throw const CloudEnableIncompleteException('preflight_uncertain');
+    } catch (e) {
+      throw CloudEnableIncompleteException(
+          'preflight_uncertain[reserve|${e.runtimeType}]');
     }
     if (!current()) throw const StaleAdmissionException();
     return RestrictivePublishPlan(version,
@@ -2125,7 +2242,8 @@ class CaptureDeviceRegistrationService {
         expectedReservedVersion: expectVersion,
         expectedLifetimeOwnerGeneration: expectLifetimeGeneration,
         expectedLifetimeOwnerEpoch: expectLifetimeEpoch,
-        expectedOffCopies: expectedOffCopies);
+        expectedOffCopies: expectedOffCopies,
+        expectedRetiredCopies: expectedRetiredCopies);
   }
 
   /// True only when the stored Cloud choice is not accepted (unset or
@@ -3495,6 +3613,7 @@ extension RestrictiveOwnerPublication on CaptureDeviceRegistrationService {
       expectedLifetimeOwnerGeneration: plan?.expectedLifetimeOwnerGeneration,
       expectedLifetimeOwnerEpoch: plan?.expectedLifetimeOwnerEpoch,
       expectedOffCopies: plan?.expectedOffCopies,
+      expectedRetiredCopies: plan?.expectedRetiredCopies,
       // ASR §7.5 SE1 (never together with an explicit plan).
       successorOf: plan == null ? successorOf : null,
       causeAuthority: plan == null ? successorCauseAuthority : null,

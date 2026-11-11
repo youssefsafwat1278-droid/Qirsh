@@ -10,6 +10,7 @@ import 'package:money_companion/domain/finance/money.dart';
 import 'package:money_companion/features/ads/ad_placement.dart';
 import 'package:money_companion/features/ads/banner_ads_providers.dart';
 import 'package:money_companion/features/common/category_catalog.dart';
+import 'package:money_companion/features/common/qirsh_summary_card.dart';
 import 'package:money_companion/features/dashboard/dashboard_providers.dart';
 import 'package:money_companion/features/reports/reports_providers.dart';
 import 'package:money_companion/features/reports/reports_screen.dart';
@@ -94,30 +95,62 @@ void main() {
     });
   }
 
-  testWidgets('report hero date presets drive the shared period', (tester) async {
+  testWidgets('report summary period chip drives the shared period', (tester) async {
     await _openDetails(tester, language: 'en');
     final container = ProviderScope.containerOf(
       tester.element(find.byType(ReportsScreen)),
     );
+    // v3: the period selector left the hero; it is the summary card's chip.
     final hero = find.byKey(const ValueKey('section-hero-reports'));
+    final card = find.byType(QirshSummaryCard);
+    var current = TransactionsDatePreset.thisMonth;
     for (final preset in [
       TransactionsDatePreset.previousMonth,
       TransactionsDatePreset.last90Days,
       TransactionsDatePreset.thisMonth,
     ]) {
-      final label = transactionsRangeForPreset(preset).labelIn('en');
-      final button = find.descendant(of: hero, matching: find.text(label));
-      expect(button.hitTestable(), findsOneWidget);
-      await tester.tap(button);
+      final currentLabel = transactionsRangeForPreset(current).labelIn('en');
+      expect(find.descendant(of: hero, matching: find.text(currentLabel)),
+          findsNothing);
+      final chip = find.descendant(
+          of: card, matching: find.bySemanticsLabel(currentLabel));
+      expect(chip.hitTestable(), findsOneWidget);
+      await tester.tap(chip);
       await tester.pumpAndSettle();
+      final sheet = find.byType(BottomSheet);
+      for (final option in [
+        TransactionsDatePreset.thisMonth,
+        TransactionsDatePreset.previousMonth,
+        TransactionsDatePreset.last90Days,
+      ]) {
+        expect(find.descendant(of: sheet,
+            matching: find.text(transactionsRangeForPreset(option).labelIn('en'))),
+            findsOneWidget);
+      }
+      final label = transactionsRangeForPreset(preset).labelIn('en');
+      await tester.tap(find.descendant(of: sheet, matching: find.text(label)));
+      await tester.pumpAndSettle();
+      expect(sheet, findsNothing);
       expect(container.read(transactionsDateRangeProvider).preset, preset);
-      expect(
-        find.ancestor(of: button, matching: find.byWidgetPredicate(
-          (widget) => widget is Semantics && widget.properties.selected == true,
-        )),
-        findsOneWidget,
-      );
+      expect(find.descendant(of: card, matching: find.bySemanticsLabel(label)),
+          findsOneWidget);
+      current = preset;
     }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('hero Report pill opens the report flow', (tester) async {
+    await _openDetails(tester, language: 'ar');
+    final hero = find.byKey(const ValueKey('section-hero-reports'));
+    final l10n = AppL10n.of(tester.element(find.byType(ReportsScreen)));
+    expect(find.descendant(of: hero, matching: find.byType(FilledButton)),
+        findsNothing);
+    final pill = find.descendant(
+        of: hero, matching: find.bySemanticsLabel(l10n.rcCreateReport));
+    expect(pill.hitTestable(), findsOneWidget);
+    await tester.tap(pill);
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.rcTitle), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

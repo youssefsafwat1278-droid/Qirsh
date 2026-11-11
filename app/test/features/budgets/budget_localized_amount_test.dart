@@ -118,8 +118,14 @@ void main() {
         tester.testTextInput.hide();
         await settle(tester);
         final save = find.text(l10n.bfsSaveBudget);
-        await tester.scrollUntilVisible(save, 500,
+        // v2: Save lives in a sticky dock and the category grid starts
+        // collapsed, so open the full grid and scroll to its end to push the
+        // amount field out of the list.
+        await tester.tap(find.text(l10n.bfsV2ShowAll));
+        await settle(tester);
+        await tester.scrollUntilVisible(find.text('فئة 29'), 500,
             scrollable: find.byType(Scrollable).first);
+        await tester.drag(find.byType(Scrollable).first, const Offset(0, -2000));
         await settle(tester);
         expect(find.byType(TextFormField), findsNothing,
             reason: 'the amount field must actually be disposed by the long category list');

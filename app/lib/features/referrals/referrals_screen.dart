@@ -41,30 +41,58 @@ class _ReferralsScreenState extends ConsumerState<ReferralsScreen> {
 
     return AppScreenScaffold(
       header: AppHeader(title: l10n.referralTitle),
-      body: summaryAsync.when(
+      // Immersive: the body runs under the glass bar; every state starts
+      // below it (this context sees the bar's top inset).
+      body: Builder(builder: (bodyContext) => summaryAsync.when(
         skipLoadingOnReload: true,
-        loading: () => AppLoadingState(label: l10n.referralLoading),
-        error: (_, __) => AppErrorState(
-          title: l10n.referralErrorTitle,
-          description: l10n.referralErrorBody,
-          retryLabel: l10n.referralRetry,
-          onRetry: () => ref.invalidate(referralSummaryProvider),
+        loading: () => Padding(
+          padding: EdgeInsets.only(top: MediaQuery.paddingOf(bodyContext).top),
+          child: AppLoadingState(label: l10n.referralLoading),
+        ),
+        error: (_, __) => Padding(
+          padding: EdgeInsets.only(top: MediaQuery.paddingOf(bodyContext).top),
+          child: AppErrorState(
+            title: l10n.referralErrorTitle,
+            description: l10n.referralErrorBody,
+            retryLabel: l10n.referralRetry,
+            onRetry: () => ref.invalidate(referralSummaryProvider),
+          ),
         ),
         data: (summary) {
           // null == feature gated off (or Supabase unconfigured): present the
           // controlled unavailable state, never active referral functionality.
+          //
+          // v2 (spec 22): centred at the optical centre (44%) with a 200pt
+          // illustration. No action — there is nothing for the user to do.
           if (summary == null) {
-            return AppEmptyState(
-              icon: AppLucideIcons.gift,
-              illustration: const QirshIllustration(
-                  name: 'referral', width: 250, height: 187.5),
-              title: l10n.referralUnavailableTitle,
-              subtitle: l10n.referralUnavailableBody,
+            final top = MediaQuery.paddingOf(bodyContext).top;
+            return LayoutBuilder(
+              builder: (context, box) => SingleChildScrollView(
+                padding: EdgeInsets.only(top: top),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight:
+                      (box.maxHeight - top).clamp(0.0, double.infinity)),
+                  child: Align(
+                    alignment: const Alignment(0, -.12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.gutter),
+                      child: AppEmptyState(
+                        icon: AppLucideIcons.gift,
+                        illustration: const QirshIllustration(
+                            name: 'referral', width: 267, height: 200),
+                        title: l10n.referralUnavailableTitle,
+                        subtitle: l10n.referralUnavailableBody,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             );
           }
           return _ReferralBody(summary: summary);
         },
-      ),
+      )),
     );
   }
 }
@@ -130,9 +158,9 @@ class _ReferralBodyState extends ConsumerState<_ReferralBody> {
   Widget build(BuildContext context) {
     final summary = widget.summary;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(
+      padding: EdgeInsets.fromLTRB(
         AppSpacing.gutter,
-        AppSpacing.s2,
+        MediaQuery.paddingOf(context).top + AppSpacing.s2,
         AppSpacing.gutter,
         AppSpacing.s8,
       ),

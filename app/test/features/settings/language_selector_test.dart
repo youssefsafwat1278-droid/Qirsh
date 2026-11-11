@@ -90,7 +90,8 @@ void main() {
             GlobalCupertinoLocalizations.delegate,
           ],
           theme: AppTheme.light,
-          home: const SettingsScreen(),
+          // v2: Language lives on the «بيانات حسابك» sub-page.
+          home: const SettingsScreen(page: SettingsPage.account),
         ),
       ),
     );

@@ -146,6 +146,20 @@ void main() {
     'data/catalog/catalog_sync_service.dart': 'core/di/app_providers.dart',
   };
 
+  /// Files whose egress runs only inside an operation-scoped account-control
+  /// grant (`CloudEgressGate.runAccountControl`): an explicit user action,
+  /// endpoint-allowlisted in `kAccountControlAllowlist`, time-boxed, and denied
+  /// by the gated transport outside the grant. NOT a consent exemption: the
+  /// test below binds every call in these files to that runtime allowlist, so a
+  /// new endpoint cannot be added here without also being admitted there.
+  const accountControl = <String, String>{
+    'core/auth/supabase_auth_service.dart':
+        'Google sign-UP only: `google-enrollment` gets the Google ID token and '
+            'hashed nonce on the explicit "create account" tap, inside '
+            'AccountControlOp.signIn (account_control_test pins that no other '
+            'op can reach it).',
+  };
+
   /// Files that reach the network WITHOUT a consent gate, each with the reason.
   ///
   /// Everything here is either genuinely consent-exempt, or an OPEN finding
@@ -252,7 +266,11 @@ void main() {
 
     walk(Directory('lib'));
 
-    final known = {...gated.keys, ...ungatedByDesign.keys};
+    final known = {
+      ...gated.keys,
+      ...ungatedByDesign.keys,
+      ...accountControl.keys
+    };
     final unlisted = found.difference(known);
 
     expect(
@@ -268,9 +286,44 @@ void main() {
   });
 
   test('the listed files still exist — the inventory cannot go stale', () {
-    for (final path in {...gated.keys, ...ungatedByDesign.keys}) {
+    for (final path in {
+      ...gated.keys,
+      ...ungatedByDesign.keys,
+      ...accountControl.keys
+    }) {
       expect(File('lib/$path').existsSync(), isTrue,
           reason: '$path is listed but no longer exists; prune the inventory');
+    }
+  });
+
+  test('account-control files reach only allowlisted functions, inside a grant',
+      () {
+    final gate =
+        File('lib/core/privacy/cloud_egress_gate.dart').readAsStringSync();
+    final invoke = RegExp(r"functions\s*\.invoke\(\s*'([^']+)'");
+    for (final path in accountControl.keys) {
+      final src = File('lib/$path').readAsStringSync();
+      expect(src, contains('runAccountControl'),
+          reason: '$path must run its egress inside an account-control grant');
+      // Tables, RPCs, storage and raw HTTP have no place here at all.
+      expect(
+          RegExp(r"\.from\(|\.rpc[<(]|\.storage\.|http\.(post|get)")
+              .hasMatch(src),
+          isFalse,
+          reason: '$path: only allowlisted Edge Functions may be called');
+      // Every function call names a literal function, and that exact endpoint
+      // is admitted by the runtime allowlist.
+      final names = invoke.allMatches(src).map((m) => m.group(1)!).toList();
+      expect(names, isNotEmpty, reason: path);
+      expect(RegExp(r'functions\s*\.invoke\(').allMatches(src).length,
+          names.length,
+          reason: '$path: a function name must be a literal');
+      for (final name in names) {
+        expect(gate,
+            contains("AccountControlEndpoint('POST', '/functions/v1/$name')"),
+            reason: '$path calls `$name`, which kAccountControlAllowlist does '
+                'not admit');
+      }
     }
   });
 

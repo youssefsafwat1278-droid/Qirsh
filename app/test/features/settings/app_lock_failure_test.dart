@@ -88,7 +88,8 @@ void main() {
               locale: Locale(language),
               supportedLocales: AppL10n.supportedLocales,
               localizationsDelegates: AppL10n.localizationsDelegates,
-              home: const SettingsScreen(),
+              // v2: app lock lives on the «الأمان والخصوصية» sub-page.
+              home: const SettingsScreen(page: SettingsPage.security),
             ),
           ));
           for (var i = 0; i < 6; i++) {

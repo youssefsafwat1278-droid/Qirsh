@@ -268,9 +268,11 @@ begin
 end;
 $$;
 
-revoke all on function public.account_deletion_issue_challenge_v2(uuid,boolean),
-  public.account_deletion_bind_email_code(uuid,text),
-  public.account_deletion_verify_email_code(uuid,text,text)
+revoke all on function public.account_deletion_issue_challenge_v2(uuid,boolean)
+  from public, anon, authenticated, service_role;
+revoke all on function public.account_deletion_bind_email_code(uuid,text)
+  from public, anon, authenticated, service_role;
+revoke all on function public.account_deletion_verify_email_code(uuid,text,text)
   from public, anon, authenticated, service_role;
 grant execute on function public.account_deletion_issue_challenge_v2(uuid,boolean),
   public.account_deletion_bind_email_code(uuid,text),

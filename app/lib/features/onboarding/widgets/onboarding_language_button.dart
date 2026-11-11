@@ -79,27 +79,26 @@ class _OnboardingLanguageButtonState extends State<OnboardingLanguageButton> {
         _item('en', 'English', current),
         _item('ar', 'العربية', current),
       ],
+      // v2: a 40pt glass pill (was ~32pt and hard to hit).
       child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: widget.compact ? 10 : 14,
-          vertical: 8,
-        ),
+        constraints: const BoxConstraints(minHeight: 40),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: widget.onDark ? Colors.white.withValues(alpha: .12) : context.colors.surface,
+          color: widget.onDark ? Colors.white.withValues(alpha: .14) : context.colors.surface,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: widget.onDark ? Colors.white.withValues(alpha: .18) : context.colors.border),
+          border: Border.all(color: widget.onDark ? Colors.white.withValues(alpha: .2) : context.colors.strokeSoft),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(AppLucideIcons.globe, color: foreground, size: 16),
+            Icon(AppLucideIcons.globe, color: foreground, size: 18),
             const SizedBox(width: 6),
             Text(
               widget.compact
                   ? (current == 'ar' ? 'ع' : 'EN')
                   : (current == 'ar' ? 'العربية' : 'English'),
-              style:
-                  AppTypography.bodyStrong(foreground).copyWith(fontSize: 14),
+              style: AppTypography.bodyStrong(foreground)
+                  .copyWith(fontSize: 15, fontWeight: FontWeight.w700),
             ),
             if (!widget.compact) ...[
               const SizedBox(width: 4),

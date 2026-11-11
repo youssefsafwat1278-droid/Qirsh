@@ -2100,6 +2100,72 @@ class RunnerTests: XCTestCase {
     XCTAssertEqual(try Data(contentsOf: egressFileURL), fileBefore)
   }
 
+  func testRetiredSnapshotPublicationRequiresExactRetiredOffAboveFrontier() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    _ = try stampedAllowedItem()
+    let op = try begin(ownerA, 3, 4)
+    XCTAssertEqual(try writeOn(ownerA, op).status, .done)
+    XCTAssertEqual(try finish(ownerA, op).status, .done)
+    XCTAssertEqual(try revokeLifetime(ownerA, op).status, .done)
+    let epoch = try SharedCaptureStore.ownerEpoch()
+    let inspected = try SharedCaptureStore.cloudEgressPending(forUid: ownerA)
+    XCTAssertEqual(inspected.status, .noBarrier)
+    XCTAssertEqual(inspected.egress.count, 2)
+    XCTAssertTrue(inspected.egress.allSatisfy {
+      $0.outcome == .verified && $0.state == "OFF" && $0.operationId != nil })
+    let frontier = try XCTUnwrap(inspected.egressVersionFrontier)
+    XCTAssertGreaterThanOrEqual(frontier, 4)
+    let before = try Data(contentsOf: egressFileURL)
+    let kcBefore = SnapshotTestKeychain.read(forKey: egressKC).data
+    // The version must be strictly above every stored and retired version.
+    let low = try SharedCaptureStore.publishRestrictiveCaptureOwner(
+      uid: ownerA, version: frontier, expectedEpoch: epoch,
+      expectedRetiredCopies: inspected.egress)
+    XCTAssertEqual(low.status, .conflict)
+    XCTAssertNil(low.owner)
+    // A snapshot naming another retirement is not the stored one.
+    var other = inspected.egress
+    other[0] = SharedCaptureStore.LayerReport(
+      layer: other[0].layer, outcome: other[0].outcome, state: other[0].state,
+      transitionGeneration: other[0].transitionGeneration,
+      reservedVersion: other[0].reservedVersion,
+      operationId: String(repeating: "f", count: 32),
+      ownerGeneration: other[0].ownerGeneration, ownerEpoch: other[0].ownerEpoch)
+    let changed = try SharedCaptureStore.publishRestrictiveCaptureOwner(
+      uid: ownerA, version: frontier + 1, expectedEpoch: epoch, expectedRetiredCopies: other)
+    XCTAssertEqual(changed.status, .conflict)
+    XCTAssertNil(changed.owner)
+    // Never combined with another expectation mode.
+    XCTAssertThrowsError(try SharedCaptureStore.publishRestrictiveCaptureOwner(
+      uid: ownerA, version: frontier + 1, expectedEpoch: epoch,
+      expectedOffCopies: inspected.egress, expectedRetiredCopies: inspected.egress))
+    XCTAssertEqual(try Data(contentsOf: egressFileURL), before)
+    XCTAssertEqual(SnapshotTestKeychain.read(forKey: egressKC).data, kcBefore)
+    // The exact snapshot publishes a fresh restrictive lifetime, never ON.
+    let published = try SharedCaptureStore.publishRestrictiveCaptureOwner(
+      uid: ownerA, version: frontier + 1, expectedEpoch: epoch,
+      expectedRetiredCopies: inspected.egress)
+    XCTAssertEqual(published.status, .done)
+    let owner = try XCTUnwrap(published.owner)
+    XCTAssertGreaterThan(owner.generation, try XCTUnwrap(op.ownerGeneration))
+    XCTAssertEqual(published.egress.count, 2)
+    XCTAssertTrue(published.egress.allSatisfy {
+      $0.outcome == .verified && $0.state == "OFF" && $0.operationId == nil
+        && $0.reservedVersion == frontier + 1 })
+    XCTAssertNil(try egressRecord(file: ownerA)?.retirement)
+    XCTAssertNil(try egressRecord(keychain: ownerA)?.retirement)
+    // The retired snapshot no longer holds: a replay changes nothing.
+    let after = try Data(contentsOf: egressFileURL)
+    XCTAssertEqual(try SharedCaptureStore.publishRestrictiveCaptureOwner(
+      uid: ownerA, version: frontier + 2, expectedEpoch: epoch,
+      expectedRetiredCopies: inspected.egress).status, .conflict)
+    XCTAssertEqual(try Data(contentsOf: egressFileURL), after)
+    // The old retirement and the old enable completion do not touch the new lifetime.
+    XCTAssertEqual(try revokeLifetime(ownerA, op).status, .ownerMismatch)
+    XCTAssertEqual(try finish(ownerA, op).status, .noBarrier)
+  }
+
   func testRestrictivePublicationForAbsentRecordIsCompleteOffAndPendingConflicts() throws {
     resetCapSeams()
     defer { resetCapSeams() }

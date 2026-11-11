@@ -21,6 +21,8 @@ import '../../domain/entities/transaction_entity.dart';
 import '../../domain/errors/repo_exceptions.dart';
 import '../common/app_check_mark.dart';
 import '../common/app_screen_scaffold.dart';
+import '../common/money_text.dart';
+import '../common/motion.dart';
 import '../common/app_header.dart';
 import '../common/app_card.dart';
 import '../common/app_error_state.dart';
@@ -142,12 +144,20 @@ class MyCardsScreen extends ConsumerWidget {
       }
     }
 
+    // v2: «حركة البطاقات» is the one heading; per-account headings only
+    // remain when there is more than one group to tell apart (the card row
+    // already names its account).
+    final groupCount = sections.whereType<_SectionHeader>().length;
     final displaySections = <Widget>[
       if (sections.isNotEmpty) ...[
-        _CardDeck(rows: sections.whereType<_CardRow>().toList(growable: false)),
-        _SectionHeader(title: context.l10n.cardActivityTitle),
+        PremiumMotion(
+          child: _CardDeck(
+              rows: sections.whereType<_CardRow>().toList(growable: false)),
+        ),
+        _SectionHeader(title: context.l10n.cardActivityTitle, primary: true),
       ],
-      ...sections,
+      for (final section in sections)
+        if (section is! _SectionHeader || groupCount > 1) section,
     ];
 
     return AppScreenScaffold(
@@ -156,7 +166,7 @@ class MyCardsScreen extends ConsumerWidget {
         sectionPhoto: QirshSectionPhoto.cards,
         title: context.l10n.cardAllCards,
         action: IconButton(
-          icon: const Icon(AppLucideIcons.plus, color: Colors.white, size: 24),
+          icon: const Icon(AppLucideIcons.plus, color: Colors.white, size: 22),
           tooltip: context.l10n.cardAddCard,
           onPressed: () => showCardForm(context, ref),
         ),
@@ -224,16 +234,23 @@ class MyCardsScreen extends ConsumerWidget {
 }
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
+  const _SectionHeader({required this.title, this.primary = false});
 
   final String title;
+
+  /// The screen's one section title; account group labels are quieter.
+  final bool primary;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.s2, bottom: 2),
-      child: Text(title, style: AppTypography.title2(c.textMain)),
+      padding: EdgeInsets.only(
+          top: primary ? AppSpacing.s5 : AppSpacing.s2, bottom: 2),
+      child: Text(title,
+          style: primary
+              ? AppTypography.sectionTitle(c.textMain)
+              : AppTypography.subhead(c.textSecondary)),
     );
   }
 }
@@ -297,7 +314,8 @@ class _CardRow extends ConsumerWidget {
                     style: AppTypography.bodyStrong(c.textMain)),
                 Text('•••• ${card.last4}',
                     textDirection: TextDirection.ltr,
-                    style: AppTypography.caption(c.textSecondary)),
+                    style: AppTypography.mono(
+                        size: 13, letterSpacing: 1, color: c.textSecondary)),
                 if (entity?.nickname?.trim().isNotEmpty == true &&
                     account != null)
                   Text(account!.name,
@@ -309,22 +327,27 @@ class _CardRow extends ConsumerWidget {
             IconButton(
                 onPressed: () => _edit(context, ref),
                 tooltip: context.l10n.cardEdit,
-                icon: Icon(AppLucideIcons.pencil, color: c.primary, size: 18)),
+                icon: Icon(AppLucideIcons.pencil, color: c.actionText, size: 18)),
           ]),
           const SizedBox(height: AppSpacing.s3),
-          Row(children: [
-            Expanded(
-                child: _flow(
-                    context, context.l10n.cardIn, card.totalIn, c.success)),
-            const SizedBox(width: AppSpacing.s2),
-            Expanded(
-                child: _flow(
-                    context, context.l10n.cardOut, card.totalOut, c.danger)),
-            const SizedBox(width: AppSpacing.s2),
-            Expanded(
-                child: _flow(context, context.l10n.rptNet, net, c.textMain)),
-          ]),
-          const SizedBox(height: AppSpacing.s2),
+          // v2 QStats: in = income colour, out = NEUTRAL text with a coral
+          // dot (red is reserved for over-budget / failed / destructive),
+          // net neutral; hairline separators, no boxes.
+          IntrinsicHeight(
+            child: Row(children: [
+              Expanded(
+                  child: _flow(context, context.l10n.cardIn, card.totalIn,
+                      c.success, dot: c.success)),
+              VerticalDivider(width: AppSpacing.s4, color: c.border),
+              Expanded(
+                  child: _flow(context, context.l10n.cardOut, card.totalOut,
+                      c.textMain, dot: c.expense)),
+              VerticalDivider(width: AppSpacing.s4, color: c.border),
+              Expanded(
+                  child: _flow(context, context.l10n.rptNet, net, c.textMain)),
+            ]),
+          ),
+          const SizedBox(height: AppSpacing.s4),
           Row(children: [
             Expanded(
                 child: _action(context,
@@ -350,34 +373,60 @@ class _CardRow extends ConsumerWidget {
     required String label,
     required VoidCallback onTap,
   }) =>
+      // v2 tinted pill (action.soft + action.text), equal width.
       TextButton.icon(
         onPressed: onTap,
         icon: Icon(icon, size: 18),
         label: Text(label,
             maxLines: 2,
             textAlign: TextAlign.center,
-            style: AppTypography.footnote(context.colors.primary)),
+            style: AppTypography.subhead(context.colors.actionText)
+                .copyWith(fontWeight: FontWeight.w600)),
         style: TextButton.styleFrom(
-            minimumSize: const Size(48, 48),
-            backgroundColor: context.colors.surface2,
+            minimumSize: const Size(48, 44),
+            foregroundColor: context.colors.actionText,
+            backgroundColor: context.colors.ctaSoft,
+            shape: const StadiumBorder(),
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8)),
       );
 
-  Widget _flow(BuildContext context, String label, Money value, Color color) {
-    final text =
-        '${formatMoney(value)} ${Currency.label(context, value.currency)}';
+  Widget _flow(BuildContext context, String label, Money value, Color color,
+      {Color? dot}) {
+    final c = context.colors;
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.caption(context.colors.textSecondary)),
+      Row(children: [
+        if (dot != null) ...[
+          Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
+          const SizedBox(width: 4),
+        ],
+        Flexible(
+          child: Text(label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTypography.caption(c.textSecondary)),
+        ),
+      ]),
+      const SizedBox(height: 2),
+      // Number first, the currency after it as a muted caption run — never
+      // «جنيه 0.00».
       FittedBox(
           fit: BoxFit.scaleDown,
           alignment: AlignmentDirectional.centerStart,
-          child: Text(text,
-              maxLines: 1,
-              textDirection: TextDirection.ltr,
-              style: AppTypography.bodyStrong(color))),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            textDirection: TextDirection.ltr,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              MoneyText(value, style: AppTypography.amountSmall(color)),
+              const SizedBox(width: 4),
+              Text(Currency.label(context, value.currency),
+                  style: AppTypography.caption(c.textMuted)),
+            ],
+          )),
     ]);
   }
 }
@@ -415,10 +464,13 @@ class _CardDeck extends ConsumerWidget {
                 themeKey: card.colorTheme, accentHex: card.accentHex),
             borderRadius: BorderRadius.circular(22),
             boxShadow: [
+              // Upward edge so each stacked card separates from the one it
+              // overlaps; the front card also carries the v2 bank-card lift.
               BoxShadow(
                   color: Colors.black.withValues(alpha: .18),
                   blurRadius: 24,
-                  offset: const Offset(0, -8))
+                  offset: const Offset(0, -8)),
+              if (identical(row, rows.last)) ...bankCardShadow(context),
             ]),
         child: Material(
           color: Colors.transparent,
@@ -444,7 +496,7 @@ class _CardDeck extends ConsumerWidget {
                         child: Text(row._title(context),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: AppTypography.bodyStrong(Colors.white))),
+                            style: AppTypography.cardTitle(Colors.white))),
                     CardNetworkBadge(network: card.network),
                     const SizedBox(width: 4),
                     IconButton(
@@ -463,14 +515,16 @@ class _CardDeck extends ConsumerWidget {
                       height: 28,
                       decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(7),
-                          gradient: const LinearGradient(
-                              colors: [Color(0xFFF8E3A1), Color(0xFFD6A93A)]))),
+                          gradient: bankCardChipGradient)),
                   Row(children: [
                     Expanded(
                         child: Text('•••• ${card.last4}',
                             textDirection: TextDirection.ltr,
-                            style: AppTypography.headline(Colors.white)
-                                .copyWith(letterSpacing: 2))),
+                            style: AppTypography.mono(
+                                size: 20,
+                                weight: FontWeight.w700,
+                                letterSpacing: 2,
+                                color: Colors.white))),
                     Flexible(
                         child: Text(
                             row.account?.name ?? context.l10n.cardUnassigned,
