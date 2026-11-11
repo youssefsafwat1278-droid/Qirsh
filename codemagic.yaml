@@ -29,7 +29,7 @@ workflows:
   ios-unsigned-sideload:
     name: iOS Unsigned IPA (Sideload)
     instance_type: mac_mini_m2
-    max_build_duration: 60
+    max_build_duration: 120
     environment:
       groups:
         - supabase
@@ -151,7 +151,7 @@ workflows:
   ios-signed-release:
     name: iOS Signed IPA (Ad Hoc / App Store)
     instance_type: mac_mini_m2
-    max_build_duration: 60
+    max_build_duration: 120
     integrations:
       app_store_connect: codemagic_asc_api_key   # name of the ASC API key in Codemagic
     environment:
@@ -385,7 +385,7 @@ workflows:
   android-release:
     name: Android Release (App Bundle)
     instance_type: mac_mini_m2
-    max_build_duration: 60
+    max_build_duration: 120
     environment:
       groups:
         - supabase
