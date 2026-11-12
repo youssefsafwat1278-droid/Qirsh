@@ -51,6 +51,16 @@ enum SharedCaptureStore {
   private static let pendingNotificationRoutesKey = "pending_notification_routes_v1"
   private static let notificationLogEventsKey = "pending_notification_log_events_v1"
   private static let queueLockFileName = "pending_bank_messages.lock"
+  // Overflow segments (2026-11-12): `seg-<16-digit seq>.bin` in this directory,
+  // same AES-GCM blob format and key as the main file. Undecryptable segments
+  // are moved (never deleted) to the quarantine directory.
+  private static let overflowDirName = "pending_bank_messages_v3_overflow"
+  private static let quarantineDirName = "pending_bank_messages_v3_quarantine"
+  private static let segmentFilePrefix = "seg-"
+  private static let segmentFileSuffix = ".bin"
+  /// Every durable write goes to `.<final name>.tmp-<uuid>` first. A name with
+  /// this marker is never a segment: a leftover one is a torn write.
+  private static let tempFileMarker = ".tmp-"
   // C.4: the durable cloud-egress denial record lives in BOTH the shared
   // Keychain and an App Group file (no UserDefaults copy: it must survive a
   // purge and is only ever written under the queue flock).
@@ -76,13 +86,26 @@ enum SharedCaptureStore {
   private static let lastAdmittedHashKC = "last_admitted_uid_hash_v1"
   private static let uidHmacKeyKC = "capture_uid_hmac_key_v1"
 
-  // §4.5 queue quotas. These are the shipping values; changing any of them
-  // needs explicit approval (manifest §14.10).
-  static let ownerMaxItems = 500
-  static let ownerMaxBytes = 2 * 1024 * 1024
-  static let unboundMaxItems = 200
-  static let unboundMaxBytes = 512 * 1024
-  static let deviceMaxBytes = 8 * 1024 * 1024
+  // §4.5 queue capacity. Changed with the owner's explicit approval
+  // (manifest §14.10, approved 2026-11-12): the per-owner (500 items / 2 MB),
+  // unbound (200 / 512 KB) and device-wide (8 MB) quotas that REFUSED a new
+  // capture are gone. The queue is now the main file plus encrypted overflow
+  // segments (see "Overflow segments" below), so a capture is refused only when
+  // the device itself cannot take the write (ENOSPC), the key/lock/container is
+  // unavailable, or one single item is larger than a whole segment. Nothing is
+  // ever evicted and no older message is ever overwritten.
+  //
+  // One segment file (the main file included) takes at most this many items /
+  // plaintext bytes before the next capture opens a new overflow segment. They
+  // bound the size of every rewrite and of every decrypted blob in memory (the
+  // App Intent and Share Extension run under a small memory limit); they never
+  // limit how much the queue holds.
+  static let segmentMaxItems = 500
+  static let segmentMaxBytes = 2 * 1024 * 1024
+  /// The only remaining per-capture ceiling: one item must fit in one segment.
+  /// An SMS is a few hundred bytes; this rejects only pathological input (a
+  /// Shortcut passing a whole document), visibly, and never evicts anything.
+  static let maxItemBytes = segmentMaxBytes
   /// Unbound items expire after this long (§4.5). Stamped items never expire by age.
   static let unboundExpiryDays = 30
 
@@ -120,7 +143,9 @@ enum SharedCaptureStore {
     case encodingFailed
     /// The queue file could not be written or removed.
     case storageWriteFailed
-    /// §4.5: a count or byte quota is exhausted. Nothing is ever evicted.
+    /// The device cannot take the write (ENOSPC, "out of space"), or one single
+    /// item is larger than `maxItemBytes`. There is no count/byte quota on the
+    /// queue any more (2026-11-12); nothing is ever evicted.
     case quotaExceeded
     /// §4.4: a Remove-data barrier is in force; the capture is refused visibly.
     case barrierActive
@@ -153,6 +178,9 @@ enum SharedCaptureStore {
   static var pendingKeychainReadOverride: (() -> (status: OSStatus, data: Data?))?
   static var stateLayerWriteFault: ((_ store: String, _ layer: String) -> LayerWriteFault)?
   static var beforeLifetimeFinishLock: (() -> Void)?
+  /// A fault injected into the durable write of one queue file (main or
+  /// overflow segment), keyed by its final file name.
+  static var durableWriteFault: ((_ fileName: String) -> DurableWriteFault)?
   #else
   static let queueKeyReadOverride: (() -> (status: OSStatus, data: Data?))? = nil
   static let lockUnavailableOverride = false
@@ -163,10 +191,17 @@ enum SharedCaptureStore {
   static let pendingKeychainReadOverride: (() -> (status: OSStatus, data: Data?))? = nil
   static let stateLayerWriteFault: ((_ store: String, _ layer: String) -> LayerWriteFault)? = nil
   static let beforeLifetimeFinishLock: (() -> Void)? = nil
+  static let durableWriteFault: ((_ fileName: String) -> DurableWriteFault)? = nil
   #endif
 
   /// What a DEBUG test seam makes one layer write do. Always `.none` in release.
   enum LayerWriteFault { case none, fail, silentDrop }
+
+  /// What a DEBUG test seam makes one durable queue-file write do (never set in
+  /// release). `.fail` / `.outOfSpace` fail before anything is written;
+  /// `.tornTemp` leaves a half-written temp file behind and fails, which is what
+  /// a crash or power loss mid-write leaves on disk.
+  enum DurableWriteFault { case none, fail, outOfSpace, tornTemp }
 
   struct BackendConfig {
     let cloudProcessingEnabled: Bool
@@ -241,6 +276,8 @@ enum SharedCaptureStore {
     case deviceLocked
     /// CAP-6 refusals. They reuse the approved storage copy below: NEW
     /// user-visible copy needs approval (see the CAP-6a report for proposals).
+    /// Since 2026-11-12 `quotaFull` means the DEVICE is out of space (or one
+    /// item exceeds `maxItemBytes`); the queue itself has no count/byte quota.
     case quotaFull
     case removalInProgress
     case ownerChanged
@@ -277,7 +314,7 @@ enum SharedCaptureStore {
   }
 
   /// Codable payload consumed by Flutter through the native capture channel.
-  struct Payload: Codable {
+  struct Payload: Codable, Equatable {
     let id: String?
     let text: String
     let sender: String?
@@ -367,11 +404,15 @@ enum SharedCaptureStore {
   /// processing failed: posting the Darwin notification there would wake the
   /// host again immediately and loop drain → fail → re-enqueue → drain forever.
   ///
-  /// CAP-6 (§4.2): the owner record is read, the item stamped, the quotas checked
+  /// CAP-6 (§4.2): the owner record is read, the item stamped, its size checked
   /// and the item persisted in ONE critical section under the queue flock. With
   /// no admitted owner the item is `unbound` (with the last-admitted hint unless
   /// cleared); with a Remove-data barrier in force nothing is persisted.
   /// [requireOwnerUid] (a re-enqueue) refuses when the active owner is not that uid.
+  ///
+  /// `.enqueued` is returned only after the item's segment file was durably
+  /// written (temp file, F_FULLFSYNC, rename, directory sync). A full main file
+  /// never refuses: the item goes to an encrypted overflow segment.
   @discardableResult
   static func enqueue(
     text: String,
@@ -469,7 +510,7 @@ enum SharedCaptureStore {
           stamped.ownerHint = try readLastAdmittedHash()
           stamped.unboundAt = createdAtString
         }
-        try checkQuotas(queue, adding: stamped)
+        try checkQuotas(adding: stamped)
         queue.append(stamped)
         try saveQueue(queue, notifyHost: notifyHost)
         return .enqueued(stamped)
@@ -926,8 +967,21 @@ enum SharedCaptureStore {
     // cannot be read THROWS — it is never reported as an empty queue, because
     // the next enqueue would then overwrite recoverable records. It is
     // deliberately NOT deleted here. Callers hold the queue lock.
-    if let data = try readQueueFile() { return try decodeQueueBlob(data) }
-    return try migrateLegacyQueue()
+    //
+    // 2026-11-12: the queue is the main file followed by the overflow segments
+    // in sequence order; that is the drain order. The layout is remembered for
+    // this lock session so `saveQueue` rewrites only the segments whose items
+    // changed and appends new items to the tail segment.
+    let mainData = try readQueueFile()
+    var mainItems: [Payload] = []
+    if let data = mainData { mainItems = try decodeQueueBlob(data) }
+    let overflow = try readOverflowSegments(cleanUp: true)
+    queueLayout = QueueLayout(
+      segments: [QueueSegment(seq: 0, items: mainItems)] + overflow.segments,
+      nextSeq: overflow.nextSeq)
+    if mainData == nil { _ = try migrateLegacyQueue() }
+    guard let layout = queueLayout else { throw QueueError.unreadable }
+    return layout.items
   }
 
   /// `loadQueue` plus the §4.5 expiry: unbound items older than
@@ -969,7 +1023,12 @@ enum SharedCaptureStore {
     }
     let now = isoFormatter.string(from: Date())
     let items = try decodeQueueBlob(blob).map { quarantinedLegacy($0, at: now) }
-    if !items.isEmpty { try saveQueue(items, notifyHost: false) }
+    if !items.isEmpty {
+      // `saveQueue` takes the WHOLE queue: an overflow segment already on disk
+      // is kept, the migrated items are appended after it.
+      guard let layout = queueLayout else { throw QueueError.storageWriteFailed }
+      try saveQueue(layout.items + items, notifyHost: false)
+    }
     defaults?.set(true, forKey: migratedKey)
     return items
   }
@@ -1046,33 +1105,308 @@ enum SharedCaptureStore {
     return data
   }
 
-  /// §4.5 quotas over the queue AS IT WOULD BE after [item] is added; throws
-  /// before anything is written, and never evicts. Scope: the item's stamped
-  /// owner, or all unbound items, plus the device-wide byte cap.
-  private static func checkQuotas(_ queue: [Payload], adding item: Payload) throws {
-    func size(_ value: Payload) throws -> Int {
-      guard let data = try? JSONEncoder().encode(value) else { throw QueueError.encodingFailed }
-      return data.count
-    }
-    let stamped = item.ownerState == ownerStateStamped
-    let scope = queue.filter {
-      stamped
-        ? ($0.ownerState == ownerStateStamped && $0.ownerUid == item.ownerUid)
-        : ($0.ownerState == ownerStateUnbound)
-    }
-    var scopeBytes = 0
-    for value in scope { scopeBytes += try size(value) }
-    var deviceBytes = 0
-    for value in queue { deviceBytes += try size(value) }
-    let itemBytes = try size(item)
-    let maxItems = stamped ? ownerMaxItems : unboundMaxItems
-    let maxBytes = stamped ? ownerMaxBytes : unboundMaxBytes
-    if scope.count + 1 > maxItems
-      || scopeBytes + itemBytes > maxBytes
-      || deviceBytes + itemBytes > deviceMaxBytes {
-      throw QueueError.quotaExceeded
+  /// §4.5 since 2026-11-12: the queue has NO count or byte quota (a full
+  /// segment opens an overflow segment). The one ceiling left is per item: it
+  /// must fit in one segment. Throws before anything is written; never evicts.
+  private static func checkQuotas(adding item: Payload) throws {
+    guard let data = try? JSONEncoder().encode(item) else { throw QueueError.encodingFailed }
+    if data.count > maxItemBytes { throw QueueError.quotaExceeded }
+  }
+
+  // MARK: Overflow segments (2026-11-12, owner-approved)
+  //
+  // Segment 0 is the main file (`pending_bank_messages_v3.bin`, the unchanged
+  // pre-overflow format, still read and written as before). Segments 1... live
+  // in `overflowDirName` as `seg-<16-digit seq>.bin`: the same AES-GCM blob of
+  // a JSON `[Payload]` under the same Keychain key, with the same owner stamps.
+  // Every file is written durably (temp file, F_FULLFSYNC, rename, directory
+  // sync) under the queue flock, so the App, the App Intent and the Share
+  // Extension are serialized exactly as for the main file. An item never moves
+  // between segments; new items go to the highest-numbered segment, and a new
+  // segment is opened when that one is full (`segmentMaxItems` /
+  // `segmentMaxBytes`). A torn temp file is never read. A segment that cannot
+  // be decrypted although the key is readable is moved to `quarantineDirName`
+  // (kept, counted in `queueStats`, never decrypted again, deleted only by a
+  // purge or a Remove-data sweep); a missing or unreadable key fails the whole
+  // store closed instead, like an unreadable main file.
+
+  private struct QueueSegment {
+    /// 0 is the main file; overflow segments are 1, 2, ...
+    let seq: Int
+    var items: [Payload]
+  }
+
+  private struct QueueLayout {
+    /// `segments[0]` is always the main file (possibly absent / empty), then
+    /// the readable overflow segments in ascending order.
+    var segments: [QueueSegment]
+    /// Above every overflow segment name on disk (quarantine candidates too).
+    var nextSeq: Int
+    var items: [Payload] { segments.flatMap { $0.items } }
+  }
+
+  /// The layout read by the last `loadQueue` of THIS lock session. Reset by
+  /// `withQueueLock`, so it never outlives the flock it was read under.
+  private static var queueLayout: QueueLayout?
+
+  private static func overflowDirURL() throws -> URL {
+    try appGroupContainerURL().appendingPathComponent(overflowDirName, isDirectory: true)
+  }
+
+  private static func quarantineDirURL() throws -> URL {
+    try appGroupContainerURL().appendingPathComponent(quarantineDirName, isDirectory: true)
+  }
+
+  private static func segmentURL(_ seq: Int) throws -> URL {
+    guard seq > 0 else { return try queueFileURL() }
+    return try overflowDirURL().appendingPathComponent(
+      segmentFilePrefix + String(format: "%016d", seq) + segmentFileSuffix)
+  }
+
+  private static func segmentSeq(_ name: String) -> Int? {
+    guard name.hasPrefix(segmentFilePrefix), name.hasSuffix(segmentFileSuffix),
+          !name.contains(tempFileMarker) else { return nil }
+    let digits = name.dropFirst(segmentFilePrefix.count).dropLast(segmentFileSuffix.count)
+    guard digits.count == 16, digits.allSatisfy({ $0.isASCII && $0.isNumber }),
+          let seq = Int(digits), seq > 0 else { return nil }
+    return seq
+  }
+
+  /// Overflow segments are always sealed (no plaintext form), so they need the
+  /// key itself. CAP-0: a key that cannot be read throws `keyUnavailable`; a
+  /// key that is GONE while sealed segments exist throws `unreadable` (the same
+  /// as an undecryptable main file). Neither case quarantines or skips a file.
+  private static func segmentKey() throws -> SymmetricKey {
+    let read = readQueueKey()
+    switch read.status {
+    case errSecSuccess:
+      guard let data = read.data, data.count == 32 else { throw QueueError.unreadable }
+      return SymmetricKey(data: data)
+    case errSecItemNotFound:
+      throw QueueError.unreadable
+    default:
+      throw QueueError.keyUnavailable(read.status)
     }
   }
+
+  /// The readable overflow segments in order. [cleanUp] (writers, under the
+  /// flock) removes torn temp files and moves undecryptable segments to the
+  /// quarantine directory; without it (read-only stats) nothing on disk
+  /// changes and an undecryptable segment is only skipped and counted.
+  private static func readOverflowSegments(cleanUp: Bool) throws
+    -> (segments: [QueueSegment], nextSeq: Int, corrupt: Int) {
+    let fm = FileManager.default
+    if cleanUp { removeTornMainTempFiles() }
+    let dir = try overflowDirURL()
+    var isDirectory: ObjCBool = false
+    guard fm.fileExists(atPath: dir.path, isDirectory: &isDirectory) else { return ([], 1, 0) }
+    guard isDirectory.boolValue, let names = try? fm.contentsOfDirectory(atPath: dir.path) else {
+      throw QueueError.unreadable
+    }
+    var found: [(seq: Int, name: String)] = []
+    for name in names {
+      if name.contains(tempFileMarker) {
+        // A torn write: never a segment. We hold the flock, so no write is in
+        // progress; a writer removes it, a reader just ignores it.
+        if cleanUp { try? fm.removeItem(at: dir.appendingPathComponent(name)) }
+        continue
+      }
+      if let seq = segmentSeq(name) { found.append((seq, name)) }
+    }
+    found.sort { $0.seq < $1.seq }
+    let nextSeq = (found.last?.seq ?? 0) + 1
+    guard !found.isEmpty else { return ([], nextSeq, 0) }
+    let key = try segmentKey()
+    var segments: [QueueSegment] = []
+    var corrupt = 0
+    for entry in found {
+      let url = dir.appendingPathComponent(entry.name)
+      // A file that cannot be READ (e.g. data protection before first unlock)
+      // is not corrupt: fail closed, keep it.
+      guard let data = try? Data(contentsOf: url) else { throw QueueError.unreadable }
+      if let box = try? AES.GCM.SealedBox(combined: data),
+         let plain = try? AES.GCM.open(box, using: key),
+         let items = try? JSONDecoder().decode([Payload].self, from: plain) {
+        if !items.isEmpty { segments.append(QueueSegment(seq: entry.seq, items: items)) }
+        continue
+      }
+      corrupt += 1
+      if cleanUp { quarantineSegment(url) }
+    }
+    return (segments, nextSeq, corrupt)
+  }
+
+  /// Moves an undecryptable overflow segment aside, byte-for-byte. Best effort:
+  /// if the move fails it stays in place, is skipped on every load, and is
+  /// never rewritten (new segments are numbered above it).
+  private static func quarantineSegment(_ url: URL) {
+    let fm = FileManager.default
+    guard let dir = try? quarantineDirURL() else { return }
+    try? fm.createDirectory(
+      at: dir, withIntermediateDirectories: true,
+      attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+    let target = dir.appendingPathComponent(
+      url.lastPathComponent + "." + UUID().uuidString.lowercased())
+    try? fm.moveItem(at: url, to: target)
+  }
+
+  /// Content-free count of the segments set aside as undecryptable.
+  private static func quarantinedSegmentCount() -> Int {
+    guard let dir = try? quarantineDirURL(),
+          let names = try? FileManager.default.contentsOfDirectory(atPath: dir.path) else {
+      return 0
+    }
+    return names.count
+  }
+
+  /// Leftover `.pending_bank_messages_v3.bin.tmp-*` files of a torn main write.
+  private static func removeTornMainTempFiles() {
+    let fm = FileManager.default
+    guard let container = try? appGroupContainerURL(),
+          let names = try? fm.contentsOfDirectory(atPath: container.path) else { return }
+    let prefix = "." + queueFileName + tempFileMarker
+    for name in names where name.hasPrefix(prefix) {
+      try? fm.removeItem(at: container.appendingPathComponent(name))
+    }
+  }
+
+  /// True when a sealed queue file (main or overflow segment) exists, so a
+  /// missing key must NOT be replaced by a new one.
+  private static func sealedQueueFilesExist() throws -> Bool {
+    let fm = FileManager.default
+    if fm.fileExists(atPath: try queueFileURL().path) { return true }
+    let names = (try? fm.contentsOfDirectory(atPath: try overflowDirURL().path)) ?? []
+    return names.contains { segmentSeq($0) != nil }
+  }
+
+  /// Which segment an item was loaded from is found by its id (ids are unique
+  /// in the queue: `enqueue` deduplicates); an id-less legacy record falls back
+  /// to its content, and duplicates are matched one stored copy at a time.
+  private static func slotKey(_ item: Payload) -> String {
+    if let id = item.id { return "id:" + id }
+    return "noid:" + [item.createdAt ?? "", item.receivedAt ?? "", item.text].joined(separator: "|")
+  }
+
+  private static func plaintextSize(_ items: [Payload]) throws -> Int {
+    guard let data = try? JSONEncoder().encode(items) else { throw QueueError.encodingFailed }
+    return data.count
+  }
+
+  /// The QueueError for a failed file-system write: ENOSPC ("out of space")
+  /// is `quotaExceeded`, anything else `storageWriteFailed`.
+  private static func writeFailure(_ error: Error) -> QueueError {
+    if let queueError = error as? QueueError { return queueError }
+    let ns = error as NSError
+    let underlying = ns.userInfo[NSUnderlyingErrorKey] as? NSError
+    if (ns.domain == NSCocoaErrorDomain && ns.code == NSFileWriteOutOfSpaceError)
+      || (ns.domain == NSPOSIXErrorDomain && ns.code == Int(ENOSPC))
+      || (underlying?.domain == NSPOSIXErrorDomain && underlying?.code == Int(ENOSPC)) {
+      return .quotaExceeded
+    }
+    return .storageWriteFailed
+  }
+
+  /// The durable write of one queue file: the bytes go to a fresh
+  /// `.<name>.tmp-<uuid>` beside it (file protection
+  /// completeUntilFirstUserAuthentication), are flushed with F_FULLFSYNC
+  /// (fsync as fallback), and only then renamed over the final name; the
+  /// directory is synced so the rename survives a power loss. Until the rename
+  /// the previous file is untouched; a crash leaves at most a temp file, which
+  /// is never read and is removed by the next writer.
+  private static func writeDurably(_ data: Data, to url: URL) throws {
+    let fm = FileManager.default
+    let dir = url.deletingLastPathComponent()
+    let temp = dir.appendingPathComponent(
+      "." + url.lastPathComponent + tempFileMarker + UUID().uuidString.lowercased())
+    do {
+      try fm.createDirectory(
+        at: dir, withIntermediateDirectories: true,
+        attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication])
+    } catch {
+      throw writeFailure(error)
+    }
+    switch durableWriteFault?(url.lastPathComponent) ?? .none {
+    case .none: break
+    case .fail: throw QueueError.storageWriteFailed
+    case .outOfSpace: throw QueueError.quotaExceeded
+    case .tornTemp:
+      try? data.prefix(data.count / 2).write(to: temp, options: [.withoutOverwriting])
+      throw QueueError.storageWriteFailed
+    }
+    do {
+      try data.write(
+        to: temp, options: [.withoutOverwriting, .completeFileProtectionUntilFirstUserAuthentication])
+    } catch {
+      try? fm.removeItem(at: temp)
+      throw writeFailure(error)
+    }
+    let fd = open(temp.path, O_RDWR)
+    var synced = false
+    if fd >= 0 {
+      synced = fcntl(fd, F_FULLFSYNC) == 0 || fsync(fd) == 0
+      close(fd)
+    }
+    guard synced else {
+      try? fm.removeItem(at: temp)
+      throw QueueError.storageWriteFailed
+    }
+    guard rename(temp.path, url.path) == 0 else {
+      let code = errno
+      try? fm.removeItem(at: temp)
+      throw code == ENOSPC ? QueueError.quotaExceeded : QueueError.storageWriteFailed
+    }
+    // The rename is visible now. If it cannot be made durable the write is
+    // reported as failed (at worst a later retry is a deduplicated repeat).
+    let dirFD = open(dir.path, O_RDONLY)
+    guard dirFD >= 0 else { throw QueueError.storageWriteFailed }
+    defer { close(dirFD) }
+    guard fcntl(dirFD, F_FULLFSYNC) == 0 || fsync(dirFD) == 0 else {
+      throw QueueError.storageWriteFailed
+    }
+  }
+
+  private static func removeSegmentFile(_ seq: Int) throws {
+    guard seq > 0 else { return try removeQueueFile() }
+    let url = try segmentURL(seq)
+    guard FileManager.default.fileExists(atPath: url.path) else { return }
+    do {
+      try FileManager.default.removeItem(at: url)
+    } catch {
+      throw QueueError.storageWriteFailed
+    }
+  }
+
+  #if CAPTURE_STATE_WRITER
+  /// Purge: every overflow segment, every quarantined segment and every torn
+  /// temp file. Throws (so the purge reports failure) if ANY of them remains.
+  private static func removeOverflowFiles() throws {
+    let fm = FileManager.default
+    removeTornMainTempFiles()
+    let targets = [try overflowDirURL(), try quarantineDirURL()]
+    for url in targets where fm.fileExists(atPath: url.path) {
+      try? fm.removeItem(at: url)
+    }
+    let prefix = "." + queueFileName + tempFileMarker
+    let container = try appGroupContainerURL()
+    let leftovers = ((try? fm.contentsOfDirectory(atPath: container.path)) ?? [])
+      .filter { $0.hasPrefix(prefix) }
+    guard targets.allSatisfy({ !fm.fileExists(atPath: $0.path) }), leftovers.isEmpty else {
+      throw QueueError.storageWriteFailed
+    }
+  }
+
+  /// Remove-data sweep: a quarantined segment cannot be read, so it cannot be
+  /// shown NOT to hold the removed user's captures; it is deleted.
+  private static func removeQuarantinedSegments() throws {
+    let url = try quarantineDirURL()
+    guard FileManager.default.fileExists(atPath: url.path) else { return }
+    do {
+      try FileManager.default.removeItem(at: url)
+    } catch {
+      throw QueueError.storageWriteFailed
+    }
+  }
+  #endif
 
   private static func loadNotificationRoutes() -> [NotificationRoutePayload] {
     guard let data = defaults?.data(forKey: pendingNotificationRoutesKey),
@@ -1097,6 +1431,9 @@ enum SharedCaptureStore {
     do {
       try withProtectedWriteLock {
         try removeQueueFile()
+        // 2026-11-12: overflow, quarantine and torn temp files go too, BEFORE
+        // the key; if any remains the purge fails and the key is kept.
+        try removeOverflowFiles()
         defaults?.removeObject(forKey: queueKey)
         defaults?.removeObject(forKey: migratedKey)
         defaults?.removeObject(forKey: legacyKey)
@@ -1141,6 +1478,8 @@ enum SharedCaptureStore {
       guard errno == EINTR else { throw QueueError.lockUnavailable }
     }
     defer { flock(fd, LOCK_UN) }
+    queueLayout = nil
+    defer { queueLayout = nil }
     return try body()
   }
 
@@ -1184,22 +1523,57 @@ enum SharedCaptureStore {
   #endif
 
   private static func saveQueue(_ queue: [Payload], notifyHost: Bool = true) throws {
-    if queue.isEmpty {
-      try removeQueueFile()
-    } else {
-      let data = try encodeQueueBlob(queue)
-      // Temp file + rename (`.atomic`), readable after the first unlock.
-      do {
-        try data.write(
-          to: try queueFileURL(),
-          options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
-        )
-      } catch let error as QueueError {
-        throw error
-      } catch {
-        throw QueueError.storageWriteFailed
+    // 2026-11-12: [queue] is the whole logical queue (main + overflow). Every
+    // item stays in the segment it was loaded from; only segments whose items
+    // changed are rewritten (each one with `writeDurably`), emptied overflow
+    // segments are deleted, and NEW items are appended to the tail segment,
+    // opening a new overflow segment when the tail is full. Nothing is moved,
+    // dropped or overwritten to make room.
+    guard let layout = queueLayout else { throw QueueError.storageWriteFailed }
+    queueLayout = nil   // restored below only if every write succeeds
+    var assigned = layout.segments.map { QueueSegment(seq: $0.seq, items: []) }
+    var slots: [String: [Int]] = [:]
+    for (index, segment) in layout.segments.enumerated() {
+      for item in segment.items { slots[slotKey(item), default: []].append(index) }
+    }
+    var fresh: [Payload] = []
+    for item in queue {
+      let key = slotKey(item)
+      if var indexes = slots[key], !indexes.isEmpty {
+        assigned[indexes.removeFirst()].items.append(item)
+        slots[key] = indexes
+      } else {
+        fresh.append(item)
       }
     }
+    var nextSeq = layout.nextSeq
+    if !fresh.isEmpty {
+      var tail = assigned.count - 1
+      var tailBytes = try plaintextSize(assigned[tail].items)
+      for item in fresh {
+        let itemBytes = try plaintextSize([item])
+        let tailItems = assigned[tail].items
+        if !tailItems.isEmpty,
+           tailItems.count + 1 > segmentMaxItems || tailBytes + itemBytes > segmentMaxBytes {
+          assigned.append(QueueSegment(seq: nextSeq, items: []))
+          nextSeq += 1
+          tail = assigned.count - 1
+          tailBytes = 0
+        }
+        assigned[tail].items.append(item)
+        tailBytes += itemBytes
+      }
+    }
+    for (index, segment) in assigned.enumerated() {
+      let before = index < layout.segments.count ? layout.segments[index].items : []
+      if segment.items.isEmpty {
+        if segment.seq == 0 || !before.isEmpty { try removeSegmentFile(segment.seq) }
+      } else if segment.items != before {
+        try writeDurably(try encodeQueueBlob(segment.items), to: try segmentURL(segment.seq))
+      }
+    }
+    queueLayout = QueueLayout(
+      segments: assigned.filter { $0.seq == 0 || !$0.items.isEmpty }, nextSeq: nextSeq)
     updatePendingMetadata(queue)
     defaults?.synchronize()
     if notifyHost && !queue.isEmpty {
@@ -4024,6 +4398,7 @@ enum SharedCaptureStore {
         return false
       })
       try saveQueue(queue, notifyHost: false)
+      try removeQuarantinedSegments()
       if try readLastAdmittedHash() == hash { try removeKeychain(forKey: lastAdmittedHashKC) }
       if let owner = try readActiveOwner(), owner.uid == target {
         try removeKeychain(forKey: activeOwnerKC)
@@ -4074,27 +4449,41 @@ enum SharedCaptureStore {
     /// The v2 queue has not been migrated to v3 yet. Its items are counted as
     /// unbound (what the migration will make them) WITHOUT migrating.
     var migrationPending = false
+    /// Overflow segments that could not be decrypted although the key was
+    /// readable (quarantined or skipped). Their items are not in any count
+    /// above; the files are kept until a purge / Remove-data sweep.
+    var quarantinedSegments = 0
   }
 
   /// The queue for stats: STRICTLY read-only. Unlike `loadQueue` it never runs
   /// the one-time v2 -> v3 migration (a write); a not-yet-migrated v2 blob is
-  /// counted as the unbound items the migration will make of it.
-  private static func loadQueueReadOnly() throws -> (queue: [Payload], migrationPending: Bool) {
-    if let data = try readQueueFile() { return (try decodeQueueBlob(data), false) }
+  /// counted as the unbound items the migration will make of it. Overflow
+  /// segments are read without cleanup: nothing is moved, removed or written.
+  private static func loadQueueReadOnly() throws
+    -> (queue: [Payload], migrationPending: Bool, quarantined: Int) {
+    let mainData = try readQueueFile()
+    var mainItems: [Payload] = []
+    if let data = mainData { mainItems = try decodeQueueBlob(data) }
+    let overflow = try readOverflowSegments(cleanUp: false)
+    let rest = overflow.segments.flatMap { $0.items }
+    let quarantined = overflow.corrupt + quarantinedSegmentCount()
+    if mainData != nil { return (mainItems + rest, false, quarantined) }
     guard defaults?.bool(forKey: migratedKey) != true,
-          let blob = defaults?.data(forKey: queueKey) else { return ([], false) }
-    return (try decodeQueueBlob(blob).map { quarantinedLegacy($0, at: "") }, true)
+          let blob = defaults?.data(forKey: queueKey) else { return (rest, false, quarantined) }
+    return (try decodeQueueBlob(blob).map { quarantinedLegacy($0, at: "") } + rest, true, quarantined)
   }
 
-  /// Read-only, under the flock (writes nothing, migrates nothing). The limits
-  /// are the §4.5 shipping values.
+  /// Read-only, under the flock (writes nothing, migrates nothing). Since
+  /// 2026-11-12 there is no per-owner / unbound quota, so `ownerQuota` and
+  /// `unboundQuota` are always `ok`; `deviceQuota` reports the free space of
+  /// the volume (the only thing that can refuse a capture now).
   static func queueStats() throws -> QueueStats {
     try withQueueLock {
-      let (queue, migrationPending) = try loadQueueReadOnly()
+      let (queue, migrationPending, quarantined) = try loadQueueReadOnly()
       let owner = try readActiveOwner()
       var stats = QueueStats()
       stats.migrationPending = migrationPending
-      var ownerItems = 0
+      stats.quarantinedSegments = quarantined
       func size(_ value: Payload) throws -> Int {
         guard let data = try? JSONEncoder().encode(value) else { throw QueueError.encodingFailed }
         return data.count
@@ -4106,30 +4495,27 @@ enum SharedCaptureStore {
           stats.unbound += 1
           stats.unboundBytes += bytes
         } else if let owner = owner, item.ownerUid == owner.uid {
-          ownerItems += 1
           stats.activeOwnerBytes += bytes
           if item.localOnly == true { stats.localOnly += 1 } else { stats.stamped += 1 }
         } else {
           stats.waiting += 1
         }
       }
-      func state(count: Int, maxCount: Int?, bytes: Int, maxBytes: Int) -> QuotaState {
-        if bytes >= maxBytes || (maxCount.map { count >= $0 } ?? false) { return .full }
-        if bytes * 5 >= maxBytes * 4 || (maxCount.map { count * 5 >= $0 * 4 } ?? false) {
-          return .near
-        }
-        return .ok
-      }
-      stats.ownerQuota = state(
-        count: ownerItems, maxCount: ownerMaxItems,
-        bytes: stats.activeOwnerBytes, maxBytes: ownerMaxBytes)
-      stats.unboundQuota = state(
-        count: stats.unbound, maxCount: unboundMaxItems,
-        bytes: stats.unboundBytes, maxBytes: unboundMaxBytes)
-      stats.deviceQuota = state(
-        count: queue.count, maxCount: nil, bytes: stats.deviceBytes, maxBytes: deviceMaxBytes)
+      stats.deviceQuota = deviceCapacityState()
       return stats
     }
+  }
+
+  /// `full` when the volume has less free space than two whole segments (a
+  /// tail rewrite needs a temp copy), `near` below 64 MB. Diagnostics only:
+  /// a capture is refused only by an actual failed write.
+  private static func deviceCapacityState() -> QuotaState {
+    guard let url = try? appGroupContainerURL(),
+          let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
+          let free = values.volumeAvailableCapacityForImportantUsage else { return .ok }
+    if free < Int64(2 * segmentMaxBytes) { return .full }
+    if free < Int64(64 * 1024 * 1024) { return .near }
+    return .ok
   }
 
   /// Every queued item, for diagnostics and tests. Content-bearing: never log it.
@@ -4211,6 +4597,12 @@ enum SharedCaptureStore {
       }
       return SymmetricKey(data: data)
     case errSecItemNotFound:
+      // 2026-11-12: a key is minted only when NO sealed queue file exists. A
+      // main file or overflow segment whose key is gone (e.g. a backup restored
+      // without the ThisDeviceOnly Keychain item) is kept byte-for-byte and
+      // every write is refused: a new key would orphan it for good, even if
+      // the old key came back.
+      guard try !sealedQueueFilesExist() else { throw QueueError.unreadable }
       let key = SymmetricKey(size: .bits256)
       let raw = key.withUnsafeBytes { Data(Array($0)) }
       let status = SharedKeychain.writeData(raw, forKey: queueEncryptionKeyKC)

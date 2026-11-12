@@ -282,8 +282,9 @@ void main() {
           '1');
       expect(_row(r, 'Capture', 'unbound items hinted to this user'), '2');
       // The count-only quota rows were replaced by the native stats rows.
-      expect(_row(r, 'Capture', 'queue limit items (this owner)'), '500');
-      expect(_row(r, 'Capture', 'queue limit items (unbound)'), '200');
+      // 2026-11-12: no per-owner/unbound quota rows; segment sizes instead.
+      expect(_row(r, 'Capture', 'queue segment size items'), '500');
+      expect(_row(r, 'Capture', 'queue segment size bytes'), '2097152');
       expect(_row(r, 'Capture', 'queue stats available'), 'no');
       expect(_row(r, 'Capture', 'queue quota (this owner)'), '—');
     });
@@ -301,9 +302,11 @@ void main() {
         ownerQuota: CaptureQuotaState.near,
         unboundQuota: CaptureQuotaState.ok,
         deviceQuota: CaptureQuotaState.full,
+        quarantinedSegments: 2,
       );
       final r = await f.collect();
       expect(_row(r, 'Capture', 'queue stats available'), 'yes');
+      expect(_row(r, 'Capture', 'queue stats: quarantined segments'), '2');
       expect(_row(r, 'Capture', 'queue stats: stamped, may upload'), '4');
       expect(_row(r, 'Capture', 'queue stats: local-only'), '3');
       expect(_row(r, 'Capture', 'queue stats: waiting (other owners)'), '2');
@@ -314,7 +317,8 @@ void main() {
       expect(_row(r, 'Capture', 'queue quota (this owner)'), 'near');
       expect(_row(r, 'Capture', 'queue quota (unbound)'), 'ok');
       expect(_row(r, 'Capture', 'queue quota (device)'), 'full');
-      expect(_row(r, 'Capture', 'queue limit bytes (device)'), '8388608');
+      expect(_row(r, 'Capture', 'queue limit bytes (single capture)'),
+          '2097152');
     });
 
     test('CAP-6a: the removal barrier', () async {
@@ -327,18 +331,26 @@ void main() {
           '2026-10-06T11:00:00.000Z');
     });
 
-    test('CAP-6a: the quota constants equal the native shipping values', () {
+    test('CAP-6a: the segment constants equal the native shipping values', () {
       final swift =
           File('ios/Runner/SharedCaptureStore.swift').readAsStringSync();
-      expect(RegExp(r'static let ownerMaxItems = (\d+)').firstMatch(swift)![1],
-          '$kCaptureOwnerMaxItems');
       expect(
-          RegExp(r'static let unboundMaxItems = (\d+)').firstMatch(swift)![1],
-          '$kCaptureUnboundMaxItems');
+          RegExp(r'static let segmentMaxItems = (\d+)').firstMatch(swift)![1],
+          '$kCaptureSegmentMaxItems');
+      expect(swift, contains('static let maxItemBytes = segmentMaxBytes'));
+      expect(kCaptureMaxItemBytes, kCaptureSegmentMaxBytes);
+      // The old refusing quotas are gone on both sides (2026-11-12).
+      for (final gone in const [
+        'ownerMaxItems',
+        'unboundMaxItems',
+        'ownerMaxBytes',
+        'unboundMaxBytes',
+        'deviceMaxBytes',
+      ]) {
+        expect(swift, isNot(contains('static let $gone')));
+      }
       for (final entry in {
-        'ownerMaxBytes': kCaptureOwnerMaxBytes,
-        'unboundMaxBytes': kCaptureUnboundMaxBytes,
-        'deviceMaxBytes': kCaptureDeviceMaxBytes,
+        'segmentMaxBytes': kCaptureSegmentMaxBytes,
       }.entries) {
         final m = RegExp('static let ${entry.key} = (.+)').firstMatch(swift)!;
         // `2 * 1024 * 1024` style: evaluate the product.

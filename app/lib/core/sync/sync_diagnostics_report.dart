@@ -24,18 +24,16 @@ import 'sync_pull_proof.dart' show readSeqCursors;
 /// (SMS text, sender, amount, merchant, card digits, payload ids, uids, epochs,
 /// error messages) has no way in: an unexpected string becomes `[redacted]`.
 
-/// Manifest §4.5 per-owner queue count quota, mirrored from the native queue
-/// (`SharedCaptureStore.ownerMaxItems`; a test pins the two together).
-const int kCaptureOwnerMaxItems = 500;
+/// Manifest §4.5 (owner-approved change, 2026-11-12): the native queue has no
+/// count or byte quota any more. A full segment file opens an encrypted
+/// overflow segment; these are segment sizes, mirrored from
+/// `SharedCaptureStore.segmentMaxItems` / `segmentMaxBytes` (a test pins them).
+const int kCaptureSegmentMaxItems = 500;
+const int kCaptureSegmentMaxBytes = 2 * 1024 * 1024;
 
-/// Manifest §4.5 unbound queue count quota (`SharedCaptureStore.unboundMaxItems`).
-const int kCaptureUnboundMaxItems = 200;
-
-/// Manifest §4.5 byte quotas (`SharedCaptureStore.ownerMaxBytes`,
-/// `unboundMaxBytes`, `deviceMaxBytes`; a test pins them together).
-const int kCaptureOwnerMaxBytes = 2 * 1024 * 1024;
-const int kCaptureUnboundMaxBytes = 512 * 1024;
-const int kCaptureDeviceMaxBytes = 8 * 1024 * 1024;
+/// The one remaining per-capture ceiling (`SharedCaptureStore.maxItemBytes`):
+/// a single capture larger than a whole segment is refused, nothing is evicted.
+const int kCaptureMaxItemBytes = kCaptureSegmentMaxBytes;
 
 final RegExp _codeWord = RegExp(r'^[A-Za-z0-9_.:\-]{1,40}$');
 final RegExp _opaqueId = RegExp(r'^[0-9a-fA-F-]{16,}$');
@@ -405,17 +403,16 @@ Future<SyncDiagnosticsReport> collectSyncDiagnostics(
     r.add('queue stats: waiting (other owners)', stats?.waiting);
     r.add('queue stats: unbound', stats?.unbound);
     r.add('queue stats: v2 migration pending', stats?.migrationPending);
+    r.add('queue stats: quarantined segments', stats?.quarantinedSegments);
     r.add('queue bytes (this owner)', stats?.activeOwnerBytes);
     r.add('queue bytes (unbound)', stats?.unboundBytes);
     r.add('queue bytes (device)', stats?.deviceBytes);
     r.add('queue quota (this owner)', stats?.ownerQuota);
     r.add('queue quota (unbound)', stats?.unboundQuota);
     r.add('queue quota (device)', stats?.deviceQuota);
-    r.add('queue limit items (this owner)', kCaptureOwnerMaxItems);
-    r.add('queue limit bytes (this owner)', kCaptureOwnerMaxBytes);
-    r.add('queue limit items (unbound)', kCaptureUnboundMaxItems);
-    r.add('queue limit bytes (unbound)', kCaptureUnboundMaxBytes);
-    r.add('queue limit bytes (device)', kCaptureDeviceMaxBytes);
+    r.add('queue segment size items', kCaptureSegmentMaxItems);
+    r.add('queue segment size bytes', kCaptureSegmentMaxBytes);
+    r.add('queue limit bytes (single capture)', kCaptureMaxItemBytes);
     r.add('removal barrier active', barrier != null);
     r.add('removal barrier started', barrier == null ? null : DateTime.tryParse(barrier.startedAt));
     r.add('receipts in replica', receipts);

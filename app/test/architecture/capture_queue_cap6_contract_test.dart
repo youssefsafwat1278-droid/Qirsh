@@ -41,12 +41,32 @@ void main() {
       expect(storeCopy, store);
     });
 
-    test('queue v3 is an atomic, file-protected file; not flag-gated', () {
+    test('queue v3 is a durably written, file-protected file; not flag-gated',
+        () {
       expect(store, contains('"pending_bank_messages_v3.bin"'));
+      // 2026-11-12: every queue file (main + overflow segment) goes through
+      // ONE durable path: temp file -> F_FULLFSYNC -> rename -> directory sync.
       final save = body(store, 'private static func saveQueue(');
-      expect(save, contains('.atomic'), reason: 'temp file + rename');
-      expect(save,
+      expect(save, contains('try writeDurably('));
+      expect(save, isNot(contains('data.write(')),
+          reason: 'no second, non-durable write path');
+      final write = body(store, 'private static func writeDurably(');
+      final temp = write.indexOf('try data.write(');
+      final sync = write.indexOf('F_FULLFSYNC');
+      final rename = write.indexOf('rename(temp.path, url.path)');
+      final dirSync = write.lastIndexOf('F_FULLFSYNC');
+      expect(temp, greaterThan(-1));
+      expect(write, contains('.withoutOverwriting'),
+          reason: 'the bytes go to a fresh temp file, never the final name');
+      expect(write,
           contains('.completeFileProtectionUntilFirstUserAuthentication'));
+      expect(sync, greaterThan(temp), reason: 'flushed before the rename');
+      expect(rename, greaterThan(sync), reason: 'renamed only after the flush');
+      expect(dirSync, greaterThan(rename),
+          reason: 'the directory is synced so the rename survives power loss');
+      // A torn temp file is never a segment and is removed under the flock.
+      expect(body(store, 'private static func segmentSeq('),
+          contains('!name.contains(tempFileMarker)'));
       // One-way format change: manifest §9 lists P2 as "no flag".
       expect(store, isNot(contains('capture_import_v3')));
       expect(intent, isNot(contains('capture_import_v3')));
@@ -182,25 +202,64 @@ void main() {
     });
   });
 
-  group('quotas (§4.5)', () {
-    test('the values are exactly the manifest values', () {
-      expect(store, contains('static let ownerMaxItems = 500'));
-      expect(store, contains('static let ownerMaxBytes = 2 * 1024 * 1024'));
-      expect(store, contains('static let unboundMaxItems = 200'));
-      expect(store, contains('static let unboundMaxBytes = 512 * 1024'));
-      expect(store, contains('static let deviceMaxBytes = 8 * 1024 * 1024'));
+  group('capacity (§4.5, owner-approved change 2026-11-12)', () {
+    test('segment sizes and the single-item ceiling; no refusing quota', () {
+      expect(store, contains('static let segmentMaxItems = 500'));
+      expect(store, contains('static let segmentMaxBytes = 2 * 1024 * 1024'));
+      expect(store, contains('static let maxItemBytes = segmentMaxBytes'));
       expect(store, contains('static let unboundExpiryDays = 30'));
+      for (final gone in const [
+        'ownerMaxItems',
+        'ownerMaxBytes',
+        'unboundMaxItems',
+        'unboundMaxBytes',
+        'deviceMaxBytes',
+      ]) {
+        expect(store, isNot(contains(gone)),
+            reason: '$gone was a refusing quota; it must not come back');
+      }
+      expect(store, contains('"pending_bank_messages_v3_overflow"'));
     });
 
-    test('exhaustion throws before any write and nothing is evicted', () {
+    test('the only refusal is per item, before any write, never evicting', () {
       final quota = body(store, 'private static func checkQuotas(');
       expect(quota, contains('throw QueueError.quotaExceeded'));
-      expect(quota, contains('ownerMaxItems'));
-      expect(quota, contains('unboundMaxItems'));
-      expect(quota, contains('deviceMaxBytes'));
+      expect(quota, contains('maxItemBytes'));
       expect(quota, isNot(contains('removeFirst')));
       expect(quota, isNot(contains('removeAll')));
       expect(quota, isNot(contains('saveQueue')));
+      // A full segment opens a new one; the save path never drops an item.
+      final save = body(store, 'private static func saveQueue(');
+      expect(save, contains('segmentMaxItems'));
+      expect(save, contains('segmentMaxBytes'));
+      expect(save, contains('assigned.append(QueueSegment(seq: nextSeq'));
+      for (final drop in const ['queue.remove', 'fresh.remove', 'removeAll']) {
+        expect(save, isNot(contains(drop)), reason: 'saveQueue never drops an item');
+      }
+    });
+
+    test('a missing key never mints a new one over sealed files', () {
+      final key = body(store, 'private static func encryptionKey()');
+      expect(key.indexOf('guard try !sealedQueueFilesExist()'),
+          lessThan(key.indexOf('SymmetricKey(size:')));
+      final segKey = body(store, 'private static func segmentKey()');
+      expect(segKey, isNot(contains('SymmetricKey(size:')));
+      expect(segKey, contains('throw QueueError.unreadable'));
+    });
+
+    test('undecryptable overflow is quarantined (moved, never deleted) and counted',
+        () {
+      final q = body(store, 'private static func quarantineSegment(');
+      expect(q, contains('moveItem('));
+      expect(q, isNot(contains('removeItem(')));
+      final stats = body(store, 'struct QueueStats: Equatable');
+      expect(stats, contains('var quarantinedSegments = 0'));
+      final purge = body(store, 'static func purgeUserOwnedState()');
+      expect(purge.indexOf('try removeOverflowFiles()'),
+          lessThan(purge.indexOf('queueEncryptionKeyKC')),
+          reason: 'overflow goes before the key; a leftover fails the purge');
+      expect(body(store, 'static func finishRemoval('),
+          contains('try removeQuarantinedSegments()'));
     });
 
     test('only UNBOUND items expire by age', () {
@@ -418,11 +477,21 @@ void main() {
       'testUploadAuthorizationOwnerMismatchAndConsentMirror',
       'testOwnerRecordUnavailablePersistsNothing',
       'testFlockHeldDuringStamping',
-      'testQuotaValuesAreTheManifestValues',
-      'testUnboundCountQuotaFailsVisiblyWithoutEviction',
-      'testOwnerCountQuotaFailsVisiblyWithoutEviction',
-      'testUnboundAndOwnerByteQuotas',
-      'testDeviceByteQuota',
+      'testCapacityValuesAreSegmentSizesNotQuotas',
+      'testOldItemLimitsBoundaryAndPastThemGoToOverflow',
+      'testOldByteLimitsNoLongerRefuse',
+      'testSingleOversizedItemIsRefusedWithoutTouchingTheQueue',
+      'testDrainOrderIsPreservedAcrossMainAndOverflow',
+      'testDuplicateIdIsDetectedInMainAndOverflow',
+      'testCorruptOverflowSegmentIsQuarantinedOthersStayReadable',
+      'testFailedWriteIsReportedAndNothingIsLost',
+      'testInterruptedWriteLeavesTempFileThatIsIgnoredAndCleaned',
+      'testUpgradeFromPreviousFormatReadsTheOldBlobUnchanged',
+      'testV2MigrationNeverDropsExistingOverflowItems',
+      'testPurgeDeletesOverflowAndQuarantineAndReportsLeftovers',
+      'testOverflowItemsKeepOwnerIsolationAndRemoveDataSweepsThem',
+      'testKeyLostWhileOverflowSurvivesFailsClosedWithoutMintingAKey',
+      'testNoKeyIsMintedWhileASealedQueueFileExists',
       'testUnboundExpiresAfter30DaysStampedDoesNot',
       'testV2MigrationQuarantinesEverythingWithoutHint',
       'testUnboundHintAndClaimCAS',

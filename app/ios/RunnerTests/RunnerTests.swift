@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import XCTest
 import Security
+import CryptoKit
 
 @testable import Runner
 
@@ -727,6 +728,7 @@ class RunnerTests: XCTestCase {
     SharedCaptureStore.beforeLifetimeFinishLock = nil
     SharedCaptureStore.clockOverride = nil
     SharedCaptureStore.egressKeychainReadOverride = nil
+    SharedCaptureStore.durableWriteFault = nil
     SharedCaptureStore.debugResetCloudEgressState()
     try? FileManager.default.removeItem(
       at: container.appendingPathComponent("capture_destructive_barrier_v1.json"))
@@ -972,85 +974,522 @@ class RunnerTests: XCTestCase {
     XCTAssertTrue(probed)
   }
 
-  // §4.5 quotas: visible failure, no eviction, exact values.
-  func testQuotaValuesAreTheManifestValues() {
-    XCTAssertEqual(SharedCaptureStore.ownerMaxItems, 500)
-    XCTAssertEqual(SharedCaptureStore.ownerMaxBytes, 2 * 1024 * 1024)
-    XCTAssertEqual(SharedCaptureStore.unboundMaxItems, 200)
-    XCTAssertEqual(SharedCaptureStore.unboundMaxBytes, 512 * 1024)
-    XCTAssertEqual(SharedCaptureStore.deviceMaxBytes, 8 * 1024 * 1024)
-    XCTAssertEqual(SharedCaptureStore.unboundExpiryDays, 30)
-  }
-
-  func testUnboundCountQuotaFailsVisiblyWithoutEviction() throws {
-    resetCapSeams()
-    defer { resetCapSeams() }
-    for i in 0..<SharedCaptureStore.unboundMaxItems { put("unbound \(i) 1.00 SAR") }
-    XCTAssertEqual(try items().count, SharedCaptureStore.unboundMaxItems)
-    guard case .failed(_, let kind) = put("one too many 1.00 SAR") else {
-      return XCTFail("the 201st unbound capture must be refused")
-    }
-    XCTAssertEqual(kind, .quotaFull)
-    XCTAssertEqual(kind.userMessage, SharedCaptureStore.FailureKind.storageUnavailable.userMessage,
-                   "no new copy: the approved storage text is reused until copy is approved")
-    XCTAssertEqual(try items().count, SharedCaptureStore.unboundMaxItems, "nothing evicted")
-  }
-
-  func testOwnerCountQuotaFailsVisiblyWithoutEviction() throws {
-    resetCapSeams()
-    defer { resetCapSeams() }
-    try publish(ownerA)
-    for i in 0..<SharedCaptureStore.ownerMaxItems { put("owner \(i) 1.00 SAR") }
-    guard case .failed(_, let kind) = put("one too many 1.00 SAR") else {
-      return XCTFail("the 501st stamped capture must be refused")
-    }
-    XCTAssertEqual(kind, .quotaFull)
-    XCTAssertEqual(try items().count, SharedCaptureStore.ownerMaxItems)
-    // Another owner has its own scope.
-    try publish(ownerB)
-    guard case .enqueued = put("b item 1.00 SAR") else { return XCTFail("B has its own quota") }
-  }
-
   private func big(_ tag: String, _ chars: Int) -> String {
     tag + String(repeating: "x", count: chars)
   }
 
-  func testUnboundAndOwnerByteQuotas() throws {
-    resetCapSeams()
-    defer { resetCapSeams() }
-    for i in 0..<5 { put(big("u\(i)", 100_000)) }            // ~500 KB of 512 KB
-    guard case .failed(_, let ubKind) = put(big("u5", 100_000)) else {
-      return XCTFail("unbound byte quota must refuse")
-    }
-    XCTAssertEqual(ubKind, .quotaFull)
-    XCTAssertEqual(try items().count, 5)
-
-    SharedCaptureStore.purgeUserOwnedState()
-    try publish(ownerA)
-    for i in 0..<5 { put(big("o\(i)", 400_000)) }            // ~2.0 MB of 2 MB
-    guard case .failed(_, let ownerKind) = put(big("o5", 400_000)) else {
-      return XCTFail("per-owner byte quota must refuse")
-    }
-    XCTAssertEqual(ownerKind, .quotaFull)
-    XCTAssertEqual(try items().count, 5)
+  // §4.5 capacity (owner-approved change, 2026-11-12): the old quotas (500 /
+  // 2 MB per owner, 200 / 512 KB unbound, 8 MB device) no longer refuse a
+  // capture. A full main file opens an encrypted overflow segment; nothing is
+  // evicted and no older message is overwritten.
+  func testCapacityValuesAreSegmentSizesNotQuotas() {
+    XCTAssertEqual(SharedCaptureStore.segmentMaxItems, 500)
+    XCTAssertEqual(SharedCaptureStore.segmentMaxBytes, 2 * 1024 * 1024)
+    XCTAssertEqual(SharedCaptureStore.maxItemBytes, SharedCaptureStore.segmentMaxBytes)
+    XCTAssertEqual(SharedCaptureStore.unboundExpiryDays, 30)
   }
 
-  func testDeviceByteQuota() throws {
+  private var overflowDir: URL {
+    container.appendingPathComponent("pending_bank_messages_v3_overflow", isDirectory: true)
+  }
+
+  private var quarantineDir: URL {
+    container.appendingPathComponent("pending_bank_messages_v3_quarantine", isDirectory: true)
+  }
+
+  private func segmentURL(_ seq: Int) -> URL {
+    overflowDir.appendingPathComponent("seg-" + String(format: "%016d", seq) + ".bin")
+  }
+
+  private func segmentNames() -> [String] {
+    ((try? FileManager.default.contentsOfDirectory(atPath: overflowDir.path)) ?? []).sorted()
+  }
+
+  private func quarantineNames() -> [String] {
+    ((try? FileManager.default.contentsOfDirectory(atPath: quarantineDir.path)) ?? []).sorted()
+  }
+
+  /// The texts Dart would receive from `peekPendingSharedMessages`, in order.
+  private func peekTexts() throws -> [String] {
+    guard let json = try SharedCaptureStore.peekPendingPayloadsJSON() else { return [] }
+    let array = try XCTUnwrap(
+      try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [[String: Any]])
+    return array.compactMap { $0["text"] as? String }
+  }
+
+  private func peekIDs() throws -> [String] {
+    guard let json = try SharedCaptureStore.peekPendingPayloadsJSON() else { return [] }
+    let array = try XCTUnwrap(
+      try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [[String: Any]])
+    return array.compactMap { $0["id"] as? String }
+  }
+
+  @discardableResult
+  private func fill(_ count: Int, _ tag: String, from start: Int = 0) -> [String] {
+    var texts: [String] = []
+    for i in start..<(start + count) {
+      let text = "\(tag) \(i) 1.00 SAR"
+      guard case .enqueued = put(text) else {
+        XCTFail("capture \(i) was not saved")
+        return texts
+      }
+      texts.append(text)
+    }
+    return texts
+  }
+
+  // Boundary: exactly at the old 500-item / 200-unbound limits, and past them.
+  func testOldItemLimitsBoundaryAndPastThemGoToOverflow() throws {
     resetCapSeams()
     defer { resetCapSeams() }
+    try publish(ownerA)
+    let first500 = fill(500, "owner")
+    XCTAssertEqual(try items().count, 500, "exactly at the old per-owner limit")
+    XCTAssertNotNil(queueFileData())
+    XCTAssertEqual(segmentNames(), [], "500 items still fit the main file")
+    let mainBefore = try XCTUnwrap(queueFileData())
+
+    guard case .enqueued(let item501) = put("owner 500 1.00 SAR") else {
+      return XCTFail("the 501st stamped capture must be SAVED now (it was refused before)")
+    }
+    XCTAssertEqual(item501.ownerUid, ownerA)
+    XCTAssertEqual(segmentNames(), ["seg-0000000000000001.bin"], "it went to an overflow segment")
+    XCTAssertEqual(queueFileData(), mainBefore, "the main file was not rewritten")
+    XCTAssertEqual(try peekTexts(), first500 + ["owner 500 1.00 SAR"])
+    let overflowBlob = try Data(contentsOf: segmentURL(1))
+    XCTAssertFalse(String(decoding: overflowBlob, as: UTF8.self).contains("owner 500"),
+                   "an overflow segment is encrypted at rest")
+
+    // Unbound: 200 (old limit) then 201+.
+    try SharedCaptureStore.clearActiveOwner(clearHint: false)
+    fill(201, "unbound")
+    let unbound = try items().filter { $0.ownerState == "unbound" }
+    XCTAssertEqual(unbound.count, 201, "the 201st unbound capture is saved too")
+    XCTAssertEqual(try items().count, 702, "nothing was evicted")
+  }
+
+  // Boundary: exactly at the old byte limits (2 MB owner, 512 KB unbound, 8 MB
+  // device) and past them.
+  func testOldByteLimitsNoLongerRefuse() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    for i in 0..<6 { XCTAssertNotNil(enqueuedItem(put(big("u\(i)", 100_000))), "unbound \(i)") }
+    XCTAssertEqual(try items().count, 6, "past the old 512 KB unbound limit")
+
     let owners = [ownerA, ownerB,
                   "33333333-3333-4333-8333-333333333333",
-                  "44444444-4444-4444-8444-444444444444"]
+                  "44444444-4444-4444-8444-444444444444",
+                  "55555555-5555-4555-8555-555555555555"]
     for (n, uid) in owners.enumerated() {
       try publish(uid)
-      for i in 0..<5 { put(big("d\(n)-\(i)", 400_000)) }    // ~2 MB per owner, ~8 MB total
+      for i in 0..<6 {                                       // ~2.4 MB per owner
+        XCTAssertNotNil(enqueuedItem(put(big("d\(n)-\(i)", 400_000))), "owner \(n) item \(i)")
+      }
     }
-    try publish("55555555-5555-4555-8555-555555555555")
-    guard case .failed(_, let kind) = put(big("e0", 400_000)) else {
-      return XCTFail("device-wide 8 MB quota must refuse a fresh owner")
+    let all = try items()
+    XCTAssertEqual(all.count, 36, "~12.6 MB total: past the old 8 MB device limit")
+    XCTAssertGreaterThan(segmentNames().count, 2, "segments stay within 2 MB each")
+    for name in segmentNames() {
+      let size = try XCTUnwrap(
+        try FileManager.default.attributesOfItem(atPath: overflowDir.appendingPathComponent(name).path)[.size] as? Int)
+      XCTAssertLessThanOrEqual(size, SharedCaptureStore.segmentMaxBytes + 1024)
+    }
+    try publish(owners[0])
+    XCTAssertEqual(try peekTexts().count, 6, "owner 0 sees exactly its own six items")
+  }
+
+  // The one ceiling left: a single item larger than a whole segment. Refused
+  // visibly; nothing else changes.
+  func testSingleOversizedItemIsRefusedWithoutTouchingTheQueue() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    put("small 1.00 SAR")
+    let before = try XCTUnwrap(queueFileData())
+    guard case .failed(_, let kind) = put(big("huge", SharedCaptureStore.maxItemBytes)) else {
+      return XCTFail("an item larger than a segment must be refused")
     }
     XCTAssertEqual(kind, .quotaFull)
-    XCTAssertEqual(try items().count, 20, "nothing evicted")
+    XCTAssertEqual(queueFileData(), before)
+  }
+
+  private func enqueuedItem(_ result: SharedCaptureStore.EnqueueResult) -> SharedCaptureStore.Payload? {
+    if case .enqueued(let item) = result { return item }
+    return nil
+  }
+
+  // Drain order is the capture order across main + overflow, also after acks
+  // empty the main file and new captures arrive.
+  func testDrainOrderIsPreservedAcrossMainAndOverflow() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    var expected = fill(1001, "order")
+    XCTAssertEqual(segmentNames().count, 2, "main 500 + seg1 500 + seg2 1")
+    XCTAssertEqual(try peekTexts(), expected)
+
+    // Ack ten from the main file, one from the middle of seg1: per-item lease.
+    let ids = try peekIDs()
+    for id in ids[0..<10] + [ids[700]] {
+      XCTAssertTrue(SharedCaptureStore.remove(payloadID: id))
+    }
+    expected.remove(at: 700)
+    expected.removeFirst(10)
+    expected += fill(3, "later")
+    XCTAssertEqual(try peekTexts(), expected, "new captures drain after every older one")
+
+    // Ack everything that is still in the main file: it is removed, and a new
+    // capture still lands AFTER the overflow items, never before them.
+    for id in try peekIDs().prefix(490) {
+      XCTAssertTrue(SharedCaptureStore.remove(payloadID: id))
+    }
+    XCTAssertNil(queueFileData(), "the emptied main file is removed")
+    expected.removeFirst(490)
+    expected += fill(1, "after-main-emptied")
+    XCTAssertNil(queueFileData(), "the new item went to the tail segment")
+    XCTAssertEqual(try peekTexts(), expected)
+    XCTAssertTrue(SharedCaptureStore.hasPendingMessages())
+
+    // consume (destructive drain) returns the same order and empties the queue.
+    let consumed = try XCTUnwrap(try SharedCaptureStore.consumePendingPayloadsJSON())
+    let texts = (try JSONSerialization.jsonObject(with: Data(consumed.utf8)) as? [[String: Any]])?
+      .compactMap { $0["text"] as? String }
+    XCTAssertEqual(texts, expected)
+    XCTAssertEqual(try items().count, 0)
+    XCTAssertEqual(segmentNames(), [], "emptied overflow segments are deleted")
+  }
+
+  // Duplicate payload ids are detected across main AND overflow.
+  func testDuplicateIdIsDetectedInMainAndOverflow() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    fill(501, "dup")
+    let ids = try peekIDs()
+    let inMain = ids[3]
+    let inOverflow = ids[500]
+    for id in [inMain, inOverflow] {
+      let result = SharedCaptureStore.enqueue(
+        text: "different text 9.99", sender: "ACME", payloadID: id)
+      guard case .duplicate(let existing) = result else {
+        return XCTFail("a re-sent payload id must be a duplicate wherever it is stored")
+      }
+      XCTAssertEqual(existing.id, id)
+    }
+    XCTAssertEqual(try items().count, 501, "a duplicate is never stored twice")
+  }
+
+  // A corrupt overflow segment is quarantined (kept byte-for-byte, counted),
+  // every other segment stays readable and captures keep working.
+  func testCorruptOverflowSegmentIsQuarantinedOthersStayReadable() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    let texts = fill(1001, "q")
+    var corrupt = try Data(contentsOf: segmentURL(1))
+    corrupt[corrupt.count / 2] ^= 0xFF                      // flip one ciphertext byte
+    try corrupt.write(to: segmentURL(1))
+
+    // A read-only stats call skips and counts it, but moves nothing.
+    let stats = try SharedCaptureStore.queueStats()
+    XCTAssertEqual(stats.quarantinedSegments, 1, "the user-visible count")
+    XCTAssertEqual(stats.stamped, 501)
+    XCTAssertTrue(segmentNames().contains("seg-0000000000000001.bin"), "stats never move files")
+
+    // A writer quarantines it; the rest is intact and in order.
+    XCTAssertEqual(try peekTexts(), Array(texts[0..<500]) + [texts[1000]])
+    XCTAssertFalse(segmentNames().contains("seg-0000000000000001.bin"))
+    XCTAssertEqual(quarantineNames().count, 1)
+    let kept = try Data(contentsOf: quarantineDir.appendingPathComponent(quarantineNames()[0]))
+    XCTAssertEqual(kept, corrupt, "quarantine keeps the bytes; nothing is deleted")
+    XCTAssertEqual(try SharedCaptureStore.queueStats().quarantinedSegments, 1)
+
+    guard case .enqueued = put("after quarantine 1.00 SAR") else {
+      return XCTFail("captures keep working next to a quarantined segment")
+    }
+    XCTAssertEqual(try peekTexts().last, "after quarantine 1.00 SAR")
+    XCTAssertFalse(segmentNames().contains("seg-0000000000000001.bin"),
+                   "a quarantined segment's number is never reused for new data")
+  }
+
+  // A failed write reports failure, saves nothing and loses nothing: injected
+  // failure, out of space, and a real read-only directory.
+  func testFailedWriteIsReportedAndNothingIsLost() throws {
+    resetCapSeams()
+    defer {
+      try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: overflowDir.path)
+      resetCapSeams()
+    }
+    try publish(ownerA)
+    let texts = fill(500, "w")
+    let mainBefore = try XCTUnwrap(queueFileData())
+
+    SharedCaptureStore.durableWriteFault = { $0 == "seg-0000000000000001.bin" ? .fail : .none }
+    guard case .failed(_, let failKind) = put("w new 1.00 SAR") else {
+      return XCTFail("a failed overflow write must be reported")
+    }
+    XCTAssertEqual(failKind, .storageUnavailable)
+    SharedCaptureStore.durableWriteFault = { _ in .outOfSpace }
+    guard case .failed(_, let fullKind) = put("w new 1.00 SAR") else {
+      return XCTFail("a full disk must be reported")
+    }
+    XCTAssertEqual(fullKind, .quotaFull, "out of space selects the 'no room' kind")
+    XCTAssertEqual(fullKind.userMessage, SharedCaptureStore.FailureKind.storageUnavailable.userMessage,
+                   "approved copy only")
+    SharedCaptureStore.durableWriteFault = nil
+    XCTAssertEqual(queueFileData(), mainBefore)
+    XCTAssertEqual(try peekTexts(), texts, "nothing lost, nothing half-saved")
+
+    // A real file-system refusal: the overflow directory is read-only.
+    try FileManager.default.createDirectory(at: overflowDir, withIntermediateDirectories: true)
+    try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: overflowDir.path)
+    guard case .failed(_, let roKind) = put("w new 1.00 SAR") else {
+      return XCTFail("a read-only directory must make the capture fail visibly")
+    }
+    XCTAssertEqual(roKind, .storageUnavailable)
+    XCTAssertEqual(segmentNames(), [], "no temp or partial file is left behind")
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: overflowDir.path)
+    XCTAssertEqual(try peekTexts(), texts)
+    guard case .enqueued = put("w new 1.00 SAR") else { return XCTFail("works again") }
+
+    // The main file's write fails the same way, and its old bytes stay.
+    SharedCaptureStore.purgeUserOwnedState()
+    try publish(ownerA)
+    put("m1 1.00 SAR")
+    put("m1b 1.00 SAR")
+    let two = try XCTUnwrap(queueFileData())
+    SharedCaptureStore.durableWriteFault = { $0 == "pending_bank_messages_v3.bin" ? .fail : .none }
+    guard case .failed = put("m2 1.00 SAR") else { return XCTFail("main write failure") }
+    XCTAssertFalse(SharedCaptureStore.remove(payloadID: try XCTUnwrap(try peekIDs().first)),
+                   "an ack whose write fails is not reported as done")
+    SharedCaptureStore.durableWriteFault = nil
+    XCTAssertEqual(queueFileData(), two)
+    XCTAssertEqual(try peekTexts(), ["m1 1.00 SAR", "m1b 1.00 SAR"])
+  }
+
+  // The App Intent turns a failed durable write into a thrown error with the
+  // approved copy (it never reports "saved").
+  @available(iOS 16.0, *)
+  func testIntentReportsFailedDurableWrite() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    SharedCaptureStore.durableWriteFault = { _ in .outOfSpace }
+    let request = BankSMSCaptureRequest(
+      smsText: "ACME: purchase 3.00 SAR", senderName: "ACME", senderID: nil,
+      receivedAt: Date(), receivedAtInferred: false, localeIdentifier: nil)
+    XCTAssertThrowsError(try BankSMSCaptureService().capture(request)) { error in
+      guard case ProcessBankSMSError.captureFailed(let kind)? = error as? ProcessBankSMSError else {
+        return XCTFail("unexpected \(error)")
+      }
+      XCTAssertEqual(kind, .quotaFull)
+    }
+    SharedCaptureStore.durableWriteFault = nil
+    XCTAssertEqual(try items().count, 0)
+  }
+
+  // An interrupted write leaves only a temp file: never read, removed by the
+  // next writer, and every existing item stays intact. Main file and overflow.
+  func testInterruptedWriteLeavesTempFileThatIsIgnoredAndCleaned() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    var texts = fill(3, "t")
+    let mainBefore = try XCTUnwrap(queueFileData())
+    func mainTemps() -> [String] {
+      ((try? FileManager.default.contentsOfDirectory(atPath: container.path)) ?? [])
+        .filter { $0.hasPrefix(".pending_bank_messages_v3.bin.tmp-") }
+    }
+
+    SharedCaptureStore.durableWriteFault = { _ in .tornTemp }
+    guard case .failed = put("t torn-main 1.00 SAR") else { return XCTFail("torn main write") }
+    SharedCaptureStore.durableWriteFault = nil
+    XCTAssertEqual(mainTemps().count, 1, "a half-written temp file is on disk")
+    XCTAssertEqual(queueFileData(), mainBefore, "the main file never saw the torn write")
+    XCTAssertEqual(try peekTexts(), texts, "the torn temp is ignored; nothing lost or added")
+    XCTAssertEqual(mainTemps(), [], "the next writer removed it")
+
+    texts += fill(497, "t", from: 3)
+    SharedCaptureStore.durableWriteFault = { _ in .tornTemp }
+    guard case .failed = put("t torn-overflow 1.00 SAR") else { return XCTFail("torn overflow write") }
+    SharedCaptureStore.durableWriteFault = nil
+    XCTAssertEqual(segmentNames().filter { $0.contains(".tmp-") }.count, 1)
+    XCTAssertFalse(segmentNames().contains("seg-0000000000000001.bin"),
+                   "no half-written segment exists under a real name")
+    XCTAssertEqual(try peekTexts(), texts)
+    XCTAssertEqual(segmentNames(), [], "the torn overflow temp was removed")
+    guard case .enqueued = put("t after 1.00 SAR") else { return XCTFail("captures work again") }
+    XCTAssertEqual(try peekTexts(), texts + ["t after 1.00 SAR"])
+  }
+
+  // Upgrade: a main file written by the previous build (same AES-GCM format,
+  // more than 500 items, several owners) is read unchanged and is never
+  // rewritten just to append.
+  func testUpgradeFromPreviousFormatReadsTheOldBlobUnchanged() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    let a = try publish(ownerA)
+    let keyData = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
+    SharedCaptureStore.queueKeyReadOverride = { (status: errSecSuccess, data: keyData) }
+    var legacy: [[String: Any]] = []
+    for i in 0..<700 {
+      let owner = i % 7 == 0 ? ownerB : ownerA
+      legacy.append([
+        "id": "old-\(i)", "text": "old \(i) 2.00 SAR", "sender": "ACME", "status": "pending",
+        "createdAt": "2026-11-01T10:00:00Z", "receivedAt": "2026-11-01T10:00:00Z",
+        "ownerState": "stamped", "ownerUid": owner, "ownerGeneration": a.generation,
+      ])
+    }
+    let json = try JSONSerialization.data(withJSONObject: legacy)
+    let sealed = try XCTUnwrap(try AES.GCM.seal(json, using: SymmetricKey(data: keyData)).combined)
+    try sealed.write(to: queueFileURL)
+
+    let snapshot = try items()
+    XCTAssertEqual(snapshot.map { $0.id }, (0..<700).map { "old-\($0)" }, "read in order")
+    let mine = (0..<700).filter { $0 % 7 != 0 }.map { "old \($0) 2.00 SAR" }
+    XCTAssertEqual(try peekTexts(), mine, "owner A's items, B's stay invisible")
+    XCTAssertEqual(queueFileData(), sealed, "reading never rewrites the old blob")
+
+    guard case .enqueued = put("new after upgrade 1.00 SAR") else { return XCTFail("enqueue") }
+    XCTAssertEqual(queueFileData(), sealed, "a full old main file is not rewritten to append")
+    XCTAssertEqual(segmentNames(), ["seg-0000000000000001.bin"])
+    XCTAssertEqual(try peekTexts(), mine + ["new after upgrade 1.00 SAR"])
+
+    XCTAssertTrue(SharedCaptureStore.remove(payloadID: "old-1"))
+    XCTAssertNotEqual(queueFileData(), sealed, "an ack rewrites only the segment it touches")
+    XCTAssertEqual(try items().count, 700)
+  }
+
+  // The one-time v2 migration appends to whatever is already queued: an
+  // overflow segment that exists while the main file does not is never dropped.
+  func testV2MigrationNeverDropsExistingOverflowItems() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    fill(501, "keep")
+    for id in try peekIDs().prefix(500) { XCTAssertTrue(SharedCaptureStore.remove(payloadID: id)) }
+    XCTAssertNil(queueFileData())
+    appGroupDefaults.set(
+      Data("[{\"id\":\"v2-1\",\"text\":\"legacy 1.00\",\"status\":\"pending\"}]".utf8),
+      forKey: queueDefaultsKey)
+    appGroupDefaults.removeObject(forKey: "pending_bank_messages_v3_migrated")
+
+    let all = try items()
+    XCTAssertEqual(all.map { $0.text }, ["keep 500 1.00 SAR", "legacy 1.00"])
+    XCTAssertEqual(all.last?.origin, "legacy_v2")
+    XCTAssertEqual(try peekTexts(), ["keep 500 1.00 SAR"])
+  }
+
+  // Sign-out / account-switch purge deletes overflow and quarantine files; a
+  // purge that cannot delete them reports failure and keeps the key.
+  func testPurgeDeletesOverflowAndQuarantineAndReportsLeftovers() throws {
+    resetCapSeams()
+    defer {
+      try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: overflowDir.path)
+      resetCapSeams()
+    }
+    try publish(ownerA)
+    fill(1001, "p")
+    var corrupt = try Data(contentsOf: segmentURL(2))
+    corrupt[corrupt.count - 1] ^= 0xFF
+    try corrupt.write(to: segmentURL(2))
+    _ = try items()                                          // quarantines seg2
+    XCTAssertEqual(quarantineNames().count, 1)
+
+    // A purge that cannot remove an overflow file fails and keeps the key.
+    try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: overflowDir.path)
+    XCTAssertFalse(SharedCaptureStore.purgeUserOwnedState(), "leftover overflow => purge reports failure")
+    try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: overflowDir.path)
+    XCTAssertEqual(try items().count, 500, "seg1 is still decryptable: the key was not removed")
+
+    XCTAssertTrue(SharedCaptureStore.purgeUserOwnedState())
+    XCTAssertFalse(FileManager.default.fileExists(atPath: overflowDir.path))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: quarantineDir.path))
+    XCTAssertNil(queueFileData())
+    XCTAssertEqual(try items().count, 0)
+  }
+
+  // Owner isolation and Remove-data extend to overflow items.
+  func testOverflowItemsKeepOwnerIsolationAndRemoveDataSweepsThem() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    let aTexts = fill(501, "A")                              // one A item in seg1
+    try publish(ownerB)
+    XCTAssertNil(try SharedCaptureStore.peekPendingPayloadsJSON(), "B never sees A's overflow item")
+    XCTAssertFalse(SharedCaptureStore.hasPendingMessages())
+    let bTexts = fill(2, "B")                                // seg1: A, B, B
+    XCTAssertEqual(try peekTexts(), bTexts)
+    try publish(ownerA)
+    XCTAssertEqual(try peekTexts(), aTexts, "A never sees B's overflow items")
+
+    // An undecryptable segment in quarantine cannot be shown NOT to hold A's data.
+    try Data(repeating: 0xAB, count: 64).write(to: segmentURL(9))
+    _ = try items()
+    XCTAssertEqual(quarantineNames().count, 1)
+
+    // Remove data for A: A's main AND overflow items go; B's stay.
+    try publish(ownerB)
+    Thread.sleep(forTimeInterval: 1.1)    // created_at has 1 s resolution (sweep by barrier time)
+    _ = try SharedCaptureStore.beginRemoval(uid: ownerA)
+    XCTAssertEqual(try SharedCaptureStore.finishRemoval(uid: ownerA), 501)
+    XCTAssertEqual(try items().map { $0.text }, bTexts)
+    XCTAssertEqual(quarantineNames(), [], "quarantined segments are swept by Remove data")
+    XCTAssertEqual(try peekTexts(), bTexts)
+  }
+
+  // The no-new-key rule itself: even when the key read flips to "not found"
+  // between the load and the write, no key is minted while a sealed file exists.
+  func testNoKeyIsMintedWhileASealedQueueFileExists() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    let keyData = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
+    SharedCaptureStore.queueKeyReadOverride = { (status: errSecSuccess, data: keyData) }
+    put("sealed 1.00 SAR")
+    let sealed = try XCTUnwrap(queueFileData())
+    var reads = 0
+    SharedCaptureStore.queueKeyReadOverride = {
+      reads += 1
+      return reads == 1 ? (status: errSecSuccess, data: keyData) : (status: errSecItemNotFound, data: nil)
+    }
+    guard case .failed(_, let kind) = put("new 2.00 SAR") else {
+      return XCTFail("no key may be minted over existing sealed data")
+    }
+    XCTAssertEqual(kind, .storageUnavailable)
+    XCTAssertGreaterThanOrEqual(reads, 2, "the write path did look for the key")
+    XCTAssertEqual(queueFileData(), sealed, "the sealed file is untouched")
+    SharedCaptureStore.queueKeyReadOverride = { (status: errSecSuccess, data: keyData) }
+    XCTAssertEqual(try peekTexts(), ["sealed 1.00 SAR"])
+  }
+
+  // The Keychain key is gone while sealed overflow data survives (e.g. a
+  // restored backup: the key is ThisDeviceOnly). Nothing is overwritten,
+  // nothing deleted, no new key is minted, the failure is visible.
+  func testKeyLostWhileOverflowSurvivesFailsClosedWithoutMintingAKey() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    fill(501, "k")
+    for id in try peekIDs().prefix(500) { XCTAssertTrue(SharedCaptureStore.remove(payloadID: id)) }
+    XCTAssertNil(queueFileData(), "only the overflow segment is left")
+    let segment = try Data(contentsOf: segmentURL(1))
+
+    SharedCaptureStore.queueKeyReadOverride = { (status: errSecItemNotFound, data: nil) }
+    guard case .failed(_, let kind) = put("k new 1.00 SAR") else {
+      return XCTFail("a capture must fail while the key for existing data is missing")
+    }
+    XCTAssertEqual(kind, .storageUnavailable)
+    XCTAssertThrowsError(try SharedCaptureStore.peekPendingPayloadsJSON())
+    XCTAssertThrowsError(try SharedCaptureStore.queueStats())
+    XCTAssertFalse(SharedCaptureStore.hasPendingMessages())
+    XCTAssertEqual(try Data(contentsOf: segmentURL(1)), segment, "the sealed segment is untouched")
+    XCTAssertNil(queueFileData(), "no main file was written under a new key")
+    XCTAssertEqual(segmentNames(), ["seg-0000000000000001.bin"])
+
+    SharedCaptureStore.queueKeyReadOverride = nil
+    XCTAssertEqual(try peekTexts(), ["k 500 1.00 SAR"],
+                   "the real key was never replaced: the data still decrypts")
   }
 
   // §4.5 expiry: only UNBOUND items expire by age; stamped items never do.
@@ -1072,14 +1511,14 @@ class RunnerTests: XCTestCase {
   func testV2MigrationQuarantinesEverythingWithoutHint() throws {
     resetCapSeams()
     defer { resetCapSeams() }
-    let legacy = (0..<(SharedCaptureStore.unboundMaxItems + 50)).map {
+    let legacy = (0..<250).map {
       "{\"id\":\"l\($0)\",\"text\":\"legacy \($0) 9.00\",\"status\":\"pendingSend\",\"owner\":\"\(ownerA)\"}"
     }.joined(separator: ",")
     appGroupDefaults.set(Data("[\(legacy)]".utf8), forKey: queueDefaultsKey)
     let a = try publish(ownerA)
 
     let queue = try items()
-    XCTAssertEqual(queue.count, SharedCaptureStore.unboundMaxItems + 50, "no legacy item is dropped")
+    XCTAssertEqual(queue.count, 250, "no legacy item is dropped")
     for item in queue {
       XCTAssertEqual(item.ownerState, "unbound")
       XCTAssertNil(item.ownerUid)
@@ -1098,7 +1537,7 @@ class RunnerTests: XCTestCase {
       consumedIds: ["l0"], suspectedIds: ["l1", "no-such-id"])
     XCTAssertEqual(removed, 1)
     let after = try items()
-    XCTAssertEqual(after.count, SharedCaptureStore.unboundMaxItems + 49)
+    XCTAssertEqual(after.count, 249)
     XCTAssertFalse(after.contains { $0.id == "l0" })
     XCTAssertEqual(after.first { $0.id == "l1" }?.reviewState, "suspected_already_imported")
     XCTAssertNil(after.first { $0.id == "l2" }?.reviewState)
@@ -4408,11 +4847,26 @@ class RunnerTests: XCTestCase {
     for source in [try iosSource("Runner/SharedCaptureStore.swift"), delegate] {
       XCTAssertFalse(source.lowercased().contains("allowance"), "no Dart allowance in native")
     }
+    // Phase 3 background recovery: only the app (never the extension) declares
+    // background modes, and only the two capture-drain tasks. The BGTask code asks
+    // the live Dart engine to drain; it does no networking and starts no engine.
     for key in ["UIBackgroundModes", "BGTaskSchedulerPermittedIdentifiers"] {
-      XCTAssertFalse(try iosSource("Runner/Info.plist").contains(key))
       XCTAssertFalse(try iosSource("ShareBankMessage/Info.plist").contains(key))
     }
-    XCTAssertFalse(delegate.contains("BGTaskScheduler"))
+    let plistURL = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("Runner/Info.plist")
+    let plist = try XCTUnwrap(
+      NSDictionary(contentsOf: plistURL) as? [String: Any])
+    XCTAssertEqual(plist["UIBackgroundModes"] as? [String], ["fetch", "processing"])
+    XCTAssertEqual(
+      plist["BGTaskSchedulerPermittedIdentifiers"] as? [String],
+      ["com.youssefsafwat.mali.capture-drain.refresh",
+       "com.youssefsafwat.mali.capture-drain.processing"])
+    let drain = try XCTUnwrap(delegate.range(of: "final class CaptureBackgroundDrain"))
+    let drainSource = String(delegate[drain.lowerBound...])
+    XCTAssertFalse(drainSource.contains("URLSession"), "no networking in the BGTask path")
+    XCTAssertFalse(drainSource.contains("FlutterEngine("), "no headless engine")
     XCTAssertFalse(delegate.contains("performFetchWithCompletionHandler"))
   }
 }

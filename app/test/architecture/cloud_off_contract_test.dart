@@ -248,21 +248,30 @@ void main() {
         'unboundQuota',
         'deviceQuota',
         'migrationPending',
+        // 2026-11-12: content-free count of undecryptable overflow segments.
+        'quarantinedSegments',
       });
       for (final leak in const ['text', 'sender', 'id', 'uid', 'ownerUid']) {
         expect(keys.contains(leak), isFalse);
       }
     });
 
-    test('quota limits are the manifest values', () {
+    test('capacity values: segment sizes and the single-item ceiling', () {
+      // Owner-approved change (2026-11-12): the refusing per-owner / unbound /
+      // device quotas were replaced by encrypted overflow segments.
       for (final (name, value) in const [
-        ('ownerMaxItems', '500'),
-        ('ownerMaxBytes', '2 * 1024 * 1024'),
-        ('unboundMaxItems', '200'),
-        ('unboundMaxBytes', '512 * 1024'),
-        ('deviceMaxBytes', '8 * 1024 * 1024'),
+        ('segmentMaxItems', '500'),
+        ('segmentMaxBytes', '2 * 1024 * 1024'),
+        ('maxItemBytes', 'segmentMaxBytes'),
       ]) {
         expect(store, contains('static let $name = $value'));
+      }
+      for (final gone in const [
+        'ownerMaxItems',
+        'unboundMaxItems',
+        'deviceMaxBytes',
+      ]) {
+        expect(store, isNot(contains('static let $gone')));
       }
     });
 
