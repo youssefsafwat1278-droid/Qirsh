@@ -2704,12 +2704,22 @@ class _SmsAutoCaptureTile extends ConsumerWidget {
       }
     }
 
+    // With Smart Analysis & Cloud Sync accepted, captured messages may leave
+    // the device (sanitised) for Qirsh servers and Google Gemini, so the "on"
+    // subtitle must not say they are read on the device.
+    final consent = ref.watch(userSettingsProvider).valueOrNull;
+    final smartAnalysisOn = consent != null &&
+        consent.cloudProcessingEnabled &&
+        consent.aiConsentGranted;
+
     return _SwitchTile(
       title: l10n.smsAutoCaptureTitle,
       icon: AppLucideIcons.messageSquare,
       value: enabled,
       subtitle: enabled
-          ? l10n.smsAutoCaptureSubtitleOn
+          ? (smartAnalysisOn
+              ? l10n.smsAutoCaptureSubtitleOnSmart
+              : l10n.smsAutoCaptureSubtitleOn)
           : blocked
               ? l10n.smsAutoCaptureSubtitleBlocked
               : l10n.smsAutoCaptureSubtitleOff,

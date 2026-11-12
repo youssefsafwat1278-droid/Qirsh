@@ -1624,19 +1624,19 @@ abstract class AppL10n {
   /// Disclosure point: non-financial messages are discarded, not stored.
   ///
   /// In ar, this message translates to:
-  /// **'الرسائل غير المالية — الشخصية ورموز التحقق — بتتجاهَل ومابتتخزّنش.'**
+  /// **'تُستبعد على جهازك الرسائل التي لا تبدو مالية — مثل الرسائل الشخصية ورموز التحقق — ولا تُخزَّن. هذا الفحص آلي وقد يحتفظ أحيانًا برسالة عن طريق الخطأ، ويمكنك حذفها من قِرش. وتُخزَّن الرسائل المحتفَظ بها مشفّرة على جهازك، وقد تُعالَج في الخلفية.'**
   String get smsDisclosureFilter;
 
   /// Disclosure point: parsing happens on-device.
   ///
   /// In ar, this message translates to:
-  /// **'يتم التحليل على جهازك افتراضيًا. وإذا فعّلت المعالجة السحابية، يُرسَل نص منقّى (دون أرقام البطاقات والحسابات والهواتف) إلى خوادم قِرش.'**
+  /// **'عند إيقاف «التحليل الذكي والمزامنة السحابية» تُقرأ الرسائل على جهازك فقط. وإذا فعّلته، تُرسَل رسائل البنك الملتقطة إلى خوادم قِرش وقد يحلّلها Google Gemini، بعد حذف أرقام البطاقات والحسابات والهواتف والآيبان والرموز، وإخفاء ما يُتعرَّف عليه من أسماء وعناوين بريد إلكتروني وأرقام مرجعية. يبقى في النص المبلغ والتاجر والتاريخ والرصيد وآخر أرقام البطاقة، لذا يظل معلومات مالية شخصية تخصّك.'**
   String get smsDisclosureOnDevice;
 
   /// Disclosure point: cloud sync is a separate, off-by-default consent.
   ///
   /// In ar, this message translates to:
-  /// **'المزامنة السحابية مغلقة افتراضيًا، وإذا فعّلتها فذلك بموافقة منفصلة عن هذا الإذن.'**
+  /// **'«التحليل الذكي والمزامنة السحابية» خيار منفصل عن هذا الإذن، ويبقى متوقفًا ما لم توافق عليه، ويمكنك سحب موافقتك في أي وقت من الإعدادات ← الخصوصية.'**
   String get smsDisclosureCloud;
 
   /// Disclosure point: how to turn the feature off or revoke the permission.
@@ -1876,8 +1876,14 @@ abstract class AppL10n {
   /// No description provided for @smsAutoCaptureSubtitleOn.
   ///
   /// In ar, this message translates to:
-  /// **'يعمل — تُقرأ رسائل البنك الواردة على جهازك فقط'**
+  /// **'يعمل — تُقرأ رسائل البنك الواردة على جهازك'**
   String get smsAutoCaptureSubtitleOn;
+
+  /// Settings subtitle for the Android automatic SMS capture switch when it is on AND Smart Analysis & Cloud Sync (cloud + AI consent) is accepted: captured messages may leave the device, so it must not say 'on your device'.
+  ///
+  /// In ar, this message translates to:
+  /// **'يعمل — تُرسَل رسائل البنك بعد حذف الأرقام الحساسة إلى خوادم قِرش وقد يحلّلها Google Gemini'**
+  String get smsAutoCaptureSubtitleOnSmart;
 
   /// No description provided for @smsAutoCaptureSubtitleBlocked.
   ///
@@ -4912,13 +4918,13 @@ abstract class AppL10n {
   /// No description provided for @privCloudProcessingBody.
   ///
   /// In ar, this message translates to:
-  /// **'تُرفَع رسائل البنك الملتقطة إلى خوادم قِرش بعد حذف أرقام البطاقات والحسابات والهواتف والرموز لقراءتها، وتتم مزامنة بياناتك ونسخها احتياطيًا هناك. عند إيقافها يبقى كل شيء على جهازك: تُقرأ الرسائل بقواعد قِرش المحلية فقط ولا تتم أي مزامنة، ويظل الإدخال اليدوي متاحًا.'**
+  /// **'تتم مزامنة بياناتك ونسخها احتياطيًا على خوادم قِرش، وقد تُرسَل إليها رسائل البنك الملتقطة بعد حذف أرقام البطاقات والحسابات والهواتف والرموز لقراءتها، وقد يُرسَل اسم التاجر إلى Google Places لتصنيفه. عند الإيقاف يتوقف الإرسال: تُقرأ الرسائل بقواعد قِرش المحلية ولا تتم مزامنة أي بيانات جديدة، ويظل الإدخال اليدوي متاحًا.'**
   String get privCloudProcessingBody;
 
   /// No description provided for @privAiAnalysisBody.
   ///
   /// In ar, this message translates to:
-  /// **'عند تشغيله مع المزامنة السحابية، قد تُحلَّل رسائل البنك الملتقطة — بعد حذف أرقام البطاقات والحسابات والهواتف والرموز — بواسطة مزوّد ذكاء اصطناعي لقراءة المبلغ والتاجر والبنك. إيقافه يقصر القراءة على قواعد قِرش الخاصة.'**
+  /// **'عند تشغيله مع المزامنة السحابية، قد تُحلَّل رسائل البنك الملتقطة — ومنها رسائل SMS البنكية التي تُقرأ تلقائيًا على أندرويد — بعد حذف أرقام البطاقات والحسابات والهواتف والرموز وإخفاء ما يُتعرَّف عليه من أسماء وعناوين بريد إلكتروني وأرقام مرجعية، بواسطة Google Gemini لقراءة المبلغ والتاجر والبنك. يبقى في النص المبالغ والتجار والتواريخ والأرصدة. سحب الموافقة يقصر القراءة على قواعد قِرش داخل جهازك.'**
   String get privAiAnalysisBody;
 
   /// No description provided for @privDeleteAccountBody.
@@ -5044,7 +5050,7 @@ abstract class AppL10n {
   /// No description provided for @privIntro.
   ///
   /// In ar, this message translates to:
-  /// **'عند تفعيل المعالجة السحابية، قد تُعالج رسائل البنك التي تشاركها عبر الاختصار بنص مُعقّم على خوادم قرش وبمساعدة الذكاء الاصطناعي. عند إيقاف المعالجة السحابية تُحلّل الرسائل محليًا. ويمكنك تصدير بياناتك المالية أو استيرادها من شاشة نقل البيانات.'**
+  /// **'عند تفعيل «التحليل الذكي والمزامنة السحابية»، قد تُعالَج رسائل البنك التي يلتقطها قِرش — رسائل SMS التي تُقرأ تلقائيًا على أندرويد، أو الرسائل التي تشاركها أو ترسلها عبر اختصار iOS — كنص مُنقّى على خوادم قِرش وبواسطة Google Gemini. عند إيقافه تُحلَّل الرسائل على هذا الجهاز. ويمكنك تصدير بياناتك المالية أو استيرادها من شاشة نقل البيانات.'**
   String get privIntro;
 
   /// No description provided for @dtxPreviewRows.
@@ -9550,7 +9556,7 @@ abstract class AppL10n {
   /// No description provided for @smsShareBody.
   ///
   /// In ar, this message translates to:
-  /// **'بدون إذن قراءة الرسائل: افتح رسالة البنك، اضغط «مشاركة»، واختر قِرش. سنحلّل النص على جهازك فقط.'**
+  /// **'بدون إذن قراءة الرسائل: افتح رسالة البنك، اضغط «مشاركة»، واختر قِرش. عند إيقاف التحليل الذكي نحلّل النص على جهازك فقط.'**
   String get smsShareBody;
 
   /// No description provided for @smsShareExample.
@@ -9970,7 +9976,7 @@ abstract class AppL10n {
   /// No description provided for @smartConsentBullet1.
   ///
   /// In ar, this message translates to:
-  /// **'تُرسل الرسائل البنكية الملتقطة إلى خوادم قرش بعد إزالة أرقام البطاقات والحسابات والهواتف والرموز. قد تعالج خدمة Google Gemini هذا النص لتحديد المبلغ والتاجر والبنك.'**
+  /// **'تُرسل الرسائل البنكية الملتقطة، ومنها رسائل SMS البنكية التي تُقرأ تلقائيًا على أندرويد، إلى خوادم قرش بعد إزالة أرقام البطاقات والحسابات والهواتف والرموز. قد تعالج خدمة Google Gemini هذا النص لتحديد المبلغ والتاجر والبنك، وقد تتلقى Google Places أسماء التجار. تبقى فيه المبالغ والتجار والأرصدة، لذا فهو ليس مجهول الهوية.'**
   String get smartConsentBullet1;
 
   /// No description provided for @smartConsentBullet2.
@@ -12250,7 +12256,7 @@ abstract class AppL10n {
   /// No description provided for @smsV2PrivacyLine.
   ///
   /// In ar, this message translates to:
-  /// **'بدون إذن قراءة الرسائل · سنحلّل النص على جهازك فقط.'**
+  /// **'بدون إذن قراءة الرسائل · عند إيقاف التحليل الذكي نحلّل النص على جهازك فقط.'**
   String get smsV2PrivacyLine;
 
   /// No description provided for @insV3Report.

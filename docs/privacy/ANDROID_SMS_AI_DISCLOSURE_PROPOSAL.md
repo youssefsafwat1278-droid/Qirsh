@@ -1,9 +1,23 @@
-# Android SMS + AI — disclosure proposal (FOR REVIEW, NOT SUBMITTED)
+# Android SMS + AI — disclosure (FINAL DRAFT, NOT SUBMITTED)
 
-**Status: proposal only.** Nothing here has been applied to the ARB files, the
-privacy policy, the Play Console, or the website. Every item marked
-**OWNER TO CONFIRM** is a fact the code cannot establish; do not publish any
-text that depends on it until it is confirmed.
+**Status (2026-11-12, phase 4): final draft.** The in-app wording (EN + AR) and
+`docs/legal/PRIVACY_POLICY.md` have been updated in the working tree to match
+the phase-4 implementation (see §8). **Nothing has been submitted** to the Play
+Console, and the website has not been regenerated. Every item marked
+**OWNER MUST CONFIRM** (earlier sections: **OWNER TO CONFIRM**) is a fact the
+code cannot establish; do not publish or attest any text that depends on it
+until it is confirmed.
+
+**Release dependency.** The final wording is accurate only for a release that
+ships together with: (1) the phase-4 backend changes **deployed** (`parse-sms`,
+`bank-discovery`, `process-ios-sms`, `enrich-merchant`,
+`_shared/sms_redaction.ts`, `_shared/gemini_request.ts`, `_shared/ai_primary.ts`
+— not deployed at the time of writing); (2) the AES-256-GCM encrypted Android
+capture queue; (3) cold-start background processing (WorkManager /
+BGTaskScheduler). See §8.0.
+
+Sections 1–6 are the phase-3 analysis, kept for the record. Where phase 4
+changed a fact, §8.1 lists the correction; §8 supersedes §3–§5.
 
 **What changed.** Android capture was on-device only. Now, when the user has
 accepted *Smart Analysis & Cloud Sync* (Cloud consent AND AI consent), each
@@ -109,7 +123,7 @@ not anonymous**, and must not be described as anonymous anywhere.
 
 ---
 
-## 3. Proposed in-app wording (NOT applied)
+## 3. Proposed in-app wording (phase 3 — superseded: final text applied, see §8.2)
 
 Context: the UI no longer has separate Cloud and AI switches. One sheet,
 *Smart Analysis & Cloud Sync*, grants both together
@@ -184,7 +198,7 @@ After any ARB change: `flutter gen-l10n` from `app/`, then run
 
 ---
 
-## 4. Proposed privacy-policy text (`docs/legal/PRIVACY_POLICY.md`)
+## 4. Proposed privacy-policy text (phase 3 — superseded: applied to `docs/legal/PRIVACY_POLICY.md`)
 
 Sections that are now inaccurate:
 
@@ -260,7 +274,7 @@ Proposed §6 rows:
 
 ---
 
-## 5. Google Play — proposed answers (draft; NOT submitted)
+## 5. Google Play — proposed answers (phase 3 — superseded by §8.3–§8.5; NOT submitted)
 
 Assumptions: (a) Play counts data as *collected* when it is transmitted off the
 device; (b) a transfer to a **service provider** that processes it only on the
@@ -379,29 +393,179 @@ to use on Android.
 
 ---
 
-## 7. Engineering findings (outside wording; for the code owners)
+## 7. Engineering findings — status at phase 4 (2026-11-12)
 
-- **F1 — Android capture queue is never purged in production.**
-  `NativeCaptureBridge.purgeAllCaptureState()` (`native_capture_bridge.dart:2571`)
-  has no caller in `lib/` (grep; only `test/…/native_purge_channel_retry_test.dart`
-  calls it). The owner/removal hooks (`clearCaptureOwner`, `beginCaptureRemoval`,
-  `finishCaptureRemoval`) return early on Android because `_hasNativeQueue` is
-  iOS-only (`native_capture_bridge.dart:1647`, `:1994-1997`, `:2429-2456`). So on
-  Android, sign-out, Remove data and account deletion leave queued raw SMS
-  (plaintext, app-private) and quarantined copies in place, and do not reset the
-  auto-capture opt-in. Queued items carry no owner (`DurableCaptureQueue.kt:176-185`)
-  and would be drained by the next admitted account — including the AI route
-  under that account's consent. `docs/ANDROID_SMS_CAPTURE_DECISION.md` says the
-  opt-in "is reset on identity change"; the code does not do that today.
-  Needs a device-level check and a fix before the deletion claims in §4/§5 are
-  attested.
-- **F2 — Misleading migration comment.** `0071_ai_endpoint_hardening.sql:26`
-  says "Raw SMS / merchant text is NEVER written here", but `result` stores the
-  AI output including `merchant_name`, amount and date for ≤ ~25 h.
-- **F3 — `bank-discovery` sends the raw sender ID to Gemini**
-  (`bank-discovery/index.ts:228`). Disclose it (done above) or hash/omit it.
-- **F4 — Sanitiser gaps**: names after `من` / `from` / `received from` /
-  `credited by` and English greetings are not removed on either side.
-- **F5 — Queue at rest** is not SQLCipher-encrypted, while `helpPrivacyBody` /
-  `setEncryptedDbPart1` say financial data is stored encrypted. Short-lived in
-  normal operation, but quarantined items persist.
+| # | Finding (phase 3) | Status | Evidence |
+|---|---|---|---|
+| **F1** | Android capture queue never purged; queued SMS had no owner and could be drained by the next account (incl. the AI route). | **FIXED in phase 3** (commit `8866dd13`): Keystore-HMAC owner stamps; only the active owner's captures are drained; captures taken while signed out are imported only through the explicit claim prompt (on device, no AI); Remove data sweeps that account's captures, resets the SMS opt-in, cancels background work and keeps its barrier until verified. Owner-isolation JVM harness 47 checks pass (`scratchpad/sms_pipeline_phase3.md`). Device check still outstanding (phase-3 real-device list, item 7–9). | `DurableCaptureQueue.kt`, `MainActivity.kt`, `native_capture_bridge.dart` |
+| **F2** | `0071_ai_endpoint_hardening.sql:26` says "Raw SMS / merchant text is NEVER written here", but `ai_request_idempotency.result` holds the AI output (merchant, amount, date) for ≤ ~25 h. | **OPEN (documentation only).** Applied migrations must not be edited. Disclosed accurately in the policy §6 ("extracted result … at most about 25 hours"). Recommended: a follow-up migration with `COMMENT ON TABLE ai_request_idempotency IS '…stores the extracted AI result (merchant, amount, date) for ~1 h, pruned daily; never the SMS text'`. Not in this workstream's files. | `0071_ai_endpoint_hardening.sql:22-26`; `ai_endpoint.ts:317` (`AI_IDEMPOTENCY_TTL_SECONDS = 3600`); `0112_capture_notifications_retention.sql:682` (prune 03:25 UTC) |
+| **F3** | `bank-discovery` put the raw sender ID (possibly a phone number) into the Gemini prompt; `parse-sms` received `sender_id` it never used. | **ADDRESSED in phase 4 (backend not yet deployed).** Device: discovery runs only for a sender `BankSenderFilter.isLikelyBank` accepts; phone-number and numeric short-code senders are never sent (`bank_discovery_service.dart:55-56`; test `bank_discovery_service_test.dart` "phone-number and numeric short-code senders are never sent"). Server: `redactSenderForAi` replaces any phone-like / letter-less sender with `[NUMERIC_SENDER]` before the prompt (`sms_redaction.ts:433-439`; `bank-discovery/index.ts:230`). Device no longer sends `sender_id` to `parse-sms` (`ai_parser_client.dart:105-109`). An alphanumeric bank sender ID **is** still sent to Gemini by bank-discovery — disclosed. | as cited |
+| **F4** | Sanitiser left names after `من` / `from` / `received from` / `credited by` and English greetings. | **ADDRESSED in phase 4 (server side not yet deployed).** Device and server both mask, as `[NAME]` keeping the cue: names after salutations (Dear/Hi/Hello at sentence start, عزيزي/عزيزتي/السيد/السيدة/الأستاذ…) always; names after counterparty cues (from/to/by/beneficiary/sender/remitter/recipient/payer/Mr/Mrs/من/إلى/لصالح/باسم/المستفيد/المرسل…) only when the text reads as a transfer/credit and not a purchase/refund/bill. Also new: e-mails → `[EMAIL]`; 6–9 character references after Ref/RRN/رقم المرجع/رقم العملية… → `[REF]`. Merchants, amounts, dates, balances and masked card digits are kept. Shared fixture `supabase/functions/_shared/fixtures/sms_redaction_cases.json` pins device and server to identical output. **Limit:** a name not introduced by one of these cues (or in a message that also reads as a purchase) still reaches Gemini — wording says "recognised names". `enrich-merchant` refuses a merchant name containing an identifier (`enrich-merchant/index.ts:265-271`); the device never sends one (`add_transaction_usecase.dart` ~:1184, `SmsSanitizer.containsIdentifier`). | `sms_sanitizer.dart:124-256`, `:301-333`; `sms_redaction.ts`; `test/engine/privacy/sms_name_minimization_test.dart` |
+| **F5** | Android queue at rest not encrypted. | **IN PROGRESS (another phase-4 workstream; uncommitted at the time of writing).** AES-256-GCM with a non-exportable Android Keystore key (`qirsh_capture_queue_aes_v1`), sealed main segment, overflow and quarantine; backup and device-to-device transfer excluded (`AndroidManifest.xml:72-74`, `res/xml/data_extraction_rules.xml`). Design: `docs/ANDROID_SMS_CAPTURE_DECISION.md` "Storage at rest (encryption)". The wording "stored encrypted on your device" (`smsDisclosureFilter`, policy §1/§2/§8) **depends on this landing in the same release**. | `CaptureQueueCrypto.kt`, `DurableCaptureQueue.kt` |
+| F6 (new) | Gemini "Logs and Datasets" stores generateContent requests by default for projects created after 2026-10-26. | **ADDRESSED in phase 4 (not yet deployed):** every Gemini request body is built by `geminiRequestBody`, which forces top-level `store:false` (request-level opt-out, takes precedence over the project setting). All four callers use it: `parse-sms/index.ts:484`, `_shared/ai_primary.ts:82`, `bank-discovery/index.ts:118`, `process-ios-sms/parse.ts:352`. Google's 55-day abuse-monitoring retention still applies and is disclosed. | `_shared/gemini_request.ts`; `_shared/gemini_request_test.ts` |
+
+---
+
+## 8. FINAL DRAFT — wording, policy and Google Play answers (NOT SUBMITTED)
+
+### 8.0 Facts this wording depends on
+
+| Fact | Where it holds | Status at writing |
+|---|---|---|
+| Server masks names / e-mails / references like the device | `_shared/sms_redaction.ts` | Code in tree, **not deployed** |
+| `store:false` on every Gemini request | `_shared/gemini_request.ts` + 4 callers | Code in tree, **not deployed** |
+| bank-discovery never puts a numeric/phone sender in the prompt | `sms_redaction.ts:433` (`redactSenderForAi`), device filter | Code in tree, **server not deployed** (device filter already ships) |
+| `parse-sms` does not receive `sender_id` | `ai_parser_client.dart:105-109` | In the app release |
+| enrich-merchant refuses identifier-bearing names | `enrich-merchant/index.ts:265-271` | Code in tree, **not deployed** |
+| Android capture queue encrypted at rest (AES-256-GCM, Keystore) | `CaptureQueueCrypto.kt` | **In progress** (other workstream) |
+| Cold-start background processing under the same consent checks | `headless_capture_drain.dart`, `CaptureDrainWorker.kt`, iOS BGTask | **In progress** (other workstream) |
+| Android AI result cache ~1 h, pruned daily → ≤ ~25 h | `ai_endpoint.ts:317`, `0112_capture_notifications_retention.sql:682` | Deployed migrations (per repo) |
+| iOS server copy: content unavailable at 168 h, nulled on consume, row deleted at 30 d | `0112_capture_notifications_retention.sql:22-48`, `:636-655`; consume `0117_account_deletion_fence.sql:4656-4658` | Deployed migrations (per repo) |
+| iOS unbound queue items expire after 30 days on device | `SharedCaptureStore.swift:988-1007` | Current code; `docs/privacy/CAPTURE_RETENTION_PROPOSAL.md` proposes removing it. The policy does not state an on-device expiry, so it stays true either way. |
+
+### 8.1 Corrections to §1–§2 after phase 4
+
+- §1b "Sender ID" row: the device no longer sends `sender_id` to `parse-sms`.
+  bank-discovery sends only an alphanumeric (brand) sender to Gemini; numeric
+  and phone senders are filtered on the device and replaced on the server.
+- §1b "Merchant name" row: identifier-bearing names are never sent to Places
+  and are refused by `enrich-merchant`.
+- §1b "Raw SMS body" row: the queue is encrypted at rest once F5 lands; F1
+  purge/sweep is fixed.
+- §2 "Not removed": names after transfer/credit cues and greetings, e-mails,
+  and 6–9 character references after a reference cue are now masked (`[NAME]`,
+  `[EMAIL]`, `[REF]`). Still not removed: amounts, balances, merchants, dates,
+  masked card digits, bank names, unrecognised names.
+- Every Gemini request now carries `store:false`.
+
+### 8.2 In-app wording — APPLIED (EN + AR)
+
+Applied in `app/lib/l10n/app_en.arb` / `app_ar.arb`; `flutter gen-l10n` run.
+New key `smsAutoCaptureSubtitleOnSmart` is selected in
+`settings_screen.dart` (`_SmsAutoCaptureTile`) when the stored settings show
+cloud AND AI consent. Final text: see the ARB files (keys
+`smsDisclosureFilter`, `smsDisclosureOnDevice`, `smsDisclosureCloud`,
+`smsAutoCaptureSubtitleOn`, `smsAutoCaptureSubtitleOnSmart`,
+`smartConsentBullet1`, `privAiAnalysisBody`, `privCloudProcessingBody`,
+`privIntro`, `smsV2PrivacyLine`, `smsShareBody`).
+
+Not applied: `smartConsentBullet4` (Google retention/training) — it depends on
+the billing tier (OWNER MUST CONFIRM, §8.6 items 1–3); the policy §7 carries
+the provider detail instead. `onbCloudBullet1` / `onbAiBullet1` are unused in
+`lib/features` and were left unchanged.
+
+### 8.3 Google Play — Data safety (final draft answers)
+
+Definitions used (Play Console Help "Provide information for Google Play's Data
+safety section", answer 10787469, accessed 2026-11-12; see
+`scratchpad/p4_provider_terms.md` Q5): **Collected** = transmitted off the
+device (5.1); **Shared** = transferred to a third party, except a service
+provider processing on the developer's behalf and instructions (5.2, 5.3);
+**Processed ephemerally** = in memory only, no longer than the real-time request
+(5.4); **Messages → SMS or MMS** includes sender, recipients and content (5.5);
+**Financial info** types per 5.6.
+
+Overall questions:
+
+| Question | Answer | Basis |
+|---|---|---|
+| Does the app collect or share any of the required user data types? | **Yes** | below |
+| Is all user data collected encrypted in transit? | **Yes** — Gemini, Places and Sentry endpoints are `https://` (`parse-sms/index.ts:49`, `ai_primary.ts:77`, `enrich-merchant/index.ts:44`); Supabase URL from build config (`supabase_config.dart`) — **OWNER MUST CONFIRM** it is `https://` in every release config | |
+| Do you provide a way for users to request that their data is deleted? | **Yes** — in-app *Delete my account and all my data* (`privacy_screen.dart` → `/delete-account`), plus email to `<CONTACT_EMAIL>` (**OWNER MUST CONFIRM** the address) | |
+
+Data types:
+
+| Play data type | Collected | Shared | Ephemeral | Required / optional | Purposes | Code basis |
+|---|---|---|---|---|---|---|
+| **Messages → SMS or MMS** (sanitised SMS text; alphanumeric bank sender ID for bank-discovery) | **Yes** — sanitised text leaves the device to Qirsh's backend and Google's Gemini API | **No**, *only if* the Gemini project is on the **paid tier** (Google acts as processor under the DPA, 1.2 / 2.6). **If unpaid tier: Yes** (Google may use the content to improve its products and humans may review it, 1.1) — **OWNER MUST CONFIRM** tier | **No** — Google keeps prompts 55 days for abuse monitoring (1.4); iOS route stores text ≤ 168 h | **Optional** (RECEIVE_SMS + in-app opt-in + Smart Analysis & Cloud Sync) | App functionality | `ai_parser_client.dart:105`; `parse-sms/index.ts:484`; `bank-discovery/index.ts:230` |
+| **Financial info → Purchase history** (amount, merchant, date: AI result, synced transactions; merchant name to Places) | **Yes** | **Recommended: Yes** — the merchant name goes to Google Places, which acts as an independent controller that may use and retain search terms (3.1). Legal may conclude a bare merchant name without identity is not "user data shared"; **OWNER/LEGAL MUST DECIDE** (5.7). Gemini: as SMS row | No | Optional | App functionality | `enrich-merchant/index.ts:311-322`; `features/capture/services/ledger_outbox_queue.dart` |
+| **Financial info → Other financial info** (balances, masked card digits in the sanitised text; accounts and transfers in sync) | **Yes** | As SMS row (Gemini tier) | No | Optional | App functionality | as above |
+| **Personal info → Name** | Only incidentally: names not recognised by the masking rules can remain in sanitised SMS text. Account name/email: per the existing data-safety draft (sign-in) | As SMS row | No | Optional | App functionality | `sms_sanitizer.dart:208-233` limits |
+| **Personal info → User IDs** (account id via JWT) | Yes | No | No | **OWNER MUST CONFIRM** (existing draft: required, sign-in mandatory) | App functionality, Account management | `ai_endpoint.ts` identity |
+| **Device or other IDs** (install id, device secret hash) | Yes | No | No | Optional (with cloud) | App functionality, Fraud prevention/security | `ai_endpoint.ts` device auth |
+| **App info and performance → Crash logs, Diagnostics** | Yes | No (Sentry as service provider; `sendDefaultPii = false`, `sentry_lifecycle.dart:78`) | No | Optional | App functionality, Analytics | `telemetry_sanitizer.dart` |
+
+Do **not** answer "data is anonymised" for SMS. Do **not** claim "processed
+ephemerally" for SMS.
+
+### 8.4 Permissions Declaration — RECEIVE_SMS (final draft text)
+
+**Core functionality:** SMS-based money management — Qirsh turns the user's
+incoming bank transaction SMS into a personal spending record.
+
+> Qirsh is a personal finance app. Its core feature records the user's
+> spending automatically from the bank transaction SMS they receive, so they do
+> not have to type each purchase, transfer, withdrawal or deposit. The app
+> requests only `RECEIVE_SMS` (no READ_SMS, SEND_SMS or MMS access) and never
+> reads the existing inbox. The permission is requested only after an in-app
+> prominent disclosure, and automatic capture stays off until the user also
+> turns it on in Settings; it can be turned off in the app or revoked in Android
+> settings at any time.
+>
+> Each incoming message is screened on the device; messages that do not look
+> like financial transactions are discarded and never stored. Retained
+> messages are stored encrypted on the device (AES-256-GCM, Android Keystore
+> key) and parsed into a transaction, on the device by default, including in
+> background work scheduled by WorkManager.
+>
+> If the user separately accepts **Smart Analysis & Cloud Sync** — an explicit,
+> optional consent that is off unless accepted and is not bundled with the
+> permission — a sanitised copy of each retained financial message (full card,
+> account and phone numbers, IBANs, labelled one-time codes, e-mail addresses
+> and reference numbers removed, and recognisable names of people masked, on
+> the device and again on the server) is sent to Qirsh's backend, which
+> forwards it to Google's Gemini API solely to extract the transaction for the
+> user's own record. Qirsh's backend does not store the message text; it keeps
+> the extracted result for at most about a day to prevent duplicate
+> processing. SMS data is never sold, never used for advertising, marketing or
+> profiling, and never shared for any other purpose. [OWNER MUST CONFIRM: Gemini
+> paid tier — "Google processes these requests as our service provider and
+> does not use them to improve its products."]
+
+Notes for the owner: §5b's list of inaccurate statements in
+`Qirsh Production/18_Android_SMS_Capture/play_declaration_draft.md` still
+applies; regenerate its §3 quotes from the final ARB text (`smsDisclosure*`).
+Whether off-device AI processing fits the SMS-permission exception as Google
+expects it described is **OWNER MUST CONFIRM** (§6 item 11). The video/demo
+steps must show: disclosure → system dialog → in-app switch → Smart Analysis
+consent sheet declined (on-device) and accepted.
+
+### 8.5 Store listing sentence (final draft)
+
+- EN: "Optional Smart Analysis sends a sanitised copy of your bank messages to
+  Qirsh's servers and Google's Gemini API to read them; it is off unless you
+  accept it."
+- AR: "التحليل الذكي اختياري: يُرسل نسخة مُنقّاة من رسائل البنك إلى خوادم قِرش
+  وواجهة Google Gemini لقراءتها، ولا يعمل إلا إذا وافقت عليه."
+
+### 8.6 OWNER MUST CONFIRM (before publishing the policy or attesting in Play)
+
+1. **Gemini billing tier** of the production `GEMINI_API_KEY` project (paid tier
+   with active billing = no product-improvement use, DPA applies). Decides the
+   Data safety "Shared" answer and the bracketed policy §7 sentence.
+2. Same for the **shadow** `GEMINI_SHADOW_API_KEY` project (may be a separate
+   project/tier) — or confirm the shadow route is off in production.
+3. **Logs and Datasets** setting, project creation date (before/after
+   2026-10-26), any datasets shared with Google, any Contributor-tier enrolment.
+   (`store:false` overrides the project setting per request once deployed.)
+4. **DPA** acceptance on the billing account (Google Cloud Data Processing
+   Addendum); Supabase DPA; Sentry DPA.
+5. **Regions:** Supabase project region; Sentry data region; Gemini has no
+   residency choice. Cross-border transfer obligations (Saudi PDPL, Egypt PDPL,
+   EEA users ⇒ paid tier mandatory per Gemini terms 1.7).
+6. **Retention settings:** Supabase plan (log retention 1/7/28/90 days), any
+   log drains, backup/PITR window; Sentry plan retention (30/90 days).
+7. **Contact email** to replace `<CONTACT_EMAIL>` (policy §9) and the Play
+   deletion answer.
+8. **Google Places:** whether `GOOGLE_MAPS_API_KEY` is set in production; legal
+   view on storing the derived `category_key` in `merchant_keywords` (3.6) and
+   on the Places "Shared" answer; Maps attribution / ToS pointer duties (3.5).
+9. Production values of `GEMINI_SMS_MODEL`, `GEMINI_MODEL` and the
+   `android_capture_ai_enabled` flag.
+10. That the Supabase URL is `https://` in every release build config.
+11. Deployment of the phase-4 backend **before or with** the app release, and
+    that F5 (encryption) and cold-start background processing ship in the same
+    release (§8.0).
+12. `capture_rate_limits` has no TTL (removed only on account deletion) —
+    accept or add a prune.
+13. That `qirsh.site/privacy` is regenerated from the final policy text.

@@ -864,15 +864,15 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get smsDisclosureFilter =>
-      'Non-financial messages — personal messages and verification codes — are ignored and not stored.';
+      'Messages that don\'t look financial — such as personal messages and verification codes — are dropped on your device and not stored. The check is automatic and may occasionally keep a message by mistake; you can delete it in Qirsh. Kept messages are stored encrypted on your device and may be processed in the background.';
 
   @override
   String get smsDisclosureOnDevice =>
-      'Parsing happens on your device by default. If you enable cloud processing, a sanitized copy — without card, account or phone numbers — is sent to Qirsh\'s servers.';
+      'With Smart Analysis & Cloud Sync off, messages are read only on your device. If you turn it on, captured bank messages are sent to Qirsh\'s servers and may be analysed by Google Gemini, after card, account and phone numbers, IBANs and codes are removed and recognised names, e-mail addresses and reference numbers are masked. The amount, merchant, date, balance and last card digits stay in the text, so it is still your personal financial information.';
 
   @override
   String get smsDisclosureCloud =>
-      'Cloud sync is off by default; if you turn it on, that is a separate consent from this permission.';
+      'Smart Analysis & Cloud Sync is a separate choice from this permission. It stays off unless you accept it, and you can withdraw it at any time in Settings → Privacy.';
 
   @override
   String get smsDisclosureControl =>
@@ -1015,7 +1015,11 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get smsAutoCaptureSubtitleOn =>
-      'On — incoming bank messages are read on your device only';
+      'On — incoming bank messages are read on your device';
+
+  @override
+  String get smsAutoCaptureSubtitleOnSmart =>
+      'On — with sensitive numbers removed, bank messages are sent to Qirsh servers and may be analysed by Google Gemini';
 
   @override
   String get smsAutoCaptureSubtitleBlocked =>
@@ -2864,11 +2868,11 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get privCloudProcessingBody =>
-      'Captured bank messages are uploaded to Qirsh servers, with card, account and phone numbers and codes removed, to be read; your data is synced and backed up there. Turning it off keeps everything on this device: messages are read only by Qirsh\'s on-device rules and nothing is synced. Manual entry keeps working.';
+      'Your data is synced and backed up on Qirsh servers, and captured bank messages may be sent there, with card, account and phone numbers and codes removed, to be read; a merchant name may be sent to Google Places to categorise it. Turning it off stops sending: messages are read by Qirsh\'s on-device rules and nothing new is synced. Manual entry keeps working.';
 
   @override
   String get privAiAnalysisBody =>
-      'With Cloud Sync on, captured bank messages — with card, account and phone numbers and codes removed — may be analysed by an AI service to read the amount, merchant and bank. Turning it off limits reading to Qirsh\'s own rules.';
+      'With Cloud Sync on, captured bank messages — including bank SMS read automatically on Android — with card, account and phone numbers and codes removed and recognised names, e-mails and reference numbers masked, may be analysed by Google Gemini to read the amount, merchant and bank. The text still contains amounts, merchants, dates and balances. Withdrawing consent limits reading to Qirsh\'s on-device rules.';
 
   @override
   String get privDeleteAccountBody =>
@@ -2938,7 +2942,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get privIntro =>
-      'When you enable Cloud processing, bank messages you share through the shortcut may be processed as sanitised text on Qirsh servers with help from AI. With Cloud off, messages are parsed locally. You can export or import your financial data from Data transfer.';
+      'With Smart Analysis & Cloud Sync on, bank messages captured by Qirsh — SMS read automatically on Android, or messages you share or send through the iOS shortcut — may be processed as sanitised text on Qirsh servers and by Google Gemini. With it off, messages are parsed on this device. You can export or import your financial data from Data transfer.';
 
   @override
   String dtxPreviewRows(int rows, String format) {
@@ -5675,7 +5679,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get smsShareBody =>
-      'Without SMS read permission: open the bank message, tap Share, and choose Qirsh. The text is analysed on your device only.';
+      'Without SMS read permission: open the bank message, tap Share, and choose Qirsh. With Smart Analysis off, the text is analysed only on your device.';
 
   @override
   String get smsShareExample =>
@@ -5912,7 +5916,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get smartConsentBullet1 =>
-      'Captured bank messages are sent to Qirsh servers after card, account and phone numbers and codes are removed. Google Gemini may process this text to identify the amount, merchant and bank.';
+      'Captured bank messages, including bank SMS read automatically on Android, are sent to Qirsh servers after card, account and phone numbers and codes are removed. Google Gemini may process this text to identify the amount, merchant and bank; Google Places may receive merchant names. Amounts, merchants and balances remain, so it is not anonymous.';
 
   @override
   String get smartConsentBullet2 =>
@@ -7320,7 +7324,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get smsV2PrivacyLine =>
-      'Without SMS read permission · The text is analysed on your device only.';
+      'Without SMS read permission · With Smart Analysis off, the text is analysed only on your device.';
 
   @override
   String get insV3Report => 'Report';
