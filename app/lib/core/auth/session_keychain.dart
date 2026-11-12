@@ -3,7 +3,8 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// ASR design v7.2 §6.1 — Dart side of `ios/Runner/SessionKeychain.swift`.
+/// ASR design v7.2 §6.1 — Dart side of `ios/Runner/SessionKeychain.swift` and
+/// `android/.../SessionKeychain.kt`.
 ///
 /// Every result keeps the OS status class. `absent` is a positive statement that
 /// the item does not exist; `unavailable` (protected data not available yet) and
@@ -13,12 +14,21 @@ enum KeychainStatus { found, absent, ok, unavailable, error, unknown }
 
 @immutable
 class KeychainResult {
-  const KeychainResult(this.status, [this.value]);
+  const KeychainResult(this.status, [this.value, this.permanent = false]);
 
   final KeychainStatus status;
 
   /// Present only for [KeychainStatus.found].
   final String? value;
+
+  /// Android only, with [KeychainStatus.error]: the item exists but can never
+  /// be read again (its Keystore key is gone or invalidated, or its bytes are
+  /// damaged). A retry cannot help; the record is unrecoverable. iOS never
+  /// sets it.
+  final bool permanent;
+
+  /// [KeychainStatus.error] that no retry can resolve.
+  bool get isUnrecoverable => status == KeychainStatus.error && permanent;
 
   bool get isFound => status == KeychainStatus.found;
   bool get isAbsent => status == KeychainStatus.absent;
@@ -83,7 +93,8 @@ class MethodChannelSessionKeychain implements SessionKeychainApi {
       if (status == KeychainStatus.found && value is! String) {
         return const KeychainResult(KeychainStatus.error);
       }
-      return KeychainResult(status, value as String?);
+      return KeychainResult(status, value as String?,
+          status == KeychainStatus.error && reply['permanent'] == true);
     } catch (_) {
       // Lost reply, timeout or missing plugin: the native outcome is unknown.
       return const KeychainResult(KeychainStatus.unknown);

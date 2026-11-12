@@ -18,9 +18,16 @@ class FakeKeychain implements SessionKeychainApi {
   /// Called with every value that lands in the item.
   void Function(String value)? onWrite;
 
+  /// Android: items that exist but can never be read again (lost or
+  /// invalidated Keystore key, damaged bytes). A write replaces the item.
+  final Set<String> unrecoverable = {};
+
   @override
   Future<KeychainResult> read(String key) async {
     if (readStatus != null) return KeychainResult(readStatus!);
+    if (unrecoverable.contains(key)) {
+      return const KeychainResult(KeychainStatus.error, null, true);
+    }
     if (failNextReads > 0) {
       failNextReads--;
       return const KeychainResult(KeychainStatus.error);
@@ -42,6 +49,7 @@ class FakeKeychain implements SessionKeychainApi {
       return const KeychainResult(KeychainStatus.unknown);
     }
     items[key] = value;
+    unrecoverable.remove(key);
     onWrite?.call(value);
     if (loseNextWriteReply) {
       loseNextWriteReply = false;

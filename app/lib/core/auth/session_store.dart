@@ -142,8 +142,15 @@ class SessionStore {
         return const LoadResult(LoadClass.deferred, reason: 'file_unavailable');
       }
     }
+    // Android: the item exists but can never be read again (its Keystore key
+    // is gone or invalidated, or its bytes are damaged). Retrying cannot help,
+    // so it is not deferred: nothing is served or admitted from it, it is never
+    // reported absent to the migration (no legacy import), and the next
+    // explicit sign-in replaces it.
+    final unrecoverable = item.isUnrecoverable;
     if (item.status != KeychainStatus.found &&
-        item.status != KeychainStatus.absent) {
+        item.status != KeychainStatus.absent &&
+        !unrecoverable) {
       return const LoadResult(LoadClass.deferred, reason: 'item_unavailable');
     }
     if (marker.status == FileStatus.malformed) {
@@ -211,7 +218,7 @@ class SessionStore {
     // import: only repair is allowed.
     final migrationResult = await _migrate(record, fenceMap,
         Map.of(migrationMap),
-        itemPresent: item.isFound);
+        itemPresent: item.isFound || unrecoverable);
     if (migrationResult.deferred) {
       return const LoadResult(LoadClass.deferred, reason: 'migration');
     }
@@ -242,7 +249,10 @@ class SessionStore {
       return const LoadResult(LoadClass.verifiedEmpty);
     }
     _committed = record;
-    if (record == null) return const LoadResult(LoadClass.verifiedEmpty);
+    if (record == null) {
+      return LoadResult(LoadClass.verifiedEmpty,
+          reason: unrecoverable ? 'record_unrecoverable' : null);
+    }
     return LoadResult(classify(record),
         record: record, untrustedThisLaunch: migrationResult.untrusted);
   }

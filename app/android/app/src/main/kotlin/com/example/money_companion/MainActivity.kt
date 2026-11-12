@@ -90,6 +90,10 @@ class MainActivity : FlutterFragmentActivity() {
         // data-loss defect ran through. A timezone lookup has no business
         // sharing it.
         registerDeviceTimezoneChannel(flutterEngine.dartExecutor.binaryMessenger)
+
+        // ASR §6.1: the session store's status-preserving keychain. Without it
+        // every coordinated load defers and a configured build never starts.
+        SessionKeychainChannel.register(flutterEngine.dartExecutor.binaryMessenger, this)
     }
 
     /**

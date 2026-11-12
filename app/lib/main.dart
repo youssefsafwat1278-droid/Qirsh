@@ -5,7 +5,8 @@ import 'core/security/lock_prompt_language.dart';
 import 'dart:async';
 import 'dart:ui' show DartPluginRegistrant;
 
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -105,6 +106,13 @@ class StartupApp extends StatefulWidget {
   @visibleForTesting
   final List<ProviderObserver> externalObservers;
 
+  /// Android: the app only runs once the user's storage is unlocked, so a
+  /// deferral there is a session-storage failure a retry may fix, never "wait
+  /// for first unlock". One that persists this many times in a row ends on the
+  /// retryable error screen instead of an endless loading screen. iOS keeps
+  /// waiting (ASR §6.7).
+  static const int maxAndroidDeferrals = 5;
+
   @override
   State<StartupApp> createState() => _StartupAppState();
 }
@@ -121,6 +129,10 @@ class _StartupAppState extends State<StartupApp> {
   /// available, on the next foreground, or after a short backoff.
   Timer? _deferredRetry;
   StreamSubscription<void>? _deferredAvailable;
+
+  /// Consecutive [BootstrapAuthDeferred] results (see
+  /// [StartupApp.maxAndroidDeferrals]).
+  int _consecutiveDeferrals = 0;
   AppLifecycleListener? _deferredResume;
 
   @override
@@ -199,6 +211,7 @@ class _StartupAppState extends State<StartupApp> {
         _installPresentation = presentation;
       }
       await _runner.run();
+      _consecutiveDeferrals = 0;
       if (widget.runner == null) await debugQaLocalIdentity();
       if (!mounted) return;
       final host = _runner.accountScope;
@@ -209,6 +222,14 @@ class _StartupAppState extends State<StartupApp> {
       setState(() => _accountScope = host);
     } catch (error) {
       if (!mounted) return;
+      if (error is BootstrapAuthDeferred &&
+          defaultTargetPlatform == TargetPlatform.android &&
+          ++_consecutiveDeferrals >= StartupApp.maxAndroidDeferrals) {
+        _consecutiveDeferrals = 0;
+        _clearDeferredRetry();
+        setState(() => _error = error);
+        return;
+      }
       if (error is BootstrapAuthDeferred ||
           error is BootstrapHeadlessDrainActive) {
         // Not a failure: nothing was initialized or published. Keep loading.

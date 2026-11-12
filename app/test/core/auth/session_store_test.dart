@@ -131,6 +131,86 @@ void main() {
     });
   });
 
+  group('Android unrecoverable item (Keystore key lost / damaged bytes)', () {
+    Future<SessionStore> withSession() async {
+      final s = process();
+      await s.load();
+      expect(await s.write(fresh(s)), WriteOutcome.committed);
+      return s;
+    }
+
+    test('→ verified empty with a diagnostic, nothing served, item kept',
+        () async {
+      final s = await withSession();
+      keychain.unrecoverable.add(s.itemKey);
+      final r = await process().load();
+      expect(r.loadClass, LoadClass.verifiedEmpty);
+      expect(r.reason, 'record_unrecoverable');
+      expect(r.record, isNull);
+      expect(r.served, isNull);
+      expect(keychain.items.containsKey(s.itemKey), isTrue,
+          reason: 'never deleted by a load');
+    });
+
+    test('a transient error (not permanent) is still deferred', () async {
+      await withSession();
+      keychain.failNextReads = 1;
+      expect((await process().load()).loadClass, LoadClass.deferred);
+      expect((await process().load()).loadClass, LoadClass.valid);
+    });
+
+    test('never triggers a legacy import, even without a migration entry',
+        () async {
+      final s = await withSession();
+      keychain.unrecoverable.add(s.itemKey);
+      // Only the item's existence can forbid the import now (§6.6).
+      await File('${dir.path}/session_migration.v1').delete();
+      legacy.value = legacyValue(uid: 'u7');
+      final readsBefore = legacy.reads;
+      final r = await process().load();
+      expect(r.loadClass, LoadClass.verifiedEmpty);
+      expect(r.record, isNull);
+      expect(legacy.reads, readsBefore, reason: 'legacy value never read');
+    });
+
+    test('the next explicit sign-in replaces it and survives a restart',
+        () async {
+      final s = await withSession();
+      keychain.unrecoverable.add(s.itemKey);
+      final p = process();
+      expect((await p.load()).loadClass, LoadClass.verifiedEmpty);
+      expect(await p.write(fresh(p, uid: 'u2')), WriteOutcome.committed);
+      final again = await process().load();
+      expect(again.loadClass, LoadClass.valid);
+      expect(again.record!.owner, 'u2');
+    });
+
+    test('a sign-in after a removal fence is not fenced away', () async {
+      final s = await withSession();
+      expect(await s.remove(), isTrue);
+      final q = process();
+      await q.load();
+      expect(await q.write(fresh(q, uid: 'u3')), WriteOutcome.committed);
+      keychain.unrecoverable.add(s.itemKey);
+      final p = process();
+      expect((await p.load()).loadClass, LoadClass.verifiedEmpty);
+      expect(await p.write(fresh(p, uid: 'u4')), WriteOutcome.committed);
+      final again = await process().load();
+      expect(again.loadClass, LoadClass.valid);
+      expect(again.record!.owner, 'u4');
+    });
+
+    test('install marker lost: marker recreated, item not deleted', () async {
+      final s = await withSession();
+      keychain.unrecoverable.add(s.itemKey);
+      await File('${dir.path}/install_marker.v1').delete();
+      final p = process();
+      expect((await p.load()).loadClass, LoadClass.verifiedEmpty);
+      expect(p.installId, isNotNull);
+      expect(keychain.items.containsKey(s.itemKey), isTrue);
+    });
+  });
+
   group('write linearization (§6.3)', () {
     test('ST1 ack lost after native success → reload adopts the new record',
         () async {

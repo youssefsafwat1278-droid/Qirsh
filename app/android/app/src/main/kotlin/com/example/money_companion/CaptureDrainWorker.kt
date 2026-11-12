@@ -205,6 +205,8 @@ class FlutterHeadlessCaptureEngine(private val context: Context) : HeadlessCaptu
             ),
         )
         registerDeviceTimezoneChannel(messenger)
+        // The headless bootstrap loads the same coordinated session store.
+        SessionKeychainChannel.register(messenger, context)
         engine.dartExecutor.executeDartEntrypoint(
             DartExecutor.DartEntrypoint(loader.findAppBundlePath(), ENTRYPOINT),
         )

@@ -184,6 +184,11 @@ dependencies {
     // classpath through play-services-ads; declared because the app now uses it
     // directly. Same versions as resolved today, so nothing else moves.
     implementation("androidx.work:work-runtime:2.7.0")
+    // SessionKeychain.kt reads flutter_secure_storage's EncryptedSharedPreferences
+    // (strict ASR reads). Same version the plugin already brings, so nothing moves.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    // JVM unit tests for the session vault (pure Kotlin + JCA, no device).
+    testImplementation("junit:junit:4.12")
 }
 
 flutter {
