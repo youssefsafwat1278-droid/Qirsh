@@ -663,7 +663,12 @@ class ParserEngine {
         score: 0.95,
       );
     }
-    if (raw.length == 4 &&
+    // A card suffix is exactly four DIGITS. `9.75` or `99.5` is four characters
+    // and used to be taken for one on any card line, dropping the amount (and
+    // with it the whole parse). A bare four-digit number written against a
+    // currency is money unless a mask marker (`****`, `ending`) introduces it.
+    if (_fourDigits.hasMatch(raw) &&
+        !_isCurrencyAdjacentAmount(line, start, end) &&
         (_hasNearbyKeyword(
                 l,
                 start,
@@ -1061,6 +1066,25 @@ class ParserEngine {
       );
     }
     return output;
+  }
+
+  static final RegExp _fourDigits = RegExp(r'^[0-9]{4}$');
+  static final RegExp _maskMarkerBefore = RegExp(
+    r'(?:[*xX•]|ending|ends\s+with|تنتهي\s*بـ?|رقم)\s*:?\s*$',
+    caseSensitive: false,
+  );
+  static final RegExp _currencyBefore =
+      RegExp('(?:$_currencyPattern)\\s*:?\\s*\$', caseSensitive: false);
+  static final RegExp _currencyAfter =
+      RegExp('^\\s*(?:$_currencyPattern)\\b', caseSensitive: false);
+
+  /// `SAR 1500` / `1500 SAR`: a four-digit number with a currency token right
+  /// against it, and no mask marker in front of it.
+  bool _isCurrencyAdjacentAmount(String line, int start, int end) {
+    final before = line.substring(start < 12 ? 0 : start - 12, start);
+    if (_maskMarkerBefore.hasMatch(before)) return false;
+    final after = line.substring(end, end + 8 > line.length ? line.length : end + 8);
+    return _currencyBefore.hasMatch(before) || _currencyAfter.hasMatch(after);
   }
 
   bool _numberBelongsToDate(String line, String raw) {

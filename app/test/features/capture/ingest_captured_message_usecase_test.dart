@@ -148,6 +148,48 @@ void main() {
         reason: 'native recovery is fully local, including enrichment');
   });
 
+  // Real-device finding 2026-11-12 (tablet, consent OFF): the synthetic S3
+  // purchase of SAR 9.75 from a phone-number sender was `ignored` — no
+  // transaction, no review item. The parser took `9.75` for the card's last
+  // four digits. Both ingest paths (foreground and native/background recovery)
+  // must now produce a reviewable transaction and make no AI call.
+  group('consent off: a sub-10 card purchase is not silently dropped', () {
+    const cafe = 'عملية شراء بطاقة:مدى;****4521 مبلغ:SAR 9.75 لدى:CAFE '
+        'في:2026-04-10 08:05 الرصيد:SAR 8,914.05';
+
+    for (final onDeviceOnly in [false, true]) {
+      test(onDeviceOnly ? 'background (on-device-only) path' : 'foreground path',
+          () async {
+        final ai = _CountingAiClient();
+        final ingest = IngestCapturedMessageUseCase(
+          AddTransactionUseCase(
+            transactionRepository: DriftTransactionRepository(db),
+            merchantCategoryRepository: DriftMerchantCategoryRepository(db),
+            suspectedDuplicateRepository: DriftSuspectedDuplicateRepository(db),
+            aiClient: ai,
+            loadAiConsent: () async => false,
+          ),
+        );
+
+        final result = await ingest.fromCapturedMessage(
+          CapturedMessage(
+            text: cafe,
+            senderId: '+201000000000',
+            source: CapturedMessageSource.androidShare,
+            receivedAt: DateTime.utc(2026, 4, 10, 8, 5),
+          ),
+          onDeviceOnly: onDeviceOnly,
+        );
+
+        expect(result.disposition, isNot(CapturedMessageDisposition.ignored));
+        expect(result.transactionId, isNotNull);
+        final txns = await DriftTransactionRepository(db).getAll();
+        expect(txns.single.amount, 9.75);
+        expect(ai.calls, 0, reason: 'consent is off');
+      });
+    }
+  });
+
   test('new merchant capture requests confirmation', () async {
     const rawMessage = 'عملية شراء\nمبلغ:SAR 82.00\n'
         'لدى:LOCAL ROASTER\nفي:2026-04-08 18:30';
