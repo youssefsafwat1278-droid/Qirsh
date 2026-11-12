@@ -90,6 +90,11 @@ class ParserEngine {
   static final RegExp _merchant = RegExp(
       r'(?:^|\b)(لدى|لدي|لـ|عند|الجهة|اسم\s+التاجر|At(?=[\s:])|Merchant|من|إلى|الى|To(?=[\s:]))\s*:?\s*(.+)',
       caseSensitive: false);
+  // `\b` above is ASCII-only, so a mid-line Arabic label (`… لدى:CAFE في:…`,
+  // a one-line SMS) never matched. Mid-line, only an explicit `label:` counts —
+  // a bare preposition (`من حسابك`) is far too common to be a merchant cue.
+  static final RegExp _merchantInlineLabel = RegExp(
+      r'(?<=[\s;،,])(لدى|لدي|عند|الجهة|اسم\s+التاجر)\s*:\s*(.+)');
   static final RegExp _merchantArabicTo = RegExp(r'^\s*ل(?!ل)\s*:?\s*(.+)');
   static final RegExp _merchantAtSign = RegExp(r'@([^,\n]+)');
   static final RegExp _plainNumber =
@@ -762,6 +767,13 @@ class ParserEngine {
           return _resolveMerchantSource(value, m.group(1), bank);
         }
       }
+      final inline = _merchantInlineLabel.firstMatch(line);
+      if (inline != null) {
+        final value = _cleanMerchant(inline.group(2)!);
+        if (value != null) {
+          return _resolveMerchantSource(value, inline.group(1), bank);
+        }
+      }
       final arabicTo = _merchantArabicTo.firstMatch(line);
       if (arabicTo != null) {
         final value = _cleanMerchant(arabicTo.group(1)!);
@@ -818,7 +830,8 @@ class ParserEngine {
             // leading `(?:^|\s)` this alternation matched the "ON" inside
             // "AMAZON" and truncated the merchant to "AMAZ" — silently, in
             // shipped code, for one of the most common merchants there is.
-            RegExp(r'(?:^|\s)(?:بتاريخ|في|on|يوم|الساعه|الساعة)(?:\s|$).*$',
+            // `في:` (one-line SNB layout) ends the merchant just like `في `.
+            RegExp(r'(?:^|\s)(?:بتاريخ|في|on|يوم|الساعه|الساعة)(?:[\s:]|$).*$',
                 caseSensitive: false),
             '')
         .replaceAll(
@@ -826,7 +839,7 @@ class ParserEngine {
                 caseSensitive: false),
             '')
         .replaceAll(
-            RegExp(r'(?:الرصيد|balance|available|avl\s+bal|المتاح)(?:\s|$).*$',
+            RegExp(r'(?:الرصيد|balance|available|avl\s+bal|المتاح)(?:[\s:]|$).*$',
                 caseSensitive: false),
             '')
         .replaceAll(
