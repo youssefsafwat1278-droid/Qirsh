@@ -179,6 +179,17 @@ void main() {
       expect(v.merchantName, 'Local   Shop');
     });
 
+    test('a sanitizer placeholder is never a grounded merchant', () {
+      // "[NAME]" IS in the sanitized text, so plain grounding would accept it.
+      for (final m in ['[NAME]', 'from [NAME]', '[REDACTED]', '[ref]']) {
+        final v = _run(
+            AiParseResponse(amount: 1250, currency: 'EGP', merchantName: m),
+            'Transfer received from [NAME] EGP 1,250.00 Ref [REF] [REDACTED]');
+        expect(v.accepted, isTrue, reason: m);
+        expect(v.merchantName, isNull, reason: m);
+      }
+    });
+
     test('date outside the window is dropped, inside is kept', () {
       const text = 'paid EGP 1,250.00';
       final localAt = DateTime.utc(2026, 6, 15);

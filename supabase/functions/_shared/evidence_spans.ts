@@ -13,7 +13,17 @@
 ///
 /// Spans that land on a redaction placeholder are refused too. `[CARD]` is not
 /// evidence, and evidence that claims to be it is either confused or hostile.
-export const REDACTION_TOKENS = ['[CARD]', '[PHONE]', '[ACCOUNT]', '[IBAN]', '[OTP]', '[REDACTED]'];
+export const REDACTION_TOKENS = [
+  '[CARD]',
+  '[PHONE]',
+  '[ACCOUNT]',
+  '[IBAN]',
+  '[OTP]',
+  '[REDACTED]',
+  '[NAME]',
+  '[REF]',
+  '[EMAIL]',
+];
 
 export function validateEvidenceSpans(
   evidence: unknown,

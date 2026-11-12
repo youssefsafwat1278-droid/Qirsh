@@ -1,5 +1,6 @@
 import { AI_PRIMARY_MODE, checkPrimaryAmount, runPrimaryAi } from '../_shared/ai_primary.ts';
-import { validateAiCandidate } from '../_shared/ai_candidate_validator.ts';
+import { REDACTION_PLACEHOLDER, validateAiCandidate } from '../_shared/ai_candidate_validator.ts';
+import { geminiRequestBody } from '../_shared/gemini_request.ts';
 import { bumpCaptureEndpointRateLimit, corsHeaders, readString, serviceClient } from '../_shared/capture_auth.ts';
 import {
   apiError,
@@ -360,7 +361,12 @@ Deno.serve(async (req) => {
     idempotencyClaimed = claim.outcome === 'claimed';
   }
 
-  const finish = async (obj: Record<string, unknown>): Promise<Response> => {
+  const finish = async (result: Record<string, unknown>): Promise<Response> => {
+    // A sanitizer placeholder ("[NAME]") is never a merchant; the client's
+    // grounding check would accept it because the placeholder IS in the text.
+    const obj = typeof result.merchant_name === 'string' && REDACTION_PLACEHOLDER.test(result.merchant_name)
+      ? Object.fromEntries(Object.entries(result).filter(([k]) => k !== 'merchant_name'))
+      : result;
     if (idempotencyClaimed) {
       await completeIdempotency(supabase, identity.identity.ownerKey, 'parse-sms', requestId, 'succeeded', obj);
     }
@@ -395,6 +401,8 @@ Fields (for transaction messages only):
   NOT the merchant. When the text reads "<gateway> <real merchant>", return the REAL merchant
   (e.g. the restaurant/store), never the gateway name. Do not assume category "bills" just because
   a gateway is involved — categorize by the real merchant.
+  Bracketed placeholders ([NAME], [CARD], [ACCOUNT], [PHONE], [IBAN], [OTP], [REF], [EMAIL],
+  [REDACTED]) mark removed personal data: never return one as merchant_name.
 - type: "payment" | "withdrawal" | "transfer" | "income" | "refund" | "unknown"
 - direction: "credit" | "debit" | "unknown" (credit means money/card balance increased; debit means decreased)
 - occurred_at: ISO-8601 local datetime if the SMS contains a date/time. Infer
@@ -473,7 +481,7 @@ Return ONLY valid JSON. No markdown, no explanation.`;
     const geminiRes = await fetchWithTimeout(`${GEMINI_URL}?key=${route.key}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: geminiRequestBody({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0,

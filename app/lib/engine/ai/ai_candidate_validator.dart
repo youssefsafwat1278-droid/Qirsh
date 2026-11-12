@@ -152,10 +152,19 @@ class AiCandidateValidator {
     if (merchant == null || MerchantSanity.isNumericOnly(merchant)) {
       return false;
     }
+    // A sanitizer placeholder ("[NAME]", "[CARD]" …) is in the text by
+    // construction, so it would always "ground" — but it is never a merchant.
+    // Mirrors REDACTION_PLACEHOLDER in the server validator.
+    if (_redactionPlaceholder.hasMatch(merchant)) return false;
     final needle = _collapse(merchant);
     if (needle.isEmpty) return false;
     return _collapse(text).contains(needle);
   }
+
+  static final RegExp _redactionPlaceholder = RegExp(
+    r'\[(?:CARD|PHONE|ACCOUNT|IBAN|OTP|REDACTED|NAME|REF|EMAIL)\]',
+    caseSensitive: false,
+  );
 
   static String _collapse(String value) =>
       value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();

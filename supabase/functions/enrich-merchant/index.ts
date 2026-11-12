@@ -16,6 +16,7 @@
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_ROLE_KEY
 import { bumpCaptureEndpointRateLimit, corsHeaders, readString, serviceClient } from '../_shared/capture_auth.ts';
+import { redactPii } from '../_shared/sms_redaction.ts';
 import {
   apiError,
   claimIdempotency,
@@ -260,6 +261,13 @@ Deno.serve(async (req) => {
   }
   if (merchantName.length > MAX_MERCHANT_LENGTH) {
     return apiError('payload_too_large', { correlationId: cid });
+  }
+  // The name goes to Google Places and into the GLOBAL merchant_keywords
+  // catalogue. A "merchant" that carries an identifier (card, phone, IBAN,
+  // account, reference, e-mail) is not a business name — refuse it before
+  // either egress rather than store a person's identifier for every device.
+  if (redactPii(merchantName) !== merchantName) {
+    return apiError('invalid_payload', { correlationId: cid });
   }
   const countryCode = ((body.country_code as string | undefined) ?? 'ALL')
     .toUpperCase();

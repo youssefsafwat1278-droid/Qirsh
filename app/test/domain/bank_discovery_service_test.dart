@@ -323,6 +323,50 @@ void main() {
     expect(result.status, BankDiscoveryResultStatus.skipped);
     expect(result.reason, 'generic_pending_is_usable');
   });
+
+  test('egress: a person named in a transfer never reaches discovery',
+      () async {
+    final client = _FakeBankDiscoveryClient(highConfidenceSuggestion);
+    final service = BankDiscoveryService(
+      mappingRepository: _FakeSenderBankMappingRepository(),
+      client: client,
+      loadAiConsent: () async => true,
+    );
+
+    await service.discoverIfEligible(
+      rawSms: 'Transfer received from MOHAMED ALI HASSAN AED 750.00 '
+          'Ref 7788991 call 0551234567',
+      senderId: _unknownSender,
+      availableProfiles: const [],
+      parseResult: ParseResult.notTransaction(),
+    );
+
+    final sent = client.lastRequest!.sanitizedSms;
+    expect(sent, 'Transfer received from [NAME] AED 750.00 Ref [REF] '
+        'call [PHONE]');
+  });
+
+  test('egress: phone-number and numeric short-code senders are never sent',
+      () async {
+    // Discovery is only for alphanumeric (brand) sender IDs: a phone number
+    // is personal data and identifies no bank, so the request never leaves.
+    for (final sender in ['+966551234567', '0551234567', '19623', '3636']) {
+      final client = _FakeBankDiscoveryClient(highConfidenceSuggestion);
+      final service = BankDiscoveryService(
+        mappingRepository: _FakeSenderBankMappingRepository(),
+        client: client,
+        loadAiConsent: () async => true,
+      );
+      final result = await service.discoverIfEligible(
+        rawSms: 'Trx. of AED 50.00 at SHOP.',
+        senderId: sender,
+        availableProfiles: const [],
+        parseResult: ParseResult.notTransaction(),
+      );
+      expect(client.callCount, 0, reason: sender);
+      expect(result.reason, 'sender_not_bank_like', reason: sender);
+    }
+  });
 }
 
 SenderBankMappingEntity _mapping({

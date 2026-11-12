@@ -5341,3 +5341,62 @@ extension RunnerTests {
     }
   }
 }
+
+// F4 — the iOS Shortcut sanitizer runs the SAME fixture as the Dart
+// SmsSanitizer (app/test/engine/privacy/sms_name_minimization_test.dart) and
+// the server (supabase/functions/_shared/sms_redaction_test.ts). `expected` is
+// the server's output; the Shortcut always strips beneficiaries (no type), so
+// it must match byte for byte. All messages are synthetic.
+final class SmsRedactionParityTests: XCTestCase {
+  private struct RedactionCase: Decodable {
+    let id: String
+    let kind: String
+    let raw: String
+    let expected: String
+    let mustKeep: [String]
+    let mustDrop: [String]
+  }
+
+  private func fixtureCases() throws -> [RedactionCase] {
+    let root = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+    let url = root.appendingPathComponent(
+      "../../supabase/functions/_shared/fixtures/sms_redaction_cases.json"
+    )
+    return try JSONDecoder().decode([RedactionCase].self, from: Data(contentsOf: url))
+  }
+
+  func testShortcutSanitizerMatchesSharedRedactionFixture() throws {
+    guard #available(iOS 16.0, *) else { throw XCTSkip("App Intents need iOS 16") }
+    let cases = try fixtureCases()
+    XCTAssertGreaterThan(cases.count, 30)
+    for c in cases {
+      let out = try BackendCaptureClient.sanitize(c.raw)
+      XCTAssertEqual(out, c.expected, "\(c.id): Shortcut and server disagree")
+      for keep in c.mustKeep {
+        XCTAssertTrue(out.contains(keep), "\(c.id): parsing needs \"\(keep)\"")
+      }
+      for drop in c.mustDrop {
+        XCTAssertFalse(out.contains(drop), "\(c.id): \"\(drop)\" is personal and leaked")
+      }
+      XCTAssertEqual(try BackendCaptureClient.sanitize(out), out, "\(c.id): not idempotent")
+    }
+  }
+
+  func testShortcutKeepsMerchantInPurchaseAndMasksPersonInTransfer() throws {
+    guard #available(iOS 16.0, *) else { throw XCTSkip("App Intents need iOS 16") }
+    XCTAssertEqual(
+      try BackendCaptureClient.sanitize("شراء من كارفور بمبلغ 230.75 ريال بطاقة *9876"),
+      "شراء من كارفور بمبلغ 230.75 ريال بطاقة *9876"
+    )
+    XCTAssertEqual(
+      try BackendCaptureClient.sanitize("حوالة واردة من محمد عبدالله بمبلغ 500 ريال"),
+      "حوالة واردة من [NAME] بمبلغ 500 ريال"
+    )
+    XCTAssertEqual(
+      try BackendCaptureClient.sanitize("Purchase at FROM SCRATCH CAFE SAR 45.00 card *4321"),
+      "Purchase at FROM SCRATCH CAFE SAR 45.00 card *4321"
+    )
+  }
+}

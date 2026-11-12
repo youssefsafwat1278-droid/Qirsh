@@ -73,6 +73,23 @@ void main() {
     expect((sent['request_id'] as String).isNotEmpty, isTrue);
   });
 
+  test('never sends the sender id (parse-sms does not read it)', () async {
+    late Map<String, dynamic> sent;
+    final mock = MockClient((req) async {
+      sent = jsonDecode(req.body) as Map<String, dynamic>;
+      return http.Response(jsonEncode({'amount': 10.0, 'currency': 'SAR'}), 200);
+    });
+    await clientWith(mock).parse(
+      sanitizedSms: 'Transfer received from [NAME] SAR 10.00',
+      senderId: '+966551234567',
+      installId: 'install-1',
+    );
+    expect(sent.containsKey('sender_id'), isFalse);
+    expect(sent.containsKey('senderId'), isFalse);
+    expect(jsonEncode(sent), isNot(contains('551234567')));
+    expect(sent['sanitized_sms'], 'Transfer received from [NAME] SAR 10.00');
+  });
+
   test('reuses the same request_id across the internal retry (idempotent)',
       () async {
     final ids = <String>[];

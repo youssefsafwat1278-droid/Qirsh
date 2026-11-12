@@ -10,7 +10,7 @@ import {
 import { sendCapturePush } from '../_shared/apns.ts';
 import { clearDeadApnsToken, enqueueNotificationRetry, capturePushContent, transactionPushAlert, isDeadApnsToken } from '../_shared/capture_push.ts';
 import { fingerprintTimeKeys } from '../_shared/capture_fingerprint.ts';
-import { redactPii, redactThirdPartyNames } from '../_shared/sms_redaction.ts';
+import { redactPii, redactSenderForAi, redactThirdPartyNames } from '../_shared/sms_redaction.ts';
 import { markApnsLogFailed, markApnsLogSent } from '../_shared/notification_logs.ts';
 import {
   isTransientApnsFailure,
@@ -595,8 +595,12 @@ export function buildNotification(
   // فلا نَعِد المستخدم بمراجعة غير موجودة — نرشده للّصق اليدوي بدلاً منها.
   return {
     title: 'قِرش رصد رسالة بنك',
-    body: sender
-      ? `رسالة من ${sender} لم نتمكن من تحليلها. الصقها يدوياً في قرش لإضافتها.`
+    // The alert travels through APNs and shows on the lock screen. An
+    // alphanumeric sender is the bank's registered brand ("SNB") and is
+    // shown; a phone number or numeric short code identifies no bank and may
+    // be a person, so it falls back to the generic label.
+    body: sender && redactSenderForAi(sender) === sender.trim()
+      ? `رسالة من ${sender.trim()} لم نتمكن من تحليلها. الصقها يدوياً في قرش لإضافتها.`
       : 'رسالة بنكية لم نتمكن من تحليلها. الصقها يدوياً في قرش لإضافتها.',
     type: 'received',
   };

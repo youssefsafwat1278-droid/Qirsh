@@ -1,4 +1,5 @@
 import { bumpCaptureEndpointRateLimit, serviceClient } from '../_shared/capture_auth.ts';
+import { geminiRequestBody } from '../_shared/gemini_request.ts';
 import {
   apiError,
   consentError,
@@ -12,6 +13,7 @@ import {
 import {
   IBAN_DETECT_PATTERN,
   redactPii,
+  redactSenderForAi,
   redactThirdPartyNames,
 } from '../_shared/sms_redaction.ts';
 
@@ -113,7 +115,7 @@ Deno.serve(async (req) => {
     const geminiRes = await fetchWithTimeout(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+      body: geminiRequestBody({
         contents: [{ parts: [{ text: buildPrompt(request, safeSms) }] }],
         generationConfig: {
           temperature: 0,
@@ -225,7 +227,7 @@ Return ONLY this JSON shape:
   "reason": "Short reason based on sender and wording, no SMS content quote"
 }
 
-Sender ID: ${request.senderId}
+Sender ID: ${redactSenderForAi(request.senderId)}
 Detected currency: ${request.detectedCurrency ?? 'unknown'}
 Locale hint: ${request.localeHint ?? 'unknown'}
 Sanitized SMS:

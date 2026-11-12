@@ -103,7 +103,10 @@ class SupabaseAiParserClient implements PrimaryAiParserClient {
     final requestId = IdGenerator.uuidV4();
     final body = jsonEncode({
       'sanitized_sms': sanitizedSms,
-      'sender_id': senderId,
+      // `sender_id` is deliberately NOT sent: no version of parse-sms has
+      // ever read it (it never reaches the prompt), so transmitting the raw
+      // sender — a phone number for some messages — was pure over-collection.
+      // [senderId] stays in the signature for the local cascade/fakes.
       'install_id': installId,
       if (deviceSecret != null && deviceSecret.isNotEmpty)
         'device_secret': deviceSecret,

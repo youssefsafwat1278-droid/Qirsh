@@ -1,4 +1,5 @@
 import { amountTextGrounded } from './ai_candidate_validator.ts';
+import { geminiRequestBody } from './gemini_request.ts';
 
 // AI owns interpretation. Validation constrains evidence/shape, never substitutes
 // a rule-based transaction. No payload, credential or provider body is logged.
@@ -78,7 +79,7 @@ export async function runPrimaryAi(options: {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': options.key },
           signal: AbortSignal.timeout(options.timeoutMs ?? 12000),
-          body: JSON.stringify({
+          body: geminiRequestBody({
             contents: [{ parts: [{ text: options.prompt + correction }] }],
             generationConfig: {
               temperature: 0,

@@ -113,3 +113,16 @@ Deno.test('English capture copy covers processed, duplicate, review and rejected
   assertStringIncludes(buildNotification('duplicate', parsed(), 'SNB', RECEIVED, 180, 'en').body,
     'Open Qirsh to review');
 });
+
+// The rejected alert names the sender. It travels through APNs to the lock
+// screen, so only an alphanumeric bank brand may appear there — never a phone
+// number or a numeric short code.
+Deno.test('rejected alert shows a bank brand sender but never a numeric/phone sender', () => {
+  const rejected = (sender: string) => buildNotification('rejected', {}, sender, RECEIVED, 180, 'ar').body;
+  assertStringIncludes(rejected('SNB'), 'رسالة من SNB');
+  for (const s of ['+966551234567', '0551234567', '01012345678', '19623', '٠٥٥١٢٣٤٥٦٧', 'AB 0551234567']) {
+    const out = rejected(s);
+    assertEquals(out, 'رسالة بنكية لم نتمكن من تحليلها. الصقها يدوياً في قرش لإضافتها.', s);
+  }
+  assertEquals(rejected(''), 'رسالة بنكية لم نتمكن من تحليلها. الصقها يدوياً في قرش لإضافتها.');
+});

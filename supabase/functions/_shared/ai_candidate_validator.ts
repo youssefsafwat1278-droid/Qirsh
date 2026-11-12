@@ -240,8 +240,13 @@ function collapse(value: string): string {
   return value.toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
+/// A placeholder the sanitizer wrote (`[NAME]`, `[CARD]` …) is grounded in the
+/// text by construction but is never a merchant.
+export const REDACTION_PLACEHOLDER = /\[(?:CARD|PHONE|ACCOUNT|IBAN|OTP|REDACTED|NAME|REF|EMAIL)\]/i;
+
 export function merchantGrounded(merchant: string | undefined | null, text: string): boolean {
   if (typeof merchant !== 'string') return false;
+  if (REDACTION_PLACEHOLDER.test(merchant)) return false;
   const needle = collapse(merchant);
   return needle.length > 0 && collapse(text).includes(needle);
 }

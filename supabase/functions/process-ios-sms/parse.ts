@@ -1,4 +1,5 @@
 import { checkPrimaryAmount, runPrimaryAi } from '../_shared/ai_primary.ts';
+import { geminiRequestBody } from '../_shared/gemini_request.ts';
 import rules from './parser_rules.json' with { type: 'json' };
 import { extractCaptureAmount } from './money.ts';
 import {
@@ -7,6 +8,7 @@ import {
   last4Grounded,
   type LocalCandidate,
   merchantGrounded,
+  REDACTION_PLACEHOLDER,
   validateAiCandidate,
 } from '../_shared/ai_candidate_validator.ts';
 
@@ -269,6 +271,7 @@ Decide whether it describes a completed financial transaction. OTPs, adverts and
 Return JSON with is_transaction. For a transaction provide amount (legacy number), amount_text (exact plain-decimal transaction amount), currency (ISO), type, direction (credit/debit), merchant, category and occurredAt only if written in the SMS.
 Separate transaction amount from available balance, account/card numbers and reference codes. Category must be one of: ${AI_CATEGORIES.join(', ')}.
 A received IPN/InstaPay/person-to-person transfer is type=transfer and category=transfers with direction=credit; an outgoing one is debit. A person's name is not a merchant.
+Bracketed placeholders such as [NAME], [CARD], [ACCOUNT], [REF] or [REDACTED] mark removed personal data and are never a merchant.
 Use the SMS's local date and time without inventing a date. Return a local clock as YYYY-MM-DDTHH:MM:SS with no Z or timezone offset. PM means afternoon/evening, 12 AM means 00:00, and 12 PM means noon. Date reference: ${input.receivedAt}.
 SMS:
 ${input.text}`;
@@ -346,7 +349,7 @@ SMS: ${text}`;
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey,
       },
-      body: JSON.stringify({
+      body: geminiRequestBody({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.1,
@@ -434,8 +437,9 @@ function extractMerchant(text: string): string | undefined {
     .replace(/^[\s.,:;؛*\-]+/g, '')
     .replace(/[\s.,:;؛*\-]+$/g, '')
     .trim();
-  // A time, date or reference number is never a merchant.
-  if (!merchant || NUMERIC_ONLY.test(merchant)) return undefined;
+  // A time, date or reference number is never a merchant; nor is a
+  // sanitizer placeholder such as "[NAME]" (a masked person).
+  if (!merchant || NUMERIC_ONLY.test(merchant) || REDACTION_PLACEHOLDER.test(merchant)) return undefined;
   return merchant;
 }
 

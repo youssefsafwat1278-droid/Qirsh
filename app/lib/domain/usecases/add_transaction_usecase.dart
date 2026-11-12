@@ -1181,7 +1181,12 @@ class AddTransactionUseCase {
         // server (Google Places via enrich-merchant) to resolve a category. The
         // function also writes the result into merchant_keywords, so every other
         // device picks it up on the next catalog sync.
-        final resolver = onDeviceOnly ? null : _resolveMerchantCategory;
+        // A "merchant" carrying an identifier (Arabic-Indic digits survive
+        // normalisation; e-mails too) is not a business name: never send it.
+        final resolver =
+            onDeviceOnly || SmsSanitizer.containsIdentifier(normalized)
+                ? null
+                : _resolveMerchantCategory;
         String? resolved;
         if (resolver != null && await _mayEnrichMerchantNow()) {
           try {

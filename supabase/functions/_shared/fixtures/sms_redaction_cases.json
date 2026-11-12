@@ -1,0 +1,509 @@
+[
+ {
+  "id": "en_purchase_pos",
+  "kind": "purchase",
+  "raw": "Purchase of SAR 120.50 at STARBUCKS RIYADH with card *4321 on 05/11/2026 14:30. Avl bal SAR 2,310.00",
+  "expected": "Purchase of SAR 120.50 at STARBUCKS RIYADH with card *4321 on 05/11/2026 14:30. Avl bal SAR 2,310.00",
+  "mustKeep": [
+   "SAR",
+   "120.50",
+   "STARBUCKS RIYADH",
+   "*4321",
+   "05/11/2026",
+   "14:30"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_purchase_from_merchant",
+  "kind": "purchase",
+  "raw": "Purchase from AMAZON SA SAR 99.00 card ending 4321 on 05/11",
+  "expected": "Purchase from AMAZON SA SAR 99.00 card ending 4321 on 05/11",
+  "mustKeep": [
+   "AMAZON SA",
+   "99.00",
+   "4321",
+   "05/11"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_merchant_named_from",
+  "kind": "purchase",
+  "raw": "Purchase at FROM SCRATCH CAFE SAR 45.00 card *4321",
+  "expected": "Purchase at FROM SCRATCH CAFE SAR 45.00 card *4321",
+  "mustKeep": [
+   "FROM SCRATCH CAFE",
+   "45.00",
+   "*4321"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_merchant_named_dear",
+  "kind": "purchase",
+  "raw": "Purchase at DEAR DIARY CAFE SAR 20.00 card *4321",
+  "expected": "Purchase at DEAR DIARY CAFE SAR 20.00 card *4321",
+  "mustKeep": [
+   "DEAR DIARY CAFE",
+   "20.00"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_merchant_mr_price",
+  "kind": "purchase",
+  "raw": "POS purchase SAR 75.00 at MR PRICE card *4321",
+  "expected": "POS purchase SAR 75.00 at MR PRICE card *4321",
+  "mustKeep": [
+   "MR PRICE",
+   "75.00"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_online",
+  "kind": "purchase",
+  "raw": "Online purchase EGP 349.99 at NOON.COM using card **5398 on 06/11 21:05",
+  "expected": "Online purchase EGP 349.99 at NOON.COM using card **5398 on 06/11 21:05",
+  "mustKeep": [
+   "NOON.COM",
+   "349.99",
+   "EGP",
+   "**5398",
+   "06/11",
+   "21:05"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_debit_card_at",
+  "kind": "purchase",
+  "raw": "Your Debit Card **5398 had a Successful transaction of EGP 33.00 @Orange on 04/11",
+  "expected": "Your Debit Card **5398 had a Successful transaction of EGP 33.00 @Orange on 04/11",
+  "mustKeep": [
+   "@Orange",
+   "33.00",
+   "**5398"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_refund_from_merchant",
+  "kind": "refund",
+  "raw": "Refund of SAR 99.00 from NOON credited to card *1111 on 07/11",
+  "expected": "Refund of SAR 99.00 from NOON credited to card *1111 on 07/11",
+  "mustKeep": [
+   "NOON",
+   "99.00",
+   "*1111"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_atm",
+  "kind": "atm",
+  "raw": "Cash withdrawal SAR 500.00 from ATM RIYADH BRANCH card *1234 on 05/11 10:00",
+  "expected": "Cash withdrawal SAR 500.00 from ATM RIYADH BRANCH card *1234 on 05/11 10:00",
+  "mustKeep": [
+   "ATM RIYADH BRANCH",
+   "500.00",
+   "*1234"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_transfer_in_from",
+  "kind": "transfer_in",
+  "raw": "Transfer received from MOHAMED ALI HASSAN amount SAR 1,250.00 on 05/11 10:22",
+  "expected": "Transfer received from [NAME] amount SAR 1,250.00 on 05/11 10:22",
+  "mustKeep": [
+   "1,250.00",
+   "SAR",
+   "05/11",
+   "10:22",
+   "received from [NAME]"
+  ],
+  "mustDrop": [
+   "MOHAMED",
+   "HASSAN"
+  ]
+ },
+ {
+  "id": "en_ipn_credited_by",
+  "kind": "transfer_in",
+  "raw": "Your account **1234 was credited by EGP 500.00 from AHMED M*** via IPN on 12/05 IPN REF# 123456789",
+  "expected": "Your account **1234 was credited by EGP 500.00 from [NAME] via IPN on 12/05 IPN REF# [REF]",
+  "mustKeep": [
+   "EGP 500.00",
+   "**1234",
+   "12/05",
+   "IPN REF# [REF]",
+   "from [NAME] via IPN"
+  ],
+  "mustDrop": [
+   "AHMED",
+   "123456789"
+  ]
+ },
+ {
+  "id": "en_transfer_out_to",
+  "kind": "transfer_out",
+  "raw": "InstaPay transfer sent to Sara Mahmoud EGP 300.00 on 01/11 Ref 7788991",
+  "expected": "InstaPay transfer sent to [NAME] EGP 300.00 on 01/11 Ref [REF]",
+  "mustKeep": [
+   "EGP 300.00",
+   "01/11",
+   "sent to [NAME]"
+  ],
+  "mustDrop": [
+   "Sara",
+   "Mahmoud",
+   "7788991"
+  ]
+ },
+ {
+  "id": "en_transferred_to",
+  "kind": "transfer_out",
+  "raw": "You transferred SAR 200.00 to KHALID OMAR from account ***9911 on 03/11",
+  "expected": "You transferred SAR 200.00 to [NAME] from account ***9911 on 03/11",
+  "mustKeep": [
+   "SAR 200.00",
+   "***9911",
+   "to [NAME]"
+  ],
+  "mustDrop": [
+   "KHALID",
+   "OMAR"
+  ]
+ },
+ {
+  "id": "en_beneficiary_label",
+  "kind": "transfer_out",
+  "raw": "Transfer of SAR 900.00 Beneficiary Name: NOURA SALEH Date 03/11",
+  "expected": "Transfer of SAR 900.00 Beneficiary Name: [NAME] Date 03/11",
+  "mustKeep": [
+   "SAR 900.00",
+   "03/11",
+   "Beneficiary Name: [NAME]"
+  ],
+  "mustDrop": [
+   "NOURA",
+   "SALEH"
+  ]
+ },
+ {
+  "id": "en_salary",
+  "kind": "salary",
+  "raw": "Salary of SAR 15,000.00 credited to your account from ACME TRADING LLC on 27/10",
+  "expected": "Salary of SAR 15,000.00 credited to your account from [NAME] on 27/10",
+  "mustKeep": [
+   "15,000.00",
+   "SAR",
+   "27/10"
+  ],
+  "mustDrop": [
+   "ACME"
+  ]
+ },
+ {
+  "id": "en_dear_greeting",
+  "kind": "purchase",
+  "raw": "Dear Ahmed Ali, your card *1234 was charged SAR 50.00 at STARBUCKS",
+  "expected": "Dear [NAME], your card *1234 was charged SAR 50.00 at STARBUCKS",
+  "mustKeep": [
+   "Dear [NAME],",
+   "*1234",
+   "50.00",
+   "STARBUCKS"
+  ],
+  "mustDrop": [
+   "Ahmed",
+   "Ali,"
+  ]
+ },
+ {
+  "id": "en_dear_customer",
+  "kind": "purchase",
+  "raw": "Dear Customer, SAR 50.00 was spent at JARIR on card *1234",
+  "expected": "Dear Customer, SAR 50.00 was spent at JARIR on card *1234",
+  "mustKeep": [
+   "Dear Customer",
+   "JARIR",
+   "50.00"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_mr_title_transfer",
+  "kind": "transfer_in",
+  "raw": "Mr. AHMED ALI transferred SAR 200.00 to your account",
+  "expected": "Mr. [NAME] transferred SAR 200.00 to your account",
+  "mustKeep": [
+   "Mr. [NAME] transferred",
+   "SAR 200.00"
+  ],
+  "mustDrop": [
+   "AHMED"
+  ]
+ },
+ {
+  "id": "en_initial_name",
+  "kind": "transfer_in",
+  "raw": "SAR 100.00 credited from A.HASSAN to account ***1234",
+  "expected": "SAR 100.00 credited from [NAME] to account ***1234",
+  "mustKeep": [
+   "SAR 100.00",
+   "from [NAME]",
+   "***1234"
+  ],
+  "mustDrop": [
+   "HASSAN"
+  ]
+ },
+ {
+  "id": "en_otp",
+  "kind": "otp",
+  "raw": "Your OTP is 483920 for purchase of SAR 99.00 at NOON. Do not share.",
+  "expected": "Your OTP is [OTP] for purchase of SAR 99.00 at NOON. Do not share.",
+  "mustKeep": [
+   "Your OTP is [OTP]",
+   "99.00",
+   "NOON"
+  ],
+  "mustDrop": [
+   "483920"
+  ]
+ },
+ {
+  "id": "en_promo",
+  "kind": "promo",
+  "raw": "Get 20% cashback from NOON this weekend! Call 0551234567 or email offers@bank.com",
+  "expected": "Get 20% cashback from NOON this weekend! Call [PHONE] or email [EMAIL]",
+  "mustKeep": [
+   "NOON",
+   "20%"
+  ],
+  "mustDrop": [
+   "0551234567",
+   "offers@bank.com"
+  ]
+ },
+ {
+  "id": "en_pii_floor",
+  "kind": "transfer_in",
+  "raw": "Transfer received SAR 700.00 IBAN SA0380000000608010167519 card 4539 1488 0343 6467 phone +201012345678",
+  "expected": "Transfer received SAR 700.00 IBAN [IBAN] card [CARD] phone [PHONE]",
+  "mustKeep": [
+   "SAR 700.00",
+   "[IBAN]",
+   "[CARD]",
+   "[PHONE]"
+  ],
+  "mustDrop": [
+   "SA0380000000608010167519",
+   "4539",
+   "+201012345678"
+  ]
+ },
+ {
+  "id": "en_amount_not_ref",
+  "kind": "purchase",
+  "raw": "Transaction of EGP 5000000.00 Ref 5000000.00 at CARREFOUR",
+  "expected": "Transaction of EGP 5000000.00 Ref 5000000.00 at CARREFOUR",
+  "mustKeep": [
+   "5000000.00",
+   "CARREFOUR"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_bill",
+  "kind": "bill",
+  "raw": "Bill payment SAR 300.00 to STC ref 123456 on 02/11",
+  "expected": "Bill payment SAR 300.00 to STC ref [REF] on 02/11",
+  "mustKeep": [
+   "STC",
+   "300.00",
+   "ref [REF]"
+  ],
+  "mustDrop": [
+   "123456"
+  ]
+ },
+ {
+  "id": "ar_purchase",
+  "kind": "purchase",
+  "raw": "شراء عبر نقاط البيع بمبلغ 230.75 ريال من كارفور بطاقة *9876 في 05/11 14:30",
+  "expected": "شراء عبر نقاط البيع بمبلغ 230.75 ريال من كارفور بطاقة *9876 في 05/11 14:30",
+  "mustKeep": [
+   "كارفور",
+   "230.75",
+   "ريال",
+   "*9876",
+   "05/11",
+   "14:30"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "ar_purchase_from",
+  "kind": "purchase",
+  "raw": "شراء من بنده بمبلغ 88.00 ريال بطاقة مدى *4455 يوم 06/11",
+  "expected": "شراء من بنده بمبلغ 88.00 ريال بطاقة مدى *4455 يوم 06/11",
+  "mustKeep": [
+   "من بنده",
+   "88.00",
+   "*4455"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "ar_cib_debit",
+  "kind": "purchase",
+  "raw": "تم خصم 60.00EGP من بطاقة المدفوعة مقدماً رقم 4907 عند FAWRY*SNTRAL NWR ALA يوم 14/03 الساعه 22:29",
+  "expected": "تم خصم 60.00EGP من بطاقة المدفوعة مقدماً رقم 4907 عند FAWRY*SNTRAL NWR ALA يوم 14/03 الساعه 22:29",
+  "mustKeep": [
+   "60.00EGP",
+   "4907",
+   "FAWRY*SNTRAL NWR ALA",
+   "14/03",
+   "22:29"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "ar_transfer_in",
+  "kind": "transfer_in",
+  "raw": "حوالة واردة من محمد عبدالله آل سعود بمبلغ 5000 ريال إلى حسابك ***1234 في 05/11",
+  "expected": "حوالة واردة من [NAME] بمبلغ 5000 ريال إلى: [REDACTED]",
+  "mustKeep": [
+   "حوالة واردة من [NAME] بمبلغ 5000 ريال"
+  ],
+  "mustDrop": [
+   "محمد",
+   "عبدالله",
+   "سعود"
+  ]
+ },
+ {
+  "id": "ar_transfer_out_lisalih",
+  "kind": "transfer_out",
+  "raw": "تم تحويل 500 ريال من حسابك ***1234 لصالح سارة الاسمري بتاريخ 05/11",
+  "expected": "تم تحويل 500 ريال من حسابك ***1234 لصالح [NAME] بتاريخ 05/11",
+  "mustKeep": [
+   "500 ريال",
+   "***1234",
+   "لصالح [NAME] بتاريخ 05/11"
+  ],
+  "mustDrop": [
+   "سارة",
+   "الاسمري"
+  ]
+ },
+ {
+  "id": "ar_received_colon",
+  "kind": "transfer_in",
+  "raw": "تم استلام حوالة من: خالد سعيد مبلغ 750 جنيه رقم المرجع 99887766",
+  "expected": "تم استلام حوالة من: [NAME] مبلغ 750 جنيه رقم المرجع [REF]",
+  "mustKeep": [
+   "من: [NAME] مبلغ 750 جنيه",
+   "رقم المرجع [REF]"
+  ],
+  "mustDrop": [
+   "خالد",
+   "سعيد",
+   "99887766"
+  ]
+ },
+ {
+  "id": "ar_greeting",
+  "kind": "purchase",
+  "raw": "عزيزي محمد أحمد، تم خصم 50 ريال من بطاقتك *1234 لدى ستاربكس",
+  "expected": "[REDACTED] تم خصم 50 ريال من بطاقتك *1234 لدى ستاربكس",
+  "mustKeep": [
+   "50 ريال",
+   "*1234",
+   "لدى ستاربكس"
+  ],
+  "mustDrop": [
+   "محمد",
+   "أحمد"
+  ]
+ },
+ {
+  "id": "ar_sayyid",
+  "kind": "transfer_in",
+  "raw": "السيد خالد العتيبي قام بتحويل 300 ريال إلى حسابك",
+  "expected": "السيد [NAME] قام بتحويل 300 ريال إلى: [REDACTED]",
+  "mustKeep": [
+   "السيد [NAME] قام بتحويل 300 ريال"
+  ],
+  "mustDrop": [
+   "خالد",
+   "العتيبي"
+  ]
+ },
+ {
+  "id": "ar_atm",
+  "kind": "atm",
+  "raw": "سحب نقدي 1000 ريال من الصراف الآلي فرع العليا بطاقة *1234",
+  "expected": "سحب نقدي 1000 ريال من الصراف الآلي فرع العليا بطاقة *1234",
+  "mustKeep": [
+   "1000 ريال",
+   "الصراف",
+   "*1234"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "ar_refund",
+  "kind": "refund",
+  "raw": "استرداد مبلغ 120 ريال من نون إلى بطاقتك *1111",
+  "expected": "استرداد مبلغ 120 ريال من نون إلى: [REDACTED]",
+  "mustKeep": [
+   "من نون",
+   "120 ريال"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "ar_otp",
+  "kind": "otp",
+  "raw": "رمز التحقق: 8391 لعملية شراء بمبلغ 99 ريال",
+  "expected": "رمز التحقق: [OTP] لعملية شراء بمبلغ 99 ريال",
+  "mustKeep": [
+   "رمز التحقق: [OTP]",
+   "99 ريال"
+  ],
+  "mustDrop": [
+   "8391"
+  ]
+ },
+ {
+  "id": "ar_salary",
+  "kind": "salary",
+  "raw": "تم إيداع راتب 12000 ريال في حسابك من شركة الأفق",
+  "expected": "تم إيداع راتب 12000 ريال في حسابك من [NAME]",
+  "mustKeep": [
+   "12000 ريال"
+  ],
+  "mustDrop": [
+   "الأفق"
+  ]
+ },
+ {
+  "id": "ar_indic_digits",
+  "kind": "transfer_in",
+  "raw": "حوالة واردة من فهد ناصر بمبلغ ٥٠٠ ريال حساب ١٢٣٤٥٦٧٨٩٠١٢٣",
+  "expected": "حوالة واردة من [NAME] بمبلغ ٥٠٠ ريال حساب [ACCOUNT]",
+  "mustKeep": [
+   "من [NAME] بمبلغ ٥٠٠ ريال",
+   "[ACCOUNT]"
+  ],
+  "mustDrop": [
+   "فهد",
+   "١٢٣٤٥٦٧٨٩٠١٢٣"
+  ]
+ }
+]
