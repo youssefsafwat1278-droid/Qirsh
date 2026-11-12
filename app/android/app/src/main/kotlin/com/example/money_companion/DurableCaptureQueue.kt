@@ -81,27 +81,133 @@ internal object CaptureOwnerPolicy {
     /** iOS parity (`SharedCaptureStore.normalizedUID`). */
     fun normalize(uid: String): String = uid.trim().lowercase(Locale.ROOT)
 
-    /** What the SMS auto-capture opt-in does when an owner is published. */
-    enum class OptIn { KEEP, ADOPT, RESET }
-
     /**
-     * The opt-in belongs to the account that turned it on. A different account
-     * never inherits it (RESET). An opt-in recorded before owners existed (no
-     * owner) is adopted by the first owner published WITHOUT an account change
-     * in between: the upgrade of a signed-in user. An account change first
-     * resets such an ownerless opt-in ([resetAtAccountChange]).
+     * The SMS auto-capture opt-in, remembered per account. Owner HASHES only
+     * (the HMAC of [DurableCaptureQueue.hashOf]), never a uid.
+     *
+     * [active] + [activeOwner] are the runtime gate the receiver reads
+     * ([captureAllowed]); [remembered] is every account whose own explicit
+     * action turned capture on and that has not turned it off or removed its
+     * data since; [restoredNotice] is the owner whose opt-in was restored at
+     * its publish and who has not been told yet (one-shot).
      */
-    fun onOwnerPublished(optedIn: Boolean, optInOwner: String?, newOwner: String): OptIn =
-        when {
-            !optedIn -> OptIn.KEEP
-            optInOwner == null -> OptIn.ADOPT
-            optInOwner == newOwner -> OptIn.KEEP
-            else -> OptIn.RESET
+    data class OptInState(
+        val active: Boolean = false,
+        /** Null on an opt-in recorded before owners existed (legacy). */
+        val activeOwner: String? = null,
+        val remembered: Set<String> = emptySet(),
+        val restoredNotice: String? = null,
+    ) {
+        /**
+         * An owned active opt-in is always remembered (it also migrates an
+         * opt-in recorded before the per-account memory existed), and a notice
+         * exists only while its owner's opt-in is the active one.
+         */
+        fun normalized(): OptInState {
+            val owner = activeOwner
+            val withOwner = if (active && owner != null && owner !in remembered) {
+                copy(remembered = remembered + owner)
+            } else {
+                this
+            }
+            val noticeHolds = withOwner.restoredNotice != null && withOwner.active &&
+                withOwner.activeOwner == withOwner.restoredNotice
+            return if (withOwner.restoredNotice != null && !noticeHolds) {
+                withOwner.copy(restoredNotice = null)
+            } else {
+                withOwner
+            }
         }
 
-    /** At an account transition an opt-in nobody owns is not inherited. */
-    fun resetAtAccountChange(optedIn: Boolean, optInOwner: String?): Boolean =
-        optedIn && optInOwner == null
+        /** Nothing captured; every remembered account stays remembered. */
+        fun deactivated(): OptInState =
+            normalized().copy(active = false, activeOwner = null).normalized()
+    }
+
+    /**
+     * [newOwner] is published. Its own remembered opt-in is restored (with the
+     * one-shot notice); an opt-in recorded before owners existed is adopted by
+     * the first owner published WITHOUT an account change in between (the
+     * upgrade of a signed-in user: every owner clear deactivates it first);
+     * another account's active opt-in is deactivated, never inherited, and
+     * stays remembered for that account only.
+     */
+    fun onOwnerPublished(state: OptInState, newOwner: String): OptInState {
+        val s = state.normalized()
+        return when {
+            s.active && s.activeOwner == newOwner -> s
+            newOwner in s.remembered ->
+                s.copy(active = true, activeOwner = newOwner, restoredNotice = newOwner)
+            s.active && s.activeOwner == null ->
+                s.copy(activeOwner = newOwner, remembered = s.remembered + newOwner)
+            else -> s.deactivated()
+        }.normalized()
+    }
+
+    /**
+     * Sign-out or the start of an account transition: nothing is captured
+     * while no owner is active. Remembered opt-ins are kept; an ownerless
+     * (legacy) opt-in has no owner to remember and is dropped.
+     */
+    fun onOwnerCleared(state: OptInState): OptInState = state.deactivated()
+
+    /**
+     * The Settings toggle. On: only for an active [owner], who is remembered.
+     * With no active owner (signed out) nothing is turned on or remembered for
+     * anyone. Off: forgets the active owner's (and the caller's) opt-in.
+     */
+    fun onToggled(state: OptInState, enabled: Boolean, owner: String?): OptInState {
+        val s = state.normalized()
+        return when {
+            enabled && owner != null -> s.copy(
+                active = true,
+                activeOwner = owner,
+                remembered = s.remembered + owner,
+            )
+            enabled -> s.deactivated()
+            else -> s.copy(
+                active = false,
+                activeOwner = null,
+                remembered = s.remembered - setOfNotNull(s.activeOwner, owner),
+            )
+        }.normalized()
+    }
+
+    /**
+     * Remove data / account deletion of [removed]: its remembered opt-in is
+     * forgotten and the active opt-in is deactivated (nothing is captured
+     * while a removal runs). Other accounts stay remembered.
+     */
+    fun onOwnerRemoved(state: OptInState, removed: String): OptInState {
+        val s = state.deactivated()
+        return s.copy(remembered = s.remembered - removed).normalized()
+    }
+
+    /**
+     * The one-shot "turned back on" notice, asked for by [owner] (the active
+     * owner the caller proved). Shown only while [owner]'s restored opt-in is
+     * the active one AND capture is permitted ([permitted]: RECEIVE_SMS
+     * granted); asking consumes it either way, so a revoked permission never
+     * produces a later claim that capture is on.
+     */
+    fun consumeRestoredNotice(
+        state: OptInState,
+        owner: String?,
+        permitted: Boolean,
+    ): Pair<Boolean, OptInState> {
+        val s = state.normalized()
+        if (owner == null || s.restoredNotice != owner) return false to s
+        return permitted to s.copy(restoredNotice = null)
+    }
+
+    /**
+     * The receiver's gate: an opt-in is active AND an owner is active (never
+     * while signed out) AND the opt-in is that owner's (or legacy ownerless,
+     * adopted at the next publish).
+     */
+    fun captureAllowed(state: OptInState, activeQueueOwner: String?): Boolean =
+        state.active && activeQueueOwner != null &&
+            (state.activeOwner == null || state.activeOwner == activeQueueOwner)
 
     /** Visible to the drain: stamped to exactly the active owner. */
     fun visible(state: String, ownerHash: String?, activeOwner: String?): Boolean =

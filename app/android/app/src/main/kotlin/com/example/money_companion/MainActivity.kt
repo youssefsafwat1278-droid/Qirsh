@@ -335,14 +335,37 @@ class NativeCaptureChannelHandler(
                 result.success(array.toString())
             }
 
+            // The opt-in is remembered for the ACTIVE owner only; with none
+            // (signed out) nothing is turned on or remembered for anyone.
             "setAutomaticSmsCaptureEnabled" -> {
                 val enabled = call.argument<Boolean>("enabled") ?: false
-                CaptureSettings.setAutoCaptureEnabled(
-                    context,
-                    enabled,
-                    DurableCaptureQueue.get(context).activeOwnerHash(),
-                )
+                val owner = DurableCaptureQueue.get(context).activeOwnerHash()
+                CaptureSettings.update(context) {
+                    CaptureOwnerPolicy.onToggled(it, enabled, owner)
+                }
                 result.success(CaptureSettings.isAutoCaptureEnabled(context))
+            }
+
+            // One-shot: true only when [uid] is the active owner, its own
+            // remembered opt-in was restored at its publish, and capture is
+            // effective now (RECEIVE_SMS granted). Asking consumes it.
+            "consumeCaptureRestoredNotice" -> ownerCall(result) {
+                val uid = call.argument<String>("uid")
+                    ?: throw CaptureOwnerException("bad_args")
+                val queue = DurableCaptureQueue.get(context)
+                val hash = queue.hashOf(uid)
+                val active = queue.activeOwnerHash()
+                var show = false
+                CaptureSettings.update(context) { state ->
+                    val (shown, next) = CaptureOwnerPolicy.consumeRestoredNotice(
+                        state,
+                        if (active == hash) hash else null,
+                        CaptureSettings.hasReceiveSmsPermission(context),
+                    )
+                    show = shown
+                    next
+                } ?: throw CaptureOwnerException("queue_unavailable")
+                show && CaptureSettings.isAutoCaptureEnabled(context)
             }
 
 
@@ -433,21 +456,23 @@ class NativeCaptureChannelHandler(
                 val expectedEpoch = call.argument<Number>("expectedEpoch")?.toInt()
                     ?: throw CaptureOwnerException("bad_args")
                 val queue = DurableCaptureQueue.get(context)
-                val decision = CaptureOwnerPolicy.onOwnerPublished(
-                    CaptureSettings.isOptedIn(context),
-                    CaptureSettings.optInOwner(context),
-                    queue.hashOf(uid),
-                )
+                val before = CaptureSettings.optInState(context)
+                val next = CaptureOwnerPolicy.onOwnerPublished(before, queue.hashOf(uid))
                 // Another account's SMS opt-in is never inherited: it is
-                // reset BEFORE this owner can be stamped on anything.
-                if (decision == CaptureOwnerPolicy.OptIn.RESET &&
-                    !CaptureSettings.reset(context)
-                ) {
+                // deactivated (still remembered for that account only) BEFORE
+                // this owner can be stamped on anything.
+                val narrows = before.active && !next.active
+                if (narrows && CaptureSettings.update(context) { next } == null) {
                     throw CaptureOwnerException("queue_unavailable")
                 }
                 val record = queue.publishOwner(uid, expectedEpoch)
-                if (decision == CaptureOwnerPolicy.OptIn.ADOPT) {
-                    CaptureSettings.adoptOwner(context, record.uidHash)
+                // This owner's own remembered opt-in is restored (with its
+                // one-shot notice), or a legacy ownerless one adopted, only
+                // once it IS the active owner.
+                if (!narrows) {
+                    CaptureSettings.update(context) {
+                        CaptureOwnerPolicy.onOwnerPublished(it, record.uidHash)
+                    }
                 }
                 mapOf("uidHash" to record.uidHash, "generation" to record.generation)
             }
@@ -466,14 +491,10 @@ class NativeCaptureChannelHandler(
 
             "clearCaptureOwner" -> ownerCall(result) {
                 val clearHint = call.argument<Boolean>("clearHint") == true
-                // An account change never carries an opt-in nobody owns.
-                if (clearHint && CaptureOwnerPolicy.resetAtAccountChange(
-                        CaptureSettings.isOptedIn(context),
-                        CaptureSettings.optInOwner(context),
-                    ) && !CaptureSettings.reset(context)
-                ) {
-                    throw CaptureOwnerException("queue_unavailable")
-                }
+                // Nothing is captured while signed out or mid account change:
+                // the active opt-in is deactivated (each account's remembered
+                // opt-in is kept for that account; an ownerless one is dropped).
+                if (!CaptureSettings.reset(context)) throw CaptureOwnerException("queue_unavailable")
                 DurableCaptureQueue.get(context).clearOwner(clearHint)
                 // Nothing scheduled for the released owner may run.
                 CaptureBackgroundScheduler.cancel(context)
@@ -515,16 +536,25 @@ class NativeCaptureChannelHandler(
                 )
             }
 
-            // Remove data (§4.4 on Android): begin → (replica teardown in
-            // Dart) → finish. The SMS opt-in is reset and background work
-            // cancelled at BOTH ends, so nothing is captured or drained for
-            // the owner being removed, also when a crashed removal resumes.
+            // Remove data / account deletion (§4.4 on Android): begin →
+            // (replica teardown in Dart) → finish. The SMS opt-in is
+            // deactivated, the removed owner's remembered opt-in forgotten and
+            // background work cancelled at BOTH ends, so nothing is captured
+            // or drained for the owner being removed and nothing of it is ever
+            // restored, also when a crashed removal resumes.
             "beginCaptureRemoval" -> ownerCall(result) {
                 val uid = call.argument<String>("uid")
                     ?: throw CaptureOwnerException("bad_args")
                 CaptureBackgroundScheduler.cancel(context)
-                if (!CaptureSettings.reset(context)) throw CaptureOwnerException("queue_unavailable")
-                DurableCaptureQueue.get(context).beginRemoval(uid).toMap()
+                val queue = DurableCaptureQueue.get(context)
+                val removed = queue.hashOf(uid)
+                if (CaptureSettings.update(context) {
+                        CaptureOwnerPolicy.onOwnerRemoved(it, removed)
+                    } == null
+                ) {
+                    throw CaptureOwnerException("queue_unavailable")
+                }
+                queue.beginRemoval(uid).toMap()
             }
 
             "getCaptureRemovalBarrier" -> ownerCall(result) {
@@ -541,16 +571,24 @@ class NativeCaptureChannelHandler(
                 val uid = call.argument<String>("uid")
                     ?: throw CaptureOwnerException("bad_args")
                 CaptureBackgroundScheduler.cancel(context)
-                if (!CaptureSettings.reset(context)) throw CaptureOwnerException("removal_incomplete")
-                DurableCaptureQueue.get(context).finishRemoval(uid)
+                val queue = DurableCaptureQueue.get(context)
+                val removed = queue.hashOf(uid)
+                if (CaptureSettings.update(context) {
+                        CaptureOwnerPolicy.onOwnerRemoved(it, removed)
+                    } == null
+                ) {
+                    throw CaptureOwnerException("removal_incomplete")
+                }
+                queue.finishRemoval(uid)
             }
 
             "purgeAllCaptureState" -> {
-                // MALI-054n: purge this identity's capture residue + reset the
-                // SMS auto-capture opt-in. Both use commit() so success is
-                // verified before a new user is admitted. Report the AND of both.
+                // MALI-054n: purge this identity's capture residue + every SMS
+                // auto-capture opt-in, active or remembered. Both use commit()
+                // so success is verified before a new user is admitted. Report
+                // the AND of both.
                 val purged = DurableCaptureQueue.get(context).purge()
-                val settingsReset = CaptureSettings.reset(context)
+                val settingsReset = CaptureSettings.resetAll(context)
                 // Nothing scheduled for the purged identity may run.
                 CaptureBackgroundScheduler.cancel(context)
                 result.success(purged && settingsReset)

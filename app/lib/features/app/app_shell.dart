@@ -73,6 +73,7 @@ import '../cards/cards_providers.dart';
 import '../onboarding/force_update_screen.dart';
 import '../dashboard/dashboard_providers.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../settings/settings_providers.dart';
 import '../gamification/services/engagement_event_service.dart';
 import '../gamification/services/gamification_sync_service.dart';
 import '../gamification/services/achievement_unlocks.dart';
@@ -965,6 +966,26 @@ class _AppShellState extends ConsumerState<AppShell> {
     await NativeCaptureBridge.acknowledgeAndroidCaptureQueueNotice();
   }
 
+  /// Android: tells the signed-in account, once, that its OWN automatic SMS
+  /// capture was turned back on when it signed in again (the opt-in is
+  /// remembered per account; another account never inherits it). Native
+  /// answers true only for the active owner whose remembered opt-in it
+  /// restored and only while capture is effective (RECEIVE_SMS still granted),
+  /// and clears the notice when asked. A background-triggered pass, or an app
+  /// not in the foreground, does not ask, so the notice waits to be seen.
+  Future<void> _surfaceAndroidCaptureRestored() async {
+    if (_backgroundIsActive != null) return;
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    if (lifecycle != null && lifecycle != AppLifecycleState.resumed) return;
+    final uid = AppSession.instance.captureLocalWorkAuthority()?.uid;
+    if (uid == null) return;
+    if (!await NativeCaptureBridge.consumeCaptureRestoredNotice(uid)) return;
+    if (!mounted) return;
+    // The Settings switch renders from the platform: re-read it.
+    ref.invalidate(captureCapabilitiesProvider);
+    showTopInfo(context, context.l10n.smsAutoCaptureRestoredNotice);
+  }
+
   Future<void> _runLedgerSync(
       {bool recoveryProbe = false, bool manual = false}) async {
     // MALI-029 offline gate: a plain background/local-activity trigger while
@@ -1361,6 +1382,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           await ref.read(loadNotificationPreferencesUseCaseProvider).call();
       if (!mounted) return;
       await _surfaceAndroidQueueRefusals();
+      if (!mounted) return;
+      await _surfaceAndroidCaptureRestored();
       if (!mounted) return;
       final report = await drain.run(
         // A background-triggered pass also stops when the OS cancels it.

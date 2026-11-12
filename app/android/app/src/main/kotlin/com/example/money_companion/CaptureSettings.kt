@@ -21,6 +21,14 @@ object CaptureSettings {
      * turned the opt-in on. Absent on an opt-in recorded before owners existed.
      */
     private const val KEY_OPT_IN_OWNER = "auto_capture_owner_hash"
+    /**
+     * Every owner hash whose own explicit action turned capture on and that
+     * has not turned it off or removed its data since: restored for exactly
+     * that owner when it is published again ([CaptureOwnerPolicy.onOwnerPublished]).
+     */
+    private const val KEY_REMEMBERED_OWNERS = "auto_capture_remembered_owner_hashes"
+    /** The owner hash whose opt-in was restored and who has not been told yet. */
+    private const val KEY_RESTORED_NOTICE = "auto_capture_restored_notice_owner_hash"
 
     /** Share-to-Mali capture is always supported; it needs no permission. */
     fun supportsShareCapture(): Boolean = true
@@ -57,48 +65,80 @@ object CaptureSettings {
     fun isAutoCaptureEnabled(context: Context): Boolean {
         // Enabled only when the user turned it on AND the permission holds.
         if (!hasReceiveSmsPermission(context)) return false
-        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_AUTO_ENABLED, false) // OFF by default
+        // The opt-in (OFF by default) counts only for the ACTIVE owner whose
+        // own action turned it on: never while signed out.
+        return CaptureOwnerPolicy.captureAllowed(
+            optInState(context),
+            DurableCaptureQueue.get(context).activeOwnerHash(),
+        )
     }
 
-    /**
-     * The opt-in belongs to [ownerHash], the active capture owner when the user
-     * turned it on, so a different account never inherits it
-     * ([CaptureOwnerPolicy.onOwnerPublished]).
-     */
-    fun setAutoCaptureEnabled(context: Context, enabled: Boolean, ownerHash: String?) {
-        val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY_AUTO_ENABLED, enabled)
-        if (enabled && ownerHash != null) {
-            editor.putString(KEY_OPT_IN_OWNER, ownerHash)
-        } else {
-            editor.remove(KEY_OPT_IN_OWNER)
-        }
-        editor.apply()
-    }
-
-    /** The stored opt-in alone (no permission check): the owner rule's input. */
-    fun isOptedIn(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(KEY_AUTO_ENABLED, false)
-
-    /** Who owns the opt-in; null when off or recorded before owners existed. */
+    /** Who owns the active opt-in; null when off or recorded before owners existed. */
     fun optInOwner(context: Context): String? =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getString(KEY_OPT_IN_OWNER, null)
 
-    /** An ownerless (pre-upgrade) opt-in becomes [ownerHash]'s. */
-    fun adoptOwner(context: Context, ownerHash: String): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putString(KEY_OPT_IN_OWNER, ownerHash).commit()
+    /** The per-account opt-in state ([CaptureOwnerPolicy.OptInState]). Hashes only. */
+    @Synchronized
+    internal fun optInState(context: Context): CaptureOwnerPolicy.OptInState {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return CaptureOwnerPolicy.OptInState(
+            active = prefs.getBoolean(KEY_AUTO_ENABLED, false), // OFF by default
+            activeOwner = prefs.getString(KEY_OPT_IN_OWNER, null),
+            // A copy: the set SharedPreferences returns must not be modified.
+            remembered = prefs.getStringSet(KEY_REMEMBERED_OWNERS, null)?.toSet() ?: emptySet(),
+            restoredNotice = prefs.getString(KEY_RESTORED_NOTICE, null),
+        )
+    }
 
     /**
-     * MALI-054n/059n: reset the SMS auto-capture opt-in on an identity change so
-     * one user's consent is never inherited by the next. commit() is used so the
-     * purge boundary can confirm completion. Returns true on verified reset.
+     * Applies [transition] to the stored state and persists the result with
+     * commit(), so a caller can refuse to proceed (e.g. stamp a new owner)
+     * unless the narrowing is durable. Returns the state written, or null when
+     * the write could not be confirmed (nothing is assumed changed then).
      */
-    fun reset(context: Context): Boolean {
+    @Synchronized
+    internal fun update(
+        context: Context,
+        transition: (CaptureOwnerPolicy.OptInState) -> CaptureOwnerPolicy.OptInState,
+    ): CaptureOwnerPolicy.OptInState? {
+        val before = optInState(context)
+        val next = transition(before)
+        if (next == before) return next
+        val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_AUTO_ENABLED, next.active)
+        if (next.activeOwner != null) {
+            editor.putString(KEY_OPT_IN_OWNER, next.activeOwner)
+        } else {
+            editor.remove(KEY_OPT_IN_OWNER)
+        }
+        if (next.remembered.isEmpty()) {
+            editor.remove(KEY_REMEMBERED_OWNERS)
+        } else {
+            editor.putStringSet(KEY_REMEMBERED_OWNERS, HashSet(next.remembered))
+        }
+        if (next.restoredNotice != null) {
+            editor.putString(KEY_RESTORED_NOTICE, next.restoredNotice)
+        } else {
+            editor.remove(KEY_RESTORED_NOTICE)
+        }
+        val ok = try { editor.commit() } catch (_: Throwable) { false }
+        return if (ok) next else null
+    }
+
+    /**
+     * MALI-054n/059n: deactivate the SMS auto-capture opt-in so nothing is
+     * captured across an identity boundary. Remembered per-account opt-ins are
+     * kept (each is restored only for its own account). commit() is used so
+     * the purge boundary can confirm completion. Returns true on verified reset.
+     */
+    fun reset(context: Context): Boolean =
+        update(context) { CaptureOwnerPolicy.onOwnerCleared(it) } != null
+
+    /** Purge: every opt-in, remembered or active, and any pending notice. */
+    fun resetAll(context: Context): Boolean {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().remove(KEY_AUTO_ENABLED).remove(KEY_OPT_IN_OWNER).commit()
+            .edit().remove(KEY_AUTO_ENABLED).remove(KEY_OPT_IN_OWNER)
+            .remove(KEY_REMEMBERED_OWNERS).remove(KEY_RESTORED_NOTICE).commit()
     }
 }

@@ -85,6 +85,13 @@ void main() {
     test('opt-in is reset on identity change', () {
       expect(settings, contains('fun reset('));
     });
+
+    test('the opt-in counts only for the active owner (never signed out)', () {
+      // Per-account memory: the receiver's gate is the policy, which needs an
+      // active owner whose own opt-in it is (CaptureOptInPolicyTest, JVM).
+      expect(settings, contains('CaptureOwnerPolicy.captureAllowed('));
+      expect(settings, contains('DurableCaptureQueue.get(context).activeOwnerHash()'));
+    });
   });
 
   group('receiver privacy prefilter', () {

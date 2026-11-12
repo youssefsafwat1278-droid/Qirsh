@@ -80,6 +80,16 @@ class _AndroidNative {
   Map<String, Object?>? barrier;
   bool optedIn = false;
   String? optInOwner;
+
+  /// The per-account memory (CaptureOwnerPolicy.OptInState): owner hashes
+  /// whose own opt-in is restored when they are published again.
+  final Set<String> remembered = {};
+
+  /// The owner told once that its opt-in was turned back on.
+  String? restoredNotice;
+
+  /// RECEIVE_SMS (the other key of the two-key lock).
+  bool smsGranted = true;
   int backgroundCancels = 0;
 
   /// The next finishCaptureRemoval cannot delete everything.
@@ -98,15 +108,34 @@ class _AndroidNative {
   bool sweptBy(Map<String, Object?> i, String h) =>
       i['ownerHash'] == h || i['ownerHint'] == h;
 
-  /// The Settings toggle (MainActivity `setAutomaticSmsCaptureEnabled`).
+  /// The Settings toggle (MainActivity `setAutomaticSmsCaptureEnabled`,
+  /// CaptureOwnerPolicy.onToggled): on only for the active owner, who is
+  /// remembered; with none (signed out) nothing is turned on for anyone.
   void optIn() {
+    if (owner == null) return _deactivate();
     optedIn = true;
     optInOwner = owner;
+    remembered.add(owner!);
   }
+
+  /// CaptureOwnerPolicy.OptInState.deactivated: nothing is captured, every
+  /// owned opt-in stays remembered for its own account.
+  void _deactivate() {
+    if (optedIn && optInOwner != null) remembered.add(optInOwner!);
+    optedIn = false;
+    optInOwner = null;
+    restoredNotice = null;
+  }
+
+  /// CaptureOwnerPolicy.captureAllowed: the ACTIVE owner's own opt-in only.
+  bool get _captureAllowed =>
+      optedIn && owner != null && (optInOwner == null || optInOwner == owner);
 
   /// SmsCaptureReceiver.onReceive → DurableCaptureQueue.enqueue.
   void sms(String id, String text) {
-    if (!optedIn) return; // the two-key lock: no opt-in, nothing read
+    // The two-key lock: no opt-in of the active owner, nothing read (HEAD: the
+    // opt-in alone).
+    if (_headModel ? !optedIn : !_captureAllowed) return;
     if (barrier != null && !_headModel) return; // refused during removal
     items.add({
       'id': id,
@@ -119,6 +148,20 @@ class _AndroidNative {
           : {'ownerState': 'unbound', 'ownerHint': optInOwner ?? hint},
     });
   }
+
+  /// A capture the previous build queued UNBOUND while signed out (it read SMS
+  /// with no active owner), hinted to the account that had consented.
+  void signedOutItemFromPreviousBuild(String id, String text, String hintOwner) =>
+      items.add({
+        'id': id,
+        'text': text,
+        'sender': 'SNB',
+        'source': 'sms',
+        'receivedAtEpochMs':
+            DateTime.utc(2026, 4, 8, 9, 45).millisecondsSinceEpoch,
+        'ownerState': 'unbound',
+        'ownerHint': hintOwner,
+      });
 
   /// A queue item written by the pre-upgrade build: no owner fields at all.
   void preUpgradeItem(String id, String text) => items.add({
@@ -154,11 +197,18 @@ class _AndroidNative {
           throw PlatformException(code: 'owner_changed');
         }
         final h = hash(args['uid']! as String);
-        if (optedIn && optInOwner != null && optInOwner != h) {
-          optedIn = false; // another account's opt-in is never inherited
-          optInOwner = null;
-        } else if (optedIn && optInOwner == null) {
+        if (optedIn && optInOwner == h) {
+          // Already this owner's: kept as is (a relaunch).
+        } else if (remembered.contains(h)) {
+          // Its own remembered opt-in is restored, with a one-shot notice.
+          optedIn = true;
           optInOwner = h;
+          restoredNotice = h;
+        } else if (optedIn && optInOwner == null) {
+          optInOwner = h; // legacy ownerless opt-in adopted
+          remembered.add(h);
+        } else {
+          _deactivate(); // another account's opt-in is never inherited
         }
         if (owner != h) {
           owner = h;
@@ -171,9 +221,7 @@ class _AndroidNative {
         if (uid == null || owner != hash(uid)) return null;
         return {'uid': uid, 'uidHash': owner, 'generation': generation};
       case 'clearCaptureOwner':
-        if (args['clearHint'] == true && optedIn && optInOwner == null) {
-          optedIn = false;
-        }
+        _deactivate(); // nothing is read while signed out
         owner = null;
         epoch++;
         if (args['clearHint'] == true) hint = null;
@@ -217,8 +265,8 @@ class _AndroidNative {
       case 'beginCaptureRemoval':
         final h = hash(args['uid']! as String);
         backgroundCancels++;
-        optedIn = false;
-        optInOwner = null;
+        _deactivate();
+        remembered.remove(h);
         barrier ??= {'nonce': 'n-1', 'uidHash': h, 'startedAt': 'now'};
         if (owner == h) {
           owner = null;
@@ -231,8 +279,8 @@ class _AndroidNative {
         if (barrier == null) return 0;
         final h = hash(args['uid']! as String);
         backgroundCancels++;
-        optedIn = false;
-        optInOwner = null;
+        _deactivate();
+        remembered.remove(h);
         if (failFinish) {
           failFinish = false;
           throw PlatformException(code: 'removal_incomplete');
@@ -242,6 +290,20 @@ class _AndroidNative {
         if (hint == h) hint = null;
         barrier = null;
         return before - items.length;
+      case 'consumeCaptureRestoredNotice':
+        final h = hash(args['uid']! as String);
+        if (owner != h || restoredNotice != h) return false;
+        restoredNotice = null; // asked by its owner: spent, shown or not
+        return smsGranted && _captureAllowed;
+      case 'purgeAllCaptureState':
+        items.clear();
+        owner = null;
+        hint = null;
+        optedIn = false;
+        optInOwner = null;
+        remembered.clear();
+        restoredNotice = null;
+        return true;
       case 'authorizeCaptureUpload':
       case 'setCaptureConsentMirror':
       case 'getCloudEgressState':
@@ -485,7 +547,9 @@ void main() {
     native.optIn();
     native.sms('sms-a-1', _purchase(45)); // received while A is signed in
     await _signOut();
-    native.sms('sms-a-2', _purchase(46)); // received after A signed out
+    native.sms('sms-a-2', _purchase(46)); // arrives after A signed out
+    expect(native.items.map((i) => i['id']), ['sms-a-1'],
+        reason: 'nothing is read while signed out');
 
     await _signInAfterSignOut(_uidB);
     final report = await b.drain().run();
@@ -495,38 +559,145 @@ void main() {
     expect(ai.requests, isEmpty,
         reason: 'no AI request under B\'s consent for A\'s SMS');
     expect(report.queued, 0);
-    expect(native.items.map((i) => i['id']),
-        containsAll(<String>['sms-a-1', 'sms-a-2']),
-        reason: 'A\'s captures are kept (waiting), not lost');
+    expect(native.items.map((i) => i['id']), ['sms-a-1'],
+        reason: 'A\'s capture is kept (waiting), not lost');
     expect(await b.prompt().check(), isNull,
-        reason: 'A\'s signed-out SMS is never offered to B');
+        reason: 'A\'s capture is never offered to B');
     expect(native.optedIn, isFalse,
         reason: 'A\'s SMS auto-capture opt-in is not inherited by B');
+    expect(native.remembered, {native.hash(_uidA)},
+        reason: 'it stays remembered for A alone');
     native.sms('sms-while-b', _purchase(47));
     expect(native.items.where((i) => i['id'] == 'sms-while-b'), isEmpty,
         reason: 'nothing is read until B opts in itself');
 
-    // A comes back: its waiting SMS imports; the signed-out one needs a claim.
+    // A comes back: its waiting SMS imports, and its own opt-in is back.
     await _signOut();
     await _signInAfterSignOut(_uidA);
     await a.drain().run();
     expect(await a.transactionIds(), ['sms-a-1']);
-    final offer = await a.prompt().check();
-    expect(offer?.ids, ['sms-a-2']);
+    expect(await a.prompt().check(), isNull,
+        reason: 'nothing was captured while signed out: nothing to claim');
+    expect(native.optedIn, isTrue);
+    expect(native.optInOwner, native.hash(_uidA));
     expect(protectedWrites, isEmpty,
         reason: 'Android owner calls never record iOS egress causes');
     expect(native.calls, isNot(contains('authorizeCaptureUpload')));
   });
 
+  group('the SMS auto-capture opt-in is remembered per account', () {
+    test(
+        'A on → B → A: A\'s opt-in is restored for A only, with a one-shot '
+        'notice A sees and B never does', () async {
+      await _admit(_uidA);
+      native.optIn();
+
+      await _signOut();
+      expect(native.optedIn, isFalse, reason: 'off while signed out');
+      native.sms('signed-out', _purchase(10));
+
+      await _signInAfterSignOut(_uidB);
+      expect(native.optedIn, isFalse, reason: 'B never inherits A\'s opt-in');
+      expect(await NativeCaptureBridge.consumeCaptureRestoredNotice(_uidB),
+          isFalse);
+      native.sms('while-b', _purchase(11));
+      expect(native.items, isEmpty,
+          reason: 'nothing read signed out, nothing read for B');
+
+      await _signOut();
+      await _signInAfterSignOut(_uidA);
+      expect(native.optedIn, isTrue);
+      expect(native.optInOwner, native.hash(_uidA));
+      // B (not the active owner) can neither see nor spend A's notice.
+      expect(await NativeCaptureBridge.consumeCaptureRestoredNotice(_uidB),
+          isFalse);
+      expect(await NativeCaptureBridge.consumeCaptureRestoredNotice(_uidA),
+          isTrue, reason: 'A is told once');
+      expect(await NativeCaptureBridge.consumeCaptureRestoredNotice(_uidA),
+          isFalse, reason: 'one-shot');
+      native.sms('back-on-a', _purchase(12));
+      expect(native.items.single['ownerHash'], native.hash(_uidA));
+
+      // A relaunch republishing A is not a restore: no second notice.
+      await _admit(_uidA);
+      expect(await NativeCaptureBridge.consumeCaptureRestoredNotice(_uidA),
+          isFalse);
+    });
+
+    test('B\'s own opt-in is B\'s: A returning does not touch it', () async {
+      await _admit(_uidA);
+      native.optIn();
+      await _signOut();
+      await _signInAfterSignOut(_uidB);
+      native.optIn();
+      expect(await NativeCaptureBridge.consumeCaptureRestoredNotice(_uidB),
+          isFalse, reason: 'B turned it on itself: nothing to announce');
+
+      await _signOut();
+      await _signInAfterSignOut(_uidA);
+      expect(native.optInOwner, native.hash(_uidA));
+      expect(native.remembered, {native.hash(_uidA), native.hash(_uidB)});
+
+      await _signOut();
+      await _signInAfterSignOut(_uidB);
+      expect(native.optInOwner, native.hash(_uidB));
+      expect(await NativeCaptureBridge.consumeCaptureRestoredNotice(_uidB),
+          isTrue);
+    });
+
+    test('a restored opt-in without RECEIVE_SMS is never announced as on',
+        () async {
+      await _admit(_uidA);
+      native.optIn();
+      await _signOut();
+      await _signInAfterSignOut(_uidB);
+      await _signOut();
+      native.smsGranted = false; // revoked in system Settings meanwhile
+      await _signInAfterSignOut(_uidA);
+      expect(await NativeCaptureBridge.consumeCaptureRestoredNotice(_uidA),
+          isFalse);
+      native.smsGranted = true;
+      expect(await NativeCaptureBridge.consumeCaptureRestoredNotice(_uidA),
+          isFalse, reason: 'spent: not announced later either');
+    });
+
+    test('enabling while signed out turns nothing on for anyone', () async {
+      await _admit(_uidA);
+      await _signOut();
+      native.optIn(); // the toggle with no active owner
+      expect(native.optedIn, isFalse);
+      expect(native.remembered, isEmpty);
+      await _signInAfterSignOut(_uidA);
+      expect(native.optedIn, isFalse);
+    });
+
+    test('purge forgets every remembered opt-in', () async {
+      await _admit(_uidA);
+      native.optIn();
+      await _signOut();
+      NativeCaptureBridge.debugTreatHostAsNative = true;
+      addTearDown(() => NativeCaptureBridge.debugTreatHostAsNative = false);
+      expect(await NativeCaptureBridge.purgeAllCaptureState(), isTrue);
+      expect(native.remembered, isEmpty);
+      await _signInAfterSignOut(_uidA);
+      expect(native.optedIn, isFalse);
+    });
+  });
+
   test(
-      'an SMS received while signed out is imported ONLY after the claim, on '
-      'device (never AI)', () async {
+      'an SMS the previous build queued while signed out is imported ONLY '
+      'after the claim, on device (never AI); nothing new is read signed out',
+      () async {
     final a = await _Account.open(_uidA, ai);
     addTearDown(a.db.close);
     await _admit(_uidA);
     native.optIn();
     await _signOut();
-    native.sms('sms-u', _purchase(52));
+    native.signedOutItemFromPreviousBuild(
+        'sms-u', _purchase(52), native.hash(_uidA));
+    native.sms('sms-now', _purchase(53));
+    expect(native.items.map((i) => i['id']), ['sms-u'],
+        reason: 'this build reads nothing while signed out');
     await _signInAfterSignOut(_uidA);
 
     await a.drain().run();
@@ -611,7 +782,9 @@ void main() {
       native.optIn();
       native.sms('sms-a-1', _purchase(71));
       await _signOut();
-      native.sms('sms-a-2', _purchase(72)); // signed-out, hinted to A
+      // Queued unbound by the previous build while signed out, hinted to A.
+      native.signedOutItemFromPreviousBuild(
+          'sms-a-2', _purchase(72), native.hash(_uidA));
       await _signInAfterSignOut(_uidA);
       final cancelsBefore = native.backgroundCancels;
 
@@ -619,7 +792,9 @@ void main() {
 
       expect(native.items.map((i) => i['id']), ['sms-b'],
           reason: 'every A capture is gone; B\'s waiting capture is kept');
-      expect(native.optedIn, isFalse, reason: 'opt-in reset');
+      expect(native.optedIn, isFalse, reason: 'opt-in deactivated');
+      expect(native.remembered, {native.hash(_uidB)},
+          reason: 'A\'s remembered opt-in is forgotten; B\'s is not touched');
       expect(native.backgroundCancels, greaterThan(cancelsBefore),
           reason: 'scheduled background work cancelled');
       expect(native.barrier, isNull);
@@ -627,6 +802,14 @@ void main() {
       expect(native.calls,
           containsAllInOrder(['beginCaptureRemoval', 'finishCaptureRemoval']));
       expect(await flow().hasPending(), isFalse);
+
+      // A never gets its opt-in back; B does, for B only.
+      await _signInAfterSignOut(_uidA);
+      expect(native.optedIn, isFalse);
+      expect(await NativeCaptureBridge.consumeCaptureRestoredNotice(_uidA),
+          isFalse);
+      await _signInAfterSignOut(_uidB);
+      expect(native.optInOwner, native.hash(_uidB));
     });
 
     test('a sweep that cannot delete everything is reported, barrier kept',
@@ -708,7 +891,34 @@ void main() {
           reason: 'B\'s drain sees nothing of A');
       expect(native.optedIn, isFalse, reason: 'A\'s opt-in not inherited');
       expect(protectedWrites, isEmpty);
+
+      // A signs in again: its own opt-in is restored (and announced once).
+      await AppSession.instance.signOut();
+      await AppSession.instance.setIdentity(method: 'google', userId: _uidA);
+      expect(native.owner, native.hash(_uidA));
+      expect(native.optInOwner, native.hash(_uidA));
+      expect(native.optedIn, isTrue);
+      expect(native.restoredNotice, native.hash(_uidA));
     });
+  });
+
+  test(
+      'the shell asks for the restored notice as the ADMITTED account, in the '
+      'foreground only, and re-reads the Settings switch', () {
+    final shell = File('lib/features/app/app_shell.dart').readAsStringSync();
+    final at = shell.indexOf('Future<void> _surfaceAndroidCaptureRestored()');
+    expect(at, greaterThan(-1));
+    final body = shell.substring(at, shell.indexOf('\n  }\n', at));
+    expect(body, contains('if (_backgroundIsActive != null) return;'));
+    expect(body, contains('AppSession.instance.captureLocalWorkAuthority()?.uid'));
+    expect(body,
+        contains('NativeCaptureBridge.consumeCaptureRestoredNotice(uid)'));
+    expect(body, contains('ref.invalidate(captureCapabilitiesProvider)'));
+    expect(body, contains('l10n.smsAutoCaptureRestoredNotice'));
+    // Every Android drain pass (cold start, resume, new capture) reaches it.
+    expect(
+        shell.indexOf('await _surfaceAndroidCaptureRestored();'),
+        greaterThan(shell.indexOf('await _surfaceAndroidQueueRefusals();')));
   });
 
   test('Android gets owner calls but none of the iOS egress semantics',

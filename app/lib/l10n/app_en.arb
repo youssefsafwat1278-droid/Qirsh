@@ -3769,5 +3769,6 @@
   "txnV3NetThisPeriod": "Net this period",
   "billsV3Counts": "{subs} subscriptions · {instalments} instalments",
   "captureQueueNotSaved": "One or more bank messages couldn't be saved on this device. Share them again or add the transaction manually.",
-  "captureQueueReadFailed": "Couldn't read the bank messages saved on this device. Nothing was deleted, and we'll try again automatically."
+  "captureQueueReadFailed": "Couldn't read the bank messages saved on this device. Nothing was deleted, and we'll try again automatically.",
+  "smsAutoCaptureRestoredNotice": "Automatic SMS capture was turned back on for this account."
 }

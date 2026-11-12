@@ -7347,4 +7347,8 @@ class AppL10nEn extends AppL10n {
   @override
   String get captureQueueReadFailed =>
       'Couldn\'t read the bank messages saved on this device. Nothing was deleted, and we\'ll try again automatically.';
+
+  @override
+  String get smsAutoCaptureRestoredNotice =>
+      'Automatic SMS capture was turned back on for this account.';
 }

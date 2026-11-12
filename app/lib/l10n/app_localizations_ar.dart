@@ -7355,4 +7355,8 @@ class AppL10nAr extends AppL10n {
   @override
   String get captureQueueReadFailed =>
       'تعذّرت قراءة الرسائل البنكية المحفوظة على هذا الجهاز. لم يُحذف شيء، وسنعيد المحاولة تلقائياً.';
+
+  @override
+  String get smsAutoCaptureRestoredNotice =>
+      'تمت إعادة تشغيل الالتقاط التلقائي للرسائل لهذا الحساب.';
 }

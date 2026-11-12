@@ -1795,10 +1795,12 @@ class NativeCaptureBridge {
   /// [stillCurrent] holds) publishes with it as a compare-and-swap, so a
   /// sign-out / account change / removal clear in between makes native refuse
   /// (`owner_changed`) instead of publishing a stale owner. Native keeps only an
-  /// HMAC of the uid, resets an SMS opt-in owned by another account, and
-  /// refuses during a Remove-data barrier. Throws [CaptureQueueException] when
-  /// refused; null off Android (the iOS owner is published by the restrictive
-  /// lifetime path, which also carries the egress state).
+  /// HMAC of the uid, deactivates an SMS opt-in owned by another account (still
+  /// remembered for that account only), restores [uid]'s own remembered opt-in
+  /// (see [consumeCaptureRestoredNotice]), and refuses during a Remove-data
+  /// barrier. Throws [CaptureQueueException] when refused; null off Android
+  /// (the iOS owner is published by the restrictive lifetime path, which also
+  /// carries the egress state).
   static Future<CaptureOwnerRecord?> publishOwnerScopedCaptureOwner(
     String uid, {
     bool Function()? stillCurrent,
@@ -2156,6 +2158,9 @@ class NativeCaptureBridge {
   /// Clears the active owner (sign-out, or the start of an account transition).
   /// [clearHint] true at a transition: captures made during it are unbound with
   /// no hint. At a plain sign-out the hint stays so the same uid can recover.
+  /// On Android both also deactivate the SMS auto-capture opt-in (nothing is
+  /// read while signed out); each account's remembered opt-in is kept and
+  /// restored only when that account is published again.
   static Future<void> clearCaptureOwner({required bool clearHint}) async {
     if (!hasOwnerScopedQueue) return;
     await _ownerScopedCall<Object?>(
@@ -2175,6 +2180,23 @@ class NativeCaptureBridge {
     return CaptureOwnerRecord.tryParse(
       await _ownerScopedCall<Object?>('getCaptureOwner', {'uid': forUid}),
     );
+  }
+
+  /// Android: the one-shot "automatic SMS capture was turned back on for this
+  /// account" notice. True only when [uid] is the ACTIVE owner, its own
+  /// remembered opt-in was restored when it was published, and capture is
+  /// effective now (RECEIVE_SMS still granted). Native clears the notice when
+  /// [uid] asks, shown or not, so it is told at most once. False off Android
+  /// and on any failure (never claims capture is on when unsure).
+  static Future<bool> consumeCaptureRestoredNotice(String uid) async {
+    if (!_hasAndroidOwnerQueue) return false;
+    try {
+      return await _ownerScopedCall<bool>(
+              'consumeCaptureRestoredNotice', {'uid': uid}) ??
+          false;
+    } on CaptureQueueException {
+      return false;
+    }
   }
 
   /// Advisory per-owner consent mirror, read by the App Intent for the stamped
@@ -2624,7 +2646,8 @@ class NativeCaptureBridge {
 
   /// Remove-data step 5 (§4.4): the final sweep; clears the barrier. Returns how
   /// many queue items were deleted.
-  /// On Android the sweep also resets the SMS opt-in and cancels scheduled
+  /// On Android the sweep also deactivates the SMS opt-in, forgets [uid]'s
+  /// remembered opt-in (never restored again) and cancels scheduled
   /// background work; anything that could not be deleted throws
   /// (`removal_incomplete`) with the barrier kept.
   static Future<int> finishCaptureRemoval(String uid) async {

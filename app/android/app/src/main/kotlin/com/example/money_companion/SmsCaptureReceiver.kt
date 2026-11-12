@@ -33,7 +33,9 @@ class SmsCaptureReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Telephony.Sms.Intents.SMS_RECEIVED_ACTION) return
-        // Gate: user opt-in required; a granted permission is not consent to read.
+        // Gate: user opt-in required; a granted permission is not consent to
+        // read. The opt-in is the ACTIVE account's own: nothing is read while
+        // signed out (CaptureOwnerPolicy.captureAllowed).
         if (!CaptureSettings.isAutoCaptureEnabled(context)) return
 
         val messages = Telephony.Sms.Intents.getMessagesFromIntent(intent) ?: return
@@ -71,9 +73,10 @@ class SmsCaptureReceiver : BroadcastReceiver() {
                 source = "sms",
                 receivedAt = DurableCaptureQueue.isoOf(smsEpochMs),
                 receivedAtEpochMs = smsEpochMs,
-                // With no active owner (signed out, mid account change) the SMS
-                // is unbound, hinted to the account that consented to its
-                // capture. Ignored when an owner is active (stamped instead).
+                // The gate above admits an SMS only while an owner is active
+                // (never signed out or mid account change), so it is stamped
+                // to that owner and this hint is ignored. Kept as the consent
+                // owner should a capture ever be queued unbound.
                 ownerHint = CaptureSettings.optInOwner(context),
             ),
         )

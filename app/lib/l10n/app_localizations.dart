@@ -12294,6 +12294,12 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'تعذّرت قراءة الرسائل البنكية المحفوظة على هذا الجهاز. لم يُحذف شيء، وسنعيد المحاولة تلقائياً.'**
   String get captureQueueReadFailed;
+
+  /// No description provided for @smsAutoCaptureRestoredNotice.
+  ///
+  /// In ar, this message translates to:
+  /// **'تمت إعادة تشغيل الالتقاط التلقائي للرسائل لهذا الحساب.'**
+  String get smsAutoCaptureRestoredNotice;
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {

@@ -171,6 +171,54 @@ void main() {
     expect(after.hasReceiveSmsPermission, isFalse);
   });
 
+  testWidgets(
+      'an opt-in restored for this account at sign-in reads ON from the '
+      'platform, with no local state carried over', (tester) async {
+    // The opt-in is remembered per account natively: signed out (and for any
+    // other account) the platform reports it OFF; once this account is
+    // published again its own opt-in is restored and the platform reports ON.
+    // The shell re-reads the provider when it shows the restored notice.
+    var platform = const CaptureCapabilities(
+      receiveSmsDeclared: true,
+      hasReceiveSmsPermission: true,
+      canUseAutomaticSmsCapture: true,
+      isAutomaticSmsCaptureEnabled: false,
+    );
+    final container = ProviderContainer(overrides: [
+      captureCapabilitiesProvider.overrideWith((ref) async => platform),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        locale: const Locale('ar'),
+        supportedLocales: AppL10n.supportedLocales,
+        localizationsDelegates: const [
+          ...AppL10n.localizationsDelegates,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        theme: AppTheme.dark,
+        home: const Scaffold(body: _Harness()),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    expect(_toggle(tester), isFalse);
+    expect(_state(tester), 'off');
+
+    platform = const CaptureCapabilities(
+      receiveSmsDeclared: true,
+      hasReceiveSmsPermission: true,
+      canUseAutomaticSmsCapture: true,
+      isAutomaticSmsCaptureEnabled: true,
+    );
+    container.invalidate(captureCapabilitiesProvider);
+    await tester.pumpAndSettle();
+    expect(_toggle(tester), isTrue);
+    expect(_state(tester), 'on');
+  });
+
   test('the capability model keeps notification and SMS permission separate',
       () {
     // The bug this model replaced: one `hasSmsPermission()` that actually
