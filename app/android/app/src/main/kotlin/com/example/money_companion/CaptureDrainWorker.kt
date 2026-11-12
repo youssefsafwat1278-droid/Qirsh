@@ -11,6 +11,9 @@ import androidx.work.OneTimeWorkRequest
 import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
+import io.flutter.FlutterInjector
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.embedding.engine.dart.DartExecutor
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -20,7 +23,8 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * The engine that can run a background-triggered drain: the activity's engine,
  * once its Dart AppShell registered the handler (`setBackgroundDrainReady`).
- * No engine is ever created for the worker (see [CaptureDrainWorker]).
+ * With no activity engine at all the worker starts a headless one instead
+ * (see [CaptureDrainWorker]).
  */
 object CaptureDrainHost {
     @Volatile private var channel: MethodChannel? = null
@@ -43,6 +47,21 @@ object CaptureDrainHost {
     }
 
     fun readyChannel(): MethodChannel? = if (ready) channel else null
+
+    /** An activity engine is attached (ready or not). */
+    fun hasEngine(): Boolean = channel != null
+
+    /** A headless cold-start engine of this process is alive. */
+    @Volatile var headlessActive = false
+        private set
+
+    fun headlessStarted() {
+        headlessActive = true
+    }
+
+    fun headlessEnded() {
+        headlessActive = false
+    }
 }
 
 /**
@@ -134,17 +153,90 @@ object CaptureBackgroundScheduler {
 }
 
 /**
- * Runs the REAL Dart drain of the live engine (AppShell's leased drain: same
- * provider graph, account scope, admission checks, consent re-reads, retry
- * ledger and lease as the foreground) and maps its outcome onto the work.
- *
- * It never starts a Flutter engine. A headless engine would have to open the
- * account replica without a host-issued job, which the database coordinator
- * (`DatabaseAccessBroker`, rule O) denies to every headless entrant, and it
- * would bootstrap auth/egress state a second time in the process. With no live
- * engine the worker therefore ends without doing anything: the queue stays
- * intact and the next foreground drain (launch/resume) processes it and asks
- * for the next background run itself.
+ * A headless Flutter engine running the Dart `captureBackgroundMain` entrypoint
+ * (lib/main.dart): the cold-start drain host. Driven on the main thread.
+ */
+interface HeadlessCaptureEngine {
+    /**
+     * Starts the engine and its Dart entrypoint. [onReady] runs (main thread)
+     * once Dart registered its one-run drain host, with the capture channel to
+     * drive. Throws when the engine cannot be started.
+     */
+    fun start(onReady: (MethodChannel) -> Unit)
+
+    /** Shuts the engine (and its Dart isolate) down. Idempotent. */
+    fun destroy()
+}
+
+/** Where the worker gets its headless engine (the JVM harness swaps it). */
+object HeadlessCaptureEngines {
+    @Volatile
+    var factory: (Context) -> HeadlessCaptureEngine = { FlutterHeadlessCaptureEngine(it) }
+}
+
+/**
+ * The real headless engine: Flutter loader initialized, a [FlutterEngine]
+ * with the app's plugins auto-registered (GeneratedPluginRegistrant), the
+ * capture channel (the SAME handler as the activity's, minus the
+ * activity-only methods) and the timezone channel installed BEFORE Dart runs,
+ * then the `captureBackgroundMain` entrypoint executed.
+ */
+class FlutterHeadlessCaptureEngine(private val context: Context) : HeadlessCaptureEngine {
+    private var engine: FlutterEngine? = null
+
+    override fun start(onReady: (MethodChannel) -> Unit) {
+        val loader = FlutterInjector.instance().flutterLoader()
+        loader.startInitialization(context)
+        loader.ensureInitializationComplete(context, null)
+        val engine = FlutterEngine(context)
+        this.engine = engine
+        val messenger = engine.dartExecutor.binaryMessenger
+        val channel = MethodChannel(messenger, CAPTURE_CHANNEL)
+        var signalled = false
+        channel.setMethodCallHandler(
+            NativeCaptureChannelHandler(
+                context = context,
+                onDrainReady = { ready ->
+                    if (ready && !signalled) {
+                        signalled = true
+                        onReady(channel)
+                    }
+                },
+            ),
+        )
+        registerDeviceTimezoneChannel(messenger)
+        engine.dartExecutor.executeDartEntrypoint(
+            DartExecutor.DartEntrypoint(loader.findAppBundlePath(), ENTRYPOINT),
+        )
+    }
+
+    override fun destroy() {
+        engine?.destroy()
+        engine = null
+    }
+
+    companion object {
+        const val CAPTURE_CHANNEL = "money_companion/native_capture"
+        const val ENTRYPOINT = "captureBackgroundMain"
+    }
+}
+
+/**
+ * Runs the REAL Dart drain and maps its outcome onto the work:
+ *  - a live activity engine whose AppShell registered the drain host: that
+ *    engine's leased drain runs (same provider graph, scope and admission);
+ *  - a live activity engine without a drain host (shell not mounted, signed
+ *    out, onboarding): nothing runs here; that engine drains on its own
+ *    triggers (launch / resume / shell mount);
+ *  - NO engine in this process (killed by the OS, after a reboot): a HEADLESS
+ *    engine is started with `captureBackgroundMain`, which bootstraps only what
+ *    the drain needs (`BootstrapRunner.runHeadless`) and runs the same leased
+ *    drain once. It takes the database coordinator only when no other engine
+ *    holds it, and yields to a foreground bootstrap at the next item boundary
+ *    (the foreground always wins). The engine is destroyed only AFTER Dart
+ *    answered (its databases are closed and the coordinator released by then);
+ *    a run that has not answered in time is cancelled and its engine kept
+ *    until it answers, never torn down under an open database.
  */
 class CaptureDrainWorker(
     appContext: Context,
@@ -154,7 +246,7 @@ class CaptureDrainWorker(
     private val stopped = AtomicBoolean(false)
     @Volatile private var host: MethodChannel? = null
 
-    /** WorkManager's background thread; the channel is driven on the main thread. */
+    /** WorkManager's background thread; channels and engines are driven on the main thread. */
     override fun doWork(): Result {
         CaptureBackgroundScheduler.onWorkerStarted(applicationContext)
         val outcome = AtomicReference<Result?>(null)
@@ -163,39 +255,104 @@ class CaptureDrainWorker(
             if (outcome.compareAndSet(null, result)) answered.countDown()
         }
         main.post {
-            val channel = CaptureDrainHost.readyChannel()
-            if (channel == null || stopped.get()) {
-                answer(Result.success())
+            if (stopped.get()) {
+                answer(Result.retry())
                 return@post
             }
-            host = channel
-            channel.invokeMethod(
-                "runBackgroundDrain",
-                null,
-                object : MethodChannel.Result {
-                    override fun success(result: Any?) = answer(
-                        if (CaptureDrainSchedulePolicy.succeeded(result as? String)) {
-                            Result.success()
-                        } else {
-                            Result.retry()
-                        },
-                    )
-
-                    override fun error(code: String, message: String?, details: Any?) =
-                        answer(Result.retry())
-
-                    // The engine has no drain handler (shell not mounted).
-                    override fun notImplemented() = answer(Result.success())
-                },
-            )
+            val channel = CaptureDrainHost.readyChannel()
+            when {
+                channel != null -> runDrain(channel, null, ::answer)
+                // A live engine without a drain host: it drains on its own.
+                CaptureDrainHost.hasEngine() -> answer(Result.success())
+                // An earlier headless run has not answered yet (it was
+                // cancelled; its engine is kept until it does): never a second.
+                CaptureDrainHost.headlessActive -> answer(Result.retry())
+                else -> startHeadless(::answer)
+            }
         }
         if (!answered.await(RUN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+            // Stops at the next item boundary; the item in flight commits or
+            // rolls back as a unit. A headless engine is destroyed only once
+            // Dart answers (see runDrain), whenever that is.
             main.post { host?.invokeMethod("cancelBackgroundDrain", null) }
+            answered.await(CANCEL_GRACE_MS, TimeUnit.MILLISECONDS)
             answer(Result.retry())
         }
         if (stopped.get()) return Result.retry()
         CaptureBackgroundScheduler.onWorkerFinished(applicationContext)
         return outcome.get() ?: Result.retry()
+    }
+
+    /** Main thread: no engine exists, start a headless one for this run. */
+    private fun startHeadless(answer: (Result) -> Unit) {
+        val engine = try {
+            HeadlessCaptureEngines.factory(applicationContext)
+        } catch (_: Throwable) {
+            answer(Result.retry())
+            return
+        }
+        CaptureDrainHost.headlessStarted()
+        var ready = false
+        val notReady = Runnable {
+            // Dart never registered its drain host: it never started a
+            // bootstrap either, so nothing is open. Tear down and retry later.
+            if (!ready) {
+                engine.destroy()
+                CaptureDrainHost.headlessEnded()
+                answer(Result.retry())
+            }
+        }
+        try {
+            engine.start { channel ->
+                ready = true
+                main.removeCallbacks(notReady)
+                if (stopped.get()) {
+                    engine.destroy()
+                    CaptureDrainHost.headlessEnded()
+                    answer(Result.retry())
+                } else {
+                    runDrain(channel, engine, answer)
+                }
+            }
+        } catch (_: Throwable) {
+            engine.destroy()
+            CaptureDrainHost.headlessEnded()
+            answer(Result.retry())
+            return
+        }
+        if (!ready) main.postDelayed(notReady, READY_TIMEOUT_MS)
+    }
+
+    /** Main thread: one Dart drain; a headless engine is destroyed after it answered. */
+    private fun runDrain(channel: MethodChannel, engine: HeadlessCaptureEngine?, answer: (Result) -> Unit) {
+        host = channel
+        fun finish(result: Result) {
+            if (engine != null) {
+                engine.destroy()
+                CaptureDrainHost.headlessEnded()
+            }
+            if (host === channel) host = null
+            answer(result)
+        }
+        channel.invokeMethod(
+            "runBackgroundDrain",
+            null,
+            object : MethodChannel.Result {
+                override fun success(result: Any?) = finish(
+                    if (CaptureDrainSchedulePolicy.succeeded(result as? String)) {
+                        Result.success()
+                    } else {
+                        Result.retry()
+                    },
+                )
+
+                override fun error(code: String, message: String?, details: Any?) =
+                    finish(Result.retry())
+
+                // The engine has no drain handler (shell not mounted).
+                override fun notImplemented() = finish(Result.success())
+            },
+        )
     }
 
     override fun onStopped() {
@@ -208,6 +365,12 @@ class CaptureDrainWorker(
 
     companion object {
         /** Under WorkManager's 10-minute execution limit. */
-        private const val RUN_TIMEOUT_MS = 9 * 60_000L
+        private const val RUN_TIMEOUT_MS = 8 * 60_000L
+
+        /** After a cancel: the item in flight finishes or rolls back. */
+        private const val CANCEL_GRACE_MS = 60_000L
+
+        /** Dart must register its drain host this soon after the engine starts. */
+        private const val READY_TIMEOUT_MS = 60_000L
     }
 }

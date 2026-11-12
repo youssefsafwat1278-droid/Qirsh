@@ -56,10 +56,8 @@ import '../consent/smart_analysis_consent_sheet.dart';
 import '../transactions/manual_transaction_sheet.dart';
 import '../../core/privacy/consent_authority.dart';
 import '../capture/services/capture_import_service.dart';
-import '../capture/services/capture_notify_v2.dart';
 import '../capture/services/unbound_capture_prompt_service.dart';
 import 'capture_notification_actions.dart';
-import '../capture/services/capture_notification_content.dart';
 import '../capture/services/captured_message_processor.dart';
 import '../capture/services/capture_notification_authority.dart';
 import '../capture/services/local_notification_service.dart';
@@ -68,6 +66,7 @@ import '../capture/services/notification_log_sync_service.dart';
 import '../capture/services/pending_notification_actions.dart';
 import '../capture/services/native_capture_bridge.dart';
 import '../capture/background/background_capture_drain.dart';
+import '../capture/background/capture_alerts.dart';
 import '../capture/services/capture_identity_metrics.dart';
 import '../../core/tracking/user_activity_service.dart';
 import '../cards/cards_providers.dart';
@@ -1565,39 +1564,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   Future<void> _alertImportedV2(
     List<CaptureImportItem> imported,
     NotificationPreferences preferences,
-  ) async {
-    final lang = LocalNotificationService.instance.notificationLanguage;
-    final notifications = LocalNotificationService.instance;
-    String two(int n) => n.toString().padLeft(2, '0');
-    final now = DateTime.now();
-    await CaptureNotifyV2(
-      state: CaptureNotificationState(ref.read(appDatabaseProvider)),
-      showIndividual: (local) =>
-          _showCapturedMessageNotification(local, preferences),
-      showSummary: (count) {
-        final content = buildCaptureSummaryContent(count, lang: lang);
-        return notifications.showLightCaptureNotification(
-          title: content.title,
-          body: content.body,
-          preferences: preferences,
-          stableId: 'summary-${now.year}-${two(now.month)}-${two(now.day)}',
-          genericContent: true,
-        );
-      },
-      withdrawNativeAlert: NativeCaptureBridge.withdrawDeliveredCaptureAlert,
-      showCorrection: (transactionId) {
-        final content = buildCaptureCorrectionContent(lang: lang);
-        return notifications.showLightCaptureNotification(
-          title: content.title,
-          body: content.body,
-          preferences: preferences,
-          stableId: 'corrected-$transactionId',
-          genericContent: true,
-          transactionId: transactionId,
-        );
-      },
-    ).alertForImport(imported);
-  }
+  ) =>
+      alertImportedV2(ref.read(appDatabaseProvider), imported, preferences);
 
   bool _isPromptingUnbound = false;
   bool _unboundPromptDismissed = false;
@@ -1650,53 +1618,8 @@ class _AppShellState extends ConsumerState<AppShell> {
   Future<void> _showCapturedMessageNotification(
     CapturedMessageResult result,
     NotificationPreferences preferences,
-  ) async {
-    switch (result.disposition) {
-      case CapturedMessageDisposition.ignored:
-        return;
-      case CapturedMessageDisposition.notifyOnly:
-        final content = buildConfirmedCaptureContent(
-            result.addTransactionResult.transaction,
-            lang: LocalNotificationService.instance.notificationLanguage);
-        await LocalNotificationService.instance.showLightCaptureNotification(
-          title: content.title,
-          body: content.body,
-          preferences: preferences,
-          stableId: result.notificationStableId,
-        );
-      case CapturedMessageDisposition.requestConfirmation:
-        final transaction = result.addTransactionResult.transaction;
-        if (transaction == null) return;
-        final content = buildReviewCaptureContent(
-            result.addTransactionResult.transaction,
-            lang: LocalNotificationService.instance.notificationLanguage);
-        await LocalNotificationService.instance.showReviewNotification(
-          transactionId: transaction.id,
-          title: content.title,
-          body: content.body,
-          preferences: preferences,
-        );
-      case CapturedMessageDisposition.suspiciousDuplicate:
-        final content = buildDuplicateCaptureContent(
-            result.addTransactionResult.transaction,
-            lang: LocalNotificationService.instance.notificationLanguage);
-        await LocalNotificationService.instance.showLightCaptureNotification(
-          title: content.title,
-          body: content.body,
-          preferences: preferences,
-          stableId: result.notificationStableId,
-        );
-      case CapturedMessageDisposition.unprocessable:
-        final unsupported = buildUnsupportedCaptureContent(
-            lang: LocalNotificationService.instance.notificationLanguage);
-        await LocalNotificationService.instance.showLightCaptureNotification(
-          title: unsupported.title,
-          body: unsupported.body,
-          preferences: preferences,
-          stableId: result.notificationStableId,
-        );
-    }
-  }
+  ) =>
+      showCapturedMessageNotification(result, preferences);
 
   bool _syncEngagementInFlight = false;
 

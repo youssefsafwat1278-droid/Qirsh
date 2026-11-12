@@ -29,6 +29,15 @@ class SceneDelegate: FlutterSceneDelegate {
     options connectionOptions: UIScene.ConnectionOptions
   ) {
     super.scene(scene, willConnectTo: session, options: connectionOptions)
+    #if DEBUG
+    if CaptureBackgroundDrain.debugProbeRequested {
+      // Simulator probe of the cold background launch: the storyboard's
+      // FlutterViewController never appears, so its engine never launches Dart
+      // and no scene channel is bound. Compiled out of release builds.
+      window?.rootViewController = UIViewController()
+      return
+    }
+    #endif
     if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
       // Both are idempotent against the CURRENT FlutterViewController, so the
       // later lifecycle call sites remain defence in depth without ever

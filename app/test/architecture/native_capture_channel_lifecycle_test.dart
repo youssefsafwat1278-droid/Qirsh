@@ -258,7 +258,12 @@ void main() {
           .hasMatch(src),
           isFalse,
           reason: 'no CoreLocation import may return to this file');
-      expect(timezoneFn(), contains('TimeZone.current.identifier'));
+      // The handler is shared with the headless cold-start engine.
+      expect(timezoneFn(), contains('Self.installDeviceTimezoneHandler(on: channel)'));
+      final installer = src.substring(
+          src.indexOf('static func installDeviceTimezoneHandler('));
+      expect(installer.substring(0, installer.indexOf('\n  }\n')),
+          contains('TimeZone.current.identifier'));
     });
 
     test('the later lifecycle hooks are KEPT as defence in depth', () {

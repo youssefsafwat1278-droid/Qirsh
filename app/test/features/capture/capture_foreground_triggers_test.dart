@@ -106,8 +106,10 @@ void main() {
     });
   });
 
-  group('background execution runs only the live engine\'s drain', () {
-    test('Android: one unique network-constrained work, no engine started', () {
+  group('background execution runs the same leased drain', () {
+    test(
+        'Android: one unique network-constrained work; with no live engine a '
+        'headless one runs only captureBackgroundMain', () {
       final manifest =
           File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
       final gradle = File('android/app/build.gradle.kts').readAsStringSync();
@@ -119,9 +121,14 @@ void main() {
       expect(worker, contains('enqueueUniqueWork(UNIQUE_WORK'));
       expect(worker, contains('NetworkType.CONNECTED'));
       expect(worker, contains('"runBackgroundDrain"'));
-      expect(worker.contains('FlutterEngine('), isFalse,
-          reason: 'no headless engine: the coordinator denies it the replica');
-      expect(worker.contains('DartExecutor'), isFalse);
+      // Cold start: ONE engine construction, ONE entrypoint (the headless
+      // drain host, which takes the coordinator only when none is held and
+      // yields to a foreground bootstrap), destroyed after Dart answered.
+      expect('FlutterEngine('.allMatches(worker), hasLength(1));
+      expect(worker, contains('const val ENTRYPOINT = "captureBackgroundMain"'));
+      expect(worker, contains('DartExecutor.DartEntrypoint(loader.findAppBundlePath(), ENTRYPOINT)'));
+      expect(worker, contains('engine.destroy()'));
+      expect(worker.contains('FlutterEngineGroup'), isFalse);
     });
 
     test('iOS: BGTasks only, for the same drain', () {

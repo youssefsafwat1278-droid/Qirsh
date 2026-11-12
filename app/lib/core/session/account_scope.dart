@@ -637,6 +637,11 @@ class AccountScopeHost extends ChangeNotifier implements AccountScopeControl {
     await _publishSignedOut();
   });
 
+  /// The headless cold-start drain is done (or yields to the foreground):
+  /// withdraws and ACTUALLY closes the published database, publishing nothing
+  /// in its place. Its tracked handle's close releases the coordinator holder.
+  Future<void> closeForHeadlessRelease() => _serial(_withdraw);
+
   Future<void> _close(AppDatabase db, String? uid) async {
     final handle = _tracked[db];
     if (handle != null) {

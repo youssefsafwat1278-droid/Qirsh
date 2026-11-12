@@ -3,6 +3,7 @@ import 'package:path_provider/path_provider.dart';
 import 'core/startup/install_presentation_store.dart';
 import 'core/security/lock_prompt_language.dart';
 import 'dart:async';
+import 'dart:ui' show DartPluginRegistrant;
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
@@ -10,18 +11,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app.dart';
 import 'core/backend/sentry_config.dart';
-import 'core/di/app_providers.dart';
 import 'core/di/local_read_providers.dart';
 import 'core/observability/diagnostics.dart';
 import 'core/observability/sentry_lifecycle.dart';
 import 'core/session/account_scope.dart';
 import 'core/session/app_session.dart';
+import 'core/startup/account_scope_overrides.dart';
 import 'core/startup/bootstrap_runner.dart';
+import 'core/startup/qa_local_identity.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/font_licenses.dart';
-import 'data/db/planning_canonical_invariants.dart';
-import 'data/db/planning_cutover.dart';
 import 'features/app/startup_loading_screen.dart';
+import 'features/capture/background/headless_capture_drain.dart';
+import 'features/capture/services/native_capture_bridge.dart';
 import 'core/startup/automatic_session_recovery.dart';
 import 'core/utils/app_lucide_icons.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -52,6 +54,29 @@ Future<void> main() async {
   // toasts, nav) use Apple's real Liquid Glass on iOS 26+.
   unawaited(NativeGlassSupport.probe());
   runApp(const StartupApp());
+}
+
+/// Cold-start background capture drain. Run by a HEADLESS engine that the
+/// Android worker (`CaptureDrainWorker`) or the iOS BGTask handler
+/// (`CaptureBackgroundDrain`) starts when the OS scheduler fires and no live
+/// engine exists (process killed, after a reboot, iOS background launch). It
+/// shows nothing: it registers this engine as a one-run drain host and tells
+/// native it is ready; native then asks it to run ONE drain
+/// (`runBackgroundDrain`) and destroys the engine once it answered. See
+/// [HeadlessCaptureDrain] for what runs and what never does.
+@pragma('vm:entry-point')
+Future<void> captureBackgroundMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  DartPluginRegistrant.ensureInitialized();
+  Diag.installRedactingSink();
+  // Sentry opens only per diagnostics consent (resolved during bootstrap).
+  if (SentryConfig.isConfigured) SentryLifecycle.attach();
+  final drain = HeadlessCaptureDrain();
+  NativeCaptureBridge.setBackgroundDrainHandler(
+    () async => (await drain.run()).name,
+    cancel: drain.cancel,
+  );
+  await NativeCaptureBridge.setBackgroundDrainReady(true);
 }
 
 /// Root widget for the first frame. Renders [StartupLoadingScreen] while
@@ -174,6 +199,7 @@ class _StartupAppState extends State<StartupApp> {
         _installPresentation = presentation;
       }
       await _runner.run();
+      if (widget.runner == null) await debugQaLocalIdentity();
       if (!mounted) return;
       final host = _runner.accountScope;
       if (!identical(host, _accountScope)) {
@@ -183,8 +209,11 @@ class _StartupAppState extends State<StartupApp> {
       setState(() => _accountScope = host);
     } catch (error) {
       if (!mounted) return;
-      if (error is BootstrapAuthDeferred) {
+      if (error is BootstrapAuthDeferred ||
+          error is BootstrapHeadlessDrainActive) {
         // Not a failure: nothing was initialized or published. Keep loading.
+        // (A headless capture drain is finishing its current item and will
+        // release the coordinator; the retry finds it gone.)
         _scheduleDeferredRetry();
         return;
       }
@@ -201,7 +230,6 @@ class _StartupAppState extends State<StartupApp> {
     final host = _accountScope;
     final scope = host?.current;
     if (scope != null) {
-      final database = scope.database;
       return ProviderScope(
         // A new generation is a new database and therefore a new provider
         // graph: nothing built for the previous account survives the switch.
@@ -210,28 +238,7 @@ class _StartupAppState extends State<StartupApp> {
         overrides: [
           ...widget.externalOverrides,
           if (scope.isLocalRead) ...localReadProviderOverrides(scope),
-          appDatabaseProvider.overrideWithValue(database),
-          accountScopeHostProvider.overrideWithValue(host),
-          startupHasLocalDataProvider.overrideWithValue(scope.hasLocalData),
-          // MALI-026 (B8-3 §1/§12) — seed the coordinator with the REAL state
-          // resolved from the DB at bootstrap (canonical for fresh v30, unresolved
-          // for upgraded-with-data), so P1/P3 behavior is correct from launch.
-          planningCutoverCoordinatorProvider.overrideWith(
-            (ref) => DbBackedPlanningCutoverCoordinator(
-              initialState: scope.planningCutoverState,
-              readUserVersion: () async => (await database
-                      .customSelect('PRAGMA user_version;')
-                      .getSingle())
-                  .read<int>('user_version'),
-              readMarker: () async => (await database
-                      .customSelect(
-                          'SELECT planning_cutover_state AS s FROM user_settings;')
-                      .getSingle())
-                  .read<int>('s'),
-              countCanonicalViolations: () async =>
-                  (await planningCanonicalViolations(database)).length,
-            ),
-          ),
+          ...accountScopeProviderOverrides(scope, host!),
         ],
         child: const MoneyApp(),
       );

@@ -171,6 +171,16 @@ enum ApnsEnvironment {
       SharedCaptureStore.enqueueNotificationRoute(userInfo: remote)
     }
     BankMessageShortcuts.updateAppShortcutParameters()
+    #if DEBUG
+    if CaptureBackgroundDrain.debugProbeRequested {
+      // Simulator probe: SceneDelegate keeps the scene engine from launching,
+      // so this is the "background launch, no engine" path of the real handler.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+        NSLog("[CaptureBg] probe_handle")
+        CaptureBackgroundDrain.shared.handle(CaptureBackgroundDrain.DebugProbeTask())
+      }
+    }
+    #endif
     return didFinish
   }
 
@@ -276,14 +286,7 @@ enum ApnsEnvironment {
       name: "mali/device_timezone",
       binaryMessenger: controller.binaryMessenger
     )
-    channel.setMethodCallHandler { call, result in
-      switch call.method {
-      case "getLocalTimezone":
-        result(TimeZone.current.identifier)
-      default:
-        result(FlutterMethodNotImplemented)
-      }
-    }
+    Self.installDeviceTimezoneHandler(on: channel)
     deviceTimezoneChannel = channel
     deviceTimezoneChannelController = controller
   }
@@ -315,6 +318,26 @@ enum ApnsEnvironment {
       name: "money_companion/native_capture",
       binaryMessenger: controller.binaryMessenger
     )
+    Self.installNativeCaptureHandler(on: channel) { [weak self] ready in
+      CaptureBackgroundDrain.shared.setReady(self?.captureChannel, ready: ready)
+    }
+    captureChannel = channel
+    captureChannelController = controller
+    // A new controller is a new engine: not ready until its Dart drain host
+    // says so (setBackgroundDrainReady).
+    CaptureBackgroundDrain.shared.attach(channel)
+    registerPendingMessagesObserverIfNeeded()
+  }
+
+  /// The native capture channel's handler, independent of any view controller:
+  /// installed on the scene's engine (above) AND on the headless cold-start
+  /// engine of a background task ([HeadlessCaptureEngine]), so both reach the
+  /// same process-wide stores through the same code. [onDrainReady] receives
+  /// Dart's `setBackgroundDrainReady`.
+  static func installNativeCaptureHandler(
+    on channel: FlutterMethodChannel,
+    onDrainReady: @escaping (Bool) -> Void
+  ) {
     // CAP-0: a queue failure (key unreadable, lock unavailable, corrupt blob)
     // reaches Dart as a FlutterError — never a crash, never an "empty queue".
     // CAP-6: a refused write carries its own code (quota_exceeded,
@@ -1057,7 +1080,7 @@ enum ApnsEnvironment {
         result(nil)
       case "setBackgroundDrainReady":
         let ready = (call.arguments as? [String: Any])?["ready"] as? Bool ?? false
-        CaptureBackgroundDrain.shared.setReady(self.captureChannel, ready: ready)
+        onDrainReady(ready)
         result(nil)
       case "purgeAllCaptureState":
         // MALI-054n: wipe this identity's capture residue from the App Group.
@@ -1068,12 +1091,18 @@ enum ApnsEnvironment {
         result(FlutterMethodNotImplemented)
       }
     }
-    captureChannel = channel
-    captureChannelController = controller
-    // A new controller is a new engine: not ready until its Dart drain host
-    // says so (setBackgroundDrainReady).
-    CaptureBackgroundDrain.shared.attach(channel)
-    registerPendingMessagesObserverIfNeeded()
+  }
+
+  /// `mali/device_timezone` on any messenger (scene engine or headless engine).
+  static func installDeviceTimezoneHandler(on channel: FlutterMethodChannel) {
+    channel.setMethodCallHandler { call, result in
+      switch call.method {
+      case "getLocalTimezone":
+        result(TimeZone.current.identifier)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
   }
 
   /// MALI-065n — applies at-rest protection to a managed export temp file:
@@ -1362,25 +1391,85 @@ final class CaptureDrainLease {
   }
 }
 
+/// What a BGTask handler needs from the task: `BGTask` itself, or (DEBUG only)
+/// the probe that drives the same handler on a simulator, where BGTasks cannot
+/// be fired by the system.
+protocol CaptureDrainTask: AnyObject {
+  var expirationHandler: (() -> Void)? { get set }
+  func setTaskCompleted(success: Bool)
+}
+
+extension BGTask: CaptureDrainTask {}
+
+/// A headless Flutter engine running the Dart `captureBackgroundMain`
+/// entrypoint (lib/main.dart): the cold-start drain host for a background
+/// launch with no scene and no engine. Plugins are registered with
+/// GeneratedPluginRegistrant; the capture channel (the SAME handler as the
+/// scene engine's), the session keychain and the timezone channel are installed
+/// on its messenger in the same main-thread turn as `run`, before Dart can send.
+final class HeadlessCaptureEngine {
+  static let entrypoint = "captureBackgroundMain"
+
+  private var engine: FlutterEngine?
+  private var channels: [FlutterMethodChannel] = []
+  private let keychain = SessionKeychain()
+
+  /// Main thread. [onReady] runs once Dart registered its one-run drain host.
+  func start(onReady: @escaping (FlutterMethodChannel) -> Void) -> Bool {
+    let engine = FlutterEngine(
+      name: "qirsh.capture_drain.headless", project: nil, allowHeadlessExecution: true)
+    guard engine.run(withEntrypoint: Self.entrypoint) else { return false }
+    self.engine = engine
+    GeneratedPluginRegistrant.register(with: engine)
+    keychain.attach(messenger: engine.binaryMessenger)
+    let capture = FlutterMethodChannel(
+      name: "money_companion/native_capture", binaryMessenger: engine.binaryMessenger)
+    var signalled = false
+    AppDelegate.installNativeCaptureHandler(on: capture) { ready in
+      guard ready, !signalled else { return }
+      signalled = true
+      onReady(capture)
+    }
+    let timezone = FlutterMethodChannel(
+      name: "mali/device_timezone", binaryMessenger: engine.binaryMessenger)
+    AppDelegate.installDeviceTimezoneHandler(on: timezone)
+    channels = [capture, timezone]
+    return true
+  }
+
+  /// Main thread. Only after Dart answered (its database is closed and the
+  /// coordinator released by then), or when Dart never became ready.
+  func destroy() {
+    for channel in channels { channel.setMethodCallHandler(nil) }
+    channels = []
+    engine?.destroyContext()
+    engine = nil
+  }
+}
+
 /// Background recovery of queued captures with BGTaskScheduler.
 ///
-/// A BGTask runs the REAL Dart drain of the live Flutter engine (the AppShell's
-/// leased drain: same account scope, admission checks, per-message consent
-/// re-reads, retry ledger and lease as the foreground). It never starts a
-/// Flutter engine of its own: a headless engine would have to open the account
-/// replica without a host-issued job, which the database coordinator
-/// (`DatabaseAccessBroker`, rule O) denies to every headless entrant. So:
-///  - app suspended in memory: the system resumes it for the task, the
-///    existing engine drains (upload of a local capture, import of the server
-///    result — server-side processing itself is the backend's);
-///  - app launched in the background for the task (no scene, no engine): the
-///    task completes without doing anything and the queue stays intact; the
-///    next foreground drain processes it;
+/// A BGTask runs the REAL Dart drain (`runLeasedCaptureDrain`: same account
+/// scope, admission checks, per-message consent re-reads, retry ledger and
+/// lease as the foreground):
+///  - app suspended in memory with its scene engine's drain host registered:
+///    that engine drains;
+///  - a scene engine without a drain host (shell not mounted, signed out):
+///    nothing here; that engine drains on its own triggers;
+///  - NO engine (launched in the background for the task, after reboot or
+///    after the OS terminated the app): a HEADLESS engine runs
+///    `captureBackgroundMain`, which bootstraps only what the drain needs and
+///    takes the database coordinator only when no engine holds it; a scene
+///    engine that starts meanwhile reclaims it at the next item boundary (the
+///    foreground always wins). Protected data unavailable (before first unlock,
+///    or locked with Complete protection): nothing starts, the request is
+///    resubmitted;
 ///  - user force-quit: iOS does not launch the app for BGTasks at all;
 ///  - Background App Refresh off / Low Power Mode: the system may never run the
 ///    task. Foreground recovery (launch, resume, the adaptive poll) remains the
 ///    fallback in every case.
-/// Content-free: only an earliest-begin timestamp is stored.
+/// `setTaskCompleted` is called exactly once per task. Content-free: only an
+/// earliest-begin timestamp is stored.
 final class CaptureBackgroundDrain {
   static let shared = CaptureBackgroundDrain()
 
@@ -1388,9 +1477,16 @@ final class CaptureBackgroundDrain {
   static let processingIdentifier = "com.youssefsafwat.mali.capture-drain.processing"
   private static let earliestKey = "capture_drain_earliest_begin_v1"
 
+  /// Dart must register its drain host this soon after a headless engine starts.
+  private static let readyTimeout: TimeInterval = 30
+
   private weak var channel: FlutterMethodChannel?
   private var ready = false
   private var registered = false
+
+  /// The headless run in flight (kept until Dart answers, even past expiry).
+  private var headless: HeadlessCaptureEngine?
+  private var headlessChannel: FlutterMethodChannel?
 
   /// Once, from didFinishLaunching (a second registration would throw).
   func register() {
@@ -1453,48 +1549,129 @@ final class CaptureBackgroundDrain {
     try? BGTaskScheduler.shared.submit(processing)
   }
 
-  private func handle(_ task: BGTask) {
+  func handle(_ task: CaptureDrainTask) {
     var completed = false
     func complete(_ success: Bool) {
       guard !completed else { return }
       completed = true
+      NSLog("[CaptureBg] task_completed success=%@", success ? "true" : "false")
       task.setTaskCompleted(success: success)
     }
     task.expirationHandler = { [weak self] in
       DispatchQueue.main.async {
         // The Dart pass stops at its next item boundary; an item in flight
         // commits or rolls back as a unit and is acknowledged only after it
-        // committed. Whatever remains is asked for again.
-        self?.channel?.invokeMethod("cancelBackgroundDrain", arguments: nil)
-        self?.submitIfPending()
+        // committed. Whatever remains is asked for again. A headless engine
+        // is torn down only when its Dart answers.
+        if let self = self {
+          (self.headlessChannel ?? self.channel)?
+            .invokeMethod("cancelBackgroundDrain", arguments: nil)
+          self.submitIfPending()
+        }
         complete(false)
       }
     }
     DispatchQueue.main.async { [weak self] in
-      guard let self = self, self.ready, let channel = self.channel else {
-        // No live engine with a drain host: nothing may run here. The pending
-        // timestamp stays, so the next background entry asks again.
+      guard let self = self else {
         complete(false)
         return
       }
-      channel.invokeMethod("runBackgroundDrain", arguments: nil) { reply in
-        switch reply as? String {
-        case "done":
-          UserDefaults.standard.removeObject(forKey: Self.earliestKey)
-          complete(true)
-        case "pending", "deferred":
-          // pending: Dart already asked for the next run at the right time.
-          // deferred: signed out / not admitted; sign-out cancels the request.
-          complete(true)
-        case .some:
-          // busy / cancelled / failed: ask again later.
-          self.schedule(delay: 60)
-          complete(false)
-        case .none:
-          // No Dart handler (or an error): the next foreground drain decides.
-          complete(false)
-        }
+      if self.ready, let channel = self.channel {
+        self.runDrain(channel, engine: nil, complete)
+      } else if self.channel != nil || self.headless != nil {
+        // A scene engine without a drain host drains on its own; an earlier
+        // headless run that has not answered yet is never doubled. The pending
+        // timestamp stays, so the next background entry asks again.
+        complete(false)
+      } else if !UIApplication.shared.isProtectedDataAvailable {
+        // Before first unlock (or locked under Complete protection) the
+        // session and database keys are unreadable: exit cleanly, ask again.
+        NSLog("[CaptureBg] headless_skipped reason=protected_data")
+        self.schedule(delay: 15 * 60)
+        complete(false)
+      } else {
+        self.startHeadless(complete)
       }
     }
   }
+
+  /// Main thread: no engine exists, start a headless one for this task.
+  private func startHeadless(_ complete: @escaping (Bool) -> Void) {
+    let engine = HeadlessCaptureEngine()
+    headless = engine
+    var isReady = false
+    NSLog("[CaptureBg] headless_engine_start")
+    let started = engine.start { [weak self] channel in
+      isReady = true
+      NSLog("[CaptureBg] headless_engine_ready")
+      self?.runDrain(channel, engine: engine, complete)
+    }
+    guard started else {
+      engine.destroy()
+      headless = nil
+      schedule(delay: 60)
+      complete(false)
+      return
+    }
+    DispatchQueue.main.asyncAfter(deadline: .now() + Self.readyTimeout) { [weak self] in
+      // Dart never registered its drain host: it never started a bootstrap,
+      // so nothing is open. Tear down and ask again.
+      guard let self = self, !isReady, self.headless === engine else { return }
+      engine.destroy()
+      self.headless = nil
+      NSLog("[CaptureBg] headless_engine_destroyed reason=not_ready")
+      self.schedule(delay: 60)
+      complete(false)
+    }
+  }
+
+  /// Main thread: one Dart drain; a headless engine is destroyed after it answered.
+  private func runDrain(
+    _ channel: FlutterMethodChannel, engine: HeadlessCaptureEngine?,
+    _ complete: @escaping (Bool) -> Void
+  ) {
+    if engine != nil { headlessChannel = channel }
+    channel.invokeMethod("runBackgroundDrain", arguments: nil) { [weak self] reply in
+      if let engine = engine {
+        engine.destroy()
+        if self?.headless === engine {
+          self?.headless = nil
+          self?.headlessChannel = nil
+        }
+        NSLog("[CaptureBg] headless_engine_destroyed outcome=%@", (reply as? String) ?? "none")
+      }
+      switch reply as? String {
+      case "done":
+        UserDefaults.standard.removeObject(forKey: Self.earliestKey)
+        complete(true)
+      case "pending", "deferred":
+        // pending: Dart already asked for the next run at the right time.
+        // deferred: signed out / not admitted; sign-out cancels the request.
+        complete(true)
+      case .some:
+        // busy / cancelled / failed: ask again later.
+        self?.schedule(delay: 60)
+        complete(false)
+      case .none:
+        // No Dart handler (or an error): the next foreground drain decides.
+        complete(false)
+      }
+    }
+  }
+
+  #if DEBUG
+  /// DEBUG-only simulator probe (`-QirshDebugHeadlessDrain`): drives the REAL
+  /// handler above with a task object, because the simulator never runs
+  /// BGTasks itself. Compiled out of release builds.
+  final class DebugProbeTask: CaptureDrainTask {
+    var expirationHandler: (() -> Void)?
+    func setTaskCompleted(success: Bool) {
+      NSLog("[CaptureBg] probe_task_completed success=%@", success ? "true" : "false")
+    }
+  }
+
+  static var debugProbeRequested: Bool {
+    ProcessInfo.processInfo.arguments.contains("-QirshDebugHeadlessDrain")
+  }
+  #endif
 }

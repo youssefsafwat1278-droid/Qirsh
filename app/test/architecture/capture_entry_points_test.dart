@@ -86,11 +86,33 @@ void main() {
                       ? f.readAsStringSync().contains('$name,') ||
                           f.readAsStringSync().contains('$name)')
                       : f.readAsStringSync().contains(name));
-          if (!referenced) offenders.add('${file.path}:$name');
+          if (!referenced && !_nativeDispatched(name, nativeSources)) {
+            offenders.add('${file.path}:$name');
+          }
         }
       }
       expect(offenders, isEmpty,
           reason: 'unreachable background entry point(s): $offenders');
+    });
+
+    test('the ONLY natively dispatched entry point is the headless drain', () {
+      // The cold-start drain host (WorkManager worker / BGTask with no live
+      // engine) runs `captureBackgroundMain`, which bootstraps the account scope
+      // and runs the SAME leased drain (HeadlessCaptureDrain) - not a second
+      // capture path with its own gates.
+      final entry = read('lib/main.dart');
+      final body = entry.substring(
+          entry.indexOf('Future<void> captureBackgroundMain()'));
+      expect(body.substring(0, body.indexOf('\n}\n')),
+          contains('HeadlessCaptureDrain()'));
+      final dispatched = <String>{};
+      for (final file in nativeSources) {
+        for (final m in RegExp(r'"(\w+Main)"')
+            .allMatches(file.readAsStringSync())) {
+          dispatched.add(m.group(1)!);
+        }
+      }
+      expect(dispatched, {'captureBackgroundMain'});
     });
 
     test('Android SMS capture enqueues durably and never calls Dart', () {
@@ -110,9 +132,11 @@ void main() {
       final main = read(
           'android/app/src/main/kotlin/com/example/money_companion/MainActivity.kt');
       expect(main, contains('DurableCaptureQueue.get(this).enqueue('));
-      expect(main, contains('DurableCaptureQueue.get(this).peekJson()'),
+      // The channel handler is shared by the activity engine and the headless
+      // cold-start engine (NativeCaptureChannelHandler, context-based).
+      expect(main, contains('DurableCaptureQueue.get(context).peekJson()'),
           reason: 'the drain must PEEK, not destructively read');
-      expect(main, contains('DurableCaptureQueue.get(this).acknowledge('),
+      expect(main, contains('DurableCaptureQueue.get(context).acknowledge('),
           reason: 'per-item ack is the lease boundary');
     });
 
@@ -125,9 +149,14 @@ void main() {
 
   group('the drain is the single durable owner', () {
     test('every disposition is handled by the drain notification switch', () {
-      final shell = read('lib/features/app/app_shell.dart');
-      final switchBody = shell.substring(
-          shell.indexOf('Future<void> _showCapturedMessageNotification'));
+      // Shared by the foreground shell and the headless cold-start drain.
+      final alerts =
+          read('lib/features/capture/background/capture_alerts.dart');
+      final switchBody = alerts.substring(
+          alerts.indexOf('Future<void> showCapturedMessageNotification'));
+      expect(read('lib/features/app/app_shell.dart'),
+          contains('showCapturedMessageNotification(result, preferences)'),
+          reason: 'the foreground drain uses the same switch');
       for (final d in [
         'CapturedMessageDisposition.ignored',
         'CapturedMessageDisposition.notifyOnly',
@@ -411,3 +440,8 @@ void main() {
             '${offenders.join('\n')}');
   });
 }
+
+/// An entry point a native host starts BY NAME (a headless engine's Dart
+/// entrypoint) is registered by that host.
+bool _nativeDispatched(String name, List<File> nativeSources) => nativeSources
+    .any((f) => f.readAsStringSync().contains('"$name"'));

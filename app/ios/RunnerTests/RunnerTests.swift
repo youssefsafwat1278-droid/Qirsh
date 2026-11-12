@@ -4848,8 +4848,11 @@ class RunnerTests: XCTestCase {
       XCTAssertFalse(source.lowercased().contains("allowance"), "no Dart allowance in native")
     }
     // Phase 3 background recovery: only the app (never the extension) declares
-    // background modes, and only the two capture-drain tasks. The BGTask code asks
-    // the live Dart engine to drain; it does no networking and starts no engine.
+    // background modes, and only the two capture-drain tasks, each registered AND
+    // submitted. The BGTask code asks the live Dart engine to drain or, with no
+    // engine at all, starts ONE headless engine running ONLY the Dart
+    // `captureBackgroundMain` entrypoint, torn down after Dart answered; it does
+    // no networking itself and completes each task exactly once.
     for key in ["UIBackgroundModes", "BGTaskSchedulerPermittedIdentifiers"] {
       XCTAssertFalse(try iosSource("ShareBankMessage/Info.plist").contains(key))
     }
@@ -4866,7 +4869,34 @@ class RunnerTests: XCTestCase {
     let drain = try XCTUnwrap(delegate.range(of: "final class CaptureBackgroundDrain"))
     let drainSource = String(delegate[drain.lowerBound...])
     XCTAssertFalse(drainSource.contains("URLSession"), "no networking in the BGTask path")
-    XCTAssertFalse(drainSource.contains("FlutterEngine("), "no headless engine")
+    XCTAssertTrue(drainSource.contains(
+      "for identifier in [Self.refreshIdentifier, Self.processingIdentifier] {"),
+      "every permitted identifier has a registered handler")
+    XCTAssertTrue(drainSource.contains("BGAppRefreshTaskRequest(identifier: Self.refreshIdentifier)"),
+                  "fetch <=> a submitted BGAppRefreshTask")
+    XCTAssertTrue(drainSource.contains("BGProcessingTaskRequest(identifier: Self.processingIdentifier)"),
+                  "processing <=> a submitted BGProcessingTask")
+    // The only engine: headless, one entrypoint, destroyed.
+    let engine = try XCTUnwrap(delegate.range(of: "final class HeadlessCaptureEngine"))
+    let engineSource = String(delegate[engine.lowerBound..<drain.lowerBound])
+    XCTAssertEqual(delegate.components(separatedBy: "FlutterEngine(").count - 1, 1,
+                   "exactly one engine construction in the app delegate")
+    XCTAssertTrue(engineSource.contains("FlutterEngine("))
+    XCTAssertTrue(engineSource.contains("static let entrypoint = \"captureBackgroundMain\""))
+    XCTAssertTrue(engineSource.contains("run(withEntrypoint: Self.entrypoint)"))
+    XCTAssertTrue(engineSource.contains("destroyContext()"))
+    XCTAssertFalse(engineSource.contains("URLSession"))
+    XCTAssertFalse(drainSource.contains("FlutterEngine("), "the task handler builds no engine itself")
+    XCTAssertEqual(drainSource.components(separatedBy: "task.setTaskCompleted(").count - 1, 1,
+                   "one completion site, guarded")
+    XCTAssertTrue(drainSource.contains("guard !completed else { return }"))
+    XCTAssertTrue(drainSource.contains("isProtectedDataAvailable"),
+                  "no headless start before first unlock / while protected data is unavailable")
+    // The probe that drives the handler on a simulator is DEBUG-only.
+    let probe = try XCTUnwrap(drainSource.range(of: "-QirshDebugHeadlessDrain"))
+    let lastIf = try XCTUnwrap(drainSource.range(of: "#if DEBUG", options: .backwards,
+                                                 range: drainSource.startIndex..<probe.lowerBound))
+    XCTAssertNil(drainSource.range(of: "#endif", range: lastIf.upperBound..<probe.lowerBound))
     XCTAssertFalse(delegate.contains("performFetchWithCompletionHandler"))
   }
 }

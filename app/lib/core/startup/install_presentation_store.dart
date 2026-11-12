@@ -41,6 +41,27 @@ class InstallPresentationStore {
     }
   }
 
+  /// The headless cold-start drain: READ-ONLY. True only for a recorded,
+  /// completed setup with no reset pending; anything else (absent, unreadable,
+  /// setup or reset outstanding) is the foreground launch's to settle.
+  Future<bool> loadCompletedReadOnly() async {
+    try {
+      if (!await file.exists()) return false;
+      final state = jsonDecode(await file.readAsString());
+      if (state is! Map ||
+          state['version'] != 1 ||
+          state['requiresSetup'] != false ||
+          state['resetPending'] != false) {
+        return false;
+      }
+      requiresSetup = false;
+      languageChosen = true;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> chooseLanguage() async {
     await _write(resetPending: false, chosenLanguage: true);
     languageChosen = true;

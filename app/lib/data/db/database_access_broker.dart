@@ -19,6 +19,29 @@ class DatabaseAccessUnavailable implements Exception {
   String toString() => 'DatabaseAccessUnavailable($reason)';
 }
 
+/// What a foreground bootstrap found when it asked a HEADLESS coordinator of
+/// this VM to step aside ([DatabaseAccessBroker.reclaimFromHeadless]).
+enum HeadlessYield {
+  /// No coordinator is registered (or this isolate already owns one).
+  none,
+
+  /// A headless coordinator stopped and released the name; the foreground may
+  /// now create its own.
+  released,
+
+  /// The registered coordinator is a FOREGROUND one: nothing changes, creation
+  /// fails closed exactly as before.
+  foregroundHolder,
+
+  /// Nothing answered within the bound (a dead registration or a hung holder):
+  /// nothing changes, creation fails closed exactly as before.
+  unresponsive,
+
+  /// A headless coordinator agreed to stop but had not released within the
+  /// bound (an item still committing). Transient: retry.
+  stillRunning,
+}
+
 /// Initial O core. A never-removed VM name mapping is the coordinator tombstone.
 ///
 /// C2 ownership rule: exactly one coordinator per Dart VM, owned by the genuine
@@ -31,7 +54,11 @@ class DatabaseAccessUnavailable implements Exception {
 /// overlap, stale named ports and a genuine process restart are NOT proven here
 /// (platform evidence required, see the unit report).
 /// Background engines may discover a live port; they may never create or replace
-/// it. The embedding must retain this VM for the OS process lifetime. This is
+/// it. The ONE exception is the headless cold-start capture drain
+/// ([createHeadless]): it may create the coordinator only when NONE is
+/// registered, and it yields to a foreground bootstrap and releases the name
+/// ([reclaimFromHeadless], [releaseHeadless]); the foreground always wins.
+/// The embedding must retain this VM for the OS process lifetime. This is
 /// source-level coordination, not executed multi-engine lifecycle proof.
 ///
 /// No database/lease/key/storage/native/network operation occurs here; this class
@@ -113,6 +140,143 @@ class DatabaseAccessBroker {
     return _retained = broker;
   }
 
+  // ------------------------------------------------- headless (cold start)
+  //
+  // The cold-start background capture drain (Android WorkManager worker / iOS
+  // BGTask with no live engine) runs in a HEADLESS engine of the same VM. It may
+  // create the coordinator ONLY when none is registered, holds it for the
+  // duration of one bootstrap + drain, and RELEASES it (unregisters the name,
+  // closes its port) when done. The foreground always wins: a foreground
+  // bootstrap that finds a coordinator asks it to yield
+  // ([reclaimFromHeadless]); a headless one stops at its next item boundary,
+  // closes its databases and releases, and only then does the foreground create
+  // its own. A foreground coordinator never yields and is never released.
+
+  static const _yieldRequest = 'qirsh.coordinator.yield.v1';
+
+  /// Published (with the same port) only by a headless coordinator, BEFORE it
+  /// takes [_name]: a foreground bootstrap asks a holder to yield only when the
+  /// holder is marked headless. Any other holder (a foreground engine, a
+  /// foreign or stale registration) fails closed at once, as before.
+  static const _headlessMarker = 'qirsh.database_access_broker.O.v1.headless';
+
+  bool _headless = false;
+  bool _yieldRequested = false;
+  final List<SendPort> _yieldWaiters = [];
+
+  /// Called (once per request) when a foreground bootstrap asks this headless
+  /// coordinator to step aside. The holder stops at its next item boundary.
+  void Function()? onYieldRequested;
+
+  /// True once a foreground bootstrap asked this headless coordinator to yield.
+  bool get yieldRequested => _yieldRequested;
+  bool get isHeadless => _headless;
+
+  /// The headless background entry's coordinator. Refused (never latched, never
+  /// replacing anything) when any coordinator is already registered in the VM:
+  /// a live foreground engine owns the replica and the headless run does nothing.
+  static DatabaseAccessBroker createHeadless() {
+    if (_backgroundEntry) {
+      throw const DatabaseAccessUnavailable('background_cannot_create');
+    }
+    if (_retained != null) {
+      throw const DatabaseAccessUnavailable('coordinator_already_registered');
+    }
+    final broker = DatabaseAccessBroker._(null).._headless = true;
+    final port = broker._receive.sendPort;
+    final marked =
+        IsolateNameServer.registerPortWithName(port, _headlessMarker);
+    if (!marked || !IsolateNameServer.registerPortWithName(port, _name)) {
+      if (marked) IsolateNameServer.removePortNameMapping(_headlessMarker);
+      broker._receive.close();
+      broker._disposed = true;
+      throw const DatabaseAccessUnavailable('coordinator_already_registered');
+    }
+    return _retained = broker;
+  }
+
+  /// Ends the headless ownership: only when every holder (pending or open) has
+  /// ACTUALLY closed. Unregisters the name (only while it is still this port),
+  /// tells every waiting foreground and closes the port. A refused release keeps
+  /// the registration: the foreground then keeps failing closed, never opens a
+  /// replica beside an unconfirmed handle.
+  bool releaseHeadless() {
+    if (!_headless || _disposed) return false;
+    if (_holders.isNotEmpty) return false;
+    if (IsolateNameServer.lookupPortByName(_name) == _receive.sendPort) {
+      IsolateNameServer.removePortNameMapping(_name);
+    }
+    if (IsolateNameServer.lookupPortByName(_headlessMarker) ==
+        _receive.sendPort) {
+      IsolateNameServer.removePortNameMapping(_headlessMarker);
+    }
+    _disposed = true;
+    _mode = DatabaseAccessMode.closed;
+    for (final waiter in _yieldWaiters) {
+      waiter.send(const ['released']);
+    }
+    _yieldWaiters.clear();
+    _receive.close();
+    if (identical(_retained, this)) _retained = null;
+    return true;
+  }
+
+  /// A FOREGROUND bootstrap, before creating its coordinator: when the name is
+  /// held by a coordinator marked headless, ask it to yield and wait (bounded)
+  /// for the release. A holder that is not marked headless is never asked
+  /// ([HeadlessYield.foregroundHolder]: the caller fails closed as before). A
+  /// headless coordinator answers `yielding` and later `released`; a foreground
+  /// one answers `denied`; a dead registration answers nothing. This never
+  /// unregisters, replaces or creates anything itself.
+  static Future<HeadlessYield> reclaimFromHeadless({
+    Duration timeout = const Duration(seconds: 20),
+    Duration poll = const Duration(milliseconds: 50),
+  }) async {
+    if (_retained != null) return HeadlessYield.none;
+    if (IsolateNameServer.lookupPortByName(_name) == null) {
+      return HeadlessYield.none;
+    }
+    final replies = ReceivePort();
+    var yielding = false;
+    var denied = false;
+    replies.listen((message) {
+      if (message is! List || message.isEmpty) return;
+      if (message[0] == 'yielding') yielding = true;
+      if (message[0] == 'denied') denied = true;
+    });
+    final deadline = DateTime.now().add(timeout);
+    SendPort? asked;
+    try {
+      while (true) {
+        final holder = IsolateNameServer.lookupPortByName(_name);
+        if (holder == null) {
+          return yielding ? HeadlessYield.released : HeadlessYield.none;
+        }
+        if (denied) return HeadlessYield.foregroundHolder;
+        if (holder != asked &&
+            IsolateNameServer.lookupPortByName(_headlessMarker) != holder) {
+          return asked == null && !yielding
+              ? HeadlessYield.foregroundHolder
+              : HeadlessYield.unresponsive;
+        }
+        if (holder != asked) {
+          // A new registration (or the first one): ask it.
+          asked = holder;
+          yielding = false;
+          holder.send([_yieldRequest, replies.sendPort]);
+        }
+        if (!DateTime.now().isBefore(deadline)) {
+          return yielding
+              ? HeadlessYield.stillRunning
+              : HeadlessYield.unresponsive;
+        }
+        await Future<void>.delayed(poll);
+      }
+    } finally {
+      replies.close();
+    }
+  }
+
   /// Creates the coordinator AND installs a live authentic writable host. A
   /// coordinator that already exists in this isolate is never re-started.
   static DatabaseAccessBroker start(DatabaseHostAdmission admission) {
@@ -181,6 +345,7 @@ class DatabaseAccessBroker {
     _backgroundEntry = false;
     _debugHideRootToken = false;
     IsolateNameServer.removePortNameMapping(_name);
+    IsolateNameServer.removePortNameMapping(_headlessMarker);
   }
 
   /// Discovery is not an authority grant. Missing discovery never bootstraps.
@@ -451,6 +616,26 @@ class DatabaseAccessBroker {
   }
 
   void _message(dynamic value) {
+    if (value is List &&
+        value.length == 2 &&
+        value[0] == _yieldRequest &&
+        value[1] is SendPort) {
+      final reply = value[1] as SendPort;
+      // A foreground coordinator never yields: the asker fails closed as before.
+      if (!_headless || _disposed) {
+        reply.send(const ['denied']);
+        return;
+      }
+      _yieldRequested = true;
+      _yieldWaiters.add(reply);
+      reply.send(const ['yielding']);
+      try {
+        onYieldRequested?.call();
+      } catch (_) {
+        // The flag above is the authority; the callback only hurries it.
+      }
+      return;
+    }
     if (value is! List || value.length != 6 || value[5] is! SendPort) return;
     final reply = value[5] as SendPort;
     final command = value[0];

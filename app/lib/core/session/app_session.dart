@@ -2154,6 +2154,11 @@ class AppSession extends ValueNotifier<SessionStatus> {
   /// with the DB open). Purges the previous account's native residue, claims
   /// ownership for the pending UID and switches to its replica, then re-runs the
   /// session reconcile so the gated identity is finally admitted.
+  /// A changed-owner purge is deferred, or an owner is latched unresolved. The
+  /// headless cold-start drain does no work then (the foreground resolves it).
+  bool get hasUnsettledLocalDataOwner =>
+      _pendingOwnerConflictUid != null || _unresolvedOwnerUid != null;
+
   Future<void> resolvePendingLocalDataOwnerConflict(
     supabase.SupabaseClient client,
   ) async {

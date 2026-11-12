@@ -97,6 +97,37 @@ class BootstrapCoordinatorUnavailable implements Exception {
   String toString() => 'BootstrapCoordinatorUnavailable($reason)';
 }
 
+/// A headless cold-start capture drain of this process holds the database
+/// coordinator, has agreed to stop at its next item boundary, and has not
+/// released yet. NOT a failure: nothing was initialized; startup keeps the
+/// loading screen and retries (the foreground always wins, it only waits).
+class BootstrapHeadlessDrainActive implements Exception {
+  const BootstrapHeadlessDrainActive();
+  @override
+  String toString() => 'BootstrapHeadlessDrainActive()';
+}
+
+/// What [BootstrapRunner.runHeadless] produced. Either a writable, admitted
+/// scope of the active account ([scope] non-null), or the content-free reason
+/// why the background run does nothing ([noWork]).
+class HeadlessBootstrap {
+  const HeadlessBootstrap._(this.scope, this.noWork);
+  final AccountScope? scope;
+
+  /// A stable code (`coordinator_held`, `signed_out`, `removal_barrier`, ...).
+  final String? noWork;
+
+  bool get ready => scope != null;
+
+  /// Another engine of this process owns the coordinator (a live foreground).
+  bool get busy => noWork == 'coordinator_held';
+}
+
+class _HeadlessNoWork implements Exception {
+  const _HeadlessNoWork(this.reason);
+  final String reason;
+}
+
 /// ASR §6.7: a read the session store needs was temporarily unavailable
 /// (protected data locked). `Supabase.initialize` was NOT called, no latch was
 /// set and nothing restrictive was published; bootstrap re-runs from
@@ -201,6 +232,120 @@ class BootstrapRunner {
       throw BootstrapCoordinatorUnavailable(e.reason);
     }
     AppSession.instance.configureDatabaseCoordinator(_coordinator!);
+  }
+
+  // ------------------------------------------------ headless (cold start)
+
+  /// Set by [runHeadless]: this runner is the cold-start background entry of a
+  /// HEADLESS engine (Android worker / iOS BGTask with no live engine). It runs
+  /// the same launch steps, in the same order, minus everything that is UI,
+  /// interactive, network housekeeping or destructive recovery; at every point
+  /// where the foreground would recover, restore local read, adopt, purge or
+  /// resolve something, the headless run STOPS instead (no work, nothing
+  /// written) and leaves it to the next foreground launch.
+  bool _headless = false;
+  bool _headlessStop = false;
+
+  /// The OS withdrew the run (WorkManager stop, BGTask expiration).
+  void requestHeadlessStop() => _headlessStop = true;
+
+  /// The OS cancelled, or a foreground bootstrap asked this headless
+  /// coordinator to yield. Checked between launch steps and before every item.
+  bool get headlessStopRequested =>
+      _headlessStop || (_coordinator?.yieldRequested ?? false);
+
+  void _ensureHeadlessCoordinator() {
+    if (_coordinator != null) return;
+    try {
+      _coordinator = DatabaseAccessBroker.createHeadless();
+    } on DatabaseAccessUnavailable {
+      throw const _HeadlessNoWork('coordinator_held');
+    }
+    debugCoordinatorEvent?.call('coordinator-headless');
+    AppSession.instance.configureDatabaseCoordinator(_coordinator!);
+  }
+
+  void _headlessCheckpoint() {
+    if (_headless && headlessStopRequested) {
+      throw const _HeadlessNoWork('stopped');
+    }
+  }
+
+  /// Removal state is only READ here: a pending or unreadable removal, a native
+  /// barrier, or an owner marker naming a revoked uid means the foreground
+  /// must finish it. Never resumed by a background run.
+  Future<void> _requireNoRemovalForHeadless() async {
+    final barrier = await captureQueue.getCaptureRemovalBarrier();
+    if (barrier.presence != CaptureRemovalBarrierPresence.absent) {
+      throw const _HeadlessNoWork('removal_barrier');
+    }
+    final removal = _removeData!;
+    if (await removal.hasPending()) {
+      throw const _HeadlessNoWork('removal_pending');
+    }
+    final owner = await localDataOwnerUid();
+    if (owner != null && (await removal.revokedUids()).contains(owner)) {
+      throw const _HeadlessNoWork('owner_revoked');
+    }
+  }
+
+  /// Cold-start background initialization in a headless engine. Returns the
+  /// admitted, writable scope of the active account, or why nothing may run.
+  /// Nothing interactive, no UI, no prompt, no token refresh, no local-read
+  /// restoration or denial, no removal resumption, no legacy adoption, no
+  /// remote sync. The caller MUST call [releaseHeadless] afterwards, whatever
+  /// happened (also after a throw).
+  Future<HeadlessBootstrap> runHeadless() async {
+    _headless = true;
+    try {
+      await _runSteps();
+      _headlessCheckpoint();
+      final scope = _host?.current;
+      final session = AppSession.instance;
+      final work = session.captureLocalWorkAuthority();
+      if (scope == null ||
+          scope.uid == null ||
+          scope.isLocalRead ||
+          scope.database.isReadOnly ||
+          session.status != SessionStatus.authenticated ||
+          work == null ||
+          work.uid != scope.uid ||
+          ReplicaFreeze.instance.frozen) {
+        return const HeadlessBootstrap._(null, 'not_admitted');
+      }
+      return HeadlessBootstrap._(scope, null);
+    } on _HeadlessNoWork catch (e) {
+      return HeadlessBootstrap._(null, e.reason);
+    } on BootstrapAuthDeferred {
+      // iOS before the first unlock: protected data is unavailable.
+      return const HeadlessBootstrap._(null, 'protected_data');
+    }
+  }
+
+  /// Ends a headless run: the auth scheduler is stopped and quiesced, the
+  /// database is ACTUALLY closed, then the coordinator name is released so a
+  /// foreground bootstrap can create its own. False when a holder could not be
+  /// confirmed closed: the registration then stays (the foreground keeps
+  /// failing closed rather than opening beside an unconfirmed handle).
+  Future<bool> releaseHeadless() async {
+    final coord = AuthCoordinator.active;
+    if (coord != null) {
+      coord.setSchedulerEnabled(false);
+      try {
+        await coord.quiesced().timeout(const Duration(seconds: 10));
+      } catch (_) {}
+    }
+    try {
+      if (_supabaseInitialized) Supabase.instance.client.auth.stopAutoRefresh();
+    } catch (_) {}
+    await _initEvents.release();
+    try {
+      await _host?.closeForHeadlessRelease();
+    } catch (_) {
+      // A failed close keeps its holder registered; release refuses below.
+    }
+    _database = null;
+    return _coordinator?.releaseHeadless() ?? true;
   }
 
   StreamSubscription<AuthState>? _senderBankAuthSubscription;
@@ -334,7 +479,20 @@ class BootstrapRunner {
 
     // O: prove the inert coordinator before reading persisted preferences or
     // starting recovery. It authorizes nothing by existing.
-    _ensureCoordinator();
+    if (_headless) {
+      _ensureHeadlessCoordinator();
+    } else {
+      // The foreground always wins: a headless cold-start drain of this VM is
+      // asked to stop at its next item boundary, close its databases and
+      // release the coordinator BEFORE this bootstrap reads or opens anything.
+      if (_coordinator == null) {
+        final reclaim = await DatabaseAccessBroker.reclaimFromHeadless();
+        if (reclaim == HeadlessYield.stillRunning) {
+          throw const BootstrapHeadlessDrainActive();
+        }
+      }
+      _ensureCoordinator();
+    }
     await _loadInitialSettingsLanguage();
     AppSession.instance.configureLocalRead(LocalReadAuthority(
       store: SecureLocalReadStore(),
@@ -385,6 +543,13 @@ class BootstrapRunner {
       ..onPermitChanged = (permits) async {
         if (!_supabaseInitialized) return;
         final auth = Supabase.instance.client.auth;
+        if (_headless) {
+          // A headless run never refreshes: the foreground engine (which waits
+          // for this run to release) owns the session's rotation.
+          auth.stopAutoRefresh();
+          AuthCoordinator.active?.setSchedulerEnabled(false);
+          return;
+        }
         // ASR §3.3: the coordinator scheduler is the single refresher; the SDK
         // ticker is never started. Owner decision (2026-10-29): it runs with
         // Cloud OFF too; each tick asks the session-only refresh policy.
@@ -420,7 +585,7 @@ class BootstrapRunner {
           .denyLocalReadAfterInitializationLoss(host, binding: binding)
           .then<void>((_) {}, onError: (Object _) {}));
     };
-    _installSenderObservers();
+    if (!_headless) _installSenderObservers();
 
     // F2 — the durable removal state is loaded and acted on BEFORE anything can
     // admit, adopt or open: auth is not yet bound, no legacy adoption has run, no
@@ -431,13 +596,19 @@ class BootstrapRunner {
     // removed uid is cleared, not opened.
     var launchBlocked = !await _step(
         'account_fence_readiness', AccountFenceAuthority.shared.initialize);
+    if (_headless && launchBlocked) throw const _HeadlessNoWork('fence');
     await _step('removal_recovery', () async {
       _registerRemoveData();
       await AppSession.instance.load();
-      launchBlocked =
-          (await AppSession.instance.prepareLaunchAdmission()).blocked ||
-              launchBlocked;
+      if (_headless) await _requireNoRemovalForHeadless();
+      final launch = await AppSession.instance.prepareLaunchAdmission();
+      launchBlocked = launch.blocked || launchBlocked;
+      if (_headless) {
+        if (launchBlocked) throw const _HeadlessNoWork('launch_blocked');
+        if (launch.uid == null) throw const _HeadlessNoWork('signed_out');
+      }
     });
+    _headlessCheckpoint();
 
     // SDK initialization restores the persisted session from local storage, and
     // may also run recovery work in the background (gotrue's recoverSession is
@@ -556,6 +727,11 @@ class BootstrapRunner {
         _supabaseInitialized = true;
         final auth = Supabase.instance.client.auth;
         auth.stopAutoRefresh();
+        if (_headless) {
+          // No refresher, no ASR, no lifecycle observers in a headless run.
+          AuthCoordinator.active?.setSchedulerEnabled(false);
+          return;
+        }
         _resumeGuard ??= AutoRefreshResumeGuard()..attach();
         _wireAutomaticSessionRecovery(egressGate);
         final active = AuthCoordinator.active;
@@ -586,7 +762,29 @@ class BootstrapRunner {
     // adoption, the retired purge and any service init; those are deferred (they
     // run under their own normal authorization, never under a local-read grant).
     var localRead = false;
-    if (_database == null && !launchBlocked) {
+    if (_headless) {
+      // A headless run needs a FRESH session of the launch owner. An expired,
+      // absent or lost one is the foreground's to handle (local read + ASR):
+      // nothing is restored, denied or refreshed here.
+      final client = _authClient;
+      if (client != null) {
+        final sdk = client.auth.currentSession;
+        final owner = await localDataOwnerUid();
+        if (sdk == null ||
+            sdk.isExpired ||
+            !_initEvents.provenanceIntact ||
+            sdk.user.id != owner) {
+          throw const _HeadlessNoWork('session_not_fresh');
+        }
+      }
+      if (await File((await _replicaStore!.legacyLocation()).dbPath).exists()) {
+        throw const _HeadlessNoWork('legacy_adoption');
+      }
+      if ((await _replicaStore!.pendingRebootstraps()).isNotEmpty) {
+        throw const _HeadlessNoWork('rebootstrap');
+      }
+      _headlessCheckpoint();
+    } else if (_database == null && !launchBlocked) {
       await _step('local_read_decision', () async {
         final client = _authClient;
         final sdk = client?.auth.currentSession;
@@ -615,7 +813,7 @@ class BootstrapRunner {
       });
     }
 
-    if (_database == null && !launchBlocked && !localRead) {
+    if (_database == null && !launchBlocked && !localRead && !_headless) {
       await _step('replica_recovery', host.recoverAtLaunch);
       // WP-7: an unfinished rebootstrap keeps capture delivery and egress frozen
       // until the next sync cycle resumes it from its phase marker.
@@ -628,6 +826,11 @@ class BootstrapRunner {
       final client = _authClient;
       if (client != null && !launchBlocked) {
         await AppSession.instance.bindSupabaseAuth(client);
+        if (_headless &&
+            (!_initEvents.provenanceIntact ||
+                AppSession.instance.hasUnsettledLocalDataOwner)) {
+          throw const _HeadlessNoWork('session_changed');
+        }
         // D2: a loss emitted after the decision above but before this binding
         // listened is replayed from the buffer: it must not be missed.
         if (!_initEvents.provenanceIntact &&
@@ -669,6 +872,10 @@ class BootstrapRunner {
         ? const LaunchAdmission.blocked()
         : await AppSession.instance.prepareLaunchAdmission();
     final launchUid = launch.blocked ? null : launch.uid;
+    if (_headless && launchUid == null) {
+      throw const _HeadlessNoWork('launch_blocked');
+    }
+    _headlessCheckpoint();
     if (host.current == null) {
       // The launch-specific private reservation is minted by AppSession for the
       // owner it chose above; the open is tracked before any opener runs.
@@ -679,6 +886,9 @@ class BootstrapRunner {
       // locked, quarantined): the signed-out scope is open, so the session must
       // not look authenticated. Routing to sign-in lets an explicit sign-in
       // create or unlock it.
+      if (_headless && host.current?.uid != launchUid) {
+        throw const _HeadlessNoWork('replica_unavailable');
+      }
       if (launchUid != null && host.current?.uid == null) {
         AppSession.instance.markSessionInvalid();
       }
@@ -701,6 +911,9 @@ class BootstrapRunner {
     final database = _database = scope.database;
     hasLocalData = scope.hasLocalData;
     planningCutoverState = scope.planningCutoverState;
+    // A headless run stops here: no UI milestone, no first-frame ASR trigger,
+    // no deferred housekeeping, no telemetry.
+    if (_headless) return database;
 
     if (initialCaptureTransactionId != null) {
       CaptureRuntime.instance
@@ -951,7 +1164,7 @@ class BootstrapRunner {
         uid: uid,
         settings: () => DriftUserSettingsRepository(database).getSettings(),
       ));
-      if (uid != null) {
+      if (uid != null && !_headless) {
         _observeBootstrapWork(
           () => captureRegistration.syncBackendState().catchError((_) {
             // Capture backend registration is optional; local fallback remains active.
@@ -962,7 +1175,9 @@ class BootstrapRunner {
 
     // Binds health persistence to THIS database (and drops the previous
     // account's in-memory state).
-    _observeBootstrapWork(() => SyncHealth.shared.attach(database));
+    if (!_headless) {
+      _observeBootstrapWork(() => SyncHealth.shared.attach(database));
+    }
     if (uid == null) {
       DiagnosticsConsentGate.revoke();
       return AccountScopeInit(
@@ -974,7 +1189,7 @@ class BootstrapRunner {
     // established), is idempotent (no-op once empty), touches only that column,
     // and never reads the value into logs/errors. Best-effort: a failure leaves
     // the value in place but backup generation already refuses to serialize it.
-    if (!_dbKeyRefCleanupRan) {
+    if (!_headless && !_dbKeyRefCleanupRan) {
       await _step('db_key_ref_cleanup', () async {
         try {
           await database.clearDeprecatedDbKeyRef();
@@ -986,7 +1201,7 @@ class BootstrapRunner {
       });
     }
 
-    if (!_goalAutoSavesRan) {
+    if (!_headless && !_goalAutoSavesRan) {
       await _step('goal_autosaves', () async {
         try {
           await RunGoalAutoSavesUseCase(
@@ -1021,6 +1236,12 @@ class BootstrapRunner {
         DiagnosticsConsentGate.revoke();
       }
     });
+    // A headless run needs only the steps above: the repairs, backfills and
+    // remote sync below are the foreground launch's.
+    if (_headless) {
+      return AccountScopeInit(
+          hasLocalData: localData, planningCutoverState: cutover);
+    }
 
     if (!_accountCurrencyRepairRan) {
       await _step('account_currency_repair', () async {
@@ -1348,8 +1569,12 @@ class BootstrapRunner {
       ),
       prepareLocation: (location) =>
           AppDatabase.initProcessLiveness(location: location),
-      afterWithdraw:
-          debugAfterWithdraw ?? (() => WidgetsBinding.instance.endOfFrame),
+      // A headless engine draws no frames and has no provider graph to tear
+      // down: waiting for a frame there would never complete.
+      afterWithdraw: debugAfterWithdraw ??
+          (_headless
+              ? (() async {})
+              : (() => WidgetsBinding.instance.endOfFrame)),
       coordinator: coordinator,
       reconcileReusedScope: _reconcileReusedScope,
     );
@@ -1460,7 +1685,8 @@ class BootstrapRunner {
   }
 
   void _receiveSenderBankMapping({String? uid, AdmissionAuthority? received}) {
-    if (_senderShutdown ||
+    if (_headless ||
+        _senderShutdown ||
         !SupabaseConfig.isConfigured ||
         AppSession.instance.localReadEgressDenied) {
       return;
