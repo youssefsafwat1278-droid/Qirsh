@@ -632,7 +632,11 @@ void main() {
       END;
     ''');
 
-    await expectLater(syncService.sync(), throwsA(anything));
+    // F7: a failing capture no longer aborts the whole relay run (it would
+    // block every later capture); it is reported as failed and left un-ACKed.
+    final result = await syncService.sync();
+    expect(result.failedPayloadIds, {payloadId});
+    expect(result.importedPayloadIds, isEmpty);
 
     expect(await DriftSmartInboxRepository(db).getOpen(), isEmpty,
         reason: 'the preceding review insert must roll back with the marker');

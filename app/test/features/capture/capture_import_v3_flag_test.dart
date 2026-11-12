@@ -27,8 +27,9 @@ void main() {
     final src = File('lib/features/app/app_shell.dart').readAsStringSync();
     final gate = src.indexOf(
         'if (_captureImportV3Enabled()) {\n        await _runCaptureImportV3();');
-    final legacy = src.indexOf(
-        'backendSync = await ref.read(captureSyncServiceProvider).sync();');
+    // The legacy drain body now lives in LegacyCaptureDrain; the shell reaches
+    // it through its provider.
+    final legacy = src.indexOf('ref.read(legacyCaptureDrainProvider)');
     expect(gate, greaterThan(0));
     expect(gate, lessThan(legacy));
     expect(src, contains("featureFlags.getBool('capture_import_v3')"));

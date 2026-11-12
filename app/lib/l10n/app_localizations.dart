@@ -12276,6 +12276,18 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'{subs} اشتراك · {instalments} أقساط'**
   String billsV3Counts(int subs, int instalments);
+
+  /// No description provided for @captureQueueNotSaved.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر حفظ رسالة بنكية واحدة أو أكثر على هذا الجهاز. أعد مشاركتها أو أضف العملية يدوياً.'**
+  String get captureQueueNotSaved;
+
+  /// No description provided for @captureQueueReadFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّرت قراءة الرسائل البنكية المحفوظة على هذا الجهاز. لم يُحذف شيء، وسنعيد المحاولة تلقائياً.'**
+  String get captureQueueReadFailed;
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {

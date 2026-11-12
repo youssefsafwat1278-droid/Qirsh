@@ -21,3 +21,16 @@ class SmartInboxItemEntity {
   final double? confidence;
   final DateTime createdAt;
 }
+
+/// Why a capture was parked in Smart Inbox, stored as `review_reason` in the
+/// local row's metadata. Absent means "unsupported / not a transaction".
+abstract final class SmartInboxReviewReason {
+  /// The analysis could not run or complete (network, provider, rate limit,
+  /// retries spent). A TEMPORARY condition — the row reads "awaiting analysis"
+  /// and offers the retry action.
+  static const String analysisUnavailable = 'analysis_unavailable';
+
+  /// Local processing of this capture kept failing; it was parked for manual
+  /// review.
+  static const String processingFailed = 'processing_failed';
+}

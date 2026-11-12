@@ -123,4 +123,36 @@ void main() {
       throwsA(isA<CaptureBackendException>()),
     );
   });
+  // F10 — "nothing is known" must not be read as "there are no results": the
+  // drain would park a server-analysed capture and later discard its result.
+  group('sync-captures: a malformed 200 is unknown, not empty', () {
+    CaptureBackendClient client(String body) => CaptureBackendClient(
+          supabaseUrl: 'https://example.supabase.co',
+          anonKey: 'anon',
+          httpClient: MockClient((_) async => Response(body, 200)),
+        );
+
+    test('a non-JSON body throws instead of returning no captures', () async {
+      await expectLater(
+        client('<html>ok</html>').syncCaptures(installId: 'i', deviceSecret: 's'),
+        throwsA(isA<CaptureBackendException>()
+            .having((e) => e.reason, 'reason', 'sync_failed_malformed')),
+      );
+    });
+
+    test('a JSON body without a captures list throws', () async {
+      await expectLater(
+        client('{"ok":true}').syncCaptures(installId: 'i', deviceSecret: 's'),
+        throwsA(isA<CaptureBackendException>()),
+      );
+    });
+
+    test('a well-formed empty list is still "no results"', () async {
+      expect(
+        await client('{"captures":[]}')
+            .syncCaptures(installId: 'i', deviceSecret: 's'),
+        isEmpty,
+      );
+    });
+  });
 }

@@ -76,6 +76,13 @@ export type ParseOutcome = {
   aiTransientFailure?: boolean;
   /** beforeAi refused (consent revoked / lease lost): AI never started. */
   aiDenied?: boolean;
+  /**
+   * AI-primary only: the provider could not be reached or answered with an
+   * error on every bounded attempt (timeout, 429, 5xx, no key). The capture
+   * was never judged, so it is retryable — unlike a model answer the validator
+   * rejected, which is a final "kept for review".
+   */
+  aiProviderUnavailable?: boolean;
 };
 
 /**
@@ -289,6 +296,7 @@ ${input.text}`;
     beforeAttempt: input.beforeAi ?? (() => Promise.resolve(true)), validate });
   if (!result.ok) return { parsed: pending, accepted: false,
     aiInvoked: result.attempts > 0, aiTransientFailure: result.reason !== 'denied',
+    ...(result.reason === 'unavailable' ? { aiProviderUnavailable: true } : {}),
     ...(result.reason === 'denied' ? { aiDenied: true } : {}) };
   if (result.value.is_transaction === false) return { parsed: { parserSource: 'ai_ignored' }, accepted: false, aiInvoked: true };
   const ai = candidate(result.value);

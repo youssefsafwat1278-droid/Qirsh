@@ -167,14 +167,26 @@ void main() {
     test(
         'the drain re-ingests on device only unless the AI fallback rule holds',
         () {
-      final shell = read('lib/features/app/app_shell.dart');
-      expect(shell, contains('onDeviceOnly: !nativeCaptureMayUseAiFallback('),
+      // The per-message loop moved out of AppShell into LegacyCaptureDrain
+      // (so it can be executed in tests); the rule is pinned where it lives.
+      // Its behaviour is exercised end to end in
+      // test/features/capture/legacy_capture_drain_test.dart.
+      final drain =
+          read('lib/features/capture/services/legacy_capture_drain.dart');
+      final policy = read(
+          'lib/features/capture/services/legacy_capture_drain_policy.dart');
+      expect(drain,
+          contains('onDeviceOnly: route != LegacyDrainRoute.ingestWithAi'),
           reason: 'a later drain must never re-send an SMS to AI/enrichment '
-              'except a backend-failed `sent` capture, behind consent + flag');
-      expect(shell, contains('EgressClass.aiProcessing'),
+              'except on the one route that consent + a kill switch allow');
+      expect(policy,
+          contains('if (!aiSelected) return LegacyDrainRoute.ingest;'),
+          reason: 'without Cloud AND AI consent nothing leaves the device');
+      expect(drain, contains('EgressClass.aiProcessing'),
           reason:
               'consent is read fresh per message so revocation never re-sends');
-      expect(shell, contains("'capture_ai_fallback_enabled'"));
+      expect(drain, contains("'capture_ai_fallback_enabled'"));
+      expect(drain, contains("'android_capture_ai_enabled'"));
     });
   });
 
@@ -212,15 +224,20 @@ void main() {
     final shell = File('lib/features/app/app_shell.dart').readAsStringSync();
     final start = shell.indexOf('Future<void> _consumeSharedInput');
     expect(start, isNonNegative, reason: '_consumeSharedInput missing');
-    final peek = shell.indexOf(
-        'await NativeCaptureBridge.peekPendingSharedMessages()', start);
-    expect(peek, isNonNegative, reason: 'the peek await moved');
-    final nextRef = shell.indexOf('ref.read(', peek);
-    final guard = shell.indexOf('if (!mounted) return;', peek);
-    expect(guard, isNonNegative, reason: 'no mounted guard after the peek');
+    // The peek now happens inside LegacyCaptureDrain.run (the loop was
+    // extracted so tests can execute it). The same hazard applies to the
+    // awaited run: every `ref` use after it needs a mounted guard first, and
+    // the run itself is told when the shell is gone.
+    final run = shell.indexOf('await drain.run(', start);
+    expect(run, isNonNegative, reason: 'the drain run await moved');
+    expect(shell.indexOf('isActive: () => mounted', run), isNonNegative,
+        reason: 'the drain must stop when the shell is disposed');
+    final nextRef = shell.indexOf('ref.read(', run);
+    final guard = shell.indexOf('if (!mounted) return;', run);
+    expect(guard, isNonNegative, reason: 'no mounted guard after the run');
     expect(guard < nextRef, isTrue,
         reason: 'the mounted guard must precede the first ref use after the '
-            'peek, or a disposed shell throws instead of stopping');
+            'run, or a disposed shell throws instead of stopping');
   });
 
   test('a disposed shell stops the drain instead of raising unhandled', () {

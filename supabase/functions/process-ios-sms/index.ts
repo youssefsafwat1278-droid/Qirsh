@@ -331,8 +331,13 @@ export async function handleProcessIosSms(
       notification.pushAlert = transactionPushAlert(parsed, locale, { receivedAt, tzOffsetMinutes });
     }
     // Each primary analysis already made its bounded provider attempts. A
-    // terminal unverified result is preserved for review, with no push.
-    const transient = !aiPrimary && outcome.aiTransientFailure === true;
+    // model answer the validator rejected is terminal and preserved for
+    // review, with no push. A provider that could not be reached at all never
+    // judged the capture: that stays retryable (bounded by capture_claim's
+    // attempt cap and backoff), so a later client replay analyses it instead
+    // of replaying a stored rejection forever.
+    const transient = outcome.aiTransientFailure === true &&
+      (!aiPrimary || (outcome as { aiProviderUnavailable?: boolean }).aiProviderUnavailable === true);
     const fin = await finalize({
       state: transient ? 'retryable' : status === 'rejected' ? 'rejected' : 'processed',
       status,

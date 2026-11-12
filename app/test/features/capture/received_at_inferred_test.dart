@@ -58,11 +58,29 @@ void main() {
       expect(messages.single.receivedAtInferred, isNull);
     });
 
-    test('a native queue failure surfaces as an empty, retryable peek',
+    test('a native queue failure is a typed read error, never an empty queue',
         () async {
+      // F10: "unreadable" must not look like "nothing queued" — the drain
+      // would otherwise carry on as if there were no captures.
       messenger.setMockMethodCallHandler(channel, (call) async {
         throw PlatformException(code: 'queue_unavailable');
       });
+      await expectLater(
+        NativeCaptureBridge.peekPendingSharedMessages(),
+        throwsA(isA<NativeCaptureReadException>()
+            .having((e) => e.code, 'code', 'queue_unavailable')),
+      );
+    });
+
+    test('undecodable peek JSON is a typed read error', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async => '{not json');
+      await expectLater(NativeCaptureBridge.peekPendingSharedMessages(),
+          throwsA(isA<NativeCaptureReadException>()));
+    });
+
+    test('a native layer with no handler at all is still "nothing queued"',
+        () async {
+      messenger.setMockMethodCallHandler(channel, null);
       expect(await NativeCaptureBridge.peekPendingSharedMessages(), isEmpty);
     });
   });

@@ -71,6 +71,7 @@ class DriftSmartInboxRepository implements SmartInboxRepository {
     DateTime? receivedAt,
     String lang = 'ar',
     bool awaitingAnalysis = false,
+    String? reviewReason,
   }) async {
     final itemId = 'local_capture:$payloadId';
     final now = DateTime.now().toUtc();
@@ -89,7 +90,8 @@ class DriftSmartInboxRepository implements SmartInboxRepository {
         Variable.withString(itemId),
         Variable.withString(itemId),
         Variable.withString(payloadId),
-        Variable.withString(awaitingAnalysis
+        Variable.withString(awaitingAnalysis ||
+                reviewReason == SmartInboxReviewReason.analysisUnavailable
             ? (lang == 'en' ? 'Bank message awaiting analysis'
                 : 'رسالة بنكية بانتظار التحليل')
             : (lang == 'en' ? 'An unsupported bank message that needs review'
@@ -102,6 +104,7 @@ class DriftSmartInboxRepository implements SmartInboxRepository {
           'received_at': effectiveReceivedAt.toIso8601String(),
           'local_only': true,
           if (awaitingAnalysis) 'manual_analysis_draft': true,
+          if (reviewReason != null) 'review_reason': reviewReason,
         })),
         Variable.withString(dateTimeToSql(effectiveReceivedAt)),
         Variable.withString(dateTimeToSql(now)),

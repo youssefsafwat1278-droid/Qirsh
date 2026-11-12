@@ -136,6 +136,10 @@ enum CaptureUploadStatus {
   /// The server accepted the replay; results are fetchable again.
   sent,
 
+  /// The server answered 429: no further upload is attempted on this run and
+  /// the retry waits at least the rate-limit floor.
+  rateLimited,
+
   /// Cloud is off, or the capture may not leave the device: parse it locally.
   notAllowed,
 

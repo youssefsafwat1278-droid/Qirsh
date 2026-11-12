@@ -51,19 +51,35 @@ class SmsCaptureReceiver : BroadcastReceiver() {
         // MALI-068n §11 — the SMS's own receipt epoch is authoritative, not the
         // (possibly later) time this receiver runs. Fall back to now only if the
         // platform did not supply one.
-        val smsEpochMs = messages.firstOrNull()?.timestampMillis
-            ?.takeIf { it > 0 } ?: System.currentTimeMillis()
+        val platformEpochMs = messages.firstOrNull()?.timestampMillis?.takeIf { it > 0 }
+        val smsEpochMs = platformEpochMs ?: System.currentTimeMillis()
+        val cleanSender = sender?.trim()?.takeIf { it.isNotEmpty() }
+        // A stable id (sender + the SMS's own timestamp + body) so a broadcast
+        // the platform delivers twice is ONE capture. Without a platform
+        // timestamp there is no stable identity: a random id keeps it distinct.
+        val id = if (platformEpochMs != null) {
+            DurableCaptureQueue.smsId(cleanSender, platformEpochMs, text)
+        } else {
+            UUID.randomUUID().toString()
+        }
 
-        DurableCaptureQueue.get(context).enqueue(
+        val result = DurableCaptureQueue.get(context).enqueue(
             DurableCaptureQueue.Item(
-                id = UUID.randomUUID().toString(),
+                id = id,
                 text = text,
-                sender = sender?.trim()?.takeIf { it.isNotEmpty() },
+                sender = cleanSender,
                 source = "sms",
                 receivedAt = DurableCaptureQueue.isoOf(smsEpochMs),
                 receivedAtEpochMs = smsEpochMs,
             ),
         )
+        if (result == DurableCaptureQueue.EnqueueResult.NOT_PERSISTED) {
+            // A receiver has no UI and may be killed on return: the queue has
+            // already retried the write once and counted the refusal, and the
+            // app shows the "could not be saved" notice the next time it is in
+            // the foreground. Outcome name only — never the message.
+            android.util.Log.w("QirshSmsCapture", "sms capture not stored: $result")
+        }
     }
 
     /**

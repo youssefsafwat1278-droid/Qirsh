@@ -345,6 +345,14 @@ class AddTransactionUseCase {
     AiParserClient? aiClient,
     Future<bool> Function()? loadAiConsent,
     Future<bool> Function()? aiPrimarySelected,
+    // F9: an earlier capture of the SAME message text (see the call site).
+    // Absent => only the exact-timestamp duplicate check runs.
+    Future<TransactionEntity?> Function({
+      required String rawMessage,
+      required Money amount,
+      required String currency,
+      required DateTime comparisonTimestamp,
+    })? findSameTextCapture,
     String? installId,
     Future<String> Function()? loadInstallId,
     ResolveBankForSenderUseCase? resolveBankForSenderUseCase,
@@ -394,6 +402,7 @@ class AddTransactionUseCase {
         _aiClient = aiClient,
         _loadAiConsent = loadAiConsent,
         _aiPrimarySelected = aiPrimarySelected,
+        _findSameTextCapture = findSameTextCapture,
         _installId = installId,
         _loadInstallId = loadInstallId,
         _resolveBankForSenderUseCase = resolveBankForSenderUseCase,
@@ -653,6 +662,12 @@ class AddTransactionUseCase {
   final AiParserClient? _aiClient;
   final Future<bool> Function()? _loadAiConsent;
   final Future<bool> Function()? _aiPrimarySelected;
+  final Future<TransactionEntity?> Function({
+    required String rawMessage,
+    required Money amount,
+    required String currency,
+    required DateTime comparisonTimestamp,
+  })? _findSameTextCapture;
   final String? _installId;
   final Future<String> Function()? _loadInstallId;
   final ResolveBankForSenderUseCase? _resolveBankForSenderUseCase;
@@ -751,8 +766,11 @@ class AddTransactionUseCase {
                 aiFirstAttempt.sanitizedSms != null));
     final aiSaysNotTransaction = aiPrimary &&
         aiFirstAttempt.response == null && aiFirstAttempt.failureReason == null;
-    final intentionallyIgnored = wasIgnored || aiSaysNotTransaction ||
-        (transactionShaped &&
+    // An AI "not a transaction" verdict is NOT an intentional drop: a model can
+    // misread a real bank message, so it becomes a review item (Smart Inbox)
+    // unless the DETERMINISTIC OTP/promo filter also rejects the text.
+    final intentionallyIgnored = wasIgnored ||
+        ((transactionShaped || aiSaysNotTransaction) &&
             ParserEngine.isIgnoredMessage(rawMessage,
                 senderId: senderId, bankProfiles: bankProfiles));
     final droppedByParser =
@@ -880,6 +898,42 @@ class AddTransactionUseCase {
         });
         return AddTransactionResult.suspiciousDuplicate(
           duplicate,
+          suspectedDuplicateId: suspectedId,
+          duplicateReason: reason,
+        );
+      }
+      // F9 — the SAME message text was already captured recently (e.g. once by
+      // the SMS receiver and once by a manual share, or a body with no time so
+      // the exact-timestamp check above cannot match). Identity is uncertain:
+      // it may be one message twice or two identical purchases. Never merge and
+      // never drop — keep this capture as a suspected duplicate for review.
+      final sameText = await _findSameTextCapture?.call(
+        rawMessage: rawMessage,
+        amount: parsedAmountForDedup.money,
+        currency: parsed.currency,
+        comparisonTimestamp: comparisonTimestamp,
+      );
+      if (sameText != null) {
+        const reason = 'same message text captured again';
+        String? suspectedId;
+        await _atomically(capture, () async {
+          suspectedId = await _saveSuspectedDuplicate(
+            rawMessage: rawMessage,
+            senderId: senderId,
+            existingTransactionId: sameText.id,
+            parsed: parsed,
+            amountMoney: parsedAmountForDedup.money,
+            occurredAt: occurredAt,
+            cardLast4: parsed.cardLast4,
+            comparisonTimestamp: comparisonTimestamp,
+            comparisonTimestampSource: comparisonTimestampSource,
+            duplicateReason: reason,
+            id: capture?.captureId,
+          );
+          await capture?.writeReceipt(sameText.id);
+        });
+        return AddTransactionResult.suspiciousDuplicate(
+          sameText,
           suspectedDuplicateId: suspectedId,
           duplicateReason: reason,
         );

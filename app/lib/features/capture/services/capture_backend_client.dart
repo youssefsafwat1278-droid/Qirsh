@@ -226,7 +226,12 @@ class CaptureBackendClient {
       throw CaptureBackendException('sync_failed_${response.statusCode}');
     }
     final captures = json['captures'];
-    if (captures is! List) return const [];
+    // A 200 the server did not write (`{captures: [...]}` always) tells us
+    // nothing about the results. Reading it as "no results" would let the
+    // drain park a server-analysed capture and later discard its result.
+    if (captures is! List) {
+      throw const CaptureBackendException('sync_failed_malformed');
+    }
     return [
       for (final item in captures)
         if (item is Map)

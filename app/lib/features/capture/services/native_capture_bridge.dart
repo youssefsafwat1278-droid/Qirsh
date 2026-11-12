@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../../../core/observability/diagnostics.dart';
 import '../../../domain/entities/captured_message.dart';
 import '../../../domain/services/captured_timestamp.dart';
 
@@ -1211,6 +1212,59 @@ class NativeNotificationLogEvent {
   final String? originKind;
 }
 
+/// The native capture queue could not be read. Nothing is known about its
+/// contents: it must not be treated as empty, written to, or acknowledged.
+class NativeCaptureReadException implements Exception {
+  const NativeCaptureReadException(this.code);
+
+  /// A native error code (e.g. `queue_unavailable`) or `undecodable`. Never
+  /// message content.
+  final String code;
+
+  @override
+  String toString() => 'NativeCaptureReadException($code)';
+}
+
+/// Counts reported by the Android durable capture queue. No message content.
+class AndroidCaptureQueueHealth {
+  const AndroidCaptureQueueHealth({
+    required this.size,
+    required this.capacity,
+    required this.refusedFull,
+    required this.notPersisted,
+    required this.quarantined,
+    required this.unseen,
+  });
+
+  factory AndroidCaptureQueueHealth.fromJson(Map<String, dynamic> json) {
+    int count(String key) => json[key] is int ? json[key] as int : 0;
+    return AndroidCaptureQueueHealth(
+      size: count('size'),
+      capacity: count('capacity'),
+      refusedFull: count('refusedFull'),
+      notPersisted: count('notPersisted'),
+      quarantined: count('quarantined'),
+      unseen: count('unseen'),
+    );
+  }
+
+  /// Items queued now; -1 when the store is unreadable.
+  final int size;
+  final int capacity;
+
+  /// Captures refused because the queue was at its bound.
+  final int refusedFull;
+
+  /// Captures refused because the store could not be read or written.
+  final int notPersisted;
+
+  /// Unreadable queue blobs preserved under a quarantine key.
+  final int quarantined;
+
+  /// Refusals not yet shown to the user.
+  final int unseen;
+}
+
 /// MALI-013 — honest capture capabilities for Android (share always; SMS is
 /// opt-in and two-key: declared in the build AND granted AND enabled). The old
 /// `hasSmsPermission()` conflated notification and SMS permission; these fields
@@ -1412,6 +1466,31 @@ class NativeCaptureBridge {
     } catch (_) {
       return const CaptureCapabilities(supportsShareCapture: true);
     }
+  }
+
+  /// Android durable-queue health: COUNTS ONLY (never content). `unseen` is the
+  /// number of captures the queue had to refuse (queue full, or the store could
+  /// not be written) that the user has not been told about yet. Null off
+  /// Android or when the native side cannot answer.
+  static Future<AndroidCaptureQueueHealth?> androidCaptureQueueHealth() async {
+    if (!Platform.isAndroid) return null;
+    try {
+      final raw = await _channel.invokeMethod<String>('captureQueueHealth');
+      if (raw == null) return null;
+      return AndroidCaptureQueueHealth.fromJson(
+        jsonDecode(raw) as Map<String, dynamic>,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Marks the refusals counted so far as shown to the user.
+  static Future<void> acknowledgeAndroidCaptureQueueNotice() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _channel.invokeMethod<bool>('acknowledgeCaptureQueueNotice');
+    } catch (_) {}
   }
 
   /// Turn automatic SMS capture on/off (persisted natively). Returns the
@@ -2434,7 +2513,9 @@ class NativeCaptureBridge {
   /// queue after its import committed. Returns false when the native layer
   /// doesn't support acks or the id was already gone.
   static Future<bool> acknowledgeSharedMessage(String payloadId) async {
-    if (!Platform.isIOS && !Platform.isAndroid) return false;
+    if (!debugTreatHostAsNative && !Platform.isIOS && !Platform.isAndroid) {
+      return false;
+    }
     try {
       final removed = await _channel.invokeMethod<bool>(
         'acknowledgeSharedMessage',
@@ -2524,20 +2605,27 @@ class NativeCaptureBridge {
       json = await _channel.invokeMethod<String>(method);
     } on MissingPluginException {
       return const [];
-    } on PlatformException {
-      // An older native layer without the peek/ack handlers reports
-      // notImplemented as a PlatformException — treat as empty; the caller
-      // falls back to the destructive consume path.
-      return const [];
+    } on PlatformException catch (error) {
+      // The native queue exists but could not be READ (locked store, lost key,
+      // corrupt blob, I/O error). That is an error, never an empty queue: the
+      // caller must not write, acknowledge or overwrite anything, and retries
+      // on a later drain. Only a native layer with NO handler at all
+      // (MissingPluginException above: `notImplemented`) is "nothing queued".
+      // The error code only (never content) is logged.
+      Diag.log('[Capture]', 'native_read_failed code=${error.code}');
+      throw NativeCaptureReadException(error.code);
     }
     if (json == null || json.trim().isEmpty) {
       return const [];
     }
     final List<dynamic> decoded;
     try {
-      decoded = jsonDecode(json) as List<dynamic>;
+      final parsed = jsonDecode(json);
+      if (parsed is! List) throw const FormatException('not a list');
+      decoded = parsed;
     } on FormatException {
-      return const [];
+      Diag.log('[Capture]', 'native_read_failed code=undecodable');
+      throw const NativeCaptureReadException('undecodable');
     }
     final messages = <SharedCapturedMessage>[];
     for (final item in decoded) {

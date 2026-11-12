@@ -347,3 +347,78 @@ Deno.test('AI-primary failed extraction is kept for review without local substit
   assertEquals(result.json.pushSent, false);
   assertEquals(fake.captures.get('primary-uncertain')!.state, 'rejected');
 });
+
+// ── AI-primary: a provider outage is retryable, not a stored rejection ──────
+// A capture the provider never judged (timeout / 429 / 5xx on every bounded
+// attempt) used to be finalized `rejected`; capture_claim then replayed that
+// stored rejection forever, so the outage was never recovered server-side.
+
+function stubGeminiStatus(status: number) {
+  const original = globalThis.fetch;
+  const previousKey = Deno.env.get('GEMINI_API_KEY');
+  Deno.env.set('GEMINI_API_KEY', 'test-key');
+  const stub = {
+    calls: 0,
+    restore: () => {
+      globalThis.fetch = original;
+      if (previousKey == null) Deno.env.delete('GEMINI_API_KEY');
+      else Deno.env.set('GEMINI_API_KEY', previousKey);
+    },
+  };
+  globalThis.fetch = (() => {
+    stub.calls++;
+    return Promise.resolve(new Response('{}', { status }));
+  }) as typeof fetch;
+  return stub;
+}
+
+const PRIMARY = { sanitizedText: RESOLVED, allowAi: true, analysis_mode: 'ai_primary_v1' };
+const PRIMARY_GOOD_AI = {
+  is_transaction: true, amount: 250, amount_text: '250.00', currency: 'EGP',
+  merchant: 'CARREFOUR', type: 'payment', direction: 'debit', category: 'groceries',
+};
+
+Deno.test('AI-primary provider outage is finalized retryable, then recovered by a replay', async () => {
+  const fake = fakeSupabase();
+  const outage = stubGeminiStatus(503);
+  try {
+    const res = await handleProcessIosSms(
+      request({ payloadId: 'primary-outage', ...PRIMARY }), deps(fake));
+    await res.json();
+    assertEquals(outage.calls, 3, 'bounded provider attempts');
+  } finally {
+    outage.restore();
+  }
+  const stored = fake.captures.get('primary-outage')!;
+  assertEquals(stored.state, 'retryable');
+  assertEquals(stored.failure_reason, 'ai_unavailable');
+
+  // Inside the backoff a replay returns the stored row and calls no provider.
+  const early = await call(fake, { payloadId: 'primary-outage', ...PRIMARY }, PRIMARY_GOOD_AI);
+  assertEquals(early.calls, 0);
+  assertEquals(fake.captures.get('primary-outage')!.state, 'retryable');
+
+  // Once due, the same payload id is re-claimed and analysed exactly once.
+  stored.next_attempt_at = 0;
+  const later = await call(fake, { payloadId: 'primary-outage', ...PRIMARY }, PRIMARY_GOOD_AI);
+  assertEquals(later.calls, 1);
+  const recovered = fake.captures.get('primary-outage')!;
+  assertEquals(recovered.state, 'processed');
+  assertEquals((recovered.parsed as Record<string, unknown>).amount, 250);
+});
+
+Deno.test('AI-primary: an answer the validator rejects stays a final review item', async () => {
+  const fake = fakeSupabase();
+  const result = await call(fake, { payloadId: 'primary-invalid', ...PRIMARY },
+    { is_transaction: true, amount: 9999, amount_text: '9999', currency: 'EGP',
+      type: 'payment', direction: 'debit', category: 'groceries' });
+  assertEquals(result.calls, 3);
+  assertEquals(fake.captures.get('primary-invalid')!.state, 'rejected');
+});
+
+Deno.test('AI-primary "not a transaction" stays final (never retried)', async () => {
+  const fake = fakeSupabase();
+  const result = await call(fake, { payloadId: 'primary-ignored', ...PRIMARY }, { is_transaction: false });
+  assertEquals(result.calls, 1);
+  assertEquals(fake.captures.get('primary-ignored')!.state, 'rejected');
+});

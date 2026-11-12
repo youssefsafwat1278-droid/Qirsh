@@ -151,6 +151,52 @@ class DriftTransactionRepository implements TransactionRepository {
     return result.existing;
   }
 
+  /// How far apart two captures of the same text may be and still be treated
+  /// as a possible re-capture of one message.
+  static const Duration sameTextWindow = Duration(hours: 72);
+
+  /// F9 — an earlier, still-live transaction created from the SAME message
+  /// text (whitespace-insensitive), with the same amount and currency, whose
+  /// comparison time is within [sameTextWindow] of [comparisonTimestamp].
+  ///
+  /// This is NOT proof of a duplicate: the same SMS captured through two paths
+  /// and two genuinely identical purchases look alike when the body carries no
+  /// time. The caller therefore never merges or drops — it keeps the new
+  /// capture as a suspected duplicate for the user to decide.
+  Future<TransactionEntity?> findSameTextCapture({
+    required String rawMessage,
+    required Money amount,
+    required String currency,
+    required DateTime comparisonTimestamp,
+  }) async {
+    String normalize(String text) =>
+        text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    final wanted = normalize(rawMessage);
+    if (wanted.isEmpty) return null;
+    final rows = await _db.customSelect(
+      '''
+        SELECT *
+        FROM transactions
+        WHERE status != 'ignored'
+          AND amount = ? AND UPPER(currency) = ?
+        ORDER BY occurred_at DESC
+        LIMIT 100;
+      ''',
+      variables: [
+        kMoneyCodec.realVar(amount),
+        Variable.withString(currency.trim().toUpperCase()),
+      ],
+    ).get();
+    final at = comparisonTimestamp.toUtc();
+    for (final candidate in rows.map(transactionFromRow)) {
+      final other =
+          (candidate.comparisonTimestamp ?? candidate.occurredAt).toUtc();
+      if (other.difference(at).abs() > sameTextWindow) continue;
+      if (normalize(candidate.rawMessage) == wanted) return candidate;
+    }
+    return null;
+  }
+
   @override
   Future<TransactionEntity?> getById(String id) async {
     final row = await _db.customSelect(

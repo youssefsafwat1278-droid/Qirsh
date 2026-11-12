@@ -27,6 +27,8 @@ class SharedCaptureHandoffService {
     required SharedCapturedMessage message,
     required CapturedMessageDisposition disposition,
     required String? transactionId,
+    // Why an unprocessable capture is parked (labels the Smart Inbox row).
+    String? reviewReason,
   }) async {
     if (!await _isOwnerCurrent()) throw const StaleOwnershipException();
 
@@ -42,6 +44,7 @@ class SharedCaptureHandoffService {
         await _captureSyncService.persistUnprocessableCapture(
           message,
           isOwnerCurrent: _isOwnerCurrent,
+          reviewReason: reviewReason,
         );
         break;
       case CapturedMessageDisposition.ignored:

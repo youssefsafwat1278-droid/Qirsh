@@ -121,7 +121,9 @@ import '../../features/capture/services/capture_sync_service.dart';
 import '../../features/capture/services/capture_import_ports.dart';
 import '../../features/capture/services/capture_import_service.dart';
 import '../../features/capture/services/capture_receipts.dart';
+import '../../features/capture/services/capture_retry_ledger.dart';
 import '../../features/capture/services/capture_server_port.dart';
+import '../../features/capture/services/legacy_capture_drain.dart';
 import '../../features/capture/services/legacy_capture_resolver.dart';
 import '../../features/capture/services/unbound_capture_prompt_service.dart';
 import '../../features/capture/services/native_capture_bridge.dart';
@@ -1516,6 +1518,12 @@ final notificationLogSyncServiceProvider =
   );
 });
 
+/// Bounds the automatic retries of queued captures (backoff, attempt cap, then
+/// a Smart Inbox row). Content-free: payload ids, counters and timestamps only.
+final captureRetryLedgerProvider = writerProvider<CaptureRetryLedger>(
+  (ref) => CaptureRetryLedger(store: const PrefsCaptureRetryStore()),
+);
+
 final captureSyncServiceProvider = writerProvider<CaptureSyncService>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final ingest = ref.watch(ingestCapturedMessageUseCaseProvider);
@@ -1550,6 +1558,21 @@ final captureSyncServiceProvider = writerProvider<CaptureSyncService>((ref) {
       }
       return null;
     },
+    retryLedger: ref.watch(captureRetryLedgerProvider),
+  );
+});
+
+/// The legacy native-queue drain (Android always; iOS unless
+/// `capture_import_v3` is on). AppShell supplies the UI callbacks per run.
+final legacyCaptureDrainProvider = writerProvider<LegacyCaptureDrain>((ref) {
+  final db = ref.watch(appDatabaseProvider);
+  return LegacyCaptureDrain(
+    captureSync: ref.watch(captureSyncServiceProvider),
+    ingest: ref.watch(ingestCapturedMessageUseCaseProvider),
+    // Read fresh for every message: a revoked consent never re-sends.
+    loadSettings: () => DriftUserSettingsRepository(db).getSettings(),
+    retryLedger: ref.watch(captureRetryLedgerProvider),
+    flag: (key) => featureFlags.getBool(key),
   );
 });
 
@@ -1574,6 +1597,7 @@ final captureImportServiceProvider = writerProvider<CaptureImportService>((ref) 
     sessionUid: () => supabase.Supabase.instance.client.auth.currentUser?.id,
     replicaOwnerUid: () => replicaOwnerUid(db),
     ownershipGuard: OwnershipGuard(),
+    retryLedger: ref.watch(captureRetryLedgerProvider),
   );
 });
 
@@ -1864,6 +1888,9 @@ final addTransactionUseCaseProvider = writerProvider<AddTransactionUseCase>((ref
       final settings = await DriftUserSettingsRepository(db).getSettings();
       return settings.cloudProcessingEnabled && settings.aiConsentGranted;
     },
+    // F9: the same message text captured again is kept as a suspected
+    // duplicate for review (never merged, never dropped).
+    findSameTextCapture: DriftTransactionRepository(db).findSameTextCapture,
     loadAiConsent: () async {
       final settings = await DriftUserSettingsRepository(db).getSettings();
       // OD-07 / C-3 — AI needs BOTH consents, matching

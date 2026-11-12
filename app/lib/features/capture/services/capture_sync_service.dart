@@ -13,6 +13,7 @@ import '../../../data/repositories/drift_transaction_repository.dart';
 import '../../../data/repositories/drift_user_settings_repository.dart';
 import '../../../domain/entities/account_entity.dart';
 import '../../../domain/entities/captured_message.dart';
+import '../../../domain/entities/smart_inbox_item_entity.dart';
 import '../../../domain/entities/suspected_duplicate_entity.dart';
 import '../../../data/db/planning_cutover.dart';
 import '../../../domain/entities/transaction_entity.dart';
@@ -24,8 +25,10 @@ import '../../../domain/usecases/ingest_captured_message_usecase.dart';
 import '../../../engine/privacy/sms_sanitizer.dart';
 import '../../../engine/parser/capture_money.dart';
 import '../../../engine/parser/merchant_sanity.dart';
+import '../../../engine/parser/parser_engine.dart';
 import 'capture_backend_client.dart';
 import 'capture_device_registration_service.dart';
+import 'capture_retry_ledger.dart';
 import 'native_capture_bridge.dart';
 import 'local_notification_service.dart';
 
@@ -35,7 +38,24 @@ class CaptureSyncResult {
     required this.ackedPayloadIds,
     required this.needsReviewTransactionIds,
     this.committedTransactions = const [],
+    this.failedPayloadIds = const {},
+    this.deferredPayloadIds = const {},
   });
+
+  /// The model said "not a transaction" and the server returned no text.
+  static const String deferredAiIgnored = 'ai_ignored';
+
+  /// The server could not analyse the capture and returned no text.
+  static const String deferredNoText = 'no_text';
+
+  /// Relay results that carry NO text and were therefore neither imported nor
+  /// acknowledged: the device's own native copy (same payload id) holds the
+  /// full message and the drain must resolve it from that. Value: why.
+  final Map<String, String> deferredPayloadIds;
+
+  /// Relay captures whose local import failed on this run. They were NOT
+  /// acknowledged and stay on the server for the next run.
+  final Set<String> failedPayloadIds;
 
   /// Newly committed rows only; receipt/ACK-only deliveries contribute none.
   /// The budget checker applies expense, status and budget-scope eligibility.
@@ -47,6 +67,16 @@ class CaptureSyncResult {
 
 class _RecoveryDeclined implements Exception {
   const _RecoveryDeclined();
+}
+
+/// A relay result that must not be consumed here: no receipt, no server ACK.
+/// The device's own native copy (same payload id) is still queued and the
+/// drain turns it into a review row with its full text.
+class _DeferToNativeCopy implements Exception {
+  const _DeferToNativeCopy(this.reason);
+
+  /// [CaptureSyncResult.deferredAiIgnored] or [CaptureSyncResult.deferredNoText].
+  final String reason;
 }
 
 class CaptureSyncService {
@@ -80,7 +110,11 @@ class CaptureSyncService {
     // A-12-min R2: the one native upload gate, consulted before ANY replay.
     Future<CaptureUploadAuthorization> Function(String payloadId)?
         authorizeUpload,
+    // Bounds the retries of a relay capture whose local import keeps failing.
+    // Absent => a failing capture is skipped (and retried) on every run.
+    CaptureRetryLedger? retryLedger,
   })  : _authorizeUpload = authorizeUpload,
+        _retryLedger = retryLedger,
         _recoverLocally = recoverLocally,
         _lookupNativeCapture = lookupNativeCapture,
         _isLocalAutoConfirmV2 = isLocalAutoConfirmV2,
@@ -121,6 +155,7 @@ class CaptureSyncService {
   final bool Function()? _isLocalAutoConfirmV2;
   final Future<CaptureUploadAuthorization> Function(String payloadId)?
       _authorizeUpload;
+  final CaptureRetryLedger? _retryLedger;
 
   // مزامنة واحدة في الرحلة الواحدة: الاستئناف (resume) وضغطة الإشعار يصلان
   // في نفس اللحظة تقريبًا، وبدون هذا القفل يجلب الاثنان نفس صفوف الـ relay
@@ -223,6 +258,8 @@ class CaptureSyncService {
     _currencyAccountCache = await _buildCurrencyAccountCache();
 
     final imported = <String>{};
+    final failed = <String>{};
+    final deferred = <String, String>{};
     final committedTransactions = <TransactionEntity>[];
     final needsReviewTransactionIds = <String>[];
     for (final capture in captures) {
@@ -245,11 +282,24 @@ class CaptureSyncService {
         needsReviewTransactionId = await _importCapture(
             capture, requireCurrentAdmission,
             onCommitted: committedTransactions.addAll);
+      } on StaleOwnershipException {
+        rethrow;
+      } on _DeferToNativeCopy catch (deferral) {
+        // Not imported, not failed, not acknowledged: left for the native drain.
+        deferred[capture.payloadId] = deferral.reason;
+        continue;
       } catch (error) {
         // Release diagnostics contain no payload IDs, SMS, money or SQL.
         Diag.log('[CaptureImport]', 'relay_commit_failed class=${error.runtimeType}');
-        rethrow;
+        // One failing capture must not block the ones after it. It is not
+        // acknowledged, so the server keeps it for the next run; once its
+        // bounded retries are spent it is parked for review instead.
+        if (!await _parkFailedRelayCapture(capture, requireCurrentAdmission)) {
+          failed.add(capture.payloadId);
+          continue;
+        }
       }
+      await _retryLedger?.clear(capture.payloadId);
       if (needsReviewTransactionId != null) {
         needsReviewTransactionIds.add(needsReviewTransactionId);
       }
@@ -272,7 +322,50 @@ class CaptureSyncService {
       importedPayloadIds: imported,
       ackedPayloadIds: imported,
       needsReviewTransactionIds: needsReviewTransactionIds,
+      failedPayloadIds: failed,
+      deferredPayloadIds: deferred,
     );
+  }
+
+  /// Records one failed local import of a relay capture. True only when its
+  /// bounded retries are spent AND the capture was durably parked as a Smart
+  /// Inbox review row with its receipt (so it may then be acknowledged).
+  Future<bool> _parkFailedRelayCapture(
+    ProcessedCaptureDto capture,
+    Future<void> Function() requireCurrentAdmission,
+  ) async {
+    final ledger = _retryLedger;
+    if (ledger == null) return false;
+    final decision = await ledger.recordFailure(
+        capture.payloadId, CaptureFailureKind.permanent);
+    if (!decision.exhausted) return false;
+    final sanitizedText = capture.sanitizedText;
+    final rawMessage = sanitizedText != null && sanitizedText.isNotEmpty
+        ? sanitizedText
+        : _string(capture.parsed['rawMessage']);
+    if (rawMessage == null) return false;
+    try {
+      await _dedupStore.runAtomically(() async {
+        await _saveUnprocessableCaptureAndMarker(
+          payloadId: capture.payloadId,
+          rawMessage: SmsSanitizer.sanitize(rawMessage),
+          source: 'backend_import_failed',
+          senderId: _string(capture.parsed['senderId']),
+          receivedAt:
+              _date(capture.parsed['comparisonTimestamp']) ?? capture.createdAt,
+          requireCurrentAdmission: requireCurrentAdmission,
+          reviewReason: SmartInboxReviewReason.processingFailed,
+        );
+        await requireCurrentAdmission();
+      });
+    } on StaleOwnershipException {
+      rethrow;
+    } catch (error) {
+      Diag.log('[CaptureImport]', 'relay_park_failed class=${error.runtimeType}');
+      return false;
+    }
+    Diag.log('[CaptureImport]', 'relay_parked_for_review');
+    return true;
   }
 
   Future<bool> isPayloadImported(String payloadId) async {
@@ -290,8 +383,17 @@ class CaptureSyncService {
 
   /// Retries a native payload whose extension may have been killed in-flight.
   /// False means cloud retry is disabled, so the caller may use local fallback.
-  Future<bool> retryPendingSend(SharedCapturedMessage message) async {
-    if (message.status != 'pendingSend' || message.id == null) return false;
+  ///
+  /// [anyStatus] lets the drain send a capture the server may never have
+  /// received (a Share Extension `pending` item, an App Intent `.waiting` item
+  /// stored as `sent`) through the SAME gate with the SAME payload id: the
+  /// server claim is idempotent, so a capture it already holds is replayed, not
+  /// analysed twice.
+  Future<bool> retryPendingSend(SharedCapturedMessage message,
+      [bool anyStatus = false]) async {
+    if ((!anyStatus && message.status != 'pendingSend') || message.id == null) {
+      return false;
+    }
     final settings = await _settingsRepository.getSettings();
     final configured = _backendConfigured ?? SupabaseConfig.isConfigured;
     if (!settings.cloudProcessingEnabled ||
@@ -359,11 +461,21 @@ class CaptureSyncService {
       // §4.8 / G1: a 409 (`capture_owner_mismatch`, `capture_owner_conflict`,
       // `capture_id_conflict`, `capture_expired`) is TERMINAL for the upload:
       // the caller parses on-device with no AI, and it is never retried.
-      if (e.reason.endsWith('_409')) return false;
+      if (e.reason.endsWith('_409')) {
+        _terminallyRefusedUploads.add(message.id!);
+        return false;
+      }
       rethrow;
     }
     return true;
   }
+
+  /// Whether the server terminally refused (409) this session's replay of
+  /// [payloadId]. A refused upload is never retried: the drain resolves the
+  /// capture on device instead.
+  bool uploadTerminallyRefused(String? payloadId) =>
+      payloadId != null && _terminallyRefusedUploads.contains(payloadId);
+  final Set<String> _terminallyRefusedUploads = {};
 
   Future<String?> transactionIdForPayload(String payloadId) {
     return _dedupStore.transactionIdFor(
@@ -420,6 +532,7 @@ class CaptureSyncService {
   Future<String> persistUnprocessableCapture(
     SharedCapturedMessage message, {
     required Future<bool> Function() isOwnerCurrent,
+    String? reviewReason,
   }) async {
     final payloadId = message.id?.trim();
     if (payloadId == null || payloadId.isEmpty) {
@@ -438,6 +551,7 @@ class CaptureSyncService {
         senderId: message.sender,
         receivedAt: message.receivedAt,
         requireCurrentAdmission: requireOwner,
+        reviewReason: reviewReason,
       );
       await requireOwner();
       return itemId;
@@ -453,6 +567,7 @@ class CaptureSyncService {
     String? senderId,
     DateTime? receivedAt,
     Future<void> Function()? requireCurrentAdmission,
+    String? reviewReason,
   }) async {
     await requireCurrentAdmission?.call();
     final itemId = await _smartInboxRepository.saveUnprocessableCapture(
@@ -462,6 +577,7 @@ class CaptureSyncService {
       senderId: senderId,
       receivedAt: receivedAt,
       lang: LocalNotificationService.instance.notificationLanguage,
+      reviewReason: reviewReason,
     );
     await requireCurrentAdmission?.call();
     await markPayloadImported(
@@ -484,11 +600,33 @@ class CaptureSyncService {
   ) async {
     final parsed = capture.parsed;
     if (parsed['parserSource'] == 'ai_ignored') {
-      await requireCurrentAdmission();
-      await markPayloadImported(payloadId: capture.payloadId, transactionId: 'ignored');
-      return;
+      // The server reports its deterministic OTP/promo filter and the model's
+      // "not a transaction" verdict with the same marker. Only the device's own
+      // deterministic filter may drop the capture; a model verdict falls
+      // through and becomes a Smart Inbox review row. With no text to judge,
+      // nothing is written AND nothing is acknowledged: the native copy (same
+      // payload id) stays queued and the drain turns it into a review row.
+      final verdictText = capture.sanitizedText?.trim() ?? '';
+      if (verdictText.isEmpty) {
+        throw const _DeferToNativeCopy(CaptureSyncResult.deferredAiIgnored);
+      }
+      if (ParserEngine.isIgnoredMessage(verdictText,
+          senderId: _string(parsed['senderId']))) {
+        await requireCurrentAdmission();
+        await markPayloadImported(payloadId: capture.payloadId, transactionId: 'ignored');
+        return;
+      }
     }
     final sanitizedText = capture.sanitizedText;
+    // The server returned no text at all (e.g. `attempts_exhausted`,
+    // `rate_limited`). Writing a placeholder row here would acknowledge the
+    // native copy and lose the real message: when the device still holds it,
+    // leave the capture for the drain, which parks the FULL native text.
+    if ((sanitizedText == null || sanitizedText.isEmpty) &&
+        _string(parsed['rawMessage']) == null &&
+        await _hasNativeCopy(capture.payloadId)) {
+      throw const _DeferToNativeCopy(CaptureSyncResult.deferredNoText);
+    }
     final rawMessage = sanitizedText != null && sanitizedText.isNotEmpty
         ? sanitizedText
         : SmsSanitizer.sanitize(
@@ -514,7 +652,31 @@ class CaptureSyncService {
       senderId: _string(parsed['senderId']),
       receivedAt: _date(parsed['comparisonTimestamp']) ?? capture.createdAt,
       requireCurrentAdmission: requireCurrentAdmission,
+      // `ai_pending`: the server's AI analysis did not produce a verified
+      // result (provider failure, rate limit, consent changed at the claim).
+      // That is a temporary condition, not "this is not a bank message".
+      reviewReason: parsed['parserSource'] == 'ai_pending'
+          ? SmartInboxReviewReason.analysisUnavailable
+          : null,
     );
+  }
+
+  /// Whether this device still holds the native copy of [payloadId] (non-empty
+  /// text). A native queue that cannot be READ right now counts as "it may":
+  /// the capture is deferred rather than replaced by a text-less placeholder.
+  Future<bool> _hasNativeCopy(String payloadId) async {
+    final lookup = _lookupNativeCapture;
+    if (lookup == null) return false;
+    try {
+      final candidate = await lookup(payloadId);
+      return candidate != null &&
+          candidate.id?.trim() == payloadId &&
+          candidate.text.trim().isNotEmpty;
+    } on NativeCaptureReadException {
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   bool _localRecoveryEnabled() {

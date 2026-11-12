@@ -1,5 +1,4 @@
 import '../../domain/entities/transaction_entity.dart';
-import '../capture/services/budget_alert_commits.dart';
 import '../../core/backend/auth_client_provider.dart';
 import '../../core/sync/sync_health.dart';
 import '../../core/sync/outbox_failure.dart';
@@ -20,6 +19,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../core/backend/supabase_config.dart';
 import '../../core/di/app_providers.dart';
+import '../../core/observability/diagnostics.dart';
 import '../../data/db/app_database.dart';
 import '../../core/session/admission_authority.dart';
 import '../ads/banner_ads_providers.dart';
@@ -27,7 +27,6 @@ import '../report_ads/report_ads_providers.dart';
 import 'sync_cadence.dart';
 import '../../data/db/financial_cache_reconcile_map.dart';
 import '../../data/db/legacy_financial_cache_reconciler.dart';
-import '../../data/db/ownership_guard.dart';
 import 'legacy_reconcile_domains.dart';
 import '../../core/diagnostics/duplicate_trace_service.dart';
 import '../../core/exporting/export_providers.dart';
@@ -45,7 +44,6 @@ import '../../core/theme/app_shadows.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/app_lucide_icons.dart';
-import '../../domain/entities/captured_message.dart';
 import '../../domain/entities/engagement_entities.dart';
 import '../../domain/errors/repo_exceptions.dart';
 import '../../domain/services/notification_planner.dart';
@@ -53,16 +51,15 @@ import '../../domain/usecases/ingest_captured_message_usecase.dart';
 import '../budgets/budgets_providers.dart';
 import '../budgets/budgets_screen.dart';
 import '../capture/capture_runtime.dart';
+import '../common/top_banner.dart';
 import '../consent/smart_analysis_consent_sheet.dart';
 import '../transactions/manual_transaction_sheet.dart';
 import '../../core/privacy/consent_authority.dart';
 import '../capture/services/capture_import_service.dart';
 import '../capture/services/capture_notify_v2.dart';
-import '../capture/services/native_capture_ai_fallback.dart';
 import '../capture/services/unbound_capture_prompt_service.dart';
 import 'capture_notification_actions.dart';
 import '../capture/services/capture_notification_content.dart';
-import '../capture/services/capture_sync_service.dart';
 import '../capture/services/captured_message_processor.dart';
 import '../capture/services/capture_notification_authority.dart';
 import '../capture/services/local_notification_service.dart';
@@ -71,7 +68,6 @@ import '../capture/services/notification_log_sync_service.dart';
 import '../capture/services/pending_notification_actions.dart';
 import '../capture/services/native_capture_bridge.dart';
 import '../capture/services/capture_identity_metrics.dart';
-import '../capture/services/shared_capture_handoff_service.dart';
 import '../../core/tracking/user_activity_service.dart';
 import '../cards/cards_providers.dart';
 import '../onboarding/force_update_screen.dart';
@@ -852,8 +848,82 @@ class _AppShellState extends ConsumerState<AppShell> {
       // The periodic poll is the sole auto-recovery probe: it runs even while the
       // gate believes we are offline, so a returned connection is re-detected.
       unawaited(_runLedgerSync(recoveryProbe: true));
+      unawaited(_drainQueuedCapturesOnPoll());
       if (mounted) _scheduleAdaptivePoll();
     });
+  }
+
+  /// Foreground-only capture recovery on the adaptive poll: when the native
+  /// queue still holds captures (an upload that failed while offline, an SMS
+  /// that arrived while the app is on screen), run the same drain a resume
+  /// runs. The timer exists only while this shell is mounted, so nothing here
+  /// runs in the background. The drain re-reads consent and the egress gates
+  /// for every message and backs off per item — a returned connection only
+  /// lets an already-authorized retry succeed; it authorizes nothing itself.
+  /// An empty queue, or one whose items are all backing off, costs one local
+  /// peek and no network request.
+  Future<void> _drainQueuedCapturesOnPoll() async {
+    if (!mounted || AdmittedLocalWork.capture(ref) == null) return;
+    try {
+      final queued = await NativeCaptureBridge.peekPendingSharedMessages();
+      if (queued.isEmpty || !mounted) return;
+      // Items still inside their retry backoff do not trigger a drain: a
+      // capture that is waiting costs no request until it is due again.
+      final retryLedger = ref.read(captureRetryLedgerProvider);
+      var anyDue = false;
+      for (final message in queued) {
+        final id = message.id?.trim();
+        if (id == null || id.isEmpty || await retryLedger.isDue(id)) {
+          anyDue = true;
+          break;
+        }
+      }
+      if (!anyDue || !mounted) return;
+      await _consumeSharedInput();
+    } on NativeCaptureReadException {
+      // Unreadable is not empty: nothing was touched; the next tick retries.
+      if (mounted) _reportCaptureQueueRead(failed: true);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[Capture] poll drain skipped: ${error.runtimeType}');
+      }
+    }
+  }
+
+  bool _captureReadErrorShown = false;
+
+  /// A native queue that cannot be READ is an error, not an empty queue. The
+  /// drain wrote and acknowledged nothing; the next resume / poll retries. The
+  /// user is told once per failure streak (not on every poll tick).
+  void _reportCaptureQueueRead({required bool failed}) {
+    if (!failed) {
+      _captureReadErrorShown = false;
+      return;
+    }
+    if (_captureReadErrorShown || !mounted) return;
+    _captureReadErrorShown = true;
+    showTopError(context, context.l10n.captureQueueReadFailed);
+  }
+
+  /// Android: tells the user once when the durable queue had to refuse a
+  /// capture (queue at its bound, or the store could not be written), and logs
+  /// the counts. Counts only — the refused message itself was never stored.
+  Future<void> _surfaceAndroidQueueRefusals() async {
+    final health = await NativeCaptureBridge.androidCaptureQueueHealth();
+    if (health == null) return;
+    if (health.refusedFull > 0 ||
+        health.notPersisted > 0 ||
+        health.quarantined > 0) {
+      Diag.log(
+          '[Capture]',
+          'android_queue size=${health.size}/${health.capacity} '
+              'refused_full=${health.refusedFull} '
+              'not_persisted=${health.notPersisted} '
+              'quarantined=${health.quarantined}');
+    }
+    if (health.unseen <= 0 || !mounted) return;
+    showTopError(context, context.l10n.captureQueueNotSaved);
+    await NativeCaptureBridge.acknowledgeAndroidCaptureQueueNotice();
   }
 
   Future<void> _runLedgerSync(
@@ -1186,265 +1256,53 @@ class _AppShellState extends ConsumerState<AppShell> {
         await _runCaptureImportV3();
         return;
       }
-      // Bind the whole drain to the current account admission. Sign-out rotates
-      // this generation before wiping local/native state, so stale work cannot
-      // persist or acknowledge a capture under the next account.
-      final ownershipGuard = OwnershipGuard();
-      final admissionToken = await ownershipGuard.capture();
-      Future<bool> isOwnerCurrent() => ownershipGuard.isCurrent(admissionToken);
-
-      final budgetCommits = <TransactionEntity>[];
-      CaptureSyncResult? backendSync;
-      try {
-        backendSync = await ref.read(captureSyncServiceProvider).sync();
-      } on AuthRepoException {
+      // The per-message loop lives in LegacyCaptureDrain (executed by tests
+      // against a mocked native channel and a fake network); this shell only
+      // supplies its UI callbacks and reacts to the report. Every `ref` the
+      // drain needs is read BEFORE the first await below.
+      final drain = ref.read(legacyCaptureDrainProvider);
+      final database = ref.read(appDatabaseProvider);
+      final notificationPreferences =
+          await ref.read(loadNotificationPreferencesUseCaseProvider).call();
+      if (!mounted) return;
+      await _surfaceAndroidQueueRefusals();
+      if (!mounted) return;
+      final report = await drain.run(
+        isActive: () => mounted,
+        // R9: one count per acknowledged capture (counts only, no content).
+        onAcknowledged: (message) => CaptureIdentityMetrics.record(
+          database,
+          message.receivedAtInferred,
+        ),
+        showLocalReview: (item) => _showCapturedMessageNotification(
+          item.result,
+          notificationPreferences,
+        ),
+      );
+      if (report.authRequiredBeforeDrain) {
         await authFailure();
         return;
-      } catch (error) {
-        if (kDebugMode) {
-          debugPrint('[Capture] backend sync skipped: $error');
-        }
       }
-      // Per-item lease (MALI-012): peek does NOT delete the native queue.
-      // Each message is acknowledged (removed) individually only after its
-      // local import committed — a kill anywhere in this loop re-delivers
-      // exactly the unprocessed remainder on the next drain.
-      final messages = await NativeCaptureBridge.peekPendingSharedMessages();
-      // The shell is a route, not a permanent host: opening a top-level page
-      // (/accounts, /goals, …) disposes it, and the peek above can outlive it.
-      // Every `ref` use below would then throw, and unlike the sync calls
-      // further up this is outside any try — so it escaped as an unhandled
-      // async error instead of the drain simply stopping. The queue is
-      // untouched; the next drain re-delivers it.
       if (!mounted) return;
-      if (kDebugMode) {
-        debugPrint('[Capture] consumeSharedInput: ${messages.length} messages');
-      }
-
-      if (messages.isNotEmpty) {
+      _reportCaptureQueueRead(failed: report.readFailed);
+      if (report.authRequired) await authFailure();
+      if (!mounted) return;
+      if (report.queued > 0) {
         // Prune old dedup hashes opportunistically on each drain cycle.
         unawaited(ref.read(appDatabaseProvider).pruneOldDedupHashes());
       }
-
-      final ingestUseCase = ref.read(ingestCapturedMessageUseCaseProvider);
-      final notificationPreferences =
-          await ref.read(loadNotificationPreferencesUseCaseProvider).call();
-
+      if (report.smartInboxChanged) ref.invalidate(smartInboxItemsProvider);
+      final backendSync = report.backendSync;
+      final budgetCommits = report.budgetCommits;
       String? pendingConfirmationId;
       String? pendingSecondaryNotice;
-
-      // Positive per-item acknowledgement: removes the leased message from
-      // the native queue only after it was fully handled locally.
-      Future<bool> ackMessage(SharedCapturedMessage message) async {
-        final id = message.id;
-        if (id == null || id.isEmpty) return false;
-        if (!await isOwnerCurrent()) throw const StaleOwnershipException();
-        final acked = await NativeCaptureBridge.acknowledgeSharedMessage(id);
-        // R9: one count per acknowledged capture (counts only, no content).
-        if (acked) {
-          await CaptureIdentityMetrics.record(
-            ref.read(appDatabaseProvider),
-            message.receivedAtInferred,
-          );
-        }
-        return acked;
-      }
-
-      final handoff = SharedCaptureHandoffService(
-        captureSyncService: ref.read(captureSyncServiceProvider),
-        isOwnerCurrent: isOwnerCurrent,
-        acknowledge: NativeCaptureBridge.acknowledgeSharedMessage,
-      );
-
-      for (final message in messages) {
-        // كل رسالة في try مستقلة، والطابور الأصلي لا يُمسح دفعة واحدة بعد
-        // الآن (MALI-012): الرسالة تُحذف من الطابور فقط بعد اكتمال معالجتها
-        // (ack)، والفاشلة تبقى في الطابور كما هي وتُعاد محاولتها في السحب
-        // التالي — لا فقدان للدفعة عند انهيار/انتهاء جلسة في المنتصف.
-        try {
-          if (!await isOwnerCurrent()) throw const StaleOwnershipException();
-          if (message.status == 'pendingSend') {
-            final captureSync = ref.read(captureSyncServiceProvider);
-            final sent = await captureSync.retryPendingSend(message);
-            if (sent) {
-              backendSync = await captureSync.sync();
-              if (message.id != null &&
-                  (backendSync.importedPayloadIds.contains(message.id) ||
-                      await captureSync.isPayloadImported(message.id!))) {
-                await ackMessage(message);
-                continue;
-              }
-              throw StateError('backend_capture_not_observable');
-            }
-          }
-          // The payload id is the transaction id and the receipt key (I-5).
-          final payloadId = message.id?.trim();
-          if (message.id != null) {
-            final alreadySynced =
-                backendSync?.importedPayloadIds.contains(message.id) ?? false;
-            // Receipt OR a transaction already holding this id: never ingest
-            // twice (the relay path or an earlier drain may have won).
-            final alreadyImported = alreadySynced ||
-                (payloadId != null &&
-                    payloadId.isNotEmpty &&
-                    await ref
-                        .read(captureSyncServiceProvider)
-                        .reconcileImportedPayload(payloadId));
-            if (alreadyImported) {
-              if (kDebugMode) {
-                debugPrint('[Capture] skip already imported backend payload');
-              }
-              await ackMessage(message);
-              continue;
-            }
-          }
-          if (kDebugMode) {
-            debugPrint(
-              '[Capture] processing: source=${message.source} '
-              'senderSet=${message.sender != null} '
-              'receivedAt=${message.receivedAt?.toIso8601String()} '
-              'textLength=${message.text.length}',
-            );
-          }
-          final captured = CapturedMessage(
-            text: message.text,
-            senderId: message.sender,
-            source: message.source,
-            // MALI-068n §11 — pass the resolved native time through as-is (null
-            // when unknown). Do NOT stamp `now` here; AddTransactionUseCase
-            // prefers the SMS-parsed date and owns the single documented
-            // last-resort fallback.
-            receivedAt: message.receivedAt,
-          );
-          // The durable native copy is the local recovery path. Consent is read
-          // fresh for THIS message so a revoked consent never re-sends its SMS
-          // to AI/discovery/enrichment services. Only a capture the backend
-          // already failed to analyse (`sent` + failureReason: its banner was
-          // shown by the extension) may use the in-app AI fallback, and only
-          // behind the kill switch.
-          final settings =
-              await ref.read(userSettingsRepositoryProvider).getSettings();
-          final aiSelected = settings.cloudProcessingEnabled &&
-              settings.aiConsentGranted &&
-              message.localOnly != true;
-          final aiAllowed = ConsentAuthority.decide(
-            EgressClass.aiProcessing,
-            settings,
-          );
-          if (aiSelected && message.status == 'pendingSend') {
-            // Its durable queue still owns the analysis when the upload is
-            // temporarily refused or cannot be observed yet.
-            continue;
-          }
-          var flagEnabled = false;
-          try {
-            flagEnabled = featureFlags.getBool('capture_ai_fallback_enabled');
-          } catch (_) {}
-          if (aiSelected &&
-              payloadId != null &&
-              payloadId.isNotEmpty &&
-              !nativeCaptureMayUseAiFallback(
-                status: message.status,
-                failureReason: message.failureReason,
-                flagEnabled: flagEnabled,
-                aiAllowed: aiAllowed,
-              )) {
-            await ref.read(captureSyncServiceProvider).persistUnprocessableCapture(
-                message, isOwnerCurrent: isOwnerCurrent);
-            await ackMessage(message);
-            ref.invalidate(smartInboxItemsProvider);
-            continue;
-          }
-          final result = await ingestUseCase.fromCapturedMessage(
-            captured,
-            onDeviceOnly: !nativeCaptureMayUseAiFallback(
-              status: message.status,
-              failureReason: message.failureReason,
-              flagEnabled: flagEnabled,
-              // A locally bound (BL-2 claimed) item is never sent to AI.
-              aiAllowed: aiAllowed && message.localOnly != true,
-            ),
-            // tx.id = payloadId, receipt in the same transaction. No payload
-            // id (null/blank) keeps random ids and the post-hoc receipt.
-            capture: payloadId == null || payloadId.isEmpty
-                ? null
-                : ref
-                    .read(captureSyncServiceProvider)
-                    .captureCommitFor(payloadId),
-          );
-          budgetCommits
-              .addAll(newlyAddedTransactions(result.addTransactionResult));
-          if (kDebugMode) {
-            debugPrint(
-              '[Capture] disposition=${result.disposition} '
-              'hasTransaction=${result.transactionId != null}',
-            );
-          }
-          // The one ack boundary: transaction/review/duplicate outcomes get a
-          // permanent payload marker; unprocessable captures first become a
-          // deterministic Smart Inbox row containing the raw SMS. Only an
-          // intentional ignored message may acknowledge without a durable row.
-          final handoffOutcome = await handoff.complete(
-            message: message,
-            disposition: result.disposition,
-            transactionId: result.transactionId,
-          );
-          if (handoffOutcome == SharedCaptureHandoffOutcome.acknowledged) {
-            await CaptureIdentityMetrics.record(
-              ref.read(appDatabaseProvider),
-              message.receivedAtInferred,
-            );
-          }
-          if (result.disposition == CapturedMessageDisposition.unprocessable) {
-            ref.invalidate(smartInboxItemsProvider);
-          }
-          // MALI-061n §12 — one authority per capture. Reached only for a
-          // freshly-imported payload (the already-imported branch acks + skips
-          // above) whose owner is valid (a stale owner throws AuthRepoException
-          // above). The native App Intent / APNs preview owns it when
-          // status=='sent'; a lost APNs response leaves status != 'sent', so the
-          // local path still fires — losing the response never suppresses both.
-          if (CaptureNotificationAuthority.shouldShowLocalReview(
-            status: message.status,
-            alreadyImported: false,
-            ownerValid: true,
-          )) {
-            if (!await isOwnerCurrent()) {
-              throw const StaleOwnershipException();
-            }
-            await _showCapturedMessageNotification(
-              result,
-              notificationPreferences,
-            );
-          }
-          if (result.transactionId != null &&
-              result.addTransactionResult.requiresConfirmation) {
-            pendingConfirmationId = result.transactionId;
-            // Guarded: this runs inside a drain loop that has already awaited,
-            // so the State may be gone by now.
-            if (mounted) {
-              pendingSecondaryNotice =
-                  feeNoticeFor(context, result.addTransactionResult.secondary);
-            }
-          }
-        } on AuthRepoException {
-          // Every remaining message would fail identically until re-auth —
-          // stop draining. Nothing was deleted from the native queue (peek,
-          // not consume), so this message AND the whole remainder stay leased
-          // and are retried after the centralized recovery re-auths.
-          await authFailure();
-          break;
-        } on StaleOwnershipException {
-          // The account admission changed while this drain was in flight.
-          // Persist/marker transactions roll back and no native ack occurs;
-          // stop so the new admission can make its own ownership decision.
-          break;
-        } catch (error) {
-          // Not acked — the message stays in the native queue and is retried
-          // on the next drain.
-          if (kDebugMode) {
-            debugPrint('[Capture] message processing failed ($error)');
-          }
+      for (final item in report.ingested) {
+        final result = item.result;
+        if (result.transactionId != null &&
+            result.addTransactionResult.requiresConfirmation) {
+          pendingConfirmationId = result.transactionId;
+          pendingSecondaryNotice =
+              feeNoticeFor(context, result.addTransactionResult.secondary);
         }
       }
       if (pendingConfirmationId == null &&
@@ -1535,7 +1393,11 @@ class _AppShellState extends ConsumerState<AppShell> {
       await authFailure();
       return;
     }
-    if (!mounted || report.imported.isEmpty) return;
+    if (!mounted) return;
+    if (!report.guardFailed && !report.barrierHeld) {
+      _reportCaptureQueueRead(failed: report.readFailed);
+    }
+    if (report.imported.isEmpty) return;
     unawaited(ref.read(appDatabaseProvider).pruneOldDedupHashes());
     final preferences =
         await ref.read(loadNotificationPreferencesUseCaseProvider).call();

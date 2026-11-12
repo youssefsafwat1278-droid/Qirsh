@@ -7343,4 +7343,12 @@ class AppL10nAr extends AppL10n {
   String billsV3Counts(int subs, int instalments) {
     return '$subs اشتراك · $instalments أقساط';
   }
+
+  @override
+  String get captureQueueNotSaved =>
+      'تعذّر حفظ رسالة بنكية واحدة أو أكثر على هذا الجهاز. أعد مشاركتها أو أضف العملية يدوياً.';
+
+  @override
+  String get captureQueueReadFailed =>
+      'تعذّرت قراءة الرسائل البنكية المحفوظة على هذا الجهاز. لم يُحذف شيء، وسنعيد المحاولة تلقائياً.';
 }

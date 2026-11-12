@@ -3,13 +3,16 @@ import 'budget_alert_commits.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../data/db/ownership_guard.dart';
+import '../../../domain/entities/smart_inbox_item_entity.dart';
 import '../../../domain/capture/validated_capture.dart';
 import '../../../domain/entities/captured_message.dart';
 import '../../../domain/usecases/add_transaction_usecase.dart';
 import '../../../domain/usecases/ingest_captured_message_usecase.dart';
+import '../../../engine/parser/parser_engine.dart';
 import 'capture_backend_client.dart';
 import 'capture_import_ports.dart';
 import 'capture_receipts.dart';
+import 'capture_retry_ledger.dart';
 import 'capture_sync_service.dart';
 import 'native_capture_bridge.dart';
 import 'shared_capture_handoff_service.dart';
@@ -57,7 +60,11 @@ class CaptureImportReport {
     this.skippedAwaiting = 0,
     this.guardFailed = false,
     this.barrierHeld = false,
+    this.readFailed = false,
   });
+
+  /// The native queue could not be READ: nothing was written or acknowledged.
+  final bool readFailed;
 
   final List<CaptureImportItem> imported;
 
@@ -106,7 +113,11 @@ class CaptureImportService {
     required Future<String?> Function() replicaOwnerUid,
     required OwnershipGuard ownershipGuard,
     Future<bool> Function()? aiPrimarySelected,
+    // Bounds automatic retries (backoff, attempt cap, then Smart Inbox).
+    // Absent => an item that cannot be finished is retried on every run.
+    CaptureRetryLedger? retryLedger,
   })  : _aiPrimarySelected = aiPrimarySelected,
+        _retryLedger = retryLedger,
         _queue = queue,
         _server = server,
         _sync = captureSyncService,
@@ -117,6 +128,7 @@ class CaptureImportService {
         _guard = ownershipGuard;
 
   final Future<bool> Function()? _aiPrimarySelected;
+  final CaptureRetryLedger? _retryLedger;
   final CaptureImportQueue _queue;
   final CaptureServerPort _server;
   final CaptureSyncService _sync;
@@ -253,7 +265,15 @@ class CaptureImportService {
     var foreign = 0;
     var awaiting = 0;
     final items = <SharedCapturedMessage>[];
-    for (final m in await _queue.peek()) {
+    final List<SharedCapturedMessage> queued;
+    try {
+      queued = await _queue.peek();
+    } on NativeCaptureReadException {
+      // An unreadable queue is an error, not an empty one: no import, no
+      // removal, no ACK. The next run retries.
+      return const CaptureImportReport(readFailed: true);
+    }
+    for (final m in queued) {
       final id = m.id?.trim();
       if (id == null || id.isEmpty) continue;
       // Triple equality: an item stamped to anyone else (or unstamped) waits.
@@ -272,11 +292,33 @@ class CaptureImportService {
     final handled = <String>{};
     final acks = <String>{};
     var guardFailed = false;
+    _uploadRateLimited = false;
     for (final item in items) {
       if (_barrier) break;
       final id = item.id!.trim();
+      // The item could not be finished on this pass: count it. True when its
+      // bounded retries are spent and it was parked in Smart Inbox instead.
+      Future<bool> deferred(CaptureFailureKind kind) async {
+        if (!await _parkAfterBoundedRetries(owner, item, id, kind)) {
+          return false;
+        }
+        handled.add(id);
+        if (results.containsKey(id)) acks.add(id);
+        imported.add(CaptureImportItem(
+            id: id, path: CaptureImportPath.server, message: item));
+        return true;
+      }
+
       try {
         if (!await _stillOwner(owner)) throw const StaleOwnershipException();
+        // Backing off after an earlier failed pass: nothing is re-sent or
+        // re-parsed until the wait elapses. A result that committed meanwhile
+        // (receipt) is still consumed below.
+        if (!(await _retryLedger?.isDue(id) ?? true) &&
+            !await _receipts.hasReceiptOrTransaction(id)) {
+          awaiting++;
+          continue;
+        }
         final done = await _handleItem(
           owner: owner,
           item: item,
@@ -287,19 +329,27 @@ class CaptureImportService {
           onRefetch: (f) => serverStatus = f.status,
         );
         if (done == null) {
-          awaiting++;
+          if (!await deferred(CaptureFailureKind.temporary)) awaiting++;
         } else {
           handled.add(id);
           imported.add(done);
+          await _retryLedger?.clear(id);
         }
       } on StaleOwnershipException {
         guardFailed = true;
         break;
       } catch (e) {
-        // The item stays in the queue and is retried on the next run.
-        awaiting++;
+        // The item stays in the queue; its retries are bounded by the ledger.
         if (kDebugMode) {
           debugPrint('[CaptureImport] item failed: ${e.runtimeType}');
+        }
+        try {
+          if (!await deferred(CaptureRetryLedger.classify(e))) awaiting++;
+        } on StaleOwnershipException {
+          guardFailed = true;
+          break;
+        } catch (_) {
+          awaiting++;
         }
       }
     }
@@ -332,6 +382,37 @@ class CaptureImportService {
     );
   }
 
+  /// A 429 was seen on this run: no further upload is attempted on it.
+  bool _uploadRateLimited = false;
+  final Set<String> _rateLimitedIds = {};
+
+  /// Records one unfinished pass for [id]. When the bounded automatic retries
+  /// are spent, the full native message is parked in Smart Inbox (row and
+  /// receipt in one transaction) and only then removed from the native queue:
+  /// a visible, user-retryable end state instead of an endless silent retry.
+  Future<bool> _parkAfterBoundedRetries(
+    String owner,
+    SharedCapturedMessage item,
+    String id,
+    CaptureFailureKind kind,
+  ) async {
+    final ledger = _retryLedger;
+    if (ledger == null) return false;
+    final decision = await ledger.recordFailure(id, kind,
+        rateLimited: _rateLimitedIds.remove(id));
+    if (!decision.exhausted) return false;
+    await _sync.persistUnprocessableCapture(
+      item,
+      isOwnerCurrent: () => _stillOwner(owner),
+      reviewReason: decision.kind == CaptureFailureKind.permanent
+          ? SmartInboxReviewReason.processingFailed
+          : SmartInboxReviewReason.analysisUnavailable,
+    );
+    await _removeNative(owner, id);
+    await ledger.clear(id);
+    return true;
+  }
+
   /// Returns null when the item must wait (stays queued, nothing consumed).
   Future<CaptureImportItem?> _handleItem({
     required String owner,
@@ -358,7 +439,22 @@ class CaptureImportService {
         fetchStatus == CaptureFetchStatus.notConfigured ||
         fetchStatus == CaptureFetchStatus.refused;
 
-    if (!local && item.status == 'pendingSend') {
+    // AI-primary and the server lists no result for an item that was never in
+    // `pendingSend`: a Share Extension `pending` item, or an App Intent
+    // `.waiting` item (stored as `sent`), which the server may never have
+    // received. It is sent with its OWN payload id through the same gate — the
+    // server claim is idempotent, so nothing is analysed twice.
+    final neverSeen = aiPrimary &&
+        !local &&
+        item.status != 'pendingSend' &&
+        fetchStatus == CaptureFetchStatus.ok &&
+        !results.containsKey(id) &&
+        item.failureReason?.trim() != 'http(409)';
+    if (!local && (item.status == 'pendingSend' || neverSeen)) {
+      if (_uploadRateLimited) {
+        _rateLimitedIds.add(id);
+        return null;
+      }
       switch (await _server.retryUpload(item)) {
         case CaptureUploadStatus.sent:
           final refetch = await _server.fetchResults();
@@ -369,6 +465,10 @@ class CaptureImportService {
         case CaptureUploadStatus.notAllowed:
         case CaptureUploadStatus.conflict:
           local = true;
+        case CaptureUploadStatus.rateLimited:
+          _uploadRateLimited = true;
+          _rateLimitedIds.add(id);
+          return null;
         case CaptureUploadStatus.unavailable:
           return null;
       }
@@ -377,6 +477,13 @@ class CaptureImportService {
     final result = results[id];
     if (aiPrimary) {
       if (result?.parsed['parserSource'] == 'ai_ignored') {
+        // Only the device's deterministic OTP/promo filter may drop a capture.
+        // A model "not a transaction" verdict keeps the full native message in
+        // Smart Inbox (row + receipt, one transaction) before it is removed.
+        if (!ParserEngine.isIgnoredMessage(item.text, senderId: item.sender)) {
+          await _sync.persistUnprocessableCapture(item,
+              isOwnerCurrent: () => _stillOwner(owner));
+        }
         await _removeNative(owner, id);
         acks.add(id);
         return CaptureImportItem(id: id, path: CaptureImportPath.server,
@@ -390,6 +497,12 @@ class CaptureImportService {
         return null;
       }
       if (result == null && item.status == 'pendingSend' && !local) return null;
+      // The capture may not leave the device (gate refused, cloud not
+      // configured) or the server refused it for good: with no server result
+      // it is resolved by the deterministic parser, never parked unparsed.
+      if (result == null && local) {
+        return _importLocally(owner, item, id, false, acks);
+      }
       // No guessed financial transaction: retain the full native message in
       // Smart Inbox atomically before acknowledging the native receipt.
       await _sync.persistUnprocessableCapture(item,

@@ -7335,4 +7335,12 @@ class AppL10nEn extends AppL10n {
   String billsV3Counts(int subs, int instalments) {
     return '$subs subscriptions · $instalments instalments';
   }
+
+  @override
+  String get captureQueueNotSaved =>
+      'One or more bank messages couldn\'t be saved on this device. Share them again or add the transaction manually.';
+
+  @override
+  String get captureQueueReadFailed =>
+      'Couldn\'t read the bank messages saved on this device. Nothing was deleted, and we\'ll try again automatically.';
 }

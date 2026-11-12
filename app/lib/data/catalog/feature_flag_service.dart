@@ -95,6 +95,14 @@ const Map<String, Object> _defaults = {
   // Kill switch: lets a durable native capture the backend failed to analyse
   // use the in-app AI fallback (still consent-gated). Seeded OFF.
   'capture_ai_fallback_enabled': false,
+  // OPERATOR KILL SWITCH for automatic in-app AI analysis of Android captures.
+  // Compiled ON: Android has no native upload pipeline, so this is the only
+  // automatic analysis its captures get, and it still needs the user's Cloud
+  // AND AI consent (read fresh before every request). To switch it off for
+  // everyone, publish this key ACTIVE with value `false` at rollout 100 —
+  // `init()` lets an in-rollout remote value override this default. A missing,
+  // inactive or partial-rollout row leaves it ON for the excluded installs.
+  'android_capture_ai_enabled': true,
   // CAP-5: the single iOS capture import (CaptureImportService, bound to the
   // account scope) with local-after-reject (Q5) and no app-side AI. Seeded OFF;
   // OFF is the shipped relay + native-drain import, byte for byte.

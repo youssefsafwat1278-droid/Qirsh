@@ -59,10 +59,13 @@ class CaptureSyncV2Client {
     try {
       decoded = jsonDecode(response.body);
     } catch (_) {
-      return const [];
+      decoded = null;
     }
     final captures = decoded is Map ? decoded['captures'] : null;
-    if (captures is! List) return const [];
+    // Unknown is not empty: see CaptureBackendClient.syncCaptures.
+    if (captures is! List) {
+      throw const CaptureBackendException('sync_failed_malformed');
+    }
     return [
       for (final item in captures)
         if (item is Map)
@@ -192,11 +195,14 @@ class BackendCaptureServerPort implements CaptureServerPort {
   @override
   Future<CaptureUploadStatus> retryUpload(SharedCapturedMessage message) async {
     try {
-      return await _sync.retryPendingSend(message)
+      // Any status: the import service decides which items need an upload.
+      return await _sync.retryPendingSend(message, true)
           ? CaptureUploadStatus.sent
           : CaptureUploadStatus.notAllowed;
     } on CaptureBackendException catch (e) {
-      return _statusOf(e) == 409
+      final status = _statusOf(e);
+      if (status == 429) return CaptureUploadStatus.rateLimited;
+      return status == 409
           ? CaptureUploadStatus.conflict
           : CaptureUploadStatus.unavailable;
     } catch (_) {

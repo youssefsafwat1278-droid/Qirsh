@@ -31,6 +31,9 @@ class MainActivity : FlutterFragmentActivity() {
      */
     private var pendingSmsPermissionResult: MethodChannel.Result? = null
 
+    /** The capture channel of the live engine; null when there is none. */
+    private var nativeCaptureChannel: MethodChannel? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setFlags(
@@ -49,10 +52,16 @@ class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(
+        val captureChannel = MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             "money_companion/native_capture",
-        ).setMethodCallHandler { call, result ->
+        )
+        nativeCaptureChannel = captureChannel
+        // Foreground-only wake-up: while this activity (and its engine) is
+        // alive, a newly stored capture tells Dart to drain. Nothing runs when
+        // the process is not alive — the next launch/resume drains instead.
+        DurableCaptureQueue.onStored = { notifyPendingCaptures() }
+        captureChannel.setMethodCallHandler { call, result ->
             when (call.method) {
                 // MALI-013: honest capability reporting. hasSmsPermission used
                 // to return the NOTIFICATION permission — a lie. Notification
@@ -137,15 +146,25 @@ class MainActivity : FlutterFragmentActivity() {
                 // Legacy destructive drain — kept for the Dart compat method
                 // consumePendingSharedMessages(); prefer peek + ack.
                 "consumePendingSharedMessages" -> {
-                    result.success(DurableCaptureQueue.get(this).drainJson())
+                    try {
+                        result.success(DurableCaptureQueue.get(this).drainJson())
+                    } catch (_: QueueUnreadableException) {
+                        result.error("queue_unreadable", null, null)
+                    }
                 }
 
                 // Per-item lease (MALI-012 + MALI-013): peek returns the durable
                 // queue without clearing it; Dart acknowledges each message by id
                 // after its import commits, so a crash/process death mid-import
                 // re-delivers only the unacknowledged remainder.
+                // A store that cannot be READ is an error for Dart, never an
+                // empty queue: nothing is written, acknowledged or overwritten.
                 "peekPendingSharedMessages" -> {
-                    result.success(DurableCaptureQueue.get(this).peekJson())
+                    try {
+                        result.success(DurableCaptureQueue.get(this).peekJson())
+                    } catch (_: QueueUnreadableException) {
+                        result.error("queue_unreadable", null, null)
+                    }
                 }
 
                 "acknowledgeSharedMessage" -> {
@@ -154,6 +173,15 @@ class MainActivity : FlutterFragmentActivity() {
                         payloadId != null &&
                             DurableCaptureQueue.get(this).acknowledge(payloadId),
                     )
+                }
+
+                // Counts only (size, bound, refusals, quarantined blobs).
+                "captureQueueHealth" -> {
+                    result.success(DurableCaptureQueue.get(this).healthJson())
+                }
+
+                "acknowledgeCaptureQueueNotice" -> {
+                    result.success(DurableCaptureQueue.get(this).acknowledgeNotice())
                 }
 
                 "purgeAllCaptureState" -> {
@@ -191,6 +219,23 @@ class MainActivity : FlutterFragmentActivity() {
                 "getLocalTimezone" -> result.success(java.util.TimeZone.getDefault().id)
                 else -> result.notImplemented()
             }
+        }
+    }
+
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        DurableCaptureQueue.onStored = null
+        nativeCaptureChannel = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
+    /**
+     * Tells Dart the durable queue changed. A no-op without a live engine; the
+     * channel must be used on the main thread (an SMS broadcast and a share
+     * intent both arrive there, `runOnUiThread` keeps that explicit).
+     */
+    private fun notifyPendingCaptures() {
+        runOnUiThread {
+            nativeCaptureChannel?.invokeMethod("pendingSharedMessagesAvailable", null)
         }
     }
 
@@ -296,7 +341,7 @@ class MainActivity : FlutterFragmentActivity() {
                 val sender = intent.getStringExtra(Intent.EXTRA_SUBJECT)?.trim()
                 // Durable enqueue — survives process death until Flutter acks
                 // the import. Unchanged behaviour for the bank-message path.
-                DurableCaptureQueue.get(this).enqueue(
+                val stored = DurableCaptureQueue.get(this).enqueue(
                     DurableCaptureQueue.Item(
                         id = java.util.UUID.randomUUID().toString(),
                         text = routed.text,
@@ -305,6 +350,12 @@ class MainActivity : FlutterFragmentActivity() {
                         receivedAt = DurableCaptureQueue.isoNow(),
                     ),
                 )
+                if (stored != DurableCaptureQueue.EnqueueResult.STORED) {
+                    // The share was NOT saved (queue full / store unwritable).
+                    // The queue counted it; wake Dart so the drain shows the
+                    // "could not be saved" notice now rather than at next launch.
+                    notifyPendingCaptures()
+                }
             }
             SharedContentRouter.Result.Ignored -> Unit
         }
