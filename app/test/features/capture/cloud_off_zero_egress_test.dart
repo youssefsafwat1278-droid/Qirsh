@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 
@@ -214,6 +215,12 @@ void main() {
   late Directory markerDir;
   late TestEgress egress;
 
+  /// Every native consent withdrawal the service asked for, with what was true
+  /// at that moment: Dart egress frozen? how many requests had left already?
+  late List<({String uid, bool frozen, int callsBefore})> withdrawals;
+  NativeEgressWithdrawal? withdrawReport;
+  Object? withdrawError;
+
   CaptureDeviceRegistrationService service({
     bool backendConfigured = true,
     bool revoke = kRevokeAtCloudSwitchOff,
@@ -225,6 +232,15 @@ void main() {
     bool android = false,
   }) =>
       CaptureDeviceRegistrationService(
+        withdrawNativeEgress: (uid) async {
+          withdrawals.add((
+            uid: uid,
+            frozen: ConsentAuthority.egressFrozen,
+            callsBefore: calls.length,
+          ));
+          if (withdrawError != null) throw withdrawError!;
+          return withdrawReport;
+        },
         revokeAtSwitchOff: revoke,
         revokeTimeout: timeout,
         revokeRetryBackoff: backoff,
@@ -320,6 +336,14 @@ void main() {
     session = (uid: 'uid-a', jwt: 'jwt-a');
     replicaOwner = 'uid-a';
     markerDir = Directory.systemTemp.createTempSync('cloud_off_marker');
+    withdrawals = [];
+    withdrawError = null;
+    withdrawReport = const NativeEgressWithdrawal(
+        mirror: 'restricted',
+        config: 'restricted',
+        egress: 'restricted',
+        inflightBefore: 0,
+        cancelled: 0);
     egress = TestEgress()..owner = 'uid-a';
     egress.install();
   });
@@ -1523,6 +1547,268 @@ void main() {
       await s.syncBackendState();
       expect(calls, ['revoke']);
       expect(await s.pendingRevocationGeneration('uid-a'), isNull);
+    });
+  });
+
+
+  // iOS privacy fix (field bug, build 143). After the user confirmed Cloud /
+  // Smart Analysis OFF, the DISABLING allocation was refused because ANOTHER
+  // account's native record on the device could not be verified
+  // (`unverified[owners=11;native_other:native_egress_evidence_unverified]`),
+  // and the native restriction ran only after that allocation, so the App
+  // Intent kept uploading. Now: the native withdrawal runs FIRST and
+  // independently, and a restrictive write is judged on its own owner only.
+  group('iOS privacy fix: the native withdrawal comes first', () {
+    const old = 'uid-old';
+    late Map<String, CloudEgressRecord> nativeRecords;
+    var nativeWriteFails = false;
+
+    /// The device of the field report: uid-a ON in every layer, and an account
+    /// that signed in long ago whose native evidence cannot be verified.
+    Future<void> fieldDevice({bool settingsOn = true}) async {
+      nativeWriteFails = false;
+      nativeRecords = {
+        'uid-a': const CloudEgressRecord(
+            state: EgressState.on,
+            ownerUid: 'uid-a',
+            transitionGeneration: 3,
+            reservedVersion: 3),
+      };
+      egress = TestEgress(
+        native: NativeEgressSlot(
+          read: (o) async {
+            if (o == old) {
+              throw const FormatException(
+                  'native_egress_uncertain:lifetime_fields_unbound');
+            }
+            return nativeRecords[o];
+          },
+          readLayers: (o) async {
+            if (o == old) {
+              throw const FormatException('native_egress_evidence_unverified');
+            }
+            final r = nativeRecords[o];
+            return [if (r != null) r, if (r != null) r];
+          },
+          write: (r) async {
+            if (nativeWriteFails) throw StateError('native write failed');
+            nativeRecords[r.ownerUid] = r;
+          },
+        ),
+      )..owner = 'uid-a';
+      egress.install();
+      final body = jsonEncode({
+        'v': 1,
+        'records': {
+          'uid-a': nativeRecords['uid-a']!.toJson(),
+          old: const CloudEgressRecord(
+                  state: EgressState.on,
+                  ownerUid: old,
+                  transitionGeneration: 8,
+                  reservedVersion: 8)
+              .toJson(),
+        }
+      });
+      egress.secure.value = body;
+      egress.file.value = body;
+      await save(
+          cloud: settingsOn ? ConsentState.accepted : ConsentState.declined,
+          ai: settingsOn ? ConsentState.accepted : ConsentState.declined,
+          enable: false);
+    }
+
+    Future<void> commitOff() =>
+        save(cloud: ConsentState.declined, ai: ConsentState.declined);
+
+    Future<CloudEgressRecord?> recordOf(String owner) async =>
+        (await egress.gate.view(owner: owner)).record;
+
+    test('field reproduction: another account\'s unverifiable record no longer '
+        'blocks this owner\'s OFF, and is left untouched', () async {
+      await fieldDevice();
+      final oldBefore = egress.secure.value!.contains('"$old"');
+
+      await service().disableCloud(commitLocalOff: commitOff);
+
+      expect(withdrawals.map((w) => w.uid), ['uid-a']);
+      expect((await recordOf('uid-a'))!.state, EgressState.off);
+      expect(nativeRecords['uid-a']!.state, EgressState.off);
+      expect(ConsentAuthority.egressFrozen, isFalse, reason: 'OFF is durable');
+      expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+      expect(oldBefore, isTrue);
+      final oldAfter = (await egress.gate.store.read(owner: old)).records[old];
+      expect(oldAfter!.state, EgressState.on, reason: 'never applied, never rewritten');
+      expect(oldAfter.transitionGeneration, 8);
+      expect(calls, isEmpty);
+    });
+
+    test('a WIDENING write still verifies every account (fail closed)',
+        () async {
+      await fieldDevice();
+      final widened = await egress.gate.store.writeAllocated(
+          'uid-a',
+          (g) => CloudEgressRecord(
+              state: EgressState.on,
+              ownerUid: 'uid-a',
+              transitionGeneration: g,
+              reservedVersion: 9));
+      expect(widened, isNull);
+      expect(CloudEgressStore.lastWriteRefusal,
+          'unverified[owners=2;native_other:native_egress_evidence_unverified]',
+          reason: 'privacy-safe: a count and allowlisted reasons, no uid');
+      expect(CloudEgressStore.lastWriteRefusal, isNot(contains('uid')));
+    });
+
+    test('native consent-write failure: the withdrawal already closed native; '
+        'Dart stays frozen, nothing is sent, the failure is reported', () async {
+      await fieldDevice();
+      // Every consent-state layer refuses the write (Dart secure, Dart file
+      // and the native egress write the Dart transition makes).
+      egress.secure.failWrites = true;
+      egress.file.failWrites = true;
+      nativeWriteFails = true;
+
+      await expectLater(service().disableCloud(commitLocalOff: commitOff),
+          throwsA(isA<CloudDisableException>()));
+
+      expect(withdrawals, hasLength(1));
+      expect(withdrawals.single.frozen, isTrue);
+      expect(ConsentAuthority.egressFrozen, isTrue,
+          reason: 'no durable OFF: Dart egress stays denied');
+      expect(ConsentAuthority.egressFreezeTag, startsWith('disable:begin:'));
+      expect(calls, isEmpty);
+      expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+      for (final c in EgressClass.values) {
+        expect(await ConsentAuthority(repo.getSettings).allows(c), isFalse);
+      }
+    });
+
+    test('the native withdrawal itself failing never blocks the local OFF',
+        () async {
+      await fieldDevice();
+      withdrawError = StateError('channel down');
+
+      await service().disableCloud(commitLocalOff: commitOff);
+
+      expect(withdrawals, hasLength(1));
+      expect(CaptureDeviceRegistrationService.lastNativeWithdrawal,
+          'disable:native_withdraw_failed');
+      expect((await recordOf('uid-a'))!.state, EgressState.off);
+      expect(nativeRecords['uid-a']!.state, EgressState.off,
+          reason: 'the Dart transition still restricts native on its own');
+    });
+
+    test('race: the withdrawal runs while Dart egress is already frozen and '
+        'before any request of the transition (drain, revoke)', () async {
+      await save(cloud: ConsentState.accepted, ai: ConsentState.accepted);
+      final s = service();
+      await s.syncBackendState();
+      expect(consent.links, hasLength(1));
+      calls.clear();
+      withdrawals.clear();
+      withdrawReport = const NativeEgressWithdrawal(
+          mirror: 'restricted',
+          config: 'restricted',
+          egress: 'restricted',
+          inflightBefore: 1,
+          cancelled: 1);
+
+      await s.disableCloud(commitLocalOff: commitOff);
+
+      expect(withdrawals, hasLength(1));
+      expect(withdrawals.single.frozen, isTrue);
+      expect(withdrawals.single.callsBefore, 0,
+          reason: 'nothing left before the native paths were closed');
+      expect(calls, ['revoke'], reason: 'only the content-free revoke follows');
+      expect(CaptureDeviceRegistrationService.lastNativeWithdrawal,
+          'disable:mirror=restricted;config=restricted;egress=restricted;'
+          'inflight_before=1;cancelled=1');
+    });
+
+    test('restart with the field state (settings OFF, record ON): native is '
+        'closed first, then the record is aligned OFF', () async {
+      await fieldDevice(settingsOn: false);
+
+      await service().syncBackendState();
+
+      expect(withdrawals.map((w) => w.uid), ['uid-a']);
+      expect(CaptureDeviceRegistrationService.lastNativeWithdrawal,
+          startsWith('reconcile_align_off:'));
+      expect((await recordOf('uid-a'))!.state, EgressState.off);
+      expect(ConsentAuthority.egressFrozen, isFalse);
+      expect(calls, isEmpty);
+    });
+
+    test('restart while a disable is pending (DISABLING): native is closed '
+        'before OFF is committed, no revoke is replayed', () async {
+      await fieldDevice();
+      await egress.gate.writeRecord(const CloudEgressRecord(
+          state: EgressState.disabling,
+          ownerUid: 'uid-a',
+          transitionGeneration: 4,
+          reservedVersion: 4));
+
+      await service().syncBackendState();
+
+      expect(withdrawals.map((w) => w.uid), ['uid-a']);
+      expect(CaptureDeviceRegistrationService.lastNativeWithdrawal,
+          startsWith('pending_disable:'));
+      expect((await recordOf('uid-a'))!.state, EgressState.off);
+      expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+      expect(calls, isEmpty);
+    });
+
+    test('offline disable, then connectivity: only the content-free revoke '
+        'is retried, nothing is uploaded, nothing is reopened', () async {
+      await save(cloud: ConsentState.accepted, ai: ConsentState.accepted);
+      var clock = DateTime.utc(2026, 11, 13);
+      final s = service(
+          backoff: const [Duration(seconds: 30)], now: () => clock);
+      await s.syncBackendState();
+      consent.setError = const CaptureBackendException('offline');
+      await s.disableCloud(commitLocalOff: commitOff);
+      consent.setError = null;
+      expect(withdrawals, hasLength(1), reason: 'closed while offline');
+      expect(await s.pendingRevocationGeneration('uid-a'), isNotNull);
+      calls.clear();
+
+      clock = clock.add(const Duration(seconds: 31)); // connectivity is back
+      await s.syncBackendState();
+      await s.syncBackendState();
+
+      expect(calls, ['revoke']);
+      expect(withdrawals, hasLength(1), reason: 'OFF is settled: no re-run');
+      expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+      s.dispose();
+    });
+
+    test('a deliberate later re-enable is not overridden: no withdrawal and '
+        'no stale revoke after it', () async {
+      await save(cloud: ConsentState.accepted, ai: ConsentState.accepted);
+      var clock = DateTime.utc(2026, 11, 13);
+      final s = service(
+          backoff: const [Duration(seconds: 30)], now: () => clock);
+      await s.syncBackendState();
+      consent.setError = const CaptureBackendException('offline');
+      await s.disableCloud(commitLocalOff: commitOff);
+      consent.setError = null;
+      calls.clear();
+
+      await s.enableCloudForTest(
+          commitLocalOn: () => save(
+              cloud: ConsentState.accepted,
+              ai: ConsentState.accepted,
+              enable: false));
+      clock = clock.add(const Duration(hours: 2));
+      await s.syncBackendState();
+      await s.syncBackendState();
+      await service().syncBackendState(); // a relaunch
+
+      expect(withdrawals, hasLength(1), reason: 'only the user-confirmed OFF');
+      expect(calls, isNot(contains('revoke')));
+      expect((await recordOf('uid-a'))!.state, EgressState.on);
+      expect((await repo.getSettings()).cloudProcessingEnabled, isTrue);
+      s.dispose();
     });
   });
 

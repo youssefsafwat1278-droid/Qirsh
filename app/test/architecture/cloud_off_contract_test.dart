@@ -100,9 +100,15 @@ void main() {
     test(
         'the consent mirror is written in exactly four places, all under the '
         'flock', () {
-      expect(RegExp(r'writeConsentMirrorEntry\(').allMatches(store).length, 4,
-          reason: 'the definition, publishActiveOwner, setConsentMirror and '
-              'publishRestrictiveCaptureOwner');
+      expect(RegExp(r'writeConsentMirrorEntry\(').allMatches(store).length, 5,
+          reason: 'the definition, publishActiveOwner, setConsentMirror, '
+              'publishRestrictiveCaptureOwner and withdrawCloudEgress');
+      // The cloud-off withdrawal only ever narrows the mirror, under the lock.
+      final withdraw = body(store, 'static func withdrawCloudEgress(');
+      expect(withdraw, contains('withProtectedWriteLock'));
+      expect(
+          RegExp(r'writeConsentMirrorEntry\(').allMatches(withdraw).length, 1);
+      expect(withdraw, contains('ConsentMirrorValue(cloud: false, ai: false'));
       final restrictive =
           body(store, 'static func publishRestrictiveCaptureOwner(');
       expect(restrictive, matches(RegExp(r'with(?:QueueLock|ProtectedWriteLock(?:Counted)?)')));

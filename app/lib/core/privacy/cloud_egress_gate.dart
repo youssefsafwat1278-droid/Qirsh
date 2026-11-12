@@ -741,6 +741,7 @@ class CloudEgressStore {
   Future<({List<Map<String, CloudEgressRecord>> layers, List<String> problems})>
       _collect(String? owner, {bool verifyNative = false, bool onlyOwner = false}) async {
     final problems = <String>[];
+    final diagnostic = <String>[];
     final layers = <Map<String, CloudEgressRecord>>[];
 
     Future<void> slot(String name, DurableSlot s) async {
@@ -799,12 +800,30 @@ class CloudEgressStore {
             continue;
           }
           problems.add('native:$detail');
+          diagnostic.add('native_${o == owner ? 'self' : 'other'}:$detail');
           break;
         }
       }
     }
+    final owners = <String>{for (final l in layers) ...l.keys};
+    lastCollectDiagnostic = [
+      'owners=${owners.length}',
+      ...diagnostic,
+      for (final p in problems)
+        if (!p.startsWith('native:')) 'dart:$p',
+    ].join(';');
     return (layers: layers, problems: problems);
   }
+
+  /// Privacy-safe field diagnostic of the last layer collection: the number of
+  /// owners the stores hold, and for each refused layer whether it belonged to
+  /// the requested owner ("self") or another one ("other") plus the allowlisted
+  /// reason. Never a uid, a hash, a token or content.
+  static String lastCollectDiagnostic = '';
+
+  /// Why the last conditional write refused to write anything ('' = it wrote).
+  /// Same privacy rules as [lastCollectDiagnostic].
+  static String lastWriteRefusal = '';
 
   /// See the class docs of [CloudEgressGate] for the rules.
   static Map<String, CloudEgressRecord> _merge(
@@ -1132,22 +1151,34 @@ class CloudEgressStore {
   Future<EgressWriteResult?> writeUnlessNewer(CloudEgressRecord record,
       {bool Function()? isCurrent}) async {
     try {
-      final collected = await _collect(record.ownerUid, verifyNative: true);
-      if (collected.problems.isNotEmpty) return null;
+      lastWriteRefusal = '';
+      // A restrictive write is judged on its OWN owner's evidence only (see
+      // [writeAllocated]); a widening one keeps the all-owner verification.
+      final collected = await _collect(record.ownerUid,
+          verifyNative: true, onlyOwner: record.restrictive);
+      if (collected.problems.isNotEmpty) {
+        lastWriteRefusal = 'unverified[$lastCollectDiagnostic]';
+        return null;
+      }
       var version = record.reservedVersion;
       for (final layer in collected.layers) {
         final held = layer[record.ownerUid];
         if (held != null && held.reservedVersion > version) version = held.reservedVersion;
         if (held != null &&
             held.transitionGeneration > record.transitionGeneration) {
+          lastWriteRefusal = 'newer_generation';
           return null;
         }
       }
       if (version > record.reservedVersion) {
-        if (!record.restrictive) return null;
+        if (!record.restrictive) {
+          lastWriteRefusal = 'newer_version';
+          return null;
+        }
         record = record.copyWith(reservedVersion: version);
       }
-    } catch (_) {
+    } catch (e) {
+      lastWriteRefusal = 'collect_threw:${e.runtimeType}';
       return null;
     }
     if (isCurrent != null && !isCurrent()) {
@@ -1175,8 +1206,21 @@ class CloudEgressStore {
       {bool Function()? isCurrent, bool onlyOwner = false}) async {
     CloudEgressRecord record;
     try {
-      final collected = await _collect(owner, verifyNative: true, onlyOwner: onlyOwner);
-      if (collected.problems.isNotEmpty) return null;
+      lastWriteRefusal = '';
+      // Native records, generations and versions are PER OWNER, and only
+      // [owner]'s are read below. A restrictive record (DISABLING/OFF) is
+      // therefore judged on [owner]'s evidence alone: another account's
+      // unverifiable native layer (e.g. a retired lifetime of an account that
+      // signed in on this device long ago) says nothing about this owner's
+      // frontier, and refusing on it left Cloud permissive (it blocked every
+      // OFF). A widening record keeps the all-owner verification (fail closed).
+      final ownerScoped = onlyOwner || build(0).restrictive;
+      final collected =
+          await _collect(owner, verifyNative: true, onlyOwner: ownerScoped);
+      if (collected.problems.isNotEmpty) {
+        lastWriteRefusal = 'unverified[$lastCollectDiagnostic]';
+        return null;
+      }
       var highest = 0;
       var version = 0;
       for (final layer in collected.layers) {
@@ -1188,10 +1232,14 @@ class CloudEgressStore {
       }
       record = build(highest + 1);
       if (version > record.reservedVersion) {
-        if (!record.restrictive) return null;
+        if (!record.restrictive) {
+          lastWriteRefusal = 'newer_version';
+          return null;
+        }
         record = record.copyWith(reservedVersion: version);
       }
-    } catch (_) {
+    } catch (e) {
+      lastWriteRefusal = 'collect_threw:${e.runtimeType}';
       return null;
     }
     if (isCurrent != null && !isCurrent()) {

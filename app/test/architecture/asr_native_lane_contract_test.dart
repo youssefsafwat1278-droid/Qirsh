@@ -73,6 +73,7 @@ void main() {
       'mintExpiryEvidenceForLiveOn',
       'invalidateExpiryEvidence',
       'retireSuccessor',
+      'withdrawCloudEgress',
       'clearCaptureOwner',
       'beginCaptureRemoval',
       'finishCaptureRemoval',

@@ -162,7 +162,15 @@ void main() {
       expect(between, isNot(contains('await')));
       expect(between, isNot(contains('Task')));
       expect(between, isNot(contains('sleep')));
-      expect('throw QueueError.egressDenied'.allMatches(transport).length, 2);
+      expect('throw QueueError.egressDenied'.allMatches(transport).length, 3,
+          reason: 'admission, the owner check, and a withdrawal since the '
+              'request began');
+      // A cloud-off withdrawal epoch read BEFORE admission; registration after
+      // the owner check refuses if it moved, and is cancellable until the send.
+      final epoch = transport.indexOf('inflightSessions.epoch(owner)');
+      final register = transport.indexOf('inflightSessions.register(');
+      expect(epoch, allOf(greaterThan(-1), lessThan(admit)));
+      expect(register, allOf(greaterThan(ownerCheck), lessThan(send)));
       // admitUpload = authorize + registry under ONE withQueueLock.
       final admitBody = body(store, 'static func admitUpload(payloadID: String)');
       expect(admitBody, contains('withQueueLock'));

@@ -759,6 +759,15 @@ enum ApnsEnvironment {
             transitionGeneration: generation, reservedVersion: reservedVersion)
           return true
         }
+      // The user confirmed Cloud / Smart Analysis OFF: restrict every native
+      // upload path of that owner first, independent of the Dart transition.
+      case "withdrawCloudEgress":
+        guard let args = call.arguments as? [String: Any],
+              let ownerUid = args["ownerUid"] as? String, !ownerUid.isEmpty else {
+          result(FlutterError(code: "bad_args", message: "Expected ownerUid.", details: nil))
+          return
+        }
+        result(SharedCaptureStore.withdrawCloudEgress(ownerUid: ownerUid).dictionary)
       case "nativeInflightUploads":
         // C.4: live (before their deadline) native uploads admitted for the owner.
         guard let ownerUid = (call.arguments as? [String: Any])?["ownerUid"] as? String,

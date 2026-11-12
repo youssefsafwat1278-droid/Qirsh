@@ -294,6 +294,8 @@ class CaptureDeviceRegistrationService {
     Future<bool> Function(String uid)? repairOwnerGeneration,
     Future<int> Function()? readOwnerEpoch,
     Future<CaptureOwnerRecord?> Function()? readCaptureOwner,
+    Future<NativeEgressWithdrawal?> Function(String ownerUid)?
+        withdrawNativeEgress,
     bool revokeAtSwitchOff = kRevokeAtCloudSwitchOff,
     Duration revokeTimeout = kCloudOffRevokeTimeout,
     List<Duration> revokeRetryBackoff = kRevokeRetryBackoff,
@@ -344,7 +346,9 @@ class CaptureDeviceRegistrationService {
         _readOwnerEpoch =
             readOwnerEpoch ?? NativeCaptureBridge.captureOwnerEpoch,
         _readCaptureOwner =
-            readCaptureOwner ?? NativeCaptureBridge.getCaptureOwner;
+            readCaptureOwner ?? NativeCaptureBridge.getCaptureOwner,
+        _withdrawNativeEgress = withdrawNativeEgress ??
+            ((uid) => NativeCaptureBridge.withdrawCloudEgress(ownerUid: uid));
 
   static const _secretKey = 'qirsh_capture_device_secret';
 
@@ -435,6 +439,30 @@ class CaptureDeviceRegistrationService {
   final ConsentMirrorWriter _writeConsentMirror;
   final OwnerPublisher _publishOwner;
   final Future<bool> Function(String uid) _repairOwnerGeneration;
+  final Future<NativeEgressWithdrawal?> Function(String ownerUid)
+      _withdrawNativeEgress;
+
+  /// The diagnostic of the last native withdrawal in this process (constant
+  /// strings and counts only).
+  @visibleForTesting
+  static String lastNativeWithdrawal = '';
+
+  /// Fail-closed native gate (iOS): restricts every native content upload
+  /// path of [owner] BEFORE any other step of a withdrawal, so no new SMS
+  /// upload or AI request can start from the App Intent / Shortcuts / share
+  /// handoff even if a later consent-state write fails. Restrictive and
+  /// owner-scoped only; never throws. Returns whether native now denies.
+  Future<bool> _withdrawNativeFirst(String? owner, String stage) async {
+    if (!_isIos() || owner == null || owner.isEmpty) return false;
+    NativeEgressWithdrawal? report;
+    try {
+      report = await _withdrawNativeEgress(owner);
+    } catch (_) {}
+    lastNativeWithdrawal =
+        '$stage:${report?.diagnostic ?? 'native_withdraw_failed'}';
+    debugPrint('[ConsentDisable] native_withdraw $lastNativeWithdrawal');
+    return report?.denies ?? false;
+  }
 
   static Future<bool> _defaultRepairOwnerGeneration(String uid) async =>
       await NativeCaptureBridge.repairActiveOwnerGeneration(uid: uid) != null;
@@ -1666,6 +1694,17 @@ class CaptureDeviceRegistrationService {
     ConsentAuthority.freeze('disable');
     _gate.advanceEpoch(EpochCause.cloudDisable); // P4: advance BEFORE any transition work
     final sessionUid = _readSession()?.uid;
+    // The user confirmed OFF: the native upload paths are closed FIRST, by
+    // restrictive owner-scoped writes that do not depend on the DISABLING
+    // allocation below (which can fail on its own). Dart egress is already
+    // frozen above; nothing in this transition reopens either.
+    String? nativeOwner;
+    try {
+      nativeOwner = await _readReplicaOwnerUid();
+    } catch (_) {}
+    await _withdrawNativeFirst(
+        (nativeOwner?.isNotEmpty ?? false) ? nativeOwner : sessionUid,
+        'disable');
     String? owner;
     DisableFreeze? freeze;
     try {
@@ -1679,9 +1718,14 @@ class CaptureDeviceRegistrationService {
         await _gate.drain();
         await _gate.drainNative(freeze.owner);
         await _revokeOnce(freeze, inputs);
-      } catch (_) {
+      } catch (e) {
         // Nothing above may block the local OFF below. Without a durable
         // DISABLING record no revoke can have been sent (see beginDisabling).
+        final refusal = freeze == null ? CloudEgressStore.lastWriteRefusal : '';
+        ConsentAuthority.egressFreezeTag =
+            'disable:${freeze == null ? 'begin' : 'after_begin'}:'
+            '${e.runtimeType}${refusal.isEmpty ? '' : ':$refusal'}';
+        debugPrint('[ConsentDisable] ${ConsentAuthority.egressFreezeTag}');
       }
     } finally {
       await _finishDisable(commitLocalOff, owner, sessionUid, freeze);
@@ -3470,6 +3514,15 @@ class CaptureDeviceRegistrationService {
     if (view.uncertain) {
       ConsentAuthority.freeze(
           'reconcile_uncertain:${view.readout.problems.join(',')}');
+      // Unreadable Dart state with a local choice of OFF: the native paths
+      // must not stay open on a record nobody can read. Restrictive only; an
+      // ON choice is left to the native layers' own (fail-closed) evidence.
+      try {
+        final settings = await _settingsRepository.getSettings();
+        if (current() && !_cloudOn(settings)) {
+          await _withdrawNativeFirst(owner, 'reconcile_uncertain');
+        }
+      } catch (_) {}
       return _Gate.blocked;
     }
     final rec = view.record;
@@ -3507,7 +3560,11 @@ class CaptureDeviceRegistrationService {
       }
       if (rec.state == EgressState.on && !on) {
         // Settings are more restrictive than the record (a disable that never
-        // became durable): align the record to OFF, never the other way.
+        // became durable): close the native upload paths first (restrictive,
+        // owner-scoped, independent of the alignment below), then align the
+        // record to OFF, never the other way.
+        await _withdrawNativeFirst(rec.ownerUid, 'reconcile_align_off');
+        if (!current()) return _Gate.blocked;
         // N-R9: the alignment allocates above the verified maximum of every
         // layer; if it cannot be established the record may still read ON, so
         // the outcome stays blocked (frozen), never "off".
@@ -3515,7 +3572,10 @@ class CaptureDeviceRegistrationService {
         if (!current()) return _Gate.blocked;
         if (aligned == null || !aligned.any) {
           if (!current()) return _Gate.blocked;
-          ConsentAuthority.freeze('reconcile_align_off');
+          ConsentAuthority.freeze(
+              'reconcile_align_off:${CloudEgressStore.lastWriteRefusal}');
+          debugPrint('[ConsentDisable] reconcile_align_off '
+              'refusal=${CloudEgressStore.lastWriteRefusal}');
           return _Gate.blocked;
         }
         return _Gate.off;
@@ -3559,6 +3619,11 @@ class CaptureDeviceRegistrationService {
     ConsentAuthority.freeze('pending_disable');
     _gate.advanceEpoch(EpochCause.consentWithdrawn);
     didAdvanceEpoch?.call();
+    // Restart while a disable is pending: the native paths may never have been
+    // restricted (a crash, or a write that failed). Close them before
+    // anything else; it is restrictive and owner-scoped.
+    await _withdrawNativeFirst(rec.ownerUid, 'pending_disable');
+    if (!current()) return false;
     try {
       final settings = await _settingsRepository.getSettings();
       if (!current()) return false;

@@ -4138,6 +4138,11 @@ enum SharedCaptureStore {
     let session = URLSession(configuration: configuration, delegate: RedirectRefusingDelegate(), delegateQueue: nil)
     defer { session.finishTasksAndInvalidate() }
 
+    // Read BEFORE admission: a consent withdrawal of this owner that lands
+    // between admission and the transport start advances it, and the request
+    // is then refused instead of being sent on a decision that is already stale.
+    let owner = normalizedUID(ownerUid)
+    let withdrawalEpoch = inflightSessions.epoch(owner)
     guard case let .allowed(admittedUid, admittedGeneration, _) = admitUpload(payloadID: payloadID) else {
       throw QueueError.egressDenied
     }
@@ -4147,12 +4152,173 @@ enum SharedCaptureStore {
     guard admittedUid == ownerUid, admittedGeneration == ownerGeneration else {
       throw QueueError.egressDenied
     }
+    // Last check before the wire: a withdrawal since [withdrawalEpoch] refuses;
+    // a later one finds the session here and cancels it.
+    guard let registration = inflightSessions.register(
+      session, owner: owner, epoch: withdrawalEpoch) else {
+      throw QueueError.egressDenied
+    }
+    defer { inflightSessions.unregister(registration) }
 
     var admitted = request
     admitted.timeoutInterval = nativeUploadTimeout
     admitted.httpShouldHandleCookies = false
     return try await session.data(for: admitted)
   }
+
+  // MARK: Consent withdrawal (fail-closed native gate)
+
+  /// In-process registry of the gated native uploads that are about to start
+  /// or on the wire, per normalized owner. Memory only (never persisted, never
+  /// logged). A consent withdrawal advances the owner's epoch and cancels its
+  /// registered sessions; [gatedUpload] registers only under an unchanged epoch.
+  final class InflightSessionRegistry {
+    private let lock = NSLock()
+    private var epochs: [String: Int] = [:]
+    private var sessions: [UUID: (owner: String, session: URLSession)] = [:]
+
+    func epoch(_ owner: String) -> Int {
+      lock.lock(); defer { lock.unlock() }
+      return epochs[owner] ?? 0
+    }
+
+    /// nil (refused) when [owner] was withdrawn since [epoch] was read.
+    func register(_ session: URLSession, owner: String, epoch: Int) -> UUID? {
+      lock.lock(); defer { lock.unlock() }
+      guard (epochs[owner] ?? 0) == epoch else { return nil }
+      let id = UUID()
+      sessions[id] = (owner, session)
+      return id
+    }
+
+    func unregister(_ id: UUID) {
+      lock.lock(); defer { lock.unlock() }
+      sessions[id] = nil
+    }
+
+    /// Advances [owner]'s epoch and cancels its registered sessions. Returns
+    /// how many were cancelled (requests already dispatched before the
+    /// withdrawal that this process could still reach).
+    func withdraw(_ owner: String) -> Int {
+      lock.lock()
+      epochs[owner] = (epochs[owner] ?? 0) + 1
+      let mine = sessions.filter { $0.value.owner == owner }
+      for id in mine.keys { sessions[id] = nil }
+      lock.unlock()
+      for entry in mine.values { entry.session.invalidateAndCancel() }
+      return mine.count
+    }
+
+    var registeredCount: Int {
+      lock.lock(); defer { lock.unlock() }
+      return sessions.count
+    }
+  }
+
+  static let inflightSessions = InflightSessionRegistry()
+
+  #if CAPTURE_STATE_WRITER
+  /// What [withdrawCloudEgress] did. Constant strings and counts only.
+  struct WithdrawReport: Equatable {
+    /// restricted | barrier (Remove-data barrier: admission already waits) | failed
+    var mirror = "failed"
+    /// restricted | failed
+    var config = "failed"
+    /// restricted (DISABLING written) | already_denied (uncertain or not ON) |
+    /// absent (no record: the mirror alone governs) | failed
+    var egress = "failed"
+    /// Admitted uploads of the owner still inside their deadline at the
+    /// withdrawal: dispatched BEFORE it (-1 = registry unreadable).
+    var inflightBefore = -1
+    /// In-process sessions of the owner cancelled by the withdrawal.
+    var cancelled = 0
+
+    var dictionary: [String: Any] {
+      ["mirror": mirror, "config": config, "egress": egress,
+       "inflightBefore": inflightBefore, "cancelled": cancelled]
+    }
+
+    /// True when the native admission is guaranteed to refuse this owner.
+    var denies: Bool {
+      mirror == "restricted" || mirror == "barrier" || config == "restricted"
+        || egress == "restricted" || egress == "already_denied"
+    }
+  }
+
+  /// The user confirmed Cloud / Smart Analysis OFF for [ownerUid]: from this
+  /// call on no native content upload of that owner may START. Every step is
+  /// restrictive, owner-scoped and independent of the Dart transition (which
+  /// can fail on its own, e.g. on another account's unverifiable records):
+  ///  1. under one flock, the backend config goes cloud/AI OFF (the App Intent
+  ///     then never asks to upload) and the owner's consent mirror goes OFF at
+  ///     its stored version ([authorizeUpload] then answers `.localOnly`);
+  ///  2. the owner's ON egress record becomes DISABLING in both layers at its
+  ///     CURRENT generation (rank up, generation unchanged), so a stale ON can
+  ///     never be written over it and a later explicit enable (a strictly
+  ///     higher generation) is not blocked by it;
+  ///  3. in-process requests admitted before the withdrawal are cancelled;
+  ///     any admitted but not yet started are refused by [gatedUpload].
+  /// Captures stay in the queue for local parsing and review.
+  static func withdrawCloudEgress(ownerUid: String) -> WithdrawReport {
+    var report = WithdrawReport()
+    let owner = normalizedUID(ownerUid)
+    guard !owner.isEmpty else { return report }
+    _ = try? withProtectedWriteLock { () throws -> Void in
+      defaults?.set(false, forKey: cloudProcessingEnabledKey)
+      defaults?.set(false, forKey: aiConsentGrantedKey)
+      defaults?.synchronize()
+      if let store = defaults,
+         store.object(forKey: cloudProcessingEnabledKey) as? Bool == false,
+         store.object(forKey: aiConsentGrantedKey) as? Bool == false {
+        report.config = "restricted"
+      }
+      if try readBarrier() != nil {
+        report.mirror = "barrier"
+        return
+      }
+      let hash = try uidHash(owner)
+      let entry = defaults?.dictionary(forKey: consentMirrorKey)?[hash] as? [String: Any]
+      let version = entry?["version"] as? Int ?? 0
+      writeConsentMirrorEntry(
+        hash: hash, mirror: ConsentMirrorValue(cloud: false, ai: false, version: version))
+      if let mirror = consentMirror(forHash: hash), !mirror.cloud, !mirror.ai {
+        report.mirror = "restricted"
+      }
+    }
+    let target = try? withQueueLock { () throws -> (generation: Int, version: Int)? in
+      let view = egressView()
+      if view.uncertain {
+        report.egress = "already_denied"
+        return nil
+      }
+      let hash = try uidHash(owner)
+      let mine = view.maps.compactMap { $0.owners[hash] }
+      if mine.isEmpty {
+        report.egress = "absent"
+        return nil
+      }
+      if !mine.contains(where: { $0.state == "ON" }) {
+        report.egress = "already_denied"
+        return nil
+      }
+      return (mine.map(\.transitionGeneration).max() ?? 0,
+              mine.map(\.reservedVersion).max() ?? 0)
+    }
+    if let target {
+      do {
+        try setCloudEgressState(
+          state: "DISABLING", ownerUid: owner,
+          transitionGeneration: target.generation, reservedVersion: target.version)
+        report.egress = "restricted"
+      } catch {
+        report.egress = "failed"
+      }
+    }
+    report.inflightBefore = (try? inflightUploads(forUid: owner).count) ?? -1
+    report.cancelled = inflightSessions.withdraw(owner)
+    return report
+  }
+  #endif
 
   #if DEBUG
   /// Test-only reset (XCTest): the egress state is deliberately NOT cleared by

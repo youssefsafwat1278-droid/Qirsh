@@ -4570,6 +4570,201 @@ class RunnerTests: XCTestCase {
   // C.4: the durable in-flight registry. Admission registers
   // {payloadId, ownerHash, deadline = admitted_at + 8 s + 2 s}; removal clears it;
   // an entry past its deadline counts as finished.
+  // MARK: - Consent withdrawal: the fail-closed native gate (iOS privacy fix)
+  //
+  // Field bug (build 143): after the user confirmed Cloud / Smart Analysis OFF
+  // the Dart DISABLING allocation was refused (another account's unverifiable
+  // native record) and nothing restrictive ever reached the native layers, so
+  // the App Intent kept uploading. These pin the native withdrawal the Dart
+  // disable now runs FIRST.
+
+  /// A capture stamped to A, Cloud ON (record generation 4 in both layers).
+  private func withdrawFixture() throws -> String {
+    let (id, _) = try stampedAllowedItem()
+    try SharedCaptureStore.setCloudEgressState(
+      state: "ON", ownerUid: ownerA, transitionGeneration: 4, reservedVersion: 5)
+    guard case .allowed = SharedCaptureStore.authorizeUpload(payloadID: id) else {
+      XCTFail("the fixture starts admitted")
+      throw QueueTestError.enqueue
+    }
+    return id
+  }
+
+  /// Adds B's ON record bound to a native lifetime that is not live (an account
+  /// that signed in on this device long ago) to BOTH layers.
+  private func addRetiredLifetimeRecordForB() throws {
+    let hashB = try SharedCaptureStore.debugOwnerHash(ownerB)
+    let retired = Rec(state: "ON", transitionGeneration: 9, reservedVersion: 9,
+                      lifetimeOwnerGeneration: 7, lifetimeOwnerEpoch: 3)
+    var file = try JSONDecoder().decode(
+      SharedCaptureStore.CloudEgressMap.self, from: Data(contentsOf: egressFileURL))
+    file.owners[hashB] = retired
+    try JSONEncoder().encode(file).write(to: egressFileURL)
+    var keychain = try JSONDecoder().decode(
+      SharedCaptureStore.CloudEgressMap.self,
+      from: XCTUnwrap(SnapshotTestKeychain.read(forKey: egressKC).data))
+    keychain.owners[hashB] = retired
+    XCTAssertEqual(SnapshotTestKeychain.writeData(
+      try JSONEncoder().encode(keychain), forKey: egressKC), errSecSuccess)
+  }
+
+  func testWithdrawClosesEveryNativeUploadInputAndSurvivesARestart() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    let id = try withdrawFixture()
+
+    let report = SharedCaptureStore.withdrawCloudEgress(ownerUid: ownerA)
+
+    XCTAssertEqual(report.mirror, "restricted")
+    XCTAssertEqual(report.config, "restricted")
+    XCTAssertEqual(report.egress, "restricted")
+    XCTAssertTrue(report.denies)
+    XCTAssertFalse(SharedCaptureStore.backendConfig().cloudProcessingEnabled,
+                   "the App Intent no longer asks to upload")
+    // `.localOnly` (not `.waiting`): the capture is still queued on the device
+    // for local parsing and review, it just never leaves it.
+    XCTAssertEqual(SharedCaptureStore.authorizeUpload(payloadID: id), .localOnly)
+    XCTAssertEqual(SharedCaptureStore.admitUpload(payloadID: id), .localOnly)
+    XCTAssertEqual(try SharedCaptureStore.inflightUploads(forUid: ownerA).count, 0)
+    // Durable in BOTH layers at the SAME generation: what the next launch reads.
+    XCTAssertEqual(try egressRecord(file: ownerA)?.state, "DISABLING")
+    XCTAssertEqual(try egressRecord(keychain: ownerA)?.state, "DISABLING")
+    XCTAssertEqual(try egressRecord(file: ownerA)?.transitionGeneration, 4)
+    XCTAssertEqual(try egressState(ownerA), .record(Rec(
+      state: "DISABLING", transitionGeneration: 4, reservedVersion: 5)))
+    // Stale permissive writes cannot reopen it.
+    XCTAssertThrowsError(try SharedCaptureStore.setConsentMirror(
+      uid: ownerA, cloud: true, ai: true, version: 9)) { assertEgressDenied($0) }
+    XCTAssertFalse(SharedCaptureStore.setBackendConfig(
+      cloudProcessingEnabled: true, installID: "i", deviceSecret: "s",
+      backendURL: "https://example.test", anonKey: "k", aiConsentGranted: true,
+      ownerUid: ownerA))
+    XCTAssertThrowsError(try SharedCaptureStore.setCloudEgressState(
+      state: "ON", ownerUid: ownerA, transitionGeneration: 4, reservedVersion: 5))
+    XCTAssertEqual(SharedCaptureStore.admitUpload(payloadID: id), .localOnly)
+    // Idempotent: a second withdrawal (restart while pending) finds it denied.
+    XCTAssertEqual(SharedCaptureStore.withdrawCloudEgress(ownerUid: ownerA).egress,
+                   "already_denied")
+  }
+
+  func testWithdrawIgnoresAnotherAccountsUnverifiableRecordAndLeavesItAlone() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    let id = try withdrawFixture()
+    try addRetiredLifetimeRecordForB()
+    let bFile = try egressRecord(file: ownerB)
+    let bKeychain = try egressRecord(keychain: ownerB)
+
+    let report = SharedCaptureStore.withdrawCloudEgress(ownerUid: ownerA)
+
+    XCTAssertEqual(report.egress, "restricted", "B's record does not block A's OFF")
+    XCTAssertEqual(SharedCaptureStore.admitUpload(payloadID: id), .localOnly)
+    XCTAssertEqual(try egressRecord(file: ownerA)?.state, "DISABLING")
+    XCTAssertEqual(try egressRecord(keychain: ownerA)?.state, "DISABLING")
+    // Account isolation: B's entry is neither applied to A nor rewritten.
+    XCTAssertEqual(try egressRecord(file: ownerB), bFile)
+    XCTAssertEqual(try egressRecord(keychain: ownerB), bKeychain)
+  }
+
+  func testWithdrawStillDeniesWhenTheEgressRecordWriteFails() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    let id = try withdrawFixture()
+    try addRetiredLifetimeRecordForB() // per-layer writer path (fault seam)
+    SharedCaptureStore.stateLayerWriteFault = { store, _ in store == "egress" ? .fail : .none }
+
+    let report = SharedCaptureStore.withdrawCloudEgress(ownerUid: ownerA)
+    SharedCaptureStore.stateLayerWriteFault = nil
+
+    XCTAssertEqual(report.egress, "failed")
+    XCTAssertEqual(report.mirror, "restricted")
+    XCTAssertTrue(report.denies)
+    XCTAssertEqual(SharedCaptureStore.authorizeUpload(payloadID: id), .localOnly,
+                   "the mirror alone refuses the upload")
+    XCTAssertEqual(SharedCaptureStore.admitUpload(payloadID: id), .localOnly)
+  }
+
+  func testWithdrawRacingUploadsCancelsTheDispatchedAndRefusesTheRest() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    let id = try withdrawFixture()
+    let registry = SharedCaptureStore.inflightSessions
+    let owner = SharedCaptureStore.normalizedUID(ownerA)
+
+    // Dispatched BEFORE the withdrawal: admitted, registered, on the wire.
+    guard case .allowed = SharedCaptureStore.admitUpload(payloadID: id) else {
+      return XCTFail("admitted before the withdrawal")
+    }
+    let onWire = URLSession(configuration: .ephemeral)
+    let dispatched = try XCTUnwrap(
+      registry.register(onWire, owner: owner, epoch: registry.epoch(owner)))
+    // Admitted before the withdrawal but not started yet: holds the old epoch.
+    let admittedEpoch = registry.epoch(owner)
+    // Another owner's request is not touched.
+    let otherOwner = SharedCaptureStore.normalizedUID(ownerB)
+    let other = try XCTUnwrap(registry.register(
+      URLSession(configuration: .ephemeral), owner: otherOwner,
+      epoch: registry.epoch(otherOwner)))
+
+    let report = SharedCaptureStore.withdrawCloudEgress(ownerUid: ownerA)
+
+    XCTAssertEqual(report.inflightBefore, 1, "counted as dispatched before the OFF")
+    XCTAssertEqual(report.cancelled, 1, "cancelled where this process can reach it")
+    XCTAssertNil(registry.register(
+      URLSession(configuration: .ephemeral), owner: owner, epoch: admittedEpoch),
+      "admitted before, starting after: refused")
+    XCTAssertEqual(SharedCaptureStore.admitUpload(payloadID: id), .localOnly,
+                   "started after: refused at admission")
+    XCTAssertEqual(registry.epoch(otherOwner), 0)
+    registry.unregister(dispatched)
+    registry.unregister(other)
+    SharedCaptureStore.removeInflightUpload(payloadID: id)
+  }
+
+  func testGatedUploadAfterWithdrawSendsNothing() async throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    let id = try withdrawFixture()
+    let owner = try XCTUnwrap(SharedCaptureStore.activeOwner())
+    _ = SharedCaptureStore.withdrawCloudEgress(ownerUid: ownerA)
+    let before = SharedCaptureStore.inflightSessions.registeredCount
+    do {
+      _ = try await SharedCaptureStore.gatedUpload(
+        URLRequest(url: URL(string: "https://example.invalid/functions/v1/process-ios-sms")!),
+        payloadID: id, ownerUid: ownerA, ownerGeneration: owner.generation)
+      XCTFail("no request may start after the withdrawal")
+    } catch {
+      assertEgressDenied(error)
+    }
+    XCTAssertEqual(SharedCaptureStore.inflightSessions.registeredCount, before)
+    XCTAssertEqual(try SharedCaptureStore.inflightUploads(forUid: ownerA).count, 0)
+  }
+
+  func testDeliberateReEnableAfterWithdrawIsNotOverriddenByAStaleRestriction() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    let id = try withdrawFixture()
+    _ = SharedCaptureStore.withdrawCloudEgress(ownerUid: ownerA)
+    XCTAssertEqual(SharedCaptureStore.authorizeUpload(payloadID: id), .localOnly)
+
+    // The later explicit enable: a strictly higher generation, then the mirror.
+    try SharedCaptureStore.setCloudEgressState(
+      state: "ON", ownerUid: ownerA, transitionGeneration: 5, reservedVersion: 6)
+    try SharedCaptureStore.setConsentMirror(
+      uid: ownerA, cloud: true, ai: true, version: 6, transitionGeneration: 5)
+    guard case .allowed = SharedCaptureStore.authorizeUpload(payloadID: id) else {
+      return XCTFail("the deliberate re-enable admits again")
+    }
+    // A stale restriction of the withdrawn generation cannot override it.
+    XCTAssertThrowsError(try SharedCaptureStore.setCloudEgressState(
+      state: "DISABLING", ownerUid: ownerA, transitionGeneration: 4, reservedVersion: 5))
+    XCTAssertThrowsError(try SharedCaptureStore.setConsentMirror(
+      uid: ownerA, cloud: false, ai: false, version: 5, transitionGeneration: 4))
+    guard case .allowed = SharedCaptureStore.authorizeUpload(payloadID: id) else {
+      return XCTFail("still admitted after the stale writes")
+    }
+  }
+
   func testInflightRegistryRegistrationRemovalAndDeadline() throws {
     resetCapSeams()
     defer { resetCapSeams() }

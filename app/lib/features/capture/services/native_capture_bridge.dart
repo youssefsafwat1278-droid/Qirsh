@@ -1834,6 +1834,8 @@ class NativeCaptureBridge {
     'mintExpiryEvidenceForLiveOn': false,
     'invalidateExpiryEvidence': false,
     'retireSuccessor': false,
+    // Cloud-off: native-first withdrawal (mirror, config, DISABLING egress).
+    'withdrawCloudEgress': false,
     'clearCaptureOwner': true,
     'beginCaptureRemoval': true,
     'finishCaptureRemoval': true,
@@ -2431,6 +2433,25 @@ class NativeCaptureBridge {
         latestDeadline:
             ms is int ? DateTime.fromMillisecondsSinceEpoch(ms) : null,
       );
+    } on CaptureQueueException {
+      return null;
+    }
+  }
+
+  /// The user confirmed Cloud / Smart Analysis OFF for [ownerUid]: the native
+  /// side restricts every content upload path of that owner (backend config
+  /// OFF, consent mirror OFF, its ON egress record -> DISABLING at the same
+  /// generation) and cancels the in-process requests it can reach. Restrictive
+  /// only, owner-scoped, independent of the Dart transition. Null when the call
+  /// failed (the caller keeps its own freeze). Off iOS there is nothing native.
+  static Future<NativeEgressWithdrawal?> withdrawCloudEgress({
+    required String ownerUid,
+  }) async {
+    if (!_hasNativeQueue || ownerUid.isEmpty) return null;
+    try {
+      final raw = await _queueCall<Object?>(
+          'withdrawCloudEgress', {'ownerUid': ownerUid});
+      return raw is Map ? NativeEgressWithdrawal.fromMap(raw) : null;
     } on CaptureQueueException {
       return null;
     }
@@ -3155,4 +3176,51 @@ Future<List<OfferIntent>> drainOfferIntents() async {
   } catch (_) {
     return const [];
   }
+}
+
+/// What the native consent withdrawal did. Constant strings and counts only
+/// (never a uid, a hash or content), so it is safe as a field diagnostic.
+@immutable
+class NativeEgressWithdrawal {
+  const NativeEgressWithdrawal({
+    required this.mirror,
+    required this.config,
+    required this.egress,
+    required this.inflightBefore,
+    required this.cancelled,
+  });
+
+  factory NativeEgressWithdrawal.fromMap(Map<Object?, Object?> raw) {
+    String str(String k) => raw[k] is String ? raw[k] as String : 'failed';
+    int num(String k, int fallback) => raw[k] is int ? raw[k] as int : fallback;
+    return NativeEgressWithdrawal(
+      mirror: str('mirror'),
+      config: str('config'),
+      egress: str('egress'),
+      inflightBefore: num('inflightBefore', -1),
+      cancelled: num('cancelled', 0),
+    );
+  }
+
+  final String mirror;
+  final String config;
+  final String egress;
+
+  /// Native uploads admitted BEFORE the withdrawal and still inside their
+  /// deadline (-1 = unknown).
+  final int inflightBefore;
+
+  /// In-process requests the withdrawal cancelled.
+  final int cancelled;
+
+  /// The native admission refuses the owner from now on.
+  bool get denies =>
+      mirror == 'restricted' ||
+      mirror == 'barrier' ||
+      config == 'restricted' ||
+      egress == 'restricted' ||
+      egress == 'already_denied';
+
+  String get diagnostic => 'mirror=$mirror;config=$config;egress=$egress;'
+      'inflight_before=$inflightBefore;cancelled=$cancelled';
 }
