@@ -151,8 +151,13 @@ class DriftTransactionRepository implements TransactionRepository {
     return result.existing;
   }
 
-  /// How far apart two captures of the same text may be and still be treated
-  /// as a possible re-capture of one message.
+  /// How far apart two captures of the same text may be for the text match to
+  /// be used as a duplicate SIGNAL when identity is uncertain. It is a review
+  /// heuristic only: being further apart proves nothing (a delayed re-share of
+  /// one message and two separate purchases both exist), it only means the
+  /// text match is no longer surfaced for review. Stronger identity — the same
+  /// capture/payload id or stable SMS id, a server capture id, an exact
+  /// comparison instant ([findSuspiciousDuplicate]) — applies at any distance.
   static const Duration sameTextWindow = Duration(hours: 72);
 
   /// F9 — an earlier, still-live transaction created from the SAME message

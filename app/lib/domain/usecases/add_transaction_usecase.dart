@@ -15,6 +15,7 @@ import '../../engine/parser/bank_profile.dart';
 import '../../engine/parser/catalog_rule_matcher.dart';
 import '../../engine/parser/payment_aggregators.dart';
 import '../../engine/parser/bank_sender_filter.dart';
+import '../../data/db/ownership_guard.dart' show StaleOwnershipException;
 import '../../data/db/planning_cutover.dart';
 import '../../engine/parser/capture_money.dart';
 import '../../engine/parser/direction_signal.dart';
@@ -57,11 +58,19 @@ import 'capture_commit_decision.dart';
 /// line is `<captureId>:fee`. The rows, their ledger outbox rows and the
 /// payload receipt ([writeReceipt]) commit in ONE [runAtomically] transaction
 /// that holds no network call: parsing, AI and enrichment finish before it.
+///
+/// [captureId] is PROOF of identity: a capture whose id already has a
+/// transaction (`tx.id == captureId`) or a receipt ([readReceipt]) is a
+/// redelivery of the same capture and is never committed a second time — not
+/// before parsing, not inside the commit transaction, and not after losing a
+/// commit race to another connection (a background engine draining the same
+/// file). Such a redelivery yields one transaction and no review noise.
 class CaptureCommit {
   const CaptureCommit({
     required this.captureId,
     required this.runAtomically,
     required this.writeReceipt,
+    this.readReceipt,
   });
 
   final String captureId;
@@ -69,6 +78,11 @@ class CaptureCommit {
 
   /// Writes `capture_payload:<captureId>` -> [transactionId].
   final Future<void> Function(String transactionId) writeReceipt;
+
+  /// What `capture_payload:<captureId>` durably points at (a transaction id
+  /// or a `smart_inbox:`/`ignored` marker), or null when there is no durable
+  /// receipt. Absent => only `tx.id == captureId` proves a redelivery.
+  final Future<String?> Function()? readReceipt;
 
   String get feeId => '$captureId:fee';
 }
@@ -377,7 +391,17 @@ class AddTransactionUseCase {
     // fail-closed: absent, throwing or non-true means nothing is persisted.
     SenderBankMappingRepository? senderBankMappingRepository,
     bool Function()? isAiSenderMappingAuto,
+    // The account identity this capture is processed under: an opaque value
+    // (e.g. the replica owner + admission generation) that is non-null ONLY
+    // while the local replica's owner IS the signed-in user. Read when the
+    // capture starts and again IMMEDIATELY before every external AI request
+    // (AI parse, AI bank discovery); a null, a throw or any change aborts the
+    // capture with [StaleOwnershipException] BEFORE the request, so nothing is
+    // sent and nothing is committed or acknowledged (the capture stays
+    // recoverable in its queue). Absent => no identity re-check.
+    Future<Object?> Function()? loadAccountIdentity,
   })  : _isLocalAutoConfirmV2 = isLocalAutoConfirmV2,
+        _loadAccountIdentity = loadAccountIdentity,
         _senderBankMappingRepository = senderBankMappingRepository,
         _isAiSenderMappingAuto = isAiSenderMappingAuto,
         _transactionRepository = transactionRepository,
@@ -674,6 +698,78 @@ class AddTransactionUseCase {
   final BankDiscoveryService? _bankDiscoveryService;
   final SenderBankMappingRepository? _senderBankMappingRepository;
   final bool Function()? _isAiSenderMappingAuto;
+  final Future<Object?> Function()? _loadAccountIdentity;
+
+  /// The identity snapshot, or [_identityUnavailable] when it cannot be read.
+  Future<Object> _readAccountIdentity() async {
+    try {
+      return await _loadAccountIdentity!() ?? _identityUnavailable;
+    } catch (_) {
+      return _identityUnavailable;
+    }
+  }
+
+  static const Object _identityUnavailable = Object();
+
+  /// Throws [StaleOwnershipException] unless the account identity read now is
+  /// available and equal to [atStart]. Called immediately before each
+  /// external AI request; a no-op when no identity source is wired.
+  Future<void> _requireSameAccountIdentity(Object? atStart) async {
+    if (_loadAccountIdentity == null) return;
+    final now = await _readAccountIdentity();
+    if (atStart == null ||
+        identical(atStart, _identityUnavailable) ||
+        identical(now, _identityUnavailable) ||
+        now != atStart) {
+      throw const StaleOwnershipException();
+    }
+  }
+
+  /// Proven redelivery of [capture]: a transaction holding its id, or a
+  /// durable receipt. Returns the already-committed result (never a review
+  /// item), or null when the capture has no local result yet.
+  Future<AddTransactionResult?> _alreadyCommitted(CaptureCommit capture) async {
+    final own = await _transactionRepository.getById(capture.captureId);
+    if (own != null) return AddTransactionResult.duplicate(own);
+    final target = await capture.readReceipt?.call();
+    if (target == null) return null;
+    final pointed = await _transactionRepository.getById(target);
+    if (pointed != null) return AddTransactionResult.duplicate(pointed);
+    // A Smart Inbox / ignored marker: already handled, nothing to add.
+    return AddTransactionResult.notTransaction(ParseResult.notTransaction(),
+        aiFailureReason: 'already_imported');
+  }
+
+  /// Commits [action] for a capture: inside ONE transaction that first
+  /// re-checks the capture's identity (another call on this connection may
+  /// have committed it meanwhile), and — when the commit fails because a
+  /// second connection to the same file won the race (unique id, busy
+  /// snapshot) — returns the winner's committed result instead of failing.
+  /// Without a [capture] the action runs as before (its own transactions).
+  Future<AddTransactionResult> _commitCapture(
+    CaptureCommit? capture,
+    Future<AddTransactionResult> Function() action,
+  ) async {
+    if (capture == null) return action();
+    AddTransactionResult? result;
+    try {
+      await capture.runAtomically(() async {
+        result = await _alreadyCommitted(capture) ?? await action();
+      });
+    } on StaleOwnershipException {
+      rethrow;
+    } catch (error, stack) {
+      AddTransactionResult? winner;
+      try {
+        winner = await _alreadyCommitted(capture);
+      } catch (_) {
+        winner = null;
+      }
+      if (winner != null) return winner;
+      Error.throwWithStackTrace(error, stack);
+    }
+    return result!;
+  }
 
   /// Fail closed: no callback, a throw, or anything but `true` means no
   /// enrichment egress.
@@ -700,6 +796,19 @@ class AddTransactionUseCase {
     // caller on the flag.
     bool forceLocalAutoConfirm = false,
   }) async {
+    // Proven redelivery (same capture id): the committed result, before any
+    // parse or AI request — one transaction, no review noise.
+    if (capture != null) {
+      final redelivered = await _alreadyCommitted(capture);
+      if (redelivered != null) return redelivered;
+    }
+    // The identity this capture is processed under, compared again right
+    // before every external AI request. Read only when a request is possible.
+    final identityAtStart = _loadAccountIdentity != null &&
+            !onDeviceOnly &&
+            (_aiClient != null || _bankDiscoveryService != null)
+        ? await _readAccountIdentity()
+        : null;
     final loadedBankProfiles = await _safeLoadBankProfiles(senderId: senderId);
     final catalogRules = await _safeLoadCatalogRules(senderId);
     final bankResolution = await _resolveBankForSender(
@@ -748,6 +857,7 @@ class AddTransactionUseCase {
         : await _tryAiParseFirst(
             rawMessage: rawMessage,
             senderId: senderId,
+            beforeRequest: () => _requireSameAccountIdentity(identityAtStart),
           );
 
     // A "no transaction" result is acked away silently UNLESS it is surfaced to
@@ -778,6 +888,13 @@ class AddTransactionUseCase {
 
     BankDiscoveryResult? discovery;
     if (!onDeviceOnly) {
+      // AI bank discovery is an external AI request too, gated by the same AI
+      // consent: with consent it may send, so the identity is re-checked first.
+      if (_bankDiscoveryService != null &&
+          _loadAccountIdentity != null &&
+          (await _loadAiConsent?.call() ?? false)) {
+        await _requireSameAccountIdentity(identityAtStart);
+      }
       discovery = await _runBankDiscoveryIfEligible(
         rawMessage: rawMessage,
         senderId: senderId,
@@ -877,11 +994,12 @@ class AddTransactionUseCase {
         cardLast4: parsed.cardLast4,
         comparisonTimestamp: comparisonTimestamp,
       );
+      // Exact-identity signal, independent of any window: the same amount,
+      // currency, merchant (and card) at the SAME comparison instant.
       if (duplicate != null) {
         const reason = 'same amount, currency, merchant and comparison time';
-        String? suspectedId;
-        await _atomically(capture, () async {
-          suspectedId = await _saveSuspectedDuplicate(
+        return _commitCapture(capture, () async {
+          final suspectedId = await _saveSuspectedDuplicate(
             rawMessage: rawMessage,
             senderId: senderId,
             existingTransactionId: duplicate.id,
@@ -895,18 +1013,20 @@ class AddTransactionUseCase {
             id: capture?.captureId,
           );
           await capture?.writeReceipt(duplicate.id);
+          return AddTransactionResult.suspiciousDuplicate(
+            duplicate,
+            suspectedDuplicateId: suspectedId,
+            duplicateReason: reason,
+          );
         });
-        return AddTransactionResult.suspiciousDuplicate(
-          duplicate,
-          suspectedDuplicateId: suspectedId,
-          duplicateReason: reason,
-        );
       }
       // F9 — the SAME message text was already captured recently (e.g. once by
       // the SMS receiver and once by a manual share, or a body with no time so
       // the exact-timestamp check above cannot match). Identity is uncertain:
       // it may be one message twice or two identical purchases. Never merge and
       // never drop — keep this capture as a suspected duplicate for review.
+      // Outside the window nothing is claimed either way: the text match is
+      // simply no longer used as a signal, and the capture is saved normally.
       final sameText = await _findSameTextCapture?.call(
         rawMessage: rawMessage,
         amount: parsedAmountForDedup.money,
@@ -915,9 +1035,8 @@ class AddTransactionUseCase {
       );
       if (sameText != null) {
         const reason = 'same message text captured again';
-        String? suspectedId;
-        await _atomically(capture, () async {
-          suspectedId = await _saveSuspectedDuplicate(
+        return _commitCapture(capture, () async {
+          final suspectedId = await _saveSuspectedDuplicate(
             rawMessage: rawMessage,
             senderId: senderId,
             existingTransactionId: sameText.id,
@@ -931,12 +1050,12 @@ class AddTransactionUseCase {
             id: capture?.captureId,
           );
           await capture?.writeReceipt(sameText.id);
+          return AddTransactionResult.suspiciousDuplicate(
+            sameText,
+            suspectedDuplicateId: suspectedId,
+            duplicateReason: reason,
+          );
         });
-        return AddTransactionResult.suspiciousDuplicate(
-          sameText,
-          suspectedDuplicateId: suspectedId,
-          duplicateReason: reason,
-        );
       }
     }
 
@@ -1288,10 +1407,8 @@ class AddTransactionUseCase {
     // Persistence only: every network step (AI, discovery, enrichment) is done.
     // With a [capture], the primary row, any fee row, their outbox rows and the
     // payload receipt commit together or not at all.
-    late final TransactionEntity saved;
-    late final AddTransactionResult? secondary;
-    await _atomically(capture, () async {
-      saved = await _transactionRepository.saveTransaction(
+    final committed = await _commitCapture(capture, () async {
+      final saved = await _transactionRepository.saveTransaction(
         transaction: transaction,
         categoryKey: effectiveCategory.categoryKey,
       );
@@ -1338,7 +1455,7 @@ class AddTransactionUseCase {
       // line from the same SMS. Doing it here (not before the dedup checks) means
       // re-pasting the same message — primary already a duplicate — can never add
       // a second fee.
-      secondary = await _maybeSaveFee(
+      final secondary = await _maybeSaveFee(
         primaryWithheldByProof:
             primaryCommit.reason == CaptureCommitReason.proofNotCorroborated,
         rawMessage: rawMessage,
@@ -1351,29 +1468,28 @@ class AddTransactionUseCase {
         feeId: capture?.feeId,
       );
       await capture?.writeReceipt(saved.id);
+      return AddTransactionResult.added(
+        saved,
+        parseResult,
+        // A validated AI capture is confirmed: a new merchant must not reopen
+        // the confirm sheet through `requiresConfirmation`.
+        isNewMerchant: aiValidated || localV2 ? false : isNewMerchant,
+        secondary: secondary,
+        // Why AI did not read this one (a reason code, never content).
+        aiFailureReason: aiParsed != null
+            ? null
+            : aiFirstAttempt.failureReason ??
+                (aiFirstAttempt.response != null
+                    ? 'ai_response_rejected_by_grounding'
+                    : 'ai_no_answer'),
+      );
     });
 
-    await _logMetric?.call('first_transaction_captured');
-    return AddTransactionResult.added(
-      saved,
-      parseResult,
-      // A validated AI capture is confirmed: a new merchant must not reopen
-      // the confirm sheet through `requiresConfirmation`.
-      isNewMerchant: aiValidated || localV2 ? false : isNewMerchant,
-      secondary: secondary,
-      // Why AI did not read this one (a reason code, never content).
-      aiFailureReason: aiParsed != null
-          ? null
-          : aiFirstAttempt.failureReason ??
-              (aiFirstAttempt.response != null
-                  ? 'ai_response_rejected_by_grounding'
-                  : 'ai_no_answer'),
-    );
+    if (committed.outcome == AddTransactionOutcome.added) {
+      await _logMetric?.call('first_transaction_captured');
+    }
+    return committed;
   }
-
-  Future<void> _atomically(
-          CaptureCommit? capture, Future<void> Function() action) =>
-      capture == null ? action() : capture.runAtomically(action);
 
   Future<String?> _saveSuspectedDuplicate({
     required String rawMessage,
@@ -1665,6 +1781,7 @@ class AddTransactionUseCase {
   Future<_AiFirstAttempt> _tryAiParseFirst({
     required String rawMessage,
     required String? senderId,
+    required Future<void> Function() beforeRequest,
   }) async {
     if (_aiClient == null) return const _AiFirstAttempt.skipped('no_ai_client');
     final consent = await _loadAiConsent?.call() ?? false;
@@ -1675,6 +1792,9 @@ class AddTransactionUseCase {
       rawMessage,
       detectedType: _privacyTypeHint(rawMessage),
     );
+    // Immediately before the request: the account must be unchanged. Throws
+    // (no request, nothing committed) — deliberately outside the catch below.
+    await beforeRequest();
     AiParseResponse? response;
     String? failureReason;
     try {

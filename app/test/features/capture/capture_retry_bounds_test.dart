@@ -614,7 +614,16 @@ void main() {
         ..analysed = _processedFor;
       await buildV3(ledger()).run();
       expect(server.uploaded, [_id(20), _id(21)]);
-      expect(await txIds(), [_id(20), _id(21)]);
+      // Both items hold the SAME bank message (identical results at the same
+      // instant): identity is uncertain, so the later one is kept for review
+      // as a suspected duplicate, never a second confirmed transaction.
+      expect(await txIds(), [_id(20)]);
+      final suspected = await db
+          .customSelect('SELECT id, existing_transaction_id e '
+              'FROM suspected_duplicates;')
+          .get();
+      expect(suspected.map((r) => '${r.data['id']}->${r.data['e']}'),
+          ['${_id(21)}->${_id(20)}']);
       expect(await reviewRows(), isEmpty);
       expect(queue.items, isEmpty);
     });

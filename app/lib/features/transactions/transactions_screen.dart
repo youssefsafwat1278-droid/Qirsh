@@ -46,6 +46,9 @@ import '../common/category_catalog.dart';
 import '../subscriptions/bill_form_sheet.dart';
 import '../dashboard/dashboard_providers.dart';
 import '../../domain/entities/suspected_duplicate_entity.dart';
+import '../../domain/usecases/add_transaction_usecase.dart'
+    show AddTransactionResult;
+import '../../domain/usecases/resolve_suspected_duplicate_usecase.dart';
 import '../../domain/entities/smart_inbox_item_entity.dart';
 import '../ads/ad_placement.dart';
 import '../ads/qirsh_ad_banner.dart';
@@ -1954,6 +1957,16 @@ class SmartInboxCard extends ConsumerWidget {
 
 // ─── Suspected Duplicates ────────────────────────────────────────────────────
 
+/// The review actions of a suspected duplicate; none deletes the original.
+ResolveSuspectedDuplicateUseCase suspectedDuplicateResolver(WidgetRef ref) {
+  final db = ref.read(appDatabaseProvider);
+  return ResolveSuspectedDuplicateUseCase(
+    addTransaction: ref.read(addTransactionUseCaseProvider),
+    repository: ref.read(suspectedDuplicateRepositoryProvider),
+    runAtomically: (action) => db.transaction(action),
+  );
+}
+
 class _SuspectedDuplicatesBanner extends ConsumerWidget {
   const _SuspectedDuplicatesBanner();
 
@@ -2078,10 +2091,8 @@ class _SuspectedDuplicatesSheet extends ConsumerWidget {
                       ),
                     );
                     if (proceed != true) return;
-                    final repo = ref.read(suspectedDuplicateRepositoryProvider);
-                    for (final d in dupes) {
-                      await repo.delete(d.id);
-                    }
+                    // Removes the review flags only — never a transaction.
+                    await suspectedDuplicateResolver(ref).dismissAll(dupes);
                     ref.invalidate(suspectedDuplicatesProvider);
                     if (context.mounted) Navigator.of(context).pop();
                   },
@@ -2321,28 +2332,35 @@ class _SuspectedDuplicateCard extends ConsumerWidget {
         : context.l10n.txnTimeReceived;
   }
 
+  /// "It is a duplicate": the review flag goes; the original stays untouched.
   Future<void> _dismiss(WidgetRef ref) async {
-    await ref.read(suspectedDuplicateRepositoryProvider).delete(dupe.id);
+    await suspectedDuplicateResolver(ref).dismiss(dupe);
     ref.invalidate(suspectedDuplicatesProvider);
   }
 
+  /// "Save as new": the later capture becomes its own transaction next to the
+  /// original. The flag stays when nothing could be saved (no capture lost).
   Future<void> _confirmAsReal(BuildContext context, WidgetRef ref) async {
-    final addUseCase = ref.read(addTransactionUseCaseProvider);
-    final result = await addUseCase(
-      rawMessage: dupe.rawMessage,
-      senderId: dupe.senderId,
-      skipDedup: true,
-      smsReceivedAt:
-          dupe.comparisonTimestampSource == ComparisonTimestampSource.receivedAt
-              ? dupe.comparisonTimestamp ?? dupe.occurredAt
-              : null,
-    );
-    await ref.read(suspectedDuplicateRepositoryProvider).delete(dupe.id);
+    AddTransactionResult result;
+    try {
+      result = await suspectedDuplicateResolver(ref).keepBoth(dupe);
+    } catch (_) {
+      // Nothing was saved; the flag (and the capture's text) stays for review.
+      ref.invalidate(suspectedDuplicatesProvider);
+      if (context.mounted) {
+        showTopError(context, context.l10n.pasteSimilarNeedsReview);
+      }
+      return;
+    }
     ref.invalidate(suspectedDuplicatesProvider);
     refreshTransactions(ref);
     ref.invalidate(dashboardDataProvider);
-    if (context.mounted && result.transaction != null) {
+    if (!context.mounted) return;
+    if (result.transaction != null &&
+        result.transaction!.id != dupe.existingTransactionId) {
       await TransactionDetailsScreen.showSheet(context, result.transaction!.id);
+    } else {
+      showTopError(context, context.l10n.pasteNotATransaction);
     }
   }
 

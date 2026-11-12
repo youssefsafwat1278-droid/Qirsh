@@ -594,6 +594,9 @@ class CaptureImportService {
         await _requireOwner(owner);
         await base.writeReceipt(transactionId);
       },
+      // A receipt committed meanwhile (another engine, an earlier pass) is a
+      // proven redelivery: consumed, never imported twice.
+      readReceipt: base.readReceipt,
     );
     final result = await _ingestLocal(
       CapturedMessage(

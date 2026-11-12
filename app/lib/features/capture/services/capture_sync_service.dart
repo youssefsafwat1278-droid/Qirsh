@@ -508,6 +508,9 @@ class CaptureSyncService {
           payloadId: payloadId,
           transactionId: transactionId,
         ),
+        readReceipt: () async => await isPayloadImported(payloadId)
+            ? transactionIdForPayload(payloadId)
+            : null,
       );
 
   /// Pre-ingest guard for the native drain. True when [payloadId] already has a
@@ -692,7 +695,8 @@ class CaptureSyncService {
   /// One strictly on-device retry of a backend-rejected capture with the app's
   /// richer parser. Prefers the native raw text (same payloadId) over the
   /// server-sanitized text. Returns true only when a confirmed local
-  /// transaction was written and the payload marker points at it; every other
+  /// transaction was written, or the capture was kept as a suspected duplicate
+  /// of an existing one, and the payload marker points at it; every other
   /// outcome (invalid, ignored, duplicate, pending, exception) rolls back any
   /// write the ingest made and returns false so the Smart Inbox path runs.
   /// A [StaleOwnershipException] propagates (caller's transaction rolls back).
@@ -737,6 +741,15 @@ class CaptureSyncService {
                 AddTransactionOutcome.added &&
             transaction != null) {
           recovered.addAll(newlyAddedTransactions(result.addTransactionResult));
+          return transaction.id;
+        }
+        // The same purchase may already be a transaction (e.g. the other
+        // capture path): the ingest kept THIS capture as a suspected duplicate
+        // for review. That is a durable, reviewable result, not a decline.
+        if (result.disposition ==
+                CapturedMessageDisposition.suspiciousDuplicate &&
+            result.addTransactionResult.suspectedDuplicateId != null &&
+            transaction != null) {
           return transaction.id;
         }
         throw const _RecoveryDeclined();
@@ -784,16 +797,40 @@ class CaptureSyncService {
     // One capture's account/review/transaction/dedup writes share a transaction.
     // The closing admission check is still inside that transaction, so an owner
     // change during any repository await rolls the complete capture back.
-    final imported = await _dedupStore.runAtomically(() async {
-      await requireCurrentAdmission();
-      final result = await _importCaptureAtomically(
-        capture,
-        requireCurrentAdmission,
-        committed,
-      );
-      await requireCurrentAdmission();
-      return result;
-    });
+    final String? imported;
+    try {
+      imported = await _dedupStore.runAtomically(() async {
+        await requireCurrentAdmission();
+        // Re-checked INSIDE the transaction: the same server capture listed
+        // again (lost ACK, a later sync) or imported meanwhile by the other
+        // path/engine is consumed without a second row.
+        if (await reconcileImportedPayload(capture.payloadId)) return null;
+        final result = await _importCaptureAtomically(
+          capture,
+          requireCurrentAdmission,
+          committed,
+        );
+        await requireCurrentAdmission();
+        return result;
+      });
+    } on StaleOwnershipException {
+      rethrow;
+    } on _DeferToNativeCopy {
+      rethrow;
+    } catch (error, stack) {
+      // A second connection to the same file (a background engine) committed
+      // this capture first and our insert lost the race: one transaction.
+      committed.clear();
+      var won = false;
+      try {
+        won = await isPayloadImported(capture.payloadId) ||
+            await _transactionRepository.getById(capture.payloadId) != null;
+      } catch (_) {
+        won = false;
+      }
+      if (won) return null;
+      Error.throwWithStackTrace(error, stack);
+    }
     onCommitted?.call(committed);
     return imported;
   }
@@ -925,10 +962,6 @@ class CaptureSyncService {
           canonicalMode: _coordinator.state() == PlanningCutoverState.canonical,
         ) ==
         AiCaptureIngress.legacyPendingReview;
-    final account = await _accountForCurrency(
-      normalizedCurrency,
-      requireCurrentAdmission,
-    );
     final occurredAt = _date(parsed['occurredAt']) ??
         _date(parsed['comparisonTimestamp']) ??
         capture.createdAt ??
@@ -941,6 +974,52 @@ class CaptureSyncService {
     final rawMessage = _string(parsed['rawMessage']) ??
         capture.sanitizedText ??
         'Backend processed capture ${capture.payloadId}';
+    // The same duplicate signals the on-device ingest applies
+    // (AddTransactionUseCase), so a server result is never auto-confirmed as
+    // a second transaction where a local capture would have gone to review —
+    // e.g. one SMS sent through the Shortcut AND the Share Extension: two
+    // payload ids, two server results with the same text. Identity is
+    // uncertain, so both captures are kept: this later one becomes a
+    // suspected duplicate (review), the earlier transaction is untouched.
+    final possibleDuplicate = await _possibleDuplicateOf(
+      amount: amountMoney,
+      currency: normalizedCurrency,
+      merchant: _string(parsed['merchant']),
+      cardLast4: _string(parsed['last4']),
+      rawMessage: rawMessage,
+      comparisonTimestamp: comparisonTimestamp,
+    );
+    if (possibleDuplicate != null) {
+      await requireCurrentAdmission();
+      await _suspectedDuplicateRepository.save(
+        SuspectedDuplicateEntity(
+          id: capture.payloadId,
+          rawMessage: rawMessage,
+          senderId: _string(parsed['senderId']),
+          existingTransactionId: possibleDuplicate.transaction.id,
+          amountMoney: amountMoney,
+          currency: normalizedCurrency,
+          rawMerchant:
+              MerchantSanity.forMessage(_string(parsed['merchant']), rawMessage),
+          occurredAt: occurredAt,
+          createdAt: now,
+          cardLast4: _string(parsed['last4']),
+          comparisonTimestamp: comparisonTimestamp,
+          comparisonTimestampSource: source,
+          duplicateReason: possibleDuplicate.reason,
+        ),
+      );
+      await requireCurrentAdmission();
+      await markPayloadImported(
+        payloadId: capture.payloadId,
+        transactionId: possibleDuplicate.transaction.id,
+      );
+      return null;
+    }
+    final account = await _accountForCurrency(
+      normalizedCurrency,
+      requireCurrentAdmission,
+    );
     final direction = _direction(_string(parsed['direction']));
     var type = _type(_string(parsed['type']));
     // نفس محاسبة التحويلات في AddTransactionUseCase: النقل بين حساباتك محايد،
@@ -1022,6 +1101,49 @@ class CaptureSyncService {
   }
 
   static String _payloadHash(String payloadId) => 'capture_payload:$payloadId';
+
+  /// An existing transaction this server result may duplicate, with the
+  /// reason. Exact signal first (same amount, currency, merchant and card at
+  /// the SAME comparison instant — no window), then the same message text
+  /// within [DriftTransactionRepository.sameTextWindow]. Never proof: the
+  /// caller keeps both captures and sends the later one to review.
+  Future<({TransactionEntity transaction, String reason})?>
+      _possibleDuplicateOf({
+    required Money amount,
+    required String currency,
+    required String? merchant,
+    required String? cardLast4,
+    required String rawMessage,
+    required DateTime comparisonTimestamp,
+  }) async {
+    final sameInstant = await _transactionRepository.findSuspiciousDuplicate(
+      amount: amount,
+      currency: currency,
+      merchantOrDescription:
+          MerchantSanity.forMessage(merchant, rawMessage) ?? rawMessage,
+      cardLast4: cardLast4,
+      comparisonTimestamp: comparisonTimestamp,
+    );
+    if (sameInstant != null) {
+      return (
+        transaction: sameInstant,
+        reason: 'same amount, currency, merchant and comparison time',
+      );
+    }
+    final sameText = await _transactionRepository.findSameTextCapture(
+      rawMessage: rawMessage,
+      amount: amount,
+      currency: currency,
+      comparisonTimestamp: comparisonTimestamp,
+    );
+    if (sameText != null) {
+      return (
+        transaction: sameText,
+        reason: 'same message text captured again',
+      );
+    }
+    return null;
+  }
 
   /// Prefetches the current accounts once per sync run into a first-match-per-
   /// currency map (mirroring the previous linear scan) and records the total for

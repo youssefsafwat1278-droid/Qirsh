@@ -325,11 +325,13 @@ void main() {
     expect(await svc.transactionIdForPayload('p6'), startsWith('smart_inbox:'));
   });
 
-  test('suspicious duplicate => Smart Inbox, no 2nd tx, no orphan dup row',
-      () async {
+  test(
+      'suspicious duplicate => kept as ONE suspected duplicate for review, no '
+      '2nd tx, no Smart Inbox row', () async {
     final first = _Backend([_rejected('p7a')]);
     await service(first, native: nativeMsg('p7a', _validRaw)).sync();
-    expect(await DriftTransactionRepository(db).getAll(), hasLength(1));
+    final original = await DriftTransactionRepository(db).getAll();
+    expect(original, hasLength(1));
 
     final second = _Backend([_rejected('p7b')]);
     final svc = service(second, native: nativeMsg('p7b', _validRaw));
@@ -337,10 +339,19 @@ void main() {
 
     expect(await DriftTransactionRepository(db).getAll(), hasLength(1),
         reason: 'no second transaction');
-    expect(await DriftSmartInboxRepository(db).getOpen(), hasLength(1));
-    expect(await svc.transactionIdForPayload('p7b'), startsWith('smart_inbox:'));
-    expect(await DriftSuspectedDuplicateRepository(db).getAll(), isEmpty,
-        reason: 'the ingest write is rolled back with the declined recovery');
+    final suspected = await DriftSuspectedDuplicateRepository(db).getAll();
+    expect(suspected, hasLength(1),
+        reason: 'the later capture is preserved for review');
+    expect(suspected.single.existingTransactionId, original.single.id);
+    expect(await DriftSmartInboxRepository(db).getOpen(), isEmpty);
+    expect(await svc.transactionIdForPayload('p7b'), original.single.id);
+
+    // The same server result listed again: nothing new.
+    await service(_Backend([_rejected('p7b')]),
+            native: nativeMsg('p7b', _validRaw))
+        .sync();
+    expect(await DriftTransactionRepository(db).getAll(), hasLength(1));
+    expect(await DriftSuspectedDuplicateRepository(db).getAll(), hasLength(1));
   });
 
   group('server needs_review', () {

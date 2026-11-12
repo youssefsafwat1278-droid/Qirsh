@@ -347,7 +347,13 @@ void main() {
     await db.customStatement('DELETE FROM dedup_hashes;');
     final client = _FakeCaptureBackendClient([
       older,
-      _capture(payloadId: 'newer-capture', status: 'processed'),
+      // A different purchase (identical results would be a suspected
+      // duplicate of the older one, by design).
+      _capture(
+          payloadId: 'newer-capture',
+          status: 'processed',
+          amountText: '43',
+          numericAmount: 43),
     ]);
     final result = await service(client).sync();
     expect(result.importedPayloadIds, {'older-capture', 'newer-capture'});

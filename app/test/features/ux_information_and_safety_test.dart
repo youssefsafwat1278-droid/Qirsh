@@ -600,7 +600,7 @@ void main() {
       final body = src.substring(i - 200, i + 2200);
       expect(body, contains('if (proceed != true) return;'));
       expect(body.indexOf('showDialog<bool>'),
-          lessThan(body.indexOf('repo.delete(d.id)')),
+          lessThan(body.indexOf('.dismissAll(dupes)')),
           reason: 'the confirmation must precede the deletion, not follow it');
     });
 
