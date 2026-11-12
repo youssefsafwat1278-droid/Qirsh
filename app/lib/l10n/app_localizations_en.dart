@@ -128,6 +128,16 @@ class AppL10nEn extends AppL10n {
   String get setupShortcutCta => 'Installed';
 
   @override
+  String get setupSmsCaptureBody =>
+      'Qirsh records your transactions from bank messages as they arrive. You can turn it off in Settings any time.';
+
+  @override
+  String get setupSmsCaptureCta => 'Turn on';
+
+  @override
+  String get setupSmsCaptureContinue => 'Continue';
+
+  @override
   String get setupFinishCta => 'Start';
 
   @override

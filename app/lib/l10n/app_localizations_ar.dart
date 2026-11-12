@@ -125,6 +125,16 @@ class AppL10nAr extends AppL10n {
   String get setupShortcutCta => 'ثبّتّه';
 
   @override
+  String get setupSmsCaptureBody =>
+      'قِرش يسجّل عملياتك من رسائل البنك أول ما توصل. تقدر تقفلها من الإعدادات في أي وقت.';
+
+  @override
+  String get setupSmsCaptureCta => 'فعّلها';
+
+  @override
+  String get setupSmsCaptureContinue => 'متابعة';
+
+  @override
   String get setupFinishCta => 'ابدأ';
 
   @override

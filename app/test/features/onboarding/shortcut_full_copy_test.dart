@@ -36,7 +36,7 @@ void main() {
     expect((await db.customSelect('SELECT * FROM user_settings').get()).map((r)=>r.data).toList(),before);
     expect(tester.takeException(),isNull);await tester.pumpWidget(const SizedBox.shrink());await tester.pumpAndSettle();await db.close();
     expect(truncated,isFalse,reason:'Instruction5 must expose its entire original text');
-   });
+   },variant:TargetPlatformVariant.only(TargetPlatform.iOS));
   }
  }
 }

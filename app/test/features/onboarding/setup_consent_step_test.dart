@@ -250,7 +250,7 @@ void main() {
     expect(finish.onPressed, isNull,
         reason: 'the separate Installed action remains an explicit user decision');
     expect(tester.takeException(), isNull);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
   testWidgets('finish is blocked without an account', (tester) async {
     await pumpSetup(tester, entry: OnboardingSetupEntry.captureGuide);
@@ -265,7 +265,7 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
     await tester.pump(const Duration(seconds: 4));
     await tester.pumpAndSettle();
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 }
 
 class _OkSaveCountry extends FakeSaveCountry {

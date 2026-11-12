@@ -106,5 +106,5 @@ void main() {
     // Finish animations started when the carousel's cards enter the viewport.
     await tester.pumpAndSettle();
     expect(find.textContaining('EGP'), findsWidgets);
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 }

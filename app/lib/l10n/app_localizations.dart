@@ -301,6 +301,24 @@ abstract class AppL10n {
   /// **'ثبّتّه'**
   String get setupShortcutCta;
 
+  /// No description provided for @setupSmsCaptureBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'قِرش يسجّل عملياتك من رسائل البنك أول ما توصل. تقدر تقفلها من الإعدادات في أي وقت.'**
+  String get setupSmsCaptureBody;
+
+  /// No description provided for @setupSmsCaptureCta.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّلها'**
+  String get setupSmsCaptureCta;
+
+  /// No description provided for @setupSmsCaptureContinue.
+  ///
+  /// In ar, this message translates to:
+  /// **'متابعة'**
+  String get setupSmsCaptureContinue;
+
   /// No description provided for @setupFinishCta.
   ///
   /// In ar, this message translates to:

@@ -1,5 +1,5 @@
 import '../../core/utils/l10n_ext.dart';
-import '../capture/widgets/sms_capture_disclosure.dart';
+import '../capture/widgets/sms_auto_capture_enable.dart';
 import '../capture/services/native_capture_bridge.dart';
 import '../capture/services/android_sms_capture_service.dart';
 import 'dart:async';
@@ -2652,9 +2652,8 @@ class _SmsAutoCaptureTile extends ConsumerWidget {
     }
 
     Future<void> onChanged(bool wanted) async {
-      final l10n = context.l10n;
-      final service = AndroidSmsCaptureService.instance;
       if (!wanted) {
+        final service = AndroidSmsCaptureService.instance;
         // Off is immediate and does NOT revoke the OS permission — that is the
         // user's business in system Settings. This is the in-app stop switch
         // and it has to work while the permission is still granted.
@@ -2663,45 +2662,7 @@ class _SmsAutoCaptureTile extends ConsumerWidget {
         return;
       }
 
-      final result = await service.requestAndEnable(
-        showDisclosure: () => showSmsCaptureDisclosure(context),
-      );
-      await refresh();
-      if (!context.mounted) return;
-
-      switch (result.status) {
-        case SmsPermissionStatus.granted:
-          return;
-        case SmsPermissionStatus.permanentlyDenied:
-          // The ONLY route out of "don't ask again": asking again returns
-          // instantly without showing anything, so offering a retry here would
-          // be a button that silently does nothing.
-          final go = await showDialog<bool>(
-            context: context,
-            builder: (dialogContext) => GlassAlertDialog(
-              title: Text(l10n.smsAutoCaptureDeniedTitle),
-              content: Text(l10n.smsAutoCaptureDeniedBody),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: Text(l10n.commonCancel),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: Text(l10n.smsAutoCaptureOpenSettings),
-                ),
-              ],
-            ),
-          );
-          if (go ?? false) await service.openSystemSettings();
-        case SmsPermissionStatus.denied:
-        case SmsPermissionStatus.unavailable:
-        case SmsPermissionStatus.inProgress:
-          // Declined, dismissed, denied-but-askable, or a platform error. The
-          // switch stays off and share/manual capture keep working; there is
-          // nothing to announce.
-          return;
-      }
+      await enableAutomaticSmsCapture(context, onRequested: refresh);
     }
 
     // With Smart Analysis & Cloud Sync accepted, captured messages may leave

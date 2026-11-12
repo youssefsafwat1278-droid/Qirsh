@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -18,6 +19,9 @@ import '../../core/utils/l10n_ext.dart';
 import '../../domain/errors/repo_exceptions.dart';
 import '../../l10n/app_localizations.dart';
 import '../capture/services/local_notification_service.dart';
+import '../capture/services/native_capture_bridge.dart';
+import '../capture/widgets/sms_auto_capture_enable.dart';
+import '../settings/settings_providers.dart';
 import 'onboarding_account_step.dart';
 import 'onboarding_consent_steps.dart';
 import 'onboarding_options.dart';
@@ -35,7 +39,9 @@ import '../common/repo_error_messages.dart';
 ///   3. Account Setup        → the user creates their first account (local,
 ///                             works offline); there is no default account
 ///   4. Notifications        → OS permission prompt
-///   5. Shortcut install     → instructions carousel, self-declared
+///   5. iOS: Shortcut install → instructions carousel, self-declared
+///      Android: automatic bank-SMS capture → the same opt-in as the
+///      Settings switch (disclosure first); "Not now" leaves it off
 ///
 /// Cloud and AI processing consent default OFF (NULL state = off, MALI-059n);
 /// each is only granted by its explicit opt-in here or in the privacy
@@ -105,7 +111,7 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
     super.initState();
     if (widget.entry == OnboardingSetupEntry.captureGuide) {
       // Restored user: everything up to and including notifications is done;
-      // only the shortcut guide remains. (`_finish` still verifies an account.)
+      // only the capture step remains. (`_finish` still verifies an account.)
       for (var i = 0; i < _stepCount - 1; i++) {
         _done[i] = true;
       }
@@ -366,7 +372,11 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
           onTap: _enableNotifications,
         );
       default:
-        return _shortcutStep(l10n);
+        // Android has no Shortcuts app; it captures bank SMS itself once the
+        // user opts in, so the last step offers that opt-in instead.
+        return defaultTargetPlatform == TargetPlatform.android
+            ? _smsCaptureStep(l10n)
+            : _shortcutStep(l10n);
     }
   }
 
@@ -593,6 +603,73 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
                     child: Text(l10n.setupShortcutCta,
                         style: AppTypography.bodyStrong(context.colors.onCta)),
                   ),
+                ),
+              ],
+            ),
+    );
+  }
+
+  // ── Step 5 (Android): automatic bank-SMS capture ──────────────────────
+  Future<void> _refreshCaptureCapabilities() async {
+    ref.invalidate(captureCapabilitiesProvider);
+    await ref.read(captureCapabilitiesProvider.future);
+  }
+
+  Future<void> _enableSmsCapture() async {
+    setState(() => _busy = true);
+    try {
+      final status = await enableAutomaticSmsCapture(context,
+          onRequested: _refreshCaptureCapabilities);
+      if (status == SmsPermissionStatus.granted) _markDone(_stepCount - 1);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Widget _smsCaptureStep(AppL10n l10n) {
+    const step = _stepCount - 1;
+    final caps = ref.watch(captureCapabilitiesProvider).valueOrNull;
+    // The platform's effective state, never a local flag (see the Settings
+    // switch): a permission revoked or an opt-in reset elsewhere shows as off.
+    final enabled = caps?.isAutomaticSmsCaptureEnabled ?? false;
+    final canEnable = !enabled && (caps?.receiveSmsDeclared ?? false);
+    return _stepHero(
+      step: step,
+      icon: AppLucideIcons.messageSquare,
+      title: l10n.smsAutoCaptureTitle,
+      body: l10n.setupSmsCaptureBody,
+      control: _done[step]
+          ? const SizedBox.shrink()
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (enabled)
+                  Text(
+                    l10n.smsAutoCaptureSubtitleOn,
+                    textAlign: TextAlign.center,
+                    style: AppTypography.bodyStrong(context.colors.success),
+                  ),
+                if (canEnable)
+                  SizedBox(
+                    width: double.infinity,
+                    height: AppSpacing.buttonHeight,
+                    child: FilledButton(
+                      key: const ValueKey('setup-sms-enable'),
+                      onPressed: _busy ? null : _enableSmsCapture,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: context.colors.cta,
+                        foregroundColor: context.colors.onCta,
+                      ),
+                      child: Text(l10n.setupSmsCaptureCta,
+                          style: AppTypography.bodyStrong(context.colors.onCta)),
+                    ),
+                  ),
+                const SizedBox(height: AppSpacing.s2),
+                // Optional: declining keeps share and manual capture working.
+                TextButton(
+                  key: const ValueKey('setup-sms-skip'),
+                  onPressed: _busy ? null : () => _markDone(step),
+                  child: Text(enabled ? l10n.setupSmsCaptureContinue : l10n.notNow),
                 ),
               ],
             ),
