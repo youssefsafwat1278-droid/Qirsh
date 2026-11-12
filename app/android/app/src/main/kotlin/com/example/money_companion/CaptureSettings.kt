@@ -16,6 +16,11 @@ import androidx.core.content.ContextCompat
 object CaptureSettings {
     private const val PREFS = "mali_capture_settings_v1"
     private const val KEY_AUTO_ENABLED = "auto_capture_enabled"
+    /**
+     * The capture owner (HMAC of the uid, never the uid) whose explicit action
+     * turned the opt-in on. Absent on an opt-in recorded before owners existed.
+     */
+    private const val KEY_OPT_IN_OWNER = "auto_capture_owner_hash"
 
     /** Share-to-Mali capture is always supported; it needs no permission. */
     fun supportsShareCapture(): Boolean = true
@@ -56,10 +61,36 @@ object CaptureSettings {
             .getBoolean(KEY_AUTO_ENABLED, false) // OFF by default
     }
 
-    fun setAutoCaptureEnabled(context: Context, enabled: Boolean) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY_AUTO_ENABLED, enabled).apply()
+    /**
+     * The opt-in belongs to [ownerHash], the active capture owner when the user
+     * turned it on, so a different account never inherits it
+     * ([CaptureOwnerPolicy.onOwnerPublished]).
+     */
+    fun setAutoCaptureEnabled(context: Context, enabled: Boolean, ownerHash: String?) {
+        val editor = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_AUTO_ENABLED, enabled)
+        if (enabled && ownerHash != null) {
+            editor.putString(KEY_OPT_IN_OWNER, ownerHash)
+        } else {
+            editor.remove(KEY_OPT_IN_OWNER)
+        }
+        editor.apply()
     }
+
+    /** The stored opt-in alone (no permission check): the owner rule's input. */
+    fun isOptedIn(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_ENABLED, false)
+
+    /** Who owns the opt-in; null when off or recorded before owners existed. */
+    fun optInOwner(context: Context): String? =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_OPT_IN_OWNER, null)
+
+    /** An ownerless (pre-upgrade) opt-in becomes [ownerHash]'s. */
+    fun adoptOwner(context: Context, ownerHash: String): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().putString(KEY_OPT_IN_OWNER, ownerHash).commit()
 
     /**
      * MALI-054n/059n: reset the SMS auto-capture opt-in on an identity change so
@@ -68,6 +99,6 @@ object CaptureSettings {
      */
     fun reset(context: Context): Boolean {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit().remove(KEY_AUTO_ENABLED).commit()
+            .edit().remove(KEY_AUTO_ENABLED).remove(KEY_OPT_IN_OWNER).commit()
     }
 }

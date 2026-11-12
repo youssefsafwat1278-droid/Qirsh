@@ -229,10 +229,38 @@ void main() {
       }
     });
 
-    test('background audit: no background mode, BGTask or background session',
-        () {
+    test(
+        'background audit: the only background execution is the BGTask that '
+        'runs the live engine\'s Dart drain; no native egress, no background '
+        'session, no silent push', () {
+      // The Runner may declare exactly fetch + processing for the capture
+      // drain BGTasks (BackgroundTasks framework). Everything else stays out.
+      final runnerPlist = read('ios/Runner/Info.plist');
+      final modes = RegExp(
+              r'<key>UIBackgroundModes</key>\s*<array>([\s\S]*?)</array>')
+          .firstMatch(runnerPlist)
+          ?.group(1);
+      expect(
+          RegExp(r'<string>([^<]+)</string>')
+              .allMatches(modes ?? '')
+              .map((m) => m.group(1))
+              .toSet(),
+          {'fetch', 'processing'});
+      final ids = RegExp(r'<key>BGTaskSchedulerPermittedIdentifiers</key>'
+              r'\s*<array>([\s\S]*?)</array>')
+          .firstMatch(runnerPlist)
+          ?.group(1);
+      expect(
+          RegExp(r'<string>([^<]+)</string>')
+              .allMatches(ids ?? '')
+              .map((m) => m.group(1))
+              .toSet(),
+          {
+            'com.youssefsafwat.mali.capture-drain.refresh',
+            'com.youssefsafwat.mali.capture-drain.processing',
+          });
+      expect(runnerPlist, isNot(contains('remote-notification')));
       for (final plist in const [
-        'ios/Runner/Info.plist',
         'ios/ShareBankMessage/Info.plist',
         'ios/Runner/Runner.entitlements',
         'ios/Runner/RunnerQA.entitlements',
@@ -252,11 +280,18 @@ void main() {
       }
       for (final file in iosSources()) {
         final source = file.readAsStringSync();
+        final bgTaskAllowed = file.path == 'ios/Runner/AppDelegate.swift';
         for (final token in const [
           'BGTaskScheduler',
           'BackgroundTasks',
           'BGAppRefreshTask',
           'BGProcessingTask',
+        ]) {
+          if (bgTaskAllowed) continue;
+          expect(source, isNot(contains(token)),
+              reason: '${file.path} uses $token');
+        }
+        for (final token in const [
           'URLSessionConfiguration.background',
           'handleEventsForBackgroundURLSession',
           'performFetchWithCompletionHandler',
@@ -267,6 +302,20 @@ void main() {
               reason: '${file.path} uses $token');
         }
       }
+      // The BGTask handler performs no native egress: it only asks the live
+      // engine's Dart drain (gated client, per-message consent) to run.
+      final delegate = read('ios/Runner/AppDelegate.swift');
+      final bg = delegate
+          .substring(delegate.indexOf('final class CaptureBackgroundDrain'));
+      for (final token in const [
+        'URLSession',
+        'URLRequest',
+        'gatedUpload(',
+        'FlutterEngine(',
+      ]) {
+        expect(bg, isNot(contains(token)), reason: 'BGTask handler uses $token');
+      }
+      expect(bg, contains('invokeMethod("runBackgroundDrain"'));
     });
 
     test('push registration is reached only through the gated channel', () {
@@ -380,7 +429,13 @@ void main() {
       ];
       for (final file in kotlin) {
         final source = file.readAsStringSync();
+        // The background capture drain schedules ONE unique WorkManager work
+        // that asks the live engine's Dart drain (gated HTTP client) to run;
+        // the worker itself has no network code (every other token below
+        // still applies to it).
+        final worker = file.path.endsWith('/CaptureDrainWorker.kt');
         for (final token in forbidden) {
+          if (worker && token == 'WorkManager') continue;
           expect(source, isNot(contains(token)),
               reason: '${file.path} uses $token');
         }

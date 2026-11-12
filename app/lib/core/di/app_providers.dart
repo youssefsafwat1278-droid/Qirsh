@@ -1624,7 +1624,13 @@ final unboundCapturePromptServiceProvider =
     queue: const NativeCaptureImportQueue(),
     sessionUid: () => supabase.Supabase.instance.client.auth.currentUser?.id,
     replicaOwnerUid: () => replicaOwnerUid(db),
-    isEnabled: () => featureFlags.getBool('capture_import_v3'),
+    // Android's owner-scoped queue always needs the explicit claim (it has no
+    // other import path for unbound captures); iOS keeps its flag.
+    isEnabled: () =>
+        (NativeCaptureBridge.hasOwnerScopedQueue &&
+            !NativeCaptureBridge.hasNativeQueue) ||
+        featureFlags.getBool('capture_import_v3'),
+    ownerFor: (uid) => NativeCaptureBridge.getCaptureOwner(forUid: uid),
   );
 });
 
@@ -1872,6 +1878,17 @@ final addTransactionUseCaseProvider = writerProvider<AddTransactionUseCase>((ref
     ).allows(EgressClass.financialSync),
     accountRepository: ref.watch(accountRepositoryProvider),
     dedupStore: DriftDedupStore(db),
+    // Item 5: the account identity a capture started under, compared again
+    // right before every external AI request. Any change (sign-out, account
+    // switch, re-admission) stops the request; the capture stays queued. It
+    // does not change WHO may use AI: a signed-out user's consented flow is
+    // unchanged; only a mid-capture identity change blocks the request.
+    loadAccountIdentity: SupabaseConfig.isConfigured
+        ? () async => (
+              await OwnershipGuard().capture(),
+              supabase.Supabase.instance.client.auth.currentUser?.id,
+            )
+        : null,
     aiClient: SupabaseConfig.isConfigured
         ? SupabaseAiParserClient(
             edgeFunctionUrl: '${SupabaseConfig.url}/functions/v1/parse-sms',

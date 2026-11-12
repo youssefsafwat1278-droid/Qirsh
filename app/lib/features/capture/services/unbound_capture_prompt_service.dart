@@ -46,12 +46,19 @@ class UnboundCapturePromptService {
     required String? Function() sessionUid,
     required Future<String?> Function() replicaOwnerUid,
     required bool Function() isEnabled,
+    Future<CaptureOwnerRecord?> Function(String uid)? ownerFor,
   })  : _queue = queue,
         _sessionUid = sessionUid,
         _replicaOwnerUid = replicaOwnerUid,
-        _isEnabled = isEnabled;
+        _isEnabled = isEnabled,
+        _ownerFor = ownerFor;
 
   final CaptureImportQueue _queue;
+
+  /// The active owner record asked for the session's uid. Android's native
+  /// queue holds no uid and answers only "is this uid the active owner";
+  /// null uses the queue's own record (iOS).
+  final Future<CaptureOwnerRecord?> Function(String uid)? _ownerFor;
   final String? Function() _sessionUid;
   final Future<String?> Function() _replicaOwnerUid;
   final bool Function() _isEnabled;
@@ -64,7 +71,10 @@ class UnboundCapturePromptService {
     final replica = await _replicaOwnerUid();
     if (session == null || replica != session) return null;
     try {
-      final owner = await _queue.getOwner();
+      final ownerFor = _ownerFor;
+      final owner = ownerFor != null
+          ? await ownerFor(session)
+          : await _queue.getOwner();
       if (owner == null || owner.uid != session) return null;
       final summary = await _queue.unboundSummary(session);
       if (summary.count == 0) return null;

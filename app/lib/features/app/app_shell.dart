@@ -67,6 +67,7 @@ import '../capture/services/notification_log_service.dart';
 import '../capture/services/notification_log_sync_service.dart';
 import '../capture/services/pending_notification_actions.dart';
 import '../capture/services/native_capture_bridge.dart';
+import '../capture/background/background_capture_drain.dart';
 import '../capture/services/capture_identity_metrics.dart';
 import '../../core/tracking/user_activity_service.dart';
 import '../cards/cards_providers.dart';
@@ -120,6 +121,22 @@ class _AppShellState extends ConsumerState<AppShell> {
   bool _isBottomBarVisible = true;
   bool _isConsumingSharedInput = false;
   SessionStatus? _lastSessionStatus;
+
+  /// The process-wide drain lease shared with every other engine's drain.
+  final CaptureDrainLease _drainLease = CaptureDrainLease();
+
+  /// Set while a background-triggered pass runs: false = the OS cancelled it.
+  bool Function()? _backgroundIsActive;
+  BackgroundCaptureDrainRunner? _backgroundDrain;
+
+  /// What the last leased drain pass reported (written by the pass itself).
+  CaptureDrainPass? _lastDrainPass;
+  CaptureDrainPass _drainPass = const CaptureDrainPass();
+
+  /// The admission this shell was mounted under. A shell disposed after that
+  /// admission ended (sign-out, Remove data, account switch) withdraws any
+  /// scheduled background drain; one disposed by navigation does not.
+  AdmissionAuthority? _mountAdmission;
   bool _remoteOnboardingCompletionSynced = false;
   bool _isReconcilingAfterResume = false;
 
@@ -187,6 +204,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   void initState() {
     super.initState();
     _lastSessionStatus = AppSession.instance.status;
+    _mountAdmission = AppSession.instance.captureLocalWorkAuthority();
     // First-use guidance (charter RC-5 Layer A). Deferred to after the first
     // frame: the shell is still building here, and the restore gate above may
     // still be covering the screen — showing a dialog into that is how a tour
@@ -290,6 +308,14 @@ class _AppShellState extends ConsumerState<AppShell> {
       if (!mounted) return;
       await _drainPendingNotificationRoutes();
     });
+    // The OS-scheduled background drain (Android WorkManager, iOS BGTask)
+    // runs THIS shell's drain: same provider graph, same account scope, same
+    // admission checks, same lease and retry ledger as the foreground.
+    NativeCaptureBridge.setBackgroundDrainHandler(
+      () async => (await _runBackgroundTriggeredDrain()).name,
+      cancel: () => _backgroundDrain?.cancel(),
+    );
+    unawaited(NativeCaptureBridge.setBackgroundDrainReady(true));
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final work = AdmittedLocalWork.capture(ref);
@@ -384,6 +410,15 @@ class _AppShellState extends ConsumerState<AppShell> {
     NativeCaptureBridge.setPendingMessagesHandler(null);
     NativeCaptureBridge.setApnsTokenUpdatedHandler(null);
     NativeCaptureBridge.setNotificationRouteHandler(null);
+    NativeCaptureBridge.setBackgroundDrainHandler(null);
+    unawaited(NativeCaptureBridge.setBackgroundDrainReady(false));
+    _backgroundDrain?.cancel();
+    final admission = _mountAdmission;
+    if (admission != null && !admission.isCurrent) {
+      // The account this shell drained for is gone (sign-out, Remove data,
+      // account switch): nothing scheduled for it may run later.
+      unawaited(NativeCaptureBridge.cancelBackgroundCaptureDrain());
+    }
     _lifecycleListener.dispose();
     super.dispose();
   }
@@ -414,6 +449,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     // the poll for the (new) owner only while authenticated; a sign-out leaves it
     // cancelled.
     _syncGate.invalidate();
+    // A background-triggered drain belongs to the admission it started under.
+    _backgroundDrain?.cancel();
+    if (now != SessionStatus.authenticated) {
+      unawaited(NativeCaptureBridge.cancelBackgroundCaptureDrain());
+    }
     _resumeCoalescer.reset(); // the new owner's first resume must fully refresh
     _syncPollTimer?.cancel();
     if (now == SessionStatus.authenticated && mounted) {
@@ -1236,6 +1276,62 @@ class _AppShellState extends ConsumerState<AppShell> {
     if (ReplicaFreeze.instance.frozen) return;
     if (_isConsumingSharedInput) return;
     _isConsumingSharedInput = true;
+    try {
+      // One process-wide lease for every engine's drain; the retry ledger is
+      // re-read from its durable store under it, and captures left queued
+      // request the next background run for when the earliest is due.
+      _lastDrainPass = await runLeasedCaptureDrain(
+        lease: _drainLease,
+        holder: 'app_shell',
+        ledger: ref.read(captureRetryLedgerProvider),
+        drain: () async {
+          _drainPass = const CaptureDrainPass();
+          await _consumeSharedInputLeased();
+          return _drainPass;
+        },
+      );
+    } on StateError catch (_) {
+      // Same discipline as the leased body below: disposed means stop (the
+      // lease was released on the way out); a StateError while mounted is a
+      // real bug and keeps propagating.
+      if (mounted) rethrow;
+    } finally {
+      _isConsumingSharedInput = false;
+    }
+  }
+
+  /// A background-triggered drain (see [BackgroundCaptureDrainRunner]). Runs
+  /// only under the same admission the foreground drain needs: a signed-in
+  /// user whose replica is the admitted active account, and no replica swap
+  /// or account transition in flight. Otherwise nothing is touched.
+  Future<BackgroundDrainOutcome> _runBackgroundTriggeredDrain() async {
+    final runner = BackgroundCaptureDrainRunner(
+      mayRun: () async =>
+          mounted &&
+          !ReplicaFreeze.instance.frozen &&
+          AppSession.instance.status == SessionStatus.authenticated &&
+          (AdmittedLocalWork.capture(ref)?.current ?? false),
+      pass: (isActive) async {
+        _lastDrainPass = null;
+        _backgroundIsActive = isActive;
+        try {
+          await _consumeSharedInput();
+        } finally {
+          _backgroundIsActive = null;
+        }
+        // No pass ran (the replica froze meanwhile): try again later.
+        return _lastDrainPass ?? const CaptureDrainPass(busy: true);
+      },
+    );
+    _backgroundDrain = runner;
+    try {
+      return await runner.run();
+    } finally {
+      if (identical(_backgroundDrain, runner)) _backgroundDrain = null;
+    }
+  }
+
+  Future<void> _consumeSharedInputLeased() async {
     final authFailure = AppSession.instance
         .captureAuthRequiredFailure(ref.read(authClientProvider));
     try {
@@ -1268,7 +1364,8 @@ class _AppShellState extends ConsumerState<AppShell> {
       await _surfaceAndroidQueueRefusals();
       if (!mounted) return;
       final report = await drain.run(
-        isActive: () => mounted,
+        // A background-triggered pass also stops when the OS cancels it.
+        isActive: () => mounted && (_backgroundIsActive?.call() ?? true),
         // R9: one count per acknowledged capture (counts only, no content).
         onAcknowledged: (message) => CaptureIdentityMetrics.record(
           database,
@@ -1278,6 +1375,11 @@ class _AppShellState extends ConsumerState<AppShell> {
           item.result,
           notificationPreferences,
         ),
+      );
+      _drainPass = CaptureDrainPass(
+        stopped: report.stopped,
+        authRequired: report.authRequired || report.authRequiredBeforeDrain,
+        readFailed: report.readFailed,
       );
       if (report.authRequiredBeforeDrain) {
         await authFailure();
@@ -1334,6 +1436,11 @@ class _AppShellState extends ConsumerState<AppShell> {
 
       _refreshAll();
 
+      // Android: captures that arrived with no active owner (signed out,
+      // mid account change) or before the owner model existed are imported
+      // only after the user claims them here; never automatically.
+      if (Platform.isAndroid) unawaited(_maybePromptUnboundCaptures());
+
       if (pendingConfirmationId != null) {
         await _openConfirmSheet(
           pendingConfirmationId,
@@ -1353,8 +1460,6 @@ class _AppShellState extends ConsumerState<AppShell> {
       if (kDebugMode) {
         debugPrint('[Capture] drain stopped: shell disposed mid-drain');
       }
-    } finally {
-      _isConsumingSharedInput = false;
     }
   }
 
@@ -1390,9 +1495,11 @@ class _AppShellState extends ConsumerState<AppShell> {
     try {
       report = await ref.read(captureImportServiceProvider).run();
     } on AuthRepoException {
+      _drainPass = const CaptureDrainPass(authRequired: true);
       await authFailure();
       return;
     }
+    _drainPass = CaptureDrainPass(readFailed: report.readFailed);
     if (!mounted) return;
     if (!report.guardFailed && !report.barrierHeld) {
       _reportCaptureQueueRead(failed: report.readFailed);

@@ -180,6 +180,10 @@ kotlin {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // Background capture drain (CaptureDrainWorker). Already on the runtime
+    // classpath through play-services-ads; declared because the app now uses it
+    // directly. Same versions as resolved today, so nothing else moves.
+    implementation("androidx.work:work-runtime:2.7.0")
 }
 
 flutter {

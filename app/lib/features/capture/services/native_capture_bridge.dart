@@ -881,6 +881,7 @@ class CaptureQueueStats {
     required this.unboundQuota,
     required this.deviceQuota,
     this.migrationPending = false,
+    this.quarantinedSegments = 0,
   });
 
   /// Stamped to the active owner and eligible to upload.
@@ -902,6 +903,11 @@ class CaptureQueueStats {
   /// The v2 queue is not migrated yet; its items are counted as unbound.
   final bool migrationPending;
 
+  /// Overflow segments that could not be decrypted with a readable key. They
+  /// are kept (moved aside, never deleted) and their captures are NOT counted
+  /// above; a non-zero value means captures exist that cannot be imported.
+  final int quarantinedSegments;
+
   int get total => stamped + localOnly + waiting + unbound;
 
   static CaptureQueueStats? tryParse(Object? raw) {
@@ -919,6 +925,7 @@ class CaptureQueueStats {
       unboundQuota: CaptureQuotaState.parse(raw['unboundQuota']),
       deviceQuota: CaptureQuotaState.parse(raw['deviceQuota']),
       migrationPending: raw['migrationPending'] == true,
+      quarantinedSegments: n('quarantinedSegments'),
     );
   }
 }
@@ -1374,6 +1381,25 @@ class SmsPermissionResult {
   }
 }
 
+/// The answer to [NativeCaptureBridge.acquireCaptureDrainLease].
+class CaptureDrainLeaseGrant {
+  const CaptureDrainLeaseGrant.granted(String this.token)
+      : busy = false,
+        supported = true;
+  const CaptureDrainLeaseGrant.busy()
+      : token = null,
+        busy = true,
+        supported = true;
+  const CaptureDrainLeaseGrant.unsupported()
+      : token = null,
+        busy = false,
+        supported = false;
+
+  final String? token;
+  final bool busy;
+  final bool supported;
+}
+
 class NativeCaptureBridge {
   NativeCaptureBridge._();
 
@@ -1384,6 +1410,82 @@ class NativeCaptureBridge {
   static Future<void> Function(ApnsRegistrationFailure failure)?
       _apnsFailureHandler;
   static Future<void> Function()? _notificationRouteHandler;
+  static Future<String> Function()? _backgroundDrainHandler;
+  static void Function()? _backgroundDrainCancel;
+
+  /// The OS-scheduled background drain (Android WorkManager worker, iOS
+  /// BGTask) asks THIS engine to run its drain: `runBackgroundDrain` answers
+  /// with an outcome name, `cancelBackgroundDrain` asks a running pass to stop
+  /// at the next item boundary. Null [run] removes both. Native only calls an
+  /// engine that reported itself ready ([setBackgroundDrainReady]).
+  static void setBackgroundDrainHandler(
+    Future<String> Function()? run, {
+    void Function()? cancel,
+  }) {
+    _backgroundDrainHandler = run;
+    _backgroundDrainCancel = run == null ? null : cancel;
+    _configureMethodHandler();
+  }
+
+  /// Tells native whether this engine can run a background-triggered drain
+  /// right now. Best effort: a platform without the method keeps no state.
+  static Future<void> setBackgroundDrainReady(bool ready) async {
+    try {
+      await _channel
+          .invokeMethod<void>('setBackgroundDrainReady', {'ready': ready});
+    } catch (_) {}
+  }
+
+  /// Asks native to run a background drain no earlier than [delay] from now
+  /// (Android: unique WorkManager work with a network constraint; iOS: BGTask
+  /// requests). Never a promise of execution. Best effort.
+  static Future<void> scheduleBackgroundCaptureDrain(Duration delay) async {
+    try {
+      await _channel.invokeMethod<void>('scheduleBackgroundCaptureDrain',
+          {'delayMs': delay.inMilliseconds});
+    } catch (_) {}
+  }
+
+  /// Withdraws any scheduled background drain (sign-out, Remove data, account
+  /// switch). Best effort.
+  static Future<void> cancelBackgroundCaptureDrain() async {
+    try {
+      await _channel.invokeMethod<void>('cancelBackgroundCaptureDrain');
+    } catch (_) {}
+  }
+
+  /// The process-wide drain lease (one holder across every engine of this
+  /// process). `granted` carries the token to release; `busy` means another
+  /// engine is draining. A platform that does not implement the lease (or a
+  /// test channel answering null) reports `unsupported`: the caller drains
+  /// without it, as before, and payload idempotency remains the backstop.
+  static Future<CaptureDrainLeaseGrant> acquireCaptureDrainLease({
+    required String holder,
+    required Duration ttl,
+  }) async {
+    try {
+      final raw = await _channel.invokeMethod<Object?>(
+          'acquireCaptureDrainLease',
+          {'holder': holder, 'ttlMs': ttl.inMilliseconds});
+      if (raw is! Map) return const CaptureDrainLeaseGrant.unsupported();
+      final token = raw['token'];
+      if (raw['granted'] == true && token is String && token.isNotEmpty) {
+        return CaptureDrainLeaseGrant.granted(token);
+      }
+      return raw['granted'] == false
+          ? const CaptureDrainLeaseGrant.busy()
+          : const CaptureDrainLeaseGrant.unsupported();
+    } catch (_) {
+      return const CaptureDrainLeaseGrant.unsupported();
+    }
+  }
+
+  static Future<void> releaseCaptureDrainLease(String token) async {
+    try {
+      await _channel
+          .invokeMethod<void>('releaseCaptureDrainLease', {'token': token});
+    } catch (_) {}
+  }
 
   static void setPendingMessagesHandler(
     Future<void> Function()? handler,
@@ -1417,7 +1519,8 @@ class NativeCaptureBridge {
     if (_pendingMessagesHandler == null &&
         _apnsTokenHandler == null &&
         _apnsFailureHandler == null &&
-        _notificationRouteHandler == null) {
+        _notificationRouteHandler == null &&
+        _backgroundDrainHandler == null) {
       _channel.setMethodCallHandler(null);
       return;
     }
@@ -1442,6 +1545,15 @@ class NativeCaptureBridge {
       }
       if (call.method == 'pendingNotificationRouteAvailable') {
         await _notificationRouteHandler?.call();
+        return null;
+      }
+      if (call.method == 'runBackgroundDrain') {
+        final run = _backgroundDrainHandler;
+        // No drain host in this engine: native completes without retrying.
+        return run == null ? 'deferred' : await run();
+      }
+      if (call.method == 'cancelBackgroundDrain') {
+        _backgroundDrainCancel?.call();
         return null;
       }
       throw MissingPluginException('Unknown native capture callback');
@@ -1646,9 +1758,61 @@ class NativeCaptureBridge {
 
   static bool get _hasNativeQueue => debugTreatHostAsNative || Platform.isIOS;
 
-  /// Whether this platform has the native v3 queue (iOS). Platforms without it
-  /// (Android, manual paste) have no native upload gate to consult.
+  /// Whether this platform has the native v3 queue (iOS): the App Intent
+  /// upload gate, the cloud-egress state, the consent mirror. Platforms
+  /// without it (Android, manual paste) have no native upload gate to consult.
   static bool get hasNativeQueue => _hasNativeQueue;
+
+  /// Android's durable queue, which is owner-scoped (account isolation) but
+  /// has NO upload gate, egress state or consent mirror.
+  static bool get _hasAndroidOwnerQueue =>
+      !_hasNativeQueue && (debugTreatHostAsAndroid || Platform.isAndroid);
+
+  /// Whether the native queue is owner-scoped: captures are stamped with the
+  /// active owner, other owners' captures wait invisibly, unbound captures
+  /// need an explicit claim, and Remove data runs the native barrier. iOS and
+  /// Android. Only the owner / claim / barrier calls below use this; every
+  /// egress-related call keeps [hasNativeQueue] (iOS).
+  static bool get hasOwnerScopedQueue =>
+      _hasNativeQueue || _hasAndroidOwnerQueue;
+
+  /// Test seam: makes the host behave as Android (owner-scoped queue, no iOS
+  /// upload gate), the way [debugTreatHostAsNative] makes it behave as iOS.
+  @visibleForTesting
+  static bool debugTreatHostAsAndroid = false;
+
+  /// An owner-scope call: on iOS exactly [_queueCall]; on Android the same
+  /// lane WITHOUT recording an egress cause (the Android queue holds no egress
+  /// state, so its owner writes are not protected egress writes).
+  static Future<T?> _ownerScopedCall<T>(
+    String method, [
+    Map<String, Object?>? arguments,
+  ]) =>
+      _queueCall<T>(method, arguments, null, _hasNativeQueue);
+
+  /// Android: publishes [uid] as the active owner of the owner-scoped queue at
+  /// an account admission. Reads the owner epoch FIRST, then (only while
+  /// [stillCurrent] holds) publishes with it as a compare-and-swap, so a
+  /// sign-out / account change / removal clear in between makes native refuse
+  /// (`owner_changed`) instead of publishing a stale owner. Native keeps only an
+  /// HMAC of the uid, resets an SMS opt-in owned by another account, and
+  /// refuses during a Remove-data barrier. Throws [CaptureQueueException] when
+  /// refused; null off Android (the iOS owner is published by the restrictive
+  /// lifetime path, which also carries the egress state).
+  static Future<CaptureOwnerRecord?> publishOwnerScopedCaptureOwner(
+    String uid, {
+    bool Function()? stillCurrent,
+  }) async {
+    if (!_hasAndroidOwnerQueue) return null;
+    final epoch = await _ownerScopedCall<int>('captureOwnerEpoch') ?? 0;
+    if (stillCurrent != null && !stillCurrent()) return null;
+    final raw = await _ownerScopedCall<Object?>('publishCaptureOwner', {
+      'uid': uid,
+      'expectedEpoch': epoch,
+    });
+    if (raw is! Map) return null;
+    return CaptureOwnerRecord.tryParse({...raw, 'uid': uid});
+  }
 
   /// ASR §5 (C2): the native writes of egress, pending, barrier or owner state
   /// issued from Dart, and whether each is an IDENTITY cause (removal, barrier,
@@ -1693,8 +1857,9 @@ class NativeCaptureBridge {
     String method, [
     Map<String, Object?>? arguments,
     Object? causeAuthority,
+    bool noteCause = true,
   ]) async {
-    _noteProtectedWrite(method, causeAuthority);
+    if (noteCause) _noteProtectedWrite(method, causeAuthority);
     try {
       return await _channel.invokeMethod<T>(method, arguments);
     } on PlatformException catch (e) {
@@ -1992,14 +2157,23 @@ class NativeCaptureBridge {
   /// [clearHint] true at a transition: captures made during it are unbound with
   /// no hint. At a plain sign-out the hint stays so the same uid can recover.
   static Future<void> clearCaptureOwner({required bool clearHint}) async {
-    if (!_hasNativeQueue) return;
-    await _queueCall<Object?>('clearCaptureOwner', {'clearHint': clearHint});
+    if (!hasOwnerScopedQueue) return;
+    await _ownerScopedCall<Object?>(
+        'clearCaptureOwner', {'clearHint': clearHint});
   }
 
-  static Future<CaptureOwnerRecord?> getCaptureOwner() async {
-    if (!_hasNativeQueue) return null;
+  /// The active owner record. On Android native holds no uid, so it answers
+  /// only for [forUid] (the record iff that uid is the active owner); without
+  /// [forUid] Android answers null, as before. iOS ignores [forUid].
+  static Future<CaptureOwnerRecord?> getCaptureOwner({String? forUid}) async {
+    if (_hasNativeQueue) {
+      return CaptureOwnerRecord.tryParse(
+        await _queueCall<Object?>('getCaptureOwner'),
+      );
+    }
+    if (!_hasAndroidOwnerQueue || forUid == null) return null;
     return CaptureOwnerRecord.tryParse(
-      await _queueCall<Object?>('getCaptureOwner'),
+      await _ownerScopedCall<Object?>('getCaptureOwner', {'uid': forUid}),
     );
   }
 
@@ -2243,11 +2417,11 @@ class NativeCaptureBridge {
   /// The unbound items hinted to [uid]; empty when there are none, or when the
   /// hint is another uid's or absent.
   static Future<UnboundCaptureSummary> unboundCaptureSummary(String uid) async {
-    if (!_hasNativeQueue) {
+    if (!hasOwnerScopedQueue) {
       return const UnboundCaptureSummary(ids: [], senders: []);
     }
     final raw =
-        await _queueCall<Object?>('unboundCaptureSummary', {'uid': uid});
+        await _ownerScopedCall<Object?>('unboundCaptureSummary', {'uid': uid});
     if (raw is! Map) return const UnboundCaptureSummary(ids: [], senders: []);
     List<String> strings(Object? v) =>
         v is List ? v.whereType<String>().toList() : const <String>[];
@@ -2289,10 +2463,10 @@ class NativeCaptureBridge {
     String sessionUid,
     List<String> ids,
   ) async {
-    if (!_hasNativeQueue) {
+    if (!hasOwnerScopedQueue) {
       return const CaptureClaimResult(CaptureClaimStatus.stale, 0);
     }
-    final raw = await _queueCall<Object?>(method, {
+    final raw = await _ownerScopedCall<Object?>(method, {
       'uid': uid,
       'generation': generation,
       'replicaOwnerUid': replicaOwnerUid,
@@ -2427,9 +2601,9 @@ class NativeCaptureBridge {
   /// Remove-data step 1 (§4.4): persists the barrier and clears the owner record
   /// if it is [uid]'s. Idempotent for the same uid (a resumed removal).
   static Future<CaptureRemovalBarrier?> beginCaptureRemoval(String uid) async {
-    if (!_hasNativeQueue) return null;
+    if (!hasOwnerScopedQueue) return null;
     return CaptureRemovalBarrier.tryParse(
-      await _queueCall<Object?>('beginCaptureRemoval', {'uid': uid}),
+      await _ownerScopedCall<Object?>('beginCaptureRemoval', {'uid': uid}),
     );
   }
 
@@ -2442,17 +2616,21 @@ class NativeCaptureBridge {
   /// transport or read error throws [CaptureQueueException]. The removal flow
   /// uses this one: only a successful read of "absent" lets anyone be admitted.
   static Future<CaptureRemovalBarrierRead> readCaptureRemovalBarrier() async {
-    if (!_hasNativeQueue) return const CaptureRemovalBarrierRead.absent();
+    if (!hasOwnerScopedQueue) return const CaptureRemovalBarrierRead.absent();
     return CaptureRemovalBarrierRead.parse(
-      await _queueCall<Object?>('getCaptureRemovalBarrier'),
+      await _ownerScopedCall<Object?>('getCaptureRemovalBarrier'),
     );
   }
 
   /// Remove-data step 5 (§4.4): the final sweep; clears the barrier. Returns how
   /// many queue items were deleted.
+  /// On Android the sweep also resets the SMS opt-in and cancels scheduled
+  /// background work; anything that could not be deleted throws
+  /// (`removal_incomplete`) with the barrier kept.
   static Future<int> finishCaptureRemoval(String uid) async {
-    if (!_hasNativeQueue) return 0;
-    return await _queueCall<int>('finishCaptureRemoval', {'uid': uid}) ?? 0;
+    if (!hasOwnerScopedQueue) return 0;
+    return await _ownerScopedCall<int>('finishCaptureRemoval', {'uid': uid}) ??
+        0;
   }
 
   static Future<ApnsTokenInfo?> registerForRemoteNotifications(
@@ -2513,7 +2691,10 @@ class NativeCaptureBridge {
   /// queue after its import committed. Returns false when the native layer
   /// doesn't support acks or the id was already gone.
   static Future<bool> acknowledgeSharedMessage(String payloadId) async {
-    if (!debugTreatHostAsNative && !Platform.isIOS && !Platform.isAndroid) {
+    if (!debugTreatHostAsNative &&
+        !debugTreatHostAsAndroid &&
+        !Platform.isIOS &&
+        !Platform.isAndroid) {
       return false;
     }
     try {
@@ -2597,7 +2778,10 @@ class NativeCaptureBridge {
   static Future<List<SharedCapturedMessage>> _fetchSharedMessages(
     String method,
   ) async {
-    if (!debugTreatHostAsNative && !Platform.isIOS && !Platform.isAndroid) {
+    if (!debugTreatHostAsNative &&
+        !debugTreatHostAsAndroid &&
+        !Platform.isIOS &&
+        !Platform.isAndroid) {
       return const [];
     }
     final String? json;

@@ -57,6 +57,9 @@ class MainActivity : FlutterFragmentActivity() {
             "money_companion/native_capture",
         )
         nativeCaptureChannel = captureChannel
+        // The background capture worker drives THIS engine's drain, and only
+        // once Dart reports a drain handler (setBackgroundDrainReady).
+        CaptureDrainHost.attach(captureChannel)
         // Foreground-only wake-up: while this activity (and its engine) is
         // alive, a newly stored capture tells Dart to drain. Nothing runs when
         // the process is not alive — the next launch/resume drains instead.
@@ -100,7 +103,11 @@ class MainActivity : FlutterFragmentActivity() {
 
                 "setAutomaticSmsCaptureEnabled" -> {
                     val enabled = call.argument<Boolean>("enabled") ?: false
-                    CaptureSettings.setAutoCaptureEnabled(this, enabled)
+                    CaptureSettings.setAutoCaptureEnabled(
+                        this,
+                        enabled,
+                        DurableCaptureQueue.get(this).activeOwnerHash(),
+                    )
                     result.success(CaptureSettings.isAutoCaptureEnabled(this))
                 }
 
@@ -184,12 +191,174 @@ class MainActivity : FlutterFragmentActivity() {
                     result.success(DurableCaptureQueue.get(this).acknowledgeNotice())
                 }
 
+                // The single process-wide drain lease: foreground and
+                // background-triggered drains of every engine never overlap.
+                "acquireCaptureDrainLease" -> {
+                    val ttlMs = call.argument<Number>("ttlMs")?.toLong() ?: 600_000L
+                    val token = CaptureDrainLease.acquire(ttlMs)
+                    result.success(mapOf("granted" to (token != null), "token" to token))
+                }
+
+                "releaseCaptureDrainLease" -> {
+                    val token = call.argument<String>("token")
+                    result.success(token != null && CaptureDrainLease.release(token))
+                }
+
+                // Captures remain queued: one unique, network-constrained
+                // background work no earlier than the earliest is due.
+                "scheduleBackgroundCaptureDrain" -> {
+                    val delayMs = call.argument<Number>("delayMs")?.toLong() ?: 0L
+                    CaptureBackgroundScheduler.request(this, delayMs)
+                    result.success(null)
+                }
+
+                // Sign-out / Remove data / account switch.
+                "cancelBackgroundCaptureDrain" -> {
+                    CaptureBackgroundScheduler.cancel(this)
+                    result.success(null)
+                }
+
+                "setBackgroundDrainReady" -> {
+                    CaptureDrainHost.setReady(
+                        captureChannel,
+                        call.argument<Boolean>("ready") == true,
+                    )
+                    result.success(null)
+                }
+
+                // ── Account isolation (owner scope). Hashes only cross back;
+                // a uid arrives from Dart and is never stored. Refusals are
+                // error codes Dart treats as "did not happen".
+                "captureOwnerEpoch" -> ownerCall(result) {
+                    DurableCaptureQueue.get(this).ownerEpoch()
+                }
+
+                "publishCaptureOwner" -> ownerCall(result) {
+                    val uid = call.argument<String>("uid")
+                        ?: throw CaptureOwnerException("bad_args")
+                    val expectedEpoch = call.argument<Number>("expectedEpoch")?.toInt()
+                        ?: throw CaptureOwnerException("bad_args")
+                    val queue = DurableCaptureQueue.get(this)
+                    val decision = CaptureOwnerPolicy.onOwnerPublished(
+                        CaptureSettings.isOptedIn(this),
+                        CaptureSettings.optInOwner(this),
+                        queue.hashOf(uid),
+                    )
+                    // Another account's SMS opt-in is never inherited: it is
+                    // reset BEFORE this owner can be stamped on anything.
+                    if (decision == CaptureOwnerPolicy.OptIn.RESET &&
+                        !CaptureSettings.reset(this)
+                    ) {
+                        throw CaptureOwnerException("queue_unavailable")
+                    }
+                    val record = queue.publishOwner(uid, expectedEpoch)
+                    if (decision == CaptureOwnerPolicy.OptIn.ADOPT) {
+                        CaptureSettings.adoptOwner(this, record.uidHash)
+                    }
+                    mapOf("uidHash" to record.uidHash, "generation" to record.generation)
+                }
+
+                // Only the record of the uid asked about (null otherwise).
+                "getCaptureOwner" -> ownerCall(result) {
+                    val uid = call.argument<String>("uid")
+                    if (uid == null) {
+                        null
+                    } else {
+                        DurableCaptureQueue.get(this).ownerFor(uid)?.let {
+                            mapOf("uid" to uid, "uidHash" to it.uidHash, "generation" to it.generation)
+                        }
+                    }
+                }
+
+                "clearCaptureOwner" -> ownerCall(result) {
+                    val clearHint = call.argument<Boolean>("clearHint") == true
+                    // An account change never carries an opt-in nobody owns.
+                    if (clearHint && CaptureOwnerPolicy.resetAtAccountChange(
+                            CaptureSettings.isOptedIn(this),
+                            CaptureSettings.optInOwner(this),
+                        ) && !CaptureSettings.reset(this)
+                    ) {
+                        throw CaptureOwnerException("queue_unavailable")
+                    }
+                    DurableCaptureQueue.get(this).clearOwner(clearHint)
+                    // Nothing scheduled for the released owner may run.
+                    CaptureBackgroundScheduler.cancel(this)
+                    null
+                }
+
+                "unboundCaptureSummary" -> ownerCall(result) {
+                    val uid = call.argument<String>("uid")
+                        ?: throw CaptureOwnerException("bad_args")
+                    val summary = DurableCaptureQueue.get(this).unboundSummary(uid)
+                    mapOf(
+                        "ids" to summary.ids,
+                        "senders" to summary.senders,
+                        "count" to summary.ids.size,
+                    )
+                }
+
+                "claimUnboundCaptures", "discardUnboundCaptures" -> ownerCall(result) {
+                    val outcome = DurableCaptureQueue.get(this).claimUnbound(
+                        uid = call.argument<String>("uid")
+                            ?: throw CaptureOwnerException("bad_args"),
+                        generation = call.argument<Number>("generation")?.toInt()
+                            ?: throw CaptureOwnerException("bad_args"),
+                        replicaOwnerUid = call.argument<String>("replicaOwnerUid")
+                            ?: throw CaptureOwnerException("bad_args"),
+                        sessionUid = call.argument<String>("sessionUid")
+                            ?: throw CaptureOwnerException("bad_args"),
+                        ids = call.argument<List<String>>("ids")
+                            ?: throw CaptureOwnerException("bad_args"),
+                        discard = call.method == "discardUnboundCaptures",
+                    )
+                    mapOf(
+                        "status" to when (outcome.status) {
+                            DurableCaptureQueue.ClaimStatus.APPLIED -> "applied"
+                            DurableCaptureQueue.ClaimStatus.STALE -> "stale"
+                            DurableCaptureQueue.ClaimStatus.OWNER_MISMATCH -> "owner_mismatch"
+                        },
+                        "count" to outcome.count,
+                    )
+                }
+
+                // Remove data (§4.4 on Android): begin → (replica teardown in
+                // Dart) → finish. The SMS opt-in is reset and background work
+                // cancelled at BOTH ends, so nothing is captured or drained for
+                // the owner being removed, also when a crashed removal resumes.
+                "beginCaptureRemoval" -> ownerCall(result) {
+                    val uid = call.argument<String>("uid")
+                        ?: throw CaptureOwnerException("bad_args")
+                    CaptureBackgroundScheduler.cancel(this)
+                    if (!CaptureSettings.reset(this)) throw CaptureOwnerException("queue_unavailable")
+                    DurableCaptureQueue.get(this).beginRemoval(uid).toMap()
+                }
+
+                "getCaptureRemovalBarrier" -> ownerCall(result) {
+                    try {
+                        DurableCaptureQueue.get(this).removalBarrier()?.toMap()
+                    } catch (e: CaptureOwnerException) {
+                        // Present but unreadable: Dart reads a non-map as
+                        // "malformed", which blocks admission like a barrier.
+                        if (e.code == "barrier_malformed") "malformed" else throw e
+                    }
+                }
+
+                "finishCaptureRemoval" -> ownerCall(result) {
+                    val uid = call.argument<String>("uid")
+                        ?: throw CaptureOwnerException("bad_args")
+                    CaptureBackgroundScheduler.cancel(this)
+                    if (!CaptureSettings.reset(this)) throw CaptureOwnerException("removal_incomplete")
+                    DurableCaptureQueue.get(this).finishRemoval(uid)
+                }
+
                 "purgeAllCaptureState" -> {
                     // MALI-054n: purge this identity's capture residue + reset the
                     // SMS auto-capture opt-in. Both use commit() so success is
                     // verified before a new user is admitted. Report the AND of both.
                     val purged = DurableCaptureQueue.get(this).purge()
                     val settingsReset = CaptureSettings.reset(this)
+                    // Nothing scheduled for the purged identity may run.
+                    CaptureBackgroundScheduler.cancel(this)
                     result.success(purged && settingsReset)
                 }
 
@@ -222,8 +391,25 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    /**
+     * Runs one owner-scope call. A refusal is its error code only (never a uid,
+     * hash or content); an unreadable store is `queue_unavailable`.
+     */
+    private fun ownerCall(result: MethodChannel.Result, body: () -> Any?) {
+        try {
+            result.success(body())
+        } catch (e: CaptureOwnerException) {
+            result.error(e.code, null, null)
+        } catch (_: QueueUnreadableException) {
+            result.error("queue_unavailable", null, null)
+        } catch (_: Throwable) {
+            result.error("queue_unavailable", null, null)
+        }
+    }
+
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
         DurableCaptureQueue.onStored = null
+        nativeCaptureChannel?.let { CaptureDrainHost.detach(it) }
         nativeCaptureChannel = null
         super.cleanUpFlutterEngine(flutterEngine)
     }
@@ -350,6 +536,9 @@ class MainActivity : FlutterFragmentActivity() {
                         receivedAt = DurableCaptureQueue.isoNow(),
                     ),
                 )
+                if (stored == DurableCaptureQueue.EnqueueResult.STORED) {
+                    CaptureBackgroundScheduler.request(this, 0L)
+                }
                 if (stored != DurableCaptureQueue.EnqueueResult.STORED) {
                     // The share was NOT saved (queue full / store unwritable).
                     // The queue counted it; wake Dart so the drain shows the

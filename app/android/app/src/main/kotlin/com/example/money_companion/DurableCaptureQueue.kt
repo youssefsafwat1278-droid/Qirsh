@@ -9,6 +9,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.UUID
+import javax.crypto.Mac
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -42,7 +44,71 @@ import org.json.JSONObject
  *     ([QueueUnreadableException]), never an empty queue.
  * Failures are surfaced to Dart as counts only ([healthJson]). Raw bodies are
  * never logged.
+ *
+ * Account isolation (the Android counterpart of the iOS queue's owner model):
+ *   - Dart publishes the admitted account as the ACTIVE OWNER; the queue keeps
+ *     only an HMAC of its uid (key in the Android Keystore, [CaptureOwnerKey]),
+ *     never the uid itself;
+ *   - every capture is stamped at enqueue with the active owner, or is
+ *     `unbound` when there is none (with the hint of the consent owner / last
+ *     admitted owner, an HMAC too). Items written before this model existed
+ *     carry no stamp and read as unbound WITHOUT a hint;
+ *   - peek / drain / acknowledge see ONLY the active owner's stamped items.
+ *     Another owner's items wait, invisible, until that owner is published
+ *     again; unbound items are imported only after an explicit claim, bound
+ *     `localOnly` (on-device parse only, never AI);
+ *   - Remove data runs behind a persisted barrier (begin → finish) that sweeps
+ *     that owner's items, main and overflow, and the unattributable
+ *     quarantined residue.
  */
+
+/** Owner-scope vocabulary and the opt-in rule, free of Android types. */
+internal object CaptureOwnerPolicy {
+    const val STAMPED = "stamped"
+    const val UNBOUND = "unbound"
+
+    /** iOS parity (`SharedCaptureStore.normalizedUID`). */
+    fun normalize(uid: String): String = uid.trim().lowercase(Locale.ROOT)
+
+    /** What the SMS auto-capture opt-in does when an owner is published. */
+    enum class OptIn { KEEP, ADOPT, RESET }
+
+    /**
+     * The opt-in belongs to the account that turned it on. A different account
+     * never inherits it (RESET). An opt-in recorded before owners existed (no
+     * owner) is adopted by the first owner published WITHOUT an account change
+     * in between: the upgrade of a signed-in user. An account change first
+     * resets such an ownerless opt-in ([resetAtAccountChange]).
+     */
+    fun onOwnerPublished(optedIn: Boolean, optInOwner: String?, newOwner: String): OptIn =
+        when {
+            !optedIn -> OptIn.KEEP
+            optInOwner == null -> OptIn.ADOPT
+            optInOwner == newOwner -> OptIn.KEEP
+            else -> OptIn.RESET
+        }
+
+    /** At an account transition an opt-in nobody owns is not inherited. */
+    fun resetAtAccountChange(optedIn: Boolean, optInOwner: String?): Boolean =
+        optedIn && optInOwner == null
+
+    /** Visible to the drain: stamped to exactly the active owner. */
+    fun visible(state: String, ownerHash: String?, activeOwner: String?): Boolean =
+        activeOwner != null && state == STAMPED && ownerHash == activeOwner
+
+    /**
+     * Offered to [ownerHash] through the explicit claim: unbound and hinted to
+     * it, or unbound with NO hint (pre-upgrade items, captures between an
+     * account-change clear and the next publish). Never an item hinted to
+     * another owner.
+     */
+    fun claimable(state: String, hint: String?, ownerHash: String): Boolean =
+        state == UNBOUND && (hint == null || hint == ownerHash)
+
+    /** Swept by [ownerHash]'s Remove data: stamped or hinted to it. */
+    fun sweptBy(ownerHash: String?, hint: String?, removed: String): Boolean =
+        ownerHash == removed || hint == removed
+}
 
 /**
  * The admission rule, free of Android types so it can be read and tested in
@@ -74,6 +140,9 @@ internal object CaptureQueuePolicy {
 /** The queue storage exists but cannot be read. Nothing was changed. */
 class QueueUnreadableException : Exception("capture queue unreadable")
 
+/** Owner calls refused: nothing was changed. [code] is the Dart error code. */
+class CaptureOwnerException(val code: String) : Exception(code)
+
 class DurableCaptureQueue private constructor(
     private val prefs: SharedPreferences,
     private val overflowDir: File,
@@ -96,7 +165,25 @@ class DurableCaptureQueue private constructor(
         private const val KEY_QUARANTINED = "quarantined_count"
         /** Failures not yet shown to the user. */
         private const val KEY_UNSEEN = "unseen_refusal_count"
+        // Owner scope. Hashes only (HMAC of the uid), never a uid.
+        private const val KEY_OWNER = "active_owner_hash"
+        private const val KEY_OWNER_GENERATION = "active_owner_generation"
+        private const val KEY_GENERATION_COUNTER = "owner_generation_counter"
+        /** Bumped by every owner clear: a publish that read an older epoch is refused. */
+        private const val KEY_EPOCH = "owner_epoch"
+        /** The last published owner; kept at sign-out so it can claim back. */
+        private const val KEY_HINT = "last_admitted_owner_hash"
+        /** The persisted Remove-data barrier (JSON: nonce, uidHash, startedAt). */
+        private const val KEY_BARRIER = "removal_barrier"
         private const val TAG = "QirshCaptureQueue"
+
+        /**
+         * The HMAC that turns a uid into its owner hash. Production: a
+         * non-exportable Android Keystore key ([CaptureOwnerKey]). A JVM test
+         * substitutes a fixed key.
+         */
+        @Volatile
+        internal var macFactory: () -> Mac = { CaptureOwnerKey.newMac() }
 
         /**
          * Called (on the caller's thread) after an item was durably stored, so a
@@ -182,6 +269,13 @@ class DurableCaptureQueue private constructor(
         // MALI-068n §11 — authoritative native epoch (SMS timestampMillis / share
         // time). Dart prefers this over parsing receivedAt. 0 = legacy item.
         val receivedAtEpochMs: Long = System.currentTimeMillis(),
+        // Owner scope, set by [enqueue] (callers never choose it). A stored item
+        // without these fields is a pre-upgrade item: unbound, no hint.
+        val ownerState: String = CaptureOwnerPolicy.UNBOUND,
+        val ownerHash: String? = null,
+        val ownerHint: String? = null,
+        /** Bound by an explicit claim: parsed on device only, never sent to AI. */
+        val localOnly: Boolean = false,
     )
 
     // ── encoding ──────────────────────────────────────────────────────────────
@@ -194,6 +288,10 @@ class DurableCaptureQueue private constructor(
         o.put("source", item.source)
         o.put("receivedAt", item.receivedAt)
         o.put("receivedAtEpochMs", item.receivedAtEpochMs)
+        o.put("ownerState", item.ownerState)
+        if (item.ownerHash != null) o.put("ownerHash", item.ownerHash)
+        if (item.ownerHint != null) o.put("ownerHint", item.ownerHint)
+        if (item.localOnly) o.put("localOnly", true)
         return o
     }
 
@@ -204,6 +302,18 @@ class DurableCaptureQueue private constructor(
         source = o.optString("source", "share"),
         receivedAt = o.optString("receivedAt", ""),
         receivedAtEpochMs = o.optLong("receivedAtEpochMs", 0L),
+        // Only a complete stamp is a stamp; anything else (a pre-upgrade item
+        // included) is unbound.
+        ownerState = if (o.optString("ownerState") == CaptureOwnerPolicy.STAMPED &&
+            o.optString("ownerHash").isNotEmpty()
+        ) CaptureOwnerPolicy.STAMPED else CaptureOwnerPolicy.UNBOUND,
+        ownerHash = o.optString("ownerHash").takeIf {
+            it.isNotEmpty() && o.optString("ownerState") == CaptureOwnerPolicy.STAMPED
+        },
+        ownerHint = o.optString("ownerHint").takeIf {
+            it.isNotEmpty() && o.optString("ownerState") != CaptureOwnerPolicy.STAMPED
+        },
+        localOnly = o.optBoolean("localOnly", false),
     )
 
     private fun encode(items: List<Item>): String {
@@ -318,6 +428,27 @@ class DurableCaptureQueue private constructor(
     }
 
     /**
+     * Replaces one overflow capture's content (a claim binding it): temp file →
+     * fsync → rename over the same name, so the file is either the old or the
+     * new complete capture. False on any failure (the old one is then intact).
+     */
+    private fun replaceOverflow(file: File, item: Item): Boolean {
+        val temp = File(file.path + TEMP_SUFFIX)
+        return try {
+            FileOutputStream(temp).use { stream ->
+                stream.write(toJson(item).toString().toByteArray(Charsets.UTF_8))
+                stream.flush()
+                stream.fd.sync()
+            }
+            temp.renameTo(file)
+        } catch (_: Throwable) {
+            false
+        } finally {
+            if (temp.exists()) temp.delete()
+        }
+    }
+
+    /**
      * Reads one overflow file. An unreadable file is renamed (kept verbatim,
      * never deleted) so it stops blocking the queue; if it cannot even be
      * renamed the store is unreadable.
@@ -349,13 +480,40 @@ class DurableCaptureQueue private constructor(
      */
     @Synchronized
     fun enqueue(item: Item): EnqueueResult {
+        // Owner scope, stamped under this lock so an owner change cannot
+        // interleave. The caller's [Item.ownerHint] is only a suggestion (the
+        // SMS receiver passes the opt-in owner) used when nobody is active.
+        // During a Remove-data barrier nothing is persisted (iOS parity): the
+        // capture is counted and the user told, never stored for a
+        // half-removed owner.
+        val stamped = try {
+            if (prefs.getString(KEY_BARRIER, null) != null) return notPersisted()
+            val owner = prefs.getString(KEY_OWNER, null)
+            if (owner != null) {
+                item.copy(
+                    ownerState = CaptureOwnerPolicy.STAMPED,
+                    ownerHash = owner,
+                    ownerHint = null,
+                    localOnly = false,
+                )
+            } else {
+                item.copy(
+                    ownerState = CaptureOwnerPolicy.UNBOUND,
+                    ownerHash = null,
+                    ownerHint = item.ownerHint ?: prefs.getString(KEY_HINT, null),
+                    localOnly = false,
+                )
+            }
+        } catch (_: Throwable) {
+            return notPersisted()
+        }
         val items = readAll() ?: return notPersisted()
         val admission = try {
             CaptureQueuePolicy.admit(
                 mainIds = items.map { it.id },
                 overflowCount = overflowFiles().size,
-                idInOverflow = overflowFileFor(item.id) != null,
-                newId = item.id,
+                idInOverflow = overflowFileFor(stamped.id) != null,
+                newId = stamped.id,
             )
         } catch (_: Throwable) {
             return notPersisted()
@@ -363,12 +521,12 @@ class DurableCaptureQueue private constructor(
         val stored = when (admission) {
             CaptureQueuePolicy.Admission.DUPLICATE_ID -> return EnqueueResult.DUPLICATE_ID
             CaptureQueuePolicy.Admission.MAIN -> {
-                items.add(item)
+                items.add(stamped)
                 // commit() can fail transiently (disk pressure): one immediate retry.
                 writeAll(items) || writeAll(items)
             }
             CaptureQueuePolicy.Admission.OVERFLOW ->
-                writeOverflow(item) || writeOverflow(item)
+                writeOverflow(stamped) || writeOverflow(stamped)
         }
         if (!stored) return notPersisted()
         onStored?.invoke()
@@ -418,14 +576,25 @@ class DurableCaptureQueue private constructor(
         return prefs.edit().remove(KEY_UNSEEN).commit()
     }
 
-    /** Main items, then up to [OVERFLOW_PEEK] overflow items, in arrival order. */
+    /**
+     * The ACTIVE owner's stamped items: main, then up to [OVERFLOW_PEEK]
+     * overflow items, in arrival order. Another owner's items and unbound items
+     * are never returned; with no active owner nothing is.
+     */
     private fun peekItems(): Pair<List<Item>, List<File>> {
         val main = readAll() ?: throw QueueUnreadableException()
-        val out = ArrayList<Item>(main)
+        val owner = try {
+            prefs.getString(KEY_OWNER, null)
+        } catch (_: Throwable) {
+            throw QueueUnreadableException()
+        } ?: return emptyList<Item>() to emptyList()
+        fun mine(item: Item) = CaptureOwnerPolicy.visible(item.ownerState, item.ownerHash, owner)
+        val out = ArrayList<Item>(main.filter(::mine))
         val files = ArrayList<File>()
         for (file in overflowFiles()) {
             if (files.size >= OVERFLOW_PEEK) break
             val item = readOverflow(file) ?: continue
+            if (!mine(item)) continue
             out.add(item)
             files.add(file)
         }
@@ -453,7 +622,10 @@ class DurableCaptureQueue private constructor(
     fun drainJson(): String? {
         val (items, files) = peekItems()
         if (items.isEmpty()) return null
-        if (!prefs.edit().remove(KEY_ITEMS).commit()) throw QueueUnreadableException()
+        val returned = items.map { it.id }.toSet()
+        val main = readAll() ?: throw QueueUnreadableException()
+        // Only what was returned (the active owner's) leaves; the rest stays.
+        if (!writeAll(main.filterNot { it.id in returned })) throw QueueUnreadableException()
         files.forEach { it.delete() }
         return encode(items)
     }
@@ -465,8 +637,18 @@ class DurableCaptureQueue private constructor(
     @Synchronized
     fun acknowledge(id: String): Boolean {
         val items = readAll() ?: return false
-        if (items.removeAll { it.id == id }) return writeAll(items)
+        val owner = try { prefs.getString(KEY_OWNER, null) } catch (_: Throwable) { null }
+            ?: return false
+        fun mine(item: Item) = CaptureOwnerPolicy.visible(item.ownerState, item.ownerHash, owner)
+        // Only an item the active owner can see can be acknowledged by it.
+        if (items.any { it.id == id && mine(it) }) {
+            items.removeAll { it.id == id }
+            return writeAll(items)
+        }
+        if (items.any { it.id == id }) return false
         val file = try { overflowFileFor(id) } catch (_: Throwable) { null } ?: return false
+        val item = try { readOverflow(file) } catch (_: Throwable) { null } ?: return false
+        if (!mine(item)) return false
         return file.delete()
     }
 
@@ -482,12 +664,327 @@ class DurableCaptureQueue private constructor(
     @Synchronized
     fun purge(): Boolean {
         volatileUnseen = 0
-        val prefsCleared = prefs.edit().clear().commit()
+        // The owner, hint and barrier go too; the epoch only moves forward, so a
+        // publish that read it before this purge is refused.
+        val epoch = try { prefs.getInt(KEY_EPOCH, 0) } catch (_: Throwable) { 0 }
+        val prefsCleared = prefs.edit().clear().commit() &&
+            prefs.edit().putInt(KEY_EPOCH, epoch + 1).commit()
         var filesCleared = true
         (overflowDir.listFiles() ?: emptyArray()).forEach {
             if (!it.delete()) filesCleared = false
         }
         return prefsCleared && filesCleared
+    }
+
+    // ── owner scope (account isolation) ──────────────────────────────────────
+
+    data class OwnerRecord(val uidHash: String, val generation: Int)
+
+    data class RemovalBarrier(val nonce: String, val uidHash: String, val startedAt: String) {
+        fun toMap(): Map<String, Any> =
+            mapOf("nonce" to nonce, "uidHash" to uidHash, "startedAt" to startedAt)
+    }
+
+    enum class ClaimStatus { APPLIED, STALE, OWNER_MISMATCH }
+
+    data class ClaimOutcome(val status: ClaimStatus, val count: Int)
+
+    data class UnboundSummary(val ids: List<String>, val senders: List<String>)
+
+    /** HMAC-SHA256 of the normalized uid, hex. Throws when the key is unavailable. */
+    fun hashOf(uid: String): String {
+        val normalized = CaptureOwnerPolicy.normalize(uid)
+        if (normalized.isEmpty()) throw CaptureOwnerException("owner_changed")
+        val mac = try {
+            macFactory()
+        } catch (_: Throwable) {
+            throw CaptureOwnerException("queue_unavailable")
+        }
+        return mac.doFinal(normalized.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
+    }
+
+    private fun commitOrThrow(editor: SharedPreferences.Editor) {
+        val ok = try { editor.commit() } catch (_: Throwable) { false }
+        if (!ok) throw CaptureOwnerException("queue_unavailable")
+    }
+
+    /** Bumped by every owner clear; Dart reads it BEFORE a publish. */
+    @Synchronized
+    fun ownerEpoch(): Int = prefs.getInt(KEY_EPOCH, 0)
+
+    /** The active owner's hash, or null when nobody is published. */
+    @Synchronized
+    fun activeOwnerHash(): String? = prefs.getString(KEY_OWNER, null)
+
+    /**
+     * Publishes [uid] as the active owner. Compare-and-swap on [expectedEpoch]
+     * (a clear since Dart read it refuses: `owner_changed`); refused during a
+     * Remove-data barrier (`removal_in_progress`). Re-publishing the current
+     * owner keeps its generation. Writes the owner, generation and hint in one
+     * commit.
+     */
+    @Synchronized
+    fun publishOwner(uid: String, expectedEpoch: Int): OwnerRecord {
+        if (readBarrier() != null) throw CaptureOwnerException("removal_in_progress")
+        if (prefs.getInt(KEY_EPOCH, 0) != expectedEpoch) throw CaptureOwnerException("owner_changed")
+        val hash = hashOf(uid)
+        if (prefs.getString(KEY_OWNER, null) == hash) {
+            if (prefs.getString(KEY_HINT, null) != hash) {
+                commitOrThrow(prefs.edit().putString(KEY_HINT, hash))
+            }
+            return OwnerRecord(hash, prefs.getInt(KEY_OWNER_GENERATION, 0))
+        }
+        val generation = prefs.getInt(KEY_GENERATION_COUNTER, 0) + 1
+        commitOrThrow(
+            prefs.edit()
+                .putString(KEY_OWNER, hash)
+                .putInt(KEY_OWNER_GENERATION, generation)
+                .putInt(KEY_GENERATION_COUNTER, generation)
+                .putString(KEY_HINT, hash),
+        )
+        return OwnerRecord(hash, generation)
+    }
+
+    /** The active owner record iff it is [uid]'s; null otherwise. */
+    @Synchronized
+    fun ownerFor(uid: String): OwnerRecord? {
+        val hash = hashOf(uid)
+        if (prefs.getString(KEY_OWNER, null) != hash) return null
+        return OwnerRecord(hash, prefs.getInt(KEY_OWNER_GENERATION, 0))
+    }
+
+    /**
+     * Sign-out ([clearHint] false: the hint stays so the same account can claim
+     * what arrives meanwhile) or an account transition ([clearHint] true).
+     * Nothing queued is deleted: the owner's items wait for it.
+     */
+    @Synchronized
+    fun clearOwner(clearHint: Boolean) {
+        val editor = prefs.edit()
+            .remove(KEY_OWNER)
+            .remove(KEY_OWNER_GENERATION)
+            .putInt(KEY_EPOCH, prefs.getInt(KEY_EPOCH, 0) + 1)
+        if (clearHint) editor.remove(KEY_HINT)
+        commitOrThrow(editor)
+    }
+
+    /** Every queued item with its overflow file (null = main segment). */
+    private fun allEntries(): Pair<MutableList<Item>, List<Pair<File, Item>>> {
+        val main = readAll() ?: throw QueueUnreadableException()
+        val overflow = ArrayList<Pair<File, Item>>()
+        for (file in overflowFiles()) {
+            val item = readOverflow(file) ?: continue
+            overflow.add(file to item)
+        }
+        return main to overflow
+    }
+
+    /** The items [uid] may claim: ids (the CAS snapshot) and distinct senders. */
+    @Synchronized
+    fun unboundSummary(uid: String): UnboundSummary {
+        val hash = hashOf(uid)
+        val (main, overflow) = allEntries()
+        val mine = (main + overflow.map { it.second })
+            .filter { CaptureOwnerPolicy.claimable(it.ownerState, it.ownerHint, hash) }
+        return UnboundSummary(
+            ids = mine.map { it.id },
+            senders = mine.mapNotNull { it.sender }.distinct().sorted(),
+        )
+    }
+
+    /**
+     * "Add them to my account" ([discard] false) / "Discard them" ([discard]
+     * true): applied iff [uid], [replicaOwnerUid] and [sessionUid] agree, the
+     * active owner is exactly `{hash(uid), generation}`, and EVERY id is still
+     * claimable by it. Otherwise nothing changes. Added items are bound
+     * `localOnly` (on device only, never AI).
+     */
+    @Synchronized
+    fun claimUnbound(
+        uid: String,
+        generation: Int,
+        replicaOwnerUid: String,
+        sessionUid: String,
+        ids: List<String>,
+        discard: Boolean,
+    ): ClaimOutcome {
+        if (readBarrier() != null) throw CaptureOwnerException("removal_in_progress")
+        val target = CaptureOwnerPolicy.normalize(uid)
+        if (CaptureOwnerPolicy.normalize(replicaOwnerUid) != target ||
+            CaptureOwnerPolicy.normalize(sessionUid) != target
+        ) {
+            return ClaimOutcome(ClaimStatus.OWNER_MISMATCH, 0)
+        }
+        val hash = hashOf(target)
+        if (prefs.getString(KEY_OWNER, null) != hash ||
+            prefs.getInt(KEY_OWNER_GENERATION, 0) != generation
+        ) {
+            return ClaimOutcome(ClaimStatus.OWNER_MISMATCH, 0)
+        }
+        val wanted = ids.toSet()
+        val (main, overflow) = allEntries()
+        val hitsMain = main.filter { it.id in wanted }
+        val hitsOverflow = overflow.filter { it.second.id in wanted }
+        val all = hitsMain + hitsOverflow.map { it.second }
+        if (wanted.isEmpty() || all.size != wanted.size ||
+            !all.all { CaptureOwnerPolicy.claimable(it.ownerState, it.ownerHint, hash) }
+        ) {
+            return ClaimOutcome(ClaimStatus.STALE, 0)
+        }
+        fun bound(item: Item) = item.copy(
+            ownerState = CaptureOwnerPolicy.STAMPED,
+            ownerHash = hash,
+            ownerHint = null,
+            localOnly = true,
+        )
+        for ((file, item) in hitsOverflow) {
+            val ok = if (discard) file.delete() else replaceOverflow(file, bound(item))
+            if (!ok) throw CaptureOwnerException("queue_unavailable")
+        }
+        if (hitsMain.isNotEmpty()) {
+            val next = if (discard) {
+                main.filterNot { it.id in wanted }
+            } else {
+                main.map { if (it.id in wanted) bound(it) else it }
+            }
+            if (!writeAll(next)) throw CaptureOwnerException("queue_unavailable")
+        }
+        return ClaimOutcome(ClaimStatus.APPLIED, all.size)
+    }
+
+    /** The barrier in force; malformed is an error (fail closed), never absent. */
+    private fun readBarrier(): RemovalBarrier? {
+        val raw = try {
+            prefs.getString(KEY_BARRIER, null)
+        } catch (_: Throwable) {
+            throw CaptureOwnerException("queue_unavailable")
+        } ?: return null
+        return try {
+            val o = JSONObject(raw)
+            RemovalBarrier(o.getString("nonce"), o.getString("uidHash"), o.getString("startedAt"))
+        } catch (_: Throwable) {
+            throw CaptureOwnerException("barrier_malformed")
+        }
+    }
+
+    /** The barrier left by a removal that did not finish, or null. */
+    @Synchronized
+    fun removalBarrier(): RemovalBarrier? = readBarrier()
+
+    /**
+     * Remove data, step 1: persists the barrier (from now on nothing is
+     * enqueued, published or claimed) and clears the owner if it is [uid]'s, in
+     * ONE commit. Idempotent for the same uid (a resumed removal).
+     */
+    @Synchronized
+    fun beginRemoval(uid: String): RemovalBarrier {
+        val hash = hashOf(uid)
+        val existing = readBarrier()
+        if (existing != null && existing.uidHash != hash) {
+            throw CaptureOwnerException("removal_in_progress")
+        }
+        val barrier = existing ?: RemovalBarrier(
+            nonce = UUID.randomUUID().toString().lowercase(Locale.ROOT),
+            uidHash = hash,
+            startedAt = isoNow(),
+        )
+        val editor = prefs.edit().putString(
+            KEY_BARRIER,
+            JSONObject(barrier.toMap()).toString(),
+        )
+        if (prefs.getString(KEY_OWNER, null) == hash) {
+            editor.remove(KEY_OWNER)
+                .remove(KEY_OWNER_GENERATION)
+                .putInt(KEY_EPOCH, prefs.getInt(KEY_EPOCH, 0) + 1)
+        }
+        commitOrThrow(editor)
+        return barrier
+    }
+
+    /**
+     * Remove data, final sweep: deletes every item stamped or hinted to [uid]
+     * (main + overflow), every quarantined blob/file and unfinished temp file
+     * (unreadable, so unattributable: they may hold this owner's messages and
+     * can never be imported by anyone), the hint and owner if they are [uid]'s,
+     * VERIFIES nothing of [uid] remains, and only then clears the barrier.
+     * Anything left throws `removal_incomplete` with the barrier KEPT, so the
+     * next launch resumes. Returns the number of captures deleted.
+     */
+    @Synchronized
+    fun finishRemoval(uid: String): Int {
+        val barrier = readBarrier() ?: return 0
+        val hash = hashOf(uid)
+        if (barrier.uidHash != hash) throw CaptureOwnerException("removal_in_progress")
+        val main = readAll() ?: throw CaptureOwnerException("removal_incomplete")
+        var removed = 0
+        var failed = false
+        for (file in overflowFiles()) {
+            val item = try {
+                readOverflow(file)
+            } catch (_: Throwable) {
+                failed = true
+                null
+            } ?: continue
+            if (CaptureOwnerPolicy.sweptBy(item.ownerHash, item.ownerHint, hash)) {
+                if (file.delete()) removed++ else failed = true
+            }
+        }
+        // Quarantined (unreadable) files and leftover temp files: unattributable.
+        for (file in overflowDir.listFiles() ?: emptyArray()) {
+            val name = file.name
+            if (name.endsWith(QUARANTINE_SUFFIX) || name.endsWith(TEMP_SUFFIX)) {
+                if (!file.delete()) failed = true
+            }
+        }
+        val keep = main.filterNot { CaptureOwnerPolicy.sweptBy(it.ownerHash, it.ownerHint, hash) }
+        removed += main.size - keep.size
+        val editor = prefs.edit().putString(KEY_ITEMS, encode(keep))
+        val quarantineKeys = try {
+            prefs.all.keys.filter { it.startsWith(QUARANTINE_PREFIX) }
+        } catch (_: Throwable) {
+            failed = true
+            emptyList()
+        }
+        quarantineKeys.forEach { editor.remove(it) }
+        if (prefs.getString(KEY_HINT, null) == hash) editor.remove(KEY_HINT)
+        if (prefs.getString(KEY_OWNER, null) == hash) {
+            editor.remove(KEY_OWNER)
+                .remove(KEY_OWNER_GENERATION)
+                .putInt(KEY_EPOCH, prefs.getInt(KEY_EPOCH, 0) + 1)
+        }
+        val committed = try { editor.commit() } catch (_: Throwable) { false }
+        if (!committed || failed || remainsFor(hash)) {
+            android.util.Log.w(TAG, "removal sweep incomplete committed=$committed")
+            throw CaptureOwnerException("removal_incomplete")
+        }
+        commitOrThrow(prefs.edit().remove(KEY_BARRIER))
+        return removed
+    }
+
+    /** Verification read: anything of [hash], or any quarantined residue, left. */
+    private fun remainsFor(hash: String): Boolean {
+        val main = readAll() ?: return true
+        if (main.any { CaptureOwnerPolicy.sweptBy(it.ownerHash, it.ownerHint, hash) }) return true
+        val files = overflowDir.listFiles() ?: emptyArray()
+        for (file in files) {
+            val name = file.name
+            if (name.endsWith(QUARANTINE_SUFFIX) || name.endsWith(TEMP_SUFFIX)) return true
+            if (!file.isFile || !name.endsWith(FILE_SUFFIX)) continue
+            val item = try {
+                fromJson(JSONObject(file.readText(Charsets.UTF_8)))
+            } catch (_: Throwable) {
+                return true
+            }
+            if (CaptureOwnerPolicy.sweptBy(item.ownerHash, item.ownerHint, hash)) return true
+        }
+        val quarantined = try {
+            prefs.all.keys.any { it.startsWith(QUARANTINE_PREFIX) }
+        } catch (_: Throwable) {
+            true
+        }
+        return quarantined || prefs.getString(KEY_HINT, null) == hash ||
+            prefs.getString(KEY_OWNER, null) == hash
     }
 
     @Synchronized

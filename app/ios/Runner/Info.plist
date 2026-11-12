@@ -42,6 +42,11 @@
 				</array>
 			</dict>
 		</array>
+		<key>BGTaskSchedulerPermittedIdentifiers</key>
+		<array>
+			<string>com.youssefsafwat.mali.capture-drain.refresh</string>
+			<string>com.youssefsafwat.mali.capture-drain.processing</string>
+		</array>
 		<key>NSCameraUsageDescription</key>
 		<string>يمكنك التقاط صورة بالكاميرا لاستخدامها كصورة شخصية في ملفك داخل قرش.</string>
 		<key>NSFaceIDUsageDescription</key>
@@ -69,6 +74,11 @@
 				</array>
 			</dict>
 		</dict>
+		<key>UIBackgroundModes</key>
+		<array>
+			<string>fetch</string>
+			<string>processing</string>
+		</array>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>UILaunchStoryboardName</key>

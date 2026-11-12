@@ -1,0 +1,213 @@
+package com.youssefsafwat.mali
+
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
+import androidx.work.WorkManager
+import androidx.work.Worker
+import androidx.work.WorkerParameters
+import io.flutter.plugin.common.MethodChannel
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
+
+/**
+ * The engine that can run a background-triggered drain: the activity's engine,
+ * once its Dart AppShell registered the handler (`setBackgroundDrainReady`).
+ * No engine is ever created for the worker (see [CaptureDrainWorker]).
+ */
+object CaptureDrainHost {
+    @Volatile private var channel: MethodChannel? = null
+    @Volatile private var ready = false
+
+    fun attach(channel: MethodChannel) {
+        this.channel = channel
+        ready = false
+    }
+
+    fun detach(channel: MethodChannel) {
+        if (this.channel === channel) {
+            this.channel = null
+            ready = false
+        }
+    }
+
+    fun setReady(channel: MethodChannel, ready: Boolean) {
+        if (this.channel === channel) this.ready = ready
+    }
+
+    fun readyChannel(): MethodChannel? = if (ready) channel else null
+}
+
+/**
+ * Persistent scheduling of the background capture drain: ONE unique work
+ * ([UNIQUE_WORK]), a network constraint and exponential backoff starting at the
+ * retry ledger's first step (30 s). WorkManager persists the work across
+ * process death and reboot (its own RescheduleReceiver, merged from the
+ * library manifest, uses RECEIVE_BOOT_COMPLETED, which the app declares).
+ * After a force-stop Android cancels the scheduled jobs and delivers no
+ * broadcast (no SMS either) until the user opens the app again; WorkManager
+ * then re-schedules on that next start.
+ */
+object CaptureBackgroundScheduler {
+    const val UNIQUE_WORK = "qirsh.capture_drain.v1"
+    private const val PREFS = "mali_capture_drain_schedule_v1"
+    private const val KEY_RUN_AT = "scheduledRunAtMs"
+    private const val BACKOFF_SECONDS = 30L
+
+    private var running = false
+    private var followUpAtMs: Long? = null
+
+    /** Asks for a drain no earlier than [delayMs] from now. Never duplicates. */
+    @Synchronized
+    fun request(context: Context, delayMs: Long) {
+        val app = context.applicationContext
+        val now = System.currentTimeMillis()
+        val runAt = now + delayMs.coerceAtLeast(0L)
+        val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val scheduled = if (prefs.contains(KEY_RUN_AT)) prefs.getLong(KEY_RUN_AT, 0L) else null
+        when (CaptureDrainSchedulePolicy.decide(running, scheduled, runAt, now)) {
+            CaptureDrainSchedulePolicy.Decision.KEEP_EXISTING -> Unit
+            CaptureDrainSchedulePolicy.Decision.FOLLOW_UP_AFTER_RUN ->
+                followUpAtMs = minOf(followUpAtMs ?: runAt, runAt)
+            CaptureDrainSchedulePolicy.Decision.REPLACE -> {
+                enqueue(app, runAt - now, ExistingWorkPolicy.REPLACE)
+                prefs.edit().putLong(KEY_RUN_AT, runAt).apply()
+            }
+        }
+    }
+
+    /** Sign-out / Remove data / account switch: nothing scheduled may run. */
+    @Synchronized
+    fun cancel(context: Context) {
+        val app = context.applicationContext
+        followUpAtMs = null
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_RUN_AT).apply()
+        WorkManager.getInstance(app).cancelUniqueWork(UNIQUE_WORK)
+    }
+
+    @Synchronized
+    internal fun onWorkerStarted(context: Context) {
+        running = true
+        context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit().remove(KEY_RUN_AT).apply()
+    }
+
+    /** Chains the follow-up a request made while running asked for. */
+    @Synchronized
+    internal fun onWorkerFinished(context: Context) {
+        running = false
+        val next = followUpAtMs ?: return
+        followUpAtMs = null
+        val app = context.applicationContext
+        val now = System.currentTimeMillis()
+        // The current work is still RUNNING here: APPEND_OR_REPLACE queues the
+        // follow-up behind it instead of cancelling it.
+        enqueue(app, (next - now).coerceAtLeast(0L), ExistingWorkPolicy.APPEND_OR_REPLACE)
+        app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putLong(KEY_RUN_AT, maxOf(next, now)).apply()
+    }
+
+    /** Stopped by the OS (constraint lost, cancelled): WorkManager owns the retry. */
+    @Synchronized
+    internal fun onWorkerStopped() {
+        running = false
+        followUpAtMs = null
+    }
+
+    private fun enqueue(app: Context, delayMs: Long, policy: ExistingWorkPolicy) {
+        val request = OneTimeWorkRequest.Builder(CaptureDrainWorker::class.java)
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
+            )
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_SECONDS, TimeUnit.SECONDS)
+            .setInitialDelay(delayMs, TimeUnit.MILLISECONDS)
+            .build()
+        WorkManager.getInstance(app).enqueueUniqueWork(UNIQUE_WORK, policy, request)
+    }
+}
+
+/**
+ * Runs the REAL Dart drain of the live engine (AppShell's leased drain: same
+ * provider graph, account scope, admission checks, consent re-reads, retry
+ * ledger and lease as the foreground) and maps its outcome onto the work.
+ *
+ * It never starts a Flutter engine. A headless engine would have to open the
+ * account replica without a host-issued job, which the database coordinator
+ * (`DatabaseAccessBroker`, rule O) denies to every headless entrant, and it
+ * would bootstrap auth/egress state a second time in the process. With no live
+ * engine the worker therefore ends without doing anything: the queue stays
+ * intact and the next foreground drain (launch/resume) processes it and asks
+ * for the next background run itself.
+ */
+class CaptureDrainWorker(
+    appContext: Context,
+    params: WorkerParameters,
+) : Worker(appContext, params) {
+    private val main = Handler(Looper.getMainLooper())
+    private val stopped = AtomicBoolean(false)
+    @Volatile private var host: MethodChannel? = null
+
+    /** WorkManager's background thread; the channel is driven on the main thread. */
+    override fun doWork(): Result {
+        CaptureBackgroundScheduler.onWorkerStarted(applicationContext)
+        val outcome = AtomicReference<Result?>(null)
+        val answered = CountDownLatch(1)
+        fun answer(result: Result) {
+            if (outcome.compareAndSet(null, result)) answered.countDown()
+        }
+        main.post {
+            val channel = CaptureDrainHost.readyChannel()
+            if (channel == null || stopped.get()) {
+                answer(Result.success())
+                return@post
+            }
+            host = channel
+            channel.invokeMethod(
+                "runBackgroundDrain",
+                null,
+                object : MethodChannel.Result {
+                    override fun success(result: Any?) = answer(
+                        if (CaptureDrainSchedulePolicy.succeeded(result as? String)) {
+                            Result.success()
+                        } else {
+                            Result.retry()
+                        },
+                    )
+
+                    override fun error(code: String, message: String?, details: Any?) =
+                        answer(Result.retry())
+
+                    // The engine has no drain handler (shell not mounted).
+                    override fun notImplemented() = answer(Result.success())
+                },
+            )
+        }
+        if (!answered.await(RUN_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+            main.post { host?.invokeMethod("cancelBackgroundDrain", null) }
+            answer(Result.retry())
+        }
+        if (stopped.get()) return Result.retry()
+        CaptureBackgroundScheduler.onWorkerFinished(applicationContext)
+        return outcome.get() ?: Result.retry()
+    }
+
+    override fun onStopped() {
+        stopped.set(true)
+        CaptureBackgroundScheduler.onWorkerStopped()
+        // The Dart pass stops at its next item boundary; an item in flight
+        // commits or rolls back as a unit and is acknowledged only after commit.
+        main.post { host?.invokeMethod("cancelBackgroundDrain", null) }
+    }
+
+    companion object {
+        /** Under WorkManager's 10-minute execution limit. */
+        private const val RUN_TIMEOUT_MS = 9 * 60_000L
+    }
+}

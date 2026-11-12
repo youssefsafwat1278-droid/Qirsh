@@ -35,9 +35,61 @@ RECEIVE_SMS granted   AND   CaptureSettings.autoCaptureEnabled == true
 
 `SmsCaptureReceiver.onReceive` returns before touching the intent unless the
 opt-in is true. The opt-in defaults to false, is set only by an explicit user
-action after the disclosure, and is reset on identity change so one user's
-consent is never inherited by the next. Revoking the OS permission fails capture
+action after the disclosure, and belongs to the account that turned it on (the
+capture owner's HMAC is stored with it). Revoking the OS permission fails capture
 closed on the next check.
+
+When the opt-in is reset (native, `MainActivity` capture channel):
+
+| Event | Opt-in |
+|---|---|
+| Another account is published as capture owner (account change) | **reset** before that account is stamped on anything |
+| The same account signs in again (after a sign-out, an app restart) | kept |
+| Sign-out | kept (the account's SMS keep arriving as *unbound*, offered back only to it) |
+| Remove data / account deletion (`beginCaptureRemoval`, `finishCaptureRemoval`) | **reset** |
+| An opt-in recorded before this model (no owner) | adopted by the account published at the first launch after the update; reset at the first account change instead |
+
+Until 2026-11-12 this paragraph promised a reset "on identity change" that did
+not happen: the Android owner, removal and purge calls were Dart no-ops
+(`NativeCaptureBridge._hasNativeQueue` was iOS-only) and `purgeAllCaptureState`
+had no production caller, so the opt-in, and every queued SMS, survived sign-out,
+account switch, Remove data and account deletion.
+
+## Account isolation of the capture queue
+
+`DurableCaptureQueue` (SharedPreferences main segment + `files/capture_overflow/`)
+is owner-scoped, the Android counterpart of the iOS queue's owner model:
+
+- Every admission (`AppSession._admitReplica`) publishes the account as the
+  **active owner** (`publishCaptureOwner`, compare-and-swap on the owner epoch).
+  Native keeps only `HMAC(Keystore key, uid)`; no uid is written anywhere.
+- Each capture (SMS receiver and share sheet) is **stamped** at enqueue with the
+  active owner, or is **unbound** when there is none, hinted to the account that
+  owns the SMS opt-in / was last signed in (also an HMAC).
+- The drain (`peekPendingSharedMessages`, `acknowledgeSharedMessage`,
+  `consumePendingSharedMessages`) sees **only the active owner's** stamped
+  captures. Sign-out (`clearCaptureOwner`) keeps them, invisible, until that
+  account signs in again; another account never sees, imports, acknowledges or
+  sends them to AI.
+- Unbound captures are imported only after the explicit claim prompt ("Add them
+  to my account" / "Discard them", `unboundCaptureSummary` /
+  `claimUnboundCaptures`), and only by the hinted account. Claimed captures are
+  `localOnly`: parsed on the device, never sent to AI.
+- Captures queued by a build before this model carry no stamp: they are treated
+  as unbound **without a hint**, never auto-imported, never deleted, and offered
+  through the same claim to the account that signs in.
+- Remove data / account deletion runs the persisted barrier
+  (`beginCaptureRemoval` → replica teardown → `finishCaptureRemoval`): nothing is
+  captured, published or claimed while it is set; the sweep deletes every capture
+  stamped or hinted to that account (main + overflow), every quarantined
+  (unreadable, so unattributable) blob/file and unfinished temp file, resets the
+  opt-in, cancels the scheduled background drain, verifies nothing of the
+  account remains and only then clears the barrier. Anything left is reported
+  (`removal_incomplete`) and the removal resumes at the next launch. Other
+  accounts' captures and unhinted pre-update captures are kept.
+- `NativeCaptureBridge.hasNativeQueue` (the iOS upload gate, egress state,
+  consent mirror) stays iOS-only; Android uses `hasOwnerScopedQueue` for the
+  owner, claim and barrier calls only.
 
 ## What was missing until 2026-09-02
 
@@ -57,8 +109,12 @@ its last production caller.
 ## Still required before publishing
 
 1. Physical-device QA — the matrix in
-   `Qirsh Production/18_Android_SMS_Capture/device_qa_plan.md`. No Android
-   device has ever been attached to this machine.
+   `Qirsh Production/18_Android_SMS_Capture/device_qa_plan.md`, plus the account
+   isolation steps: SMS while A is signed in → sign out → sign in as B (B imports
+   nothing, opt-in off) → back to A (imports it); SMS while signed out → the claim
+   prompt; Remove data with queued SMS (queue empty of A afterwards, opt-in off);
+   an update of a signed-in device with queued SMS (offered through the claim).
+   No Android device has ever been attached to this machine.
 2. Submit the Play permissions declaration and the Data Safety form (both
    drafted, neither submitted).
 3. Reconcile the declaration draft's "no SMS text reaches an AI provider" claim

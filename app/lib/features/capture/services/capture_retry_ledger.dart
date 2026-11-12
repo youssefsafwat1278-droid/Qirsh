@@ -45,6 +45,10 @@ class CaptureRetryDecision {
 abstract class CaptureRetryStore {
   Future<String?> read();
   Future<void> write(String value);
+
+  /// Drops any cached copy so the next [read] sees writes made by another
+  /// engine of this process (a background-triggered drain, a rebuilt scene).
+  Future<void> reload() async {}
 }
 
 class MemoryCaptureRetryStore implements CaptureRetryStore {
@@ -55,6 +59,9 @@ class MemoryCaptureRetryStore implements CaptureRetryStore {
 
   @override
   Future<void> write(String value) async => _value = value;
+
+  @override
+  Future<void> reload() async {}
 }
 
 class PrefsCaptureRetryStore implements CaptureRetryStore {
@@ -69,6 +76,13 @@ class PrefsCaptureRetryStore implements CaptureRetryStore {
   @override
   Future<void> write(String value) async {
     await (await SharedPreferences.getInstance()).setString(_key, value);
+  }
+
+  /// The plugin caches every value per engine; the native store is shared by
+  /// the whole process, so another engine's writes need an explicit reload.
+  @override
+  Future<void> reload() async {
+    await (await SharedPreferences.getInstance()).reload();
   }
 }
 
@@ -175,6 +189,28 @@ class CaptureRetryLedger {
     } catch (_) {
       // Best-effort persistence: the in-memory state still bounds this process.
     }
+  }
+
+  /// Forgets the in-memory copy and re-reads the durable store on next use.
+  /// Called at the start of every leased drain: foreground and
+  /// background-triggered drains may run in different engines of one process,
+  /// and each engine has its own ledger instance over the same store.
+  Future<void> reload() async {
+    _entries = null;
+    try {
+      await _store.reload();
+    } catch (_) {
+      // A failed reload only means the next read may be stale.
+    }
+  }
+
+  /// When the next automatic retry of [payloadId] is allowed, or null when no
+  /// failure is recorded for it (it may run now).
+  Future<DateTime?> dueAt(String payloadId) async {
+    final entry = (await _load())[payloadId];
+    return entry == null
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(entry.dueMs, isUtc: true);
   }
 
   /// Whether an automatic retry of [payloadId] may run now.

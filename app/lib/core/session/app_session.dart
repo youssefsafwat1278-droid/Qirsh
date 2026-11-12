@@ -1160,6 +1160,31 @@ class AppSession extends ValueNotifier<SessionStatus> {
     return outcome;
   }
 
+  /// Android's owner-scoped capture queue (no egress state there: the iOS
+  /// restrictive lifetime below is a separate thing). The epoch is read first
+  /// and the publish is a compare-and-swap on it, sent only while [adm] is
+  /// current, so a sign-out / switch / removal clear can never be overtaken by
+  /// a stale publish. Awaited and bounded; a failure leaves capture unbound
+  /// (claimable, never another account's) and never fails the admission.
+  Future<void> _publishOwnerScopedCaptureOwner(_Admission adm) async {
+    final scope = _accountScope?.activeScope;
+    if (scope == null ||
+        scope.isLocalRead ||
+        scope.database.isReadOnly ||
+        scope.uid != adm.uid ||
+        !adm.current) {
+      return;
+    }
+    try {
+      await NativeCaptureBridge.publishOwnerScopedCaptureOwner(adm.uid,
+              stillCurrent: () => adm.current)
+          .timeout(_kNativePublishTimeout);
+    } catch (_) {
+      // Refused (another clear won, a removal barrier) or unavailable: no
+      // owner is claimed. Codes only are known here; nothing is logged.
+    }
+  }
+
   /// Publishes a fresh restrictive native lifetime for [adm], ordered behind any
   /// earlier fence, and waits (bounded) for the verified receipt. Never throws.
   /// The same uid, epoch and database with a lifetime already published or being
@@ -2107,6 +2132,15 @@ class AppSession extends ValueNotifier<SessionStatus> {
     }
     if (!adm.current) return LocalDataOwnership.revoked;
     _admittedUid = uid;
+    // Android: every admission (re)publishes the owner of the owner-scoped
+    // capture queue, so new captures are stamped to this account and only its
+    // captures are drained. Idempotent for the same account (an app update of a
+    // signed-in user publishes it for the first time). Checked synchronously:
+    // other platforms take no extra async step here.
+    if (NativeCaptureBridge.hasOwnerScopedQueue &&
+        !NativeCaptureBridge.hasNativeQueue) {
+      await _publishOwnerScopedCaptureOwner(adm);
+    }
     if (!adm.explicit && publishOwner) {
       // Awaited and bounded; a publication that did not verify leaves capture
       // unbound until the next admission, and never fails the admission.

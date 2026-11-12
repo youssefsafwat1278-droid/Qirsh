@@ -1,7 +1,8 @@
 // F6 — capture recovery triggers that the platforms actually support while the
 // app is in the FOREGROUND: the adaptive poll, and Android telling Dart about a
-// newly stored capture while its activity is alive. No background execution is
-// added or claimed (no WorkManager, no BGTask, no background modes).
+// newly stored capture while its activity is alive. Background execution is
+// limited to the OS asking the LIVE engine to run this same drain (Android
+// WorkManager, iOS BGTask); no Flutter engine is ever started for it.
 //
 // The drain lives in the AppShell widget State and the wake-up in Kotlin, so
 // these are structural assertions plus the Dart side of the channel.
@@ -105,21 +106,30 @@ void main() {
     });
   });
 
-  group('no background execution is added', () {
-    test('Android: no WorkManager, job or foreground service', () {
+  group('background execution runs only the live engine\'s drain', () {
+    test('Android: one unique network-constrained work, no engine started', () {
       final manifest =
           File('android/app/src/main/AndroidManifest.xml').readAsStringSync();
       final gradle = File('android/app/build.gradle.kts').readAsStringSync();
-      for (final forbidden in ['WorkManager', 'JobService', 'foregroundService']) {
+      final worker = File('$dir/CaptureDrainWorker.kt').readAsStringSync();
+      for (final forbidden in ['JobService', 'foregroundService']) {
         expect(manifest.contains(forbidden), isFalse, reason: forbidden);
       }
-      expect(gradle.contains('work-runtime'), isFalse);
+      expect(gradle, contains('androidx.work:work-runtime:2.7.0'));
+      expect(worker, contains('enqueueUniqueWork(UNIQUE_WORK'));
+      expect(worker, contains('NetworkType.CONNECTED'));
+      expect(worker, contains('"runBackgroundDrain"'));
+      expect(worker.contains('FlutterEngine('), isFalse,
+          reason: 'no headless engine: the coordinator denies it the replica');
+      expect(worker.contains('DartExecutor'), isFalse);
     });
 
-    test('iOS: no background modes or BGTask identifiers', () {
+    test('iOS: BGTasks only, for the same drain', () {
       final plist = File('ios/Runner/Info.plist').readAsStringSync();
-      expect(plist.contains('UIBackgroundModes'), isFalse);
-      expect(plist.contains('BGTaskSchedulerPermittedIdentifiers'), isFalse);
+      expect(plist, contains('com.youssefsafwat.mali.capture-drain.refresh'));
+      expect(
+          plist, contains('com.youssefsafwat.mali.capture-drain.processing'));
+      expect(plist.contains('remote-notification'), isFalse);
     });
   });
 

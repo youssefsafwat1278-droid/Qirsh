@@ -1,5 +1,6 @@
 import AppAuth
 import AppIntents
+import BackgroundTasks
 import Flutter
 import UIKit
 import UserNotifications
@@ -159,6 +160,8 @@ enum ApnsEnvironment {
         withId: "mali_native_tab_bar"
       )
     }
+    // BGTaskScheduler handlers must be registered before launch finishes.
+    CaptureBackgroundDrain.shared.register()
     let didFinish = super.application(application, didFinishLaunchingWithOptions: launchOptions)
     configureNativeCaptureChannelIfNeeded()
     configureExportProtectionChannelIfNeeded()
@@ -691,6 +694,7 @@ enum ApnsEnvironment {
             "unboundQuota": stats.unboundQuota.rawValue,
             "deviceQuota": stats.deviceQuota.rawValue,
             "migrationPending": stats.migrationPending,
+            "quarantinedSegments": stats.quarantinedSegments,
           ]
         }
       case "clearCaptureOwner":
@@ -1030,8 +1034,35 @@ enum ApnsEnvironment {
           return
         }
         queueResult(result) { try SharedCaptureStore.finishRemoval(uid: uid) }
+      // The single process-wide drain lease: foreground and background-
+      // triggered drains of every engine in this process never overlap.
+      case "acquireCaptureDrainLease":
+        let ttlMs = ((call.arguments as? [String: Any])?["ttlMs"] as? NSNumber)?
+          .doubleValue ?? 600_000
+        let token = CaptureDrainLease.shared.acquire(ttl: ttlMs / 1000)
+        result(["granted": token != nil, "token": token ?? NSNull()] as [String: Any])
+      case "releaseCaptureDrainLease":
+        let token = (call.arguments as? [String: Any])?["token"] as? String
+        result(token.map { CaptureDrainLease.shared.release($0) } ?? false)
+      // Captures remain queued: BGTask requests no earlier than the earliest
+      // is due. A request, never a promise of execution.
+      case "scheduleBackgroundCaptureDrain":
+        let delayMs = ((call.arguments as? [String: Any])?["delayMs"] as? NSNumber)?
+          .doubleValue ?? 0
+        CaptureBackgroundDrain.shared.schedule(delay: delayMs / 1000)
+        result(nil)
+      // Sign-out / Remove data / account switch.
+      case "cancelBackgroundCaptureDrain":
+        CaptureBackgroundDrain.shared.cancel()
+        result(nil)
+      case "setBackgroundDrainReady":
+        let ready = (call.arguments as? [String: Any])?["ready"] as? Bool ?? false
+        CaptureBackgroundDrain.shared.setReady(self.captureChannel, ready: ready)
+        result(nil)
       case "purgeAllCaptureState":
         // MALI-054n: wipe this identity's capture residue from the App Group.
+        // Nothing scheduled for the purged identity may run.
+        CaptureBackgroundDrain.shared.cancel()
         result(SharedCaptureStore.purgeUserOwnedState())
       default:
         result(FlutterMethodNotImplemented)
@@ -1039,6 +1070,9 @@ enum ApnsEnvironment {
     }
     captureChannel = channel
     captureChannelController = controller
+    // A new controller is a new engine: not ready until its Dart drain host
+    // says so (setBackgroundDrainReady).
+    CaptureBackgroundDrain.shared.attach(channel)
     registerPendingMessagesObserverIfNeeded()
   }
 
@@ -1294,5 +1328,173 @@ enum ApnsEnvironment {
   private func removePrivacySnapshotView() {
     privacySnapshotView?.removeFromSuperview()
     privacySnapshotView = nil
+  }
+}
+
+/// The single process-wide capture drain lease (same contract as Android's
+/// `CaptureDrainLease`): one holder across every Flutter engine of this
+/// process; it expires after its TTL so a holder whose engine died cannot block
+/// the queue longer than that. Payload idempotency remains the backstop.
+final class CaptureDrainLease {
+  static let shared = CaptureDrainLease()
+
+  private let lock = NSLock()
+  private var token: String?
+  private var expiresAt = Date.distantPast
+
+  func acquire(ttl: TimeInterval, now: Date = Date()) -> String? {
+    lock.lock()
+    defer { lock.unlock() }
+    if token != nil, now < expiresAt { return nil }
+    let next = UUID().uuidString
+    token = next
+    expiresAt = now.addingTimeInterval(min(max(ttl, 1), 15 * 60))
+    return next
+  }
+
+  func release(_ token: String) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    guard token == self.token else { return false }
+    self.token = nil
+    expiresAt = .distantPast
+    return true
+  }
+}
+
+/// Background recovery of queued captures with BGTaskScheduler.
+///
+/// A BGTask runs the REAL Dart drain of the live Flutter engine (the AppShell's
+/// leased drain: same account scope, admission checks, per-message consent
+/// re-reads, retry ledger and lease as the foreground). It never starts a
+/// Flutter engine of its own: a headless engine would have to open the account
+/// replica without a host-issued job, which the database coordinator
+/// (`DatabaseAccessBroker`, rule O) denies to every headless entrant. So:
+///  - app suspended in memory: the system resumes it for the task, the
+///    existing engine drains (upload of a local capture, import of the server
+///    result — server-side processing itself is the backend's);
+///  - app launched in the background for the task (no scene, no engine): the
+///    task completes without doing anything and the queue stays intact; the
+///    next foreground drain processes it;
+///  - user force-quit: iOS does not launch the app for BGTasks at all;
+///  - Background App Refresh off / Low Power Mode: the system may never run the
+///    task. Foreground recovery (launch, resume, the adaptive poll) remains the
+///    fallback in every case.
+/// Content-free: only an earliest-begin timestamp is stored.
+final class CaptureBackgroundDrain {
+  static let shared = CaptureBackgroundDrain()
+
+  static let refreshIdentifier = "com.youssefsafwat.mali.capture-drain.refresh"
+  static let processingIdentifier = "com.youssefsafwat.mali.capture-drain.processing"
+  private static let earliestKey = "capture_drain_earliest_begin_v1"
+
+  private weak var channel: FlutterMethodChannel?
+  private var ready = false
+  private var registered = false
+
+  /// Once, from didFinishLaunching (a second registration would throw).
+  func register() {
+    guard !registered else { return }
+    registered = true
+    for identifier in [Self.refreshIdentifier, Self.processingIdentifier] {
+      BGTaskScheduler.shared.register(forTaskWithIdentifier: identifier, using: nil) {
+        [weak self] task in
+        self?.handle(task)
+      }
+    }
+    NotificationCenter.default.addObserver(
+      forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+    ) { [weak self] _ in
+      self?.submitIfPending()
+    }
+  }
+
+  func attach(_ channel: FlutterMethodChannel) {
+    self.channel = channel
+    ready = false
+  }
+
+  func setReady(_ channel: FlutterMethodChannel?, ready: Bool) {
+    guard let channel = channel, channel === self.channel else { return }
+    self.ready = ready
+  }
+
+  /// Captures remain: remember the earliest moment and ask the system.
+  func schedule(delay: TimeInterval) {
+    let earliest = Date().addingTimeInterval(max(delay, 0))
+    UserDefaults.standard.set(earliest.timeIntervalSince1970, forKey: Self.earliestKey)
+    submit(earliest: earliest)
+  }
+
+  /// Sign-out / Remove data / account switch: nothing scheduled may run.
+  func cancel() {
+    UserDefaults.standard.removeObject(forKey: Self.earliestKey)
+    BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.refreshIdentifier)
+    BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.processingIdentifier)
+  }
+
+  private func submitIfPending() {
+    let stored = UserDefaults.standard.double(forKey: Self.earliestKey)
+    guard stored > 0 else { return }
+    submit(earliest: max(Date(timeIntervalSince1970: stored), Date()))
+  }
+
+  /// Same identifier = the previous request is replaced: never duplicates.
+  private func submit(earliest: Date) {
+    let refresh = BGAppRefreshTaskRequest(identifier: Self.refreshIdentifier)
+    refresh.earliestBeginDate = earliest
+    let processing = BGProcessingTaskRequest(identifier: Self.processingIdentifier)
+    processing.earliestBeginDate = earliest
+    processing.requiresNetworkConnectivity = true
+    processing.requiresExternalPower = false
+    // Refused in the simulator, with Background App Refresh off, or over the
+    // per-app limit: the foreground drain is the fallback.
+    try? BGTaskScheduler.shared.submit(refresh)
+    try? BGTaskScheduler.shared.submit(processing)
+  }
+
+  private func handle(_ task: BGTask) {
+    var completed = false
+    func complete(_ success: Bool) {
+      guard !completed else { return }
+      completed = true
+      task.setTaskCompleted(success: success)
+    }
+    task.expirationHandler = { [weak self] in
+      DispatchQueue.main.async {
+        // The Dart pass stops at its next item boundary; an item in flight
+        // commits or rolls back as a unit and is acknowledged only after it
+        // committed. Whatever remains is asked for again.
+        self?.channel?.invokeMethod("cancelBackgroundDrain", arguments: nil)
+        self?.submitIfPending()
+        complete(false)
+      }
+    }
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self, self.ready, let channel = self.channel else {
+        // No live engine with a drain host: nothing may run here. The pending
+        // timestamp stays, so the next background entry asks again.
+        complete(false)
+        return
+      }
+      channel.invokeMethod("runBackgroundDrain", arguments: nil) { reply in
+        switch reply as? String {
+        case "done":
+          UserDefaults.standard.removeObject(forKey: Self.earliestKey)
+          complete(true)
+        case "pending", "deferred":
+          // pending: Dart already asked for the next run at the right time.
+          // deferred: signed out / not admitted; sign-out cancels the request.
+          complete(true)
+        case .some:
+          // busy / cancelled / failed: ask again later.
+          self.schedule(delay: 60)
+          complete(false)
+        case .none:
+          // No Dart handler (or an error): the next foreground drain decides.
+          complete(false)
+        }
+      }
+    }
   }
 }

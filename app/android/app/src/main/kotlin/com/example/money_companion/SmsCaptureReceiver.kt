@@ -71,8 +71,18 @@ class SmsCaptureReceiver : BroadcastReceiver() {
                 source = "sms",
                 receivedAt = DurableCaptureQueue.isoOf(smsEpochMs),
                 receivedAtEpochMs = smsEpochMs,
+                // With no active owner (signed out, mid account change) the SMS
+                // is unbound, hinted to the account that consented to its
+                // capture. Ignored when an owner is active (stamped instead).
+                ownerHint = CaptureSettings.optInOwner(context),
             ),
         )
+        if (result == DurableCaptureQueue.EnqueueResult.STORED) {
+            // One unique, network-constrained background drain. It runs the
+            // live engine's drain only (none is ever started for it); the
+            // drain re-checks the signed-in admission and consent itself.
+            CaptureBackgroundScheduler.request(context, 0L)
+        }
         if (result == DurableCaptureQueue.EnqueueResult.NOT_PERSISTED) {
             // A receiver has no UI and may be killed on return: the queue has
             // already retried the write once and counted the refusal, and the
