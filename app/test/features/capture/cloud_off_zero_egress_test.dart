@@ -29,11 +29,13 @@ import '../../harness/egress_test_support.dart';
 // A-12-min — CLOUD OFF = ZERO EGRESS. A network spy: every transport the
 // capture path owns is a fake that records the call, and the tests assert the
 // call list is EMPTY across admission, capture, sign-out, sign-in, resume, a
-// 401 and Remove data. The only exception is the single, one-shot revoke INSIDE
-// the user's own ON->OFF transition (CaptureDeviceRegistrationService.
+// 401 and Remove data. The only exceptions are the single, one-shot revoke
+// INSIDE the user's own ON->OFF transition (CaptureDeviceRegistrationService.
 // disableCloud, kRevokeAtCloudSwitchOff): the freeze comes first, the revoke is
 // the last control-plane action of the ON state, OFF is committed whatever it
-// does, and it is never sent again (sync, resume, relaunch, timers).
+// does; and (approved 2026-11-12) the retry of THAT revoke when it did not land:
+// the revoke only, its own owner, bounded backoff, never while ON, never after
+// a newer grant the server acknowledged (see the last group).
 
 class _MemoryKeyStore implements DatabaseKeyStore {
   @override
@@ -162,6 +164,8 @@ class _SpyConsent extends CaptureConsentClient {
 
   /// Astra G C.3: the one-shot `revoke_capture_consent` (JWT).
   final revokes = <_Consent>[];
+  final revokeOwners = <String>[];
+  final revokeGenerations = <int>[];
   RevokeResult revokeResult = const RevokeResult(ok: true, applied: true);
 
   @override
@@ -174,6 +178,8 @@ class _SpyConsent extends CaptureConsentClient {
     required int version,
   }) async {
     calls.add('revoke');
+    revokeOwners.add(ownerUid);
+    revokeGenerations.add(transitionGeneration);
     await onSet?.call();
     if (setError != null) throw setError!;
     revokes.add((cloud: false, ai: false, version: version));
@@ -214,17 +220,22 @@ void main() {
     Duration timeout = kCloudOffRevokeTimeout,
     FlutterSecureStorage? storage,
     Future<Directory> Function()? markerDirectory,
+    List<Duration> backoff = kRevokeRetryBackoff,
+    DateTime Function()? now,
+    bool android = false,
   }) =>
       CaptureDeviceRegistrationService(
         revokeAtSwitchOff: revoke,
         revokeTimeout: timeout,
+        revokeRetryBackoff: backoff,
+        now: now,
         markerDirectory: markerDirectory ?? () async => markerDir,
         settingsRepository: repo,
         client: backend,
         consentClient: consent,
         storage: storage ?? const FlutterSecureStorage(),
-        isIos: () => true,
-        isAndroid: () => false,
+        isIos: () => !android,
+        isAndroid: () => android,
         isBackendConfigured: () => backendConfigured,
         loadInstallId: () async => 'install-id',
         writeNativeBackendConfig: ({
@@ -675,7 +686,8 @@ void main() {
       expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
     });
 
-    test('POINT 4: after a failure nothing ever retries the revoke', () async {
+    test('POINT 4: after a failure no ordinary path re-sends the revoke, and '
+        'the approved retry waits for its backoff', () async {
       final s = await linkedOn();
       consent.setError = const CaptureBackendException('offline');
       await s.disableCloud(commitLocalOff: commit);
@@ -689,7 +701,8 @@ void main() {
       await relaunched.resolvePendingDisable();
       await relaunched.syncBackendState();
       await Future<void>.delayed(const Duration(milliseconds: 200)); // timers
-      expect(calls, ['revoke'], reason: 'one attempt, success or not');
+      expect(calls, ['revoke'],
+          reason: 'one attempt until the retry backoff elapses');
     });
 
     test('POINT 4: a durable consumed revoke_attempt for this (owner, '
@@ -969,7 +982,7 @@ void main() {
     });
 
     test('POINTS 3+4: a failing or timed-out revoke still commits OFF and is '
-        'never retried', () async {
+        'not re-sent before the approved retry backoff', () async {
       final s = await androidOn(timeout: const Duration(milliseconds: 50));
       consent.onSet = () => Completer<void>().future;
       await s.disableCloud(commitLocalOff: commit);
@@ -1259,6 +1272,280 @@ void main() {
       await s.linkToCurrentUser(); // A re-links
       expect(await s.isLinkedForCloud(), isTrue);
     });
+  });
+
+  // Approved 2026-11-12 (product owner): a revoke whose one-shot send did not
+  // land is persisted and retried with bounded backoff, ONLY the revoke
+  // (identifiers only), only for its own signed-in owner, only while Cloud stays
+  // OFF at its generation, never after a newer grant. Nothing else is sent and
+  // local consent never reopens.
+  group('the retry of a revoke that did not land (approved 2026-11-12)', () {
+    late DateTime clock;
+    const backoff = [Duration(seconds: 30), Duration(minutes: 1)];
+    var commits = 0;
+    Future<void> commitOff() async {
+      commits++;
+      await save(cloud: ConsentState.declined, ai: ConsentState.declined);
+    }
+
+    Future<void> commitOn() async {
+      await save(
+          cloud: ConsentState.accepted, ai: ConsentState.accepted, enable: false);
+    }
+
+    final made = <CaptureDeviceRegistrationService>[];
+    CaptureDeviceRegistrationService svc({bool android = false}) {
+      final s = service(backoff: backoff, now: () => clock, android: android);
+      made.add(s);
+      return s;
+    }
+
+    setUp(() {
+      clock = DateTime.utc(2026, 11, 12, 20);
+      commits = 0;
+      made.clear();
+    });
+    tearDown(() {
+      for (final s in made) {
+        s.dispose();
+      }
+    });
+
+    Future<CaptureDeviceRegistrationService> offWithMissedRevoke(
+        {bool android = false}) async {
+      await save(cloud: ConsentState.accepted, ai: ConsentState.accepted);
+      final s = svc(android: android);
+      await s.syncBackendState();
+      expect(consent.links, hasLength(1));
+      consent.setError = const CaptureBackendException('offline');
+      await s.disableCloud(commitLocalOff: commitOff);
+      consent.setError = null;
+      expect(commits, 1);
+      expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+      calls.clear();
+      consent.revokeOwners.clear();
+      consent.revokeGenerations.clear();
+      return s;
+    }
+
+    void elapse(Duration d) => clock = clock.add(d);
+
+    test('stays pending; not resent before its backoff; then once, only the '
+        'revoke, and silence after the server confirmed', () async {
+      final s = await offWithMissedRevoke();
+      final gen = await s.pendingRevocationGeneration('uid-a');
+      expect(gen, isNotNull);
+      await s.syncBackendState();
+      expect(calls, isEmpty, reason: 'backoff not elapsed');
+
+      elapse(const Duration(seconds: 31));
+      await s.syncBackendState();
+      expect(calls, ['revoke']);
+      expect(consent.revokeOwners, ['uid-a']);
+      expect(consent.revokeGenerations, [gen]);
+      expect(await s.pendingRevocationGeneration('uid-a'), isNull);
+      expect((await s.serverRevocation())!.status, ServerRevocation.confirmed);
+
+      elapse(const Duration(hours: 3));
+      for (var i = 0; i < 3; i++) {
+        await s.syncBackendState();
+      }
+      await svc().syncBackendState(); // a relaunched instance
+      expect(calls, ['revoke'], reason: 'confirmed: never again');
+      final settings = await repo.getSettings();
+      expect(settings.cloudProcessingEnabled, isFalse);
+      expect(settings.aiConsentGranted, isFalse,
+          reason: 'the retry never reopens local consent');
+    });
+
+    test('a failing retry backs off (bounded: the last step repeats) and '
+        'keeps the record', () async {
+      final s = await offWithMissedRevoke();
+      consent.setError = const CaptureBackendException('offline');
+      elapse(const Duration(seconds: 31));
+      await s.syncBackendState();
+      expect(calls, ['revoke']);
+      await s.syncBackendState();
+      elapse(const Duration(seconds: 59));
+      await s.syncBackendState();
+      expect(calls, ['revoke'], reason: 'next step is 1 min');
+      elapse(const Duration(seconds: 2));
+      await s.syncBackendState();
+      expect(calls, ['revoke', 'revoke']);
+      elapse(const Duration(seconds: 61));
+      await s.syncBackendState();
+      expect(calls, ['revoke', 'revoke', 'revoke'], reason: 'capped at 1 min');
+      expect(await s.pendingRevocationGeneration('uid-a'), isNotNull);
+    });
+
+    test('only for the same signed-in owner: never while signed out or for '
+        'another account', () async {
+      final s = await offWithMissedRevoke();
+      elapse(const Duration(seconds: 31));
+
+      session = null;
+      await s.syncBackendState();
+      expect(calls, isEmpty, reason: 'signed out');
+
+      session = (uid: 'uid-b', jwt: 'jwt-b');
+      replicaOwner = 'uid-b';
+      egress.owner = 'uid-b';
+      await svc().syncBackendState();
+      expect(calls, isEmpty, reason: "B never sends A's revoke");
+
+      session = (uid: 'uid-a', jwt: 'jwt-a');
+      replicaOwner = 'uid-a';
+      egress.owner = 'uid-a';
+      await s.syncBackendState();
+      expect(calls, ['revoke']);
+      expect(consent.revokeOwners, ['uid-a']);
+    });
+
+    test('an explicit re-enable (Off -> On) is never revoked: the record is '
+        'dormant while ON and ends once the server acknowledged the grant',
+        () async {
+      final s = await offWithMissedRevoke();
+      await s.enableCloudForTest(commitLocalOn: commitOn);
+      elapse(const Duration(hours: 2));
+      await s.syncBackendState(); // retry first (dormant), then the ON link
+      expect(calls, isNot(contains('revoke')));
+      expect(calls, contains('link'), reason: 'the ON state reaches the server');
+      await s.syncBackendState(); // the acknowledged grant supersedes it
+      expect(calls, isNot(contains('revoke')));
+      expect(await s.pendingRevocationGeneration('uid-a'), isNull);
+      expect((await repo.getSettings()).cloudProcessingEnabled, isTrue);
+    });
+
+    test('a newer ON in the gate record alone: nothing is sent while ON',
+        () async {
+      final s = await offWithMissedRevoke();
+      await egress.gate.enable(owner: 'uid-a', reservedVersion: 99);
+      elapse(const Duration(seconds: 31));
+      await s.syncBackendState();
+      expect(consent.revokeOwners, isEmpty);
+    });
+
+    test('Off -> On (acknowledged) -> Off: only the newest revoke is retried',
+        () async {
+      final s = await offWithMissedRevoke();
+      final g1 = (await s.pendingRevocationGeneration('uid-a'))!;
+      await s.enableCloudForTest(commitLocalOn: commitOn);
+      await s.syncBackendState(); // the ON reaches the server (ack)
+      consent.setError = const CaptureBackendException('offline');
+      await s.disableCloud(commitLocalOff: commitOff);
+      consent.setError = null;
+      final g2 = (await s.pendingRevocationGeneration('uid-a'))!;
+      expect(g2, greaterThan(g1));
+      calls.clear();
+      consent.revokeGenerations.clear();
+      elapse(const Duration(seconds: 31));
+      await s.syncBackendState();
+      expect(calls, ['revoke']);
+      expect(consent.revokeGenerations, [g2]);
+      expect(await s.pendingRevocationGeneration('uid-a'), isNull);
+    });
+
+    test('Off -> On (never reached the server) -> Off: the server still holds '
+        'the FIRST grant, so the revoke is kept, moved to the new generation '
+        'and sent once', () async {
+      final s = await offWithMissedRevoke();
+      final g1 = (await s.pendingRevocationGeneration('uid-a'))!;
+      await s.enableCloudForTest(commitLocalOn: commitOn); // offline: no sync
+      await s.disableCloud(commitLocalOff: commitOff);
+      expect(calls, isNot(contains('revoke')),
+          reason: 'no acknowledgment: the one-shot sends nothing');
+      final g2 = (await s.pendingRevocationGeneration('uid-a'))!;
+      expect(g2, greaterThan(g1));
+      elapse(const Duration(seconds: 31));
+      await s.syncBackendState();
+      expect(calls, ['revoke']);
+      expect(consent.revokeGenerations, [g2]);
+      expect(await s.pendingRevocationGeneration('uid-a'), isNull);
+    });
+
+    for (final answer in <String, Object>{
+      'stale_generation': const RevokeResult(
+          ok: true, applied: false, reason: 'stale_generation'),
+      'owner_mismatch': const RevokeResult(
+          ok: true, applied: false, reason: 'owner_mismatch'),
+      '409': const CaptureBackendException('revoke_failed_409'),
+    }.entries) {
+      test('a server answer that can never apply (${answer.key}) ends it',
+          () async {
+        final s = await offWithMissedRevoke();
+        if (answer.value is RevokeResult) {
+          consent.revokeResult = answer.value as RevokeResult;
+        } else {
+          consent.setError = answer.value;
+        }
+        elapse(const Duration(seconds: 31));
+        await s.syncBackendState();
+        expect(calls, ['revoke']);
+        expect(await s.pendingRevocationGeneration('uid-a'), isNull);
+        elapse(const Duration(hours: 2));
+        await s.syncBackendState();
+        expect(calls, ['revoke']);
+      });
+    }
+
+    test('a 401 (e.g. an expired session) keeps it for a later attempt',
+        () async {
+      final s = await offWithMissedRevoke();
+      consent.setError = const CaptureBackendException('revoke_failed_401');
+      elapse(const Duration(seconds: 31));
+      await s.syncBackendState();
+      expect(calls, ['revoke']);
+      expect(await s.pendingRevocationGeneration('uid-a'), isNotNull);
+    });
+
+    test('the record is durable BEFORE the one-shot send (a crash mid-send '
+        "leaves it) and is removed only by the server's answer", () async {
+      await save(cloud: ConsentState.accepted, ai: ConsentState.accepted);
+      final s = svc();
+      await s.syncBackendState();
+      final hang = Completer<void>();
+      consent.onSet = () => hang.future;
+      final done = s.disableCloud(commitLocalOff: commitOff);
+      await _waitFor(() => calls.contains('revoke'));
+      expect(await svc().pendingRevocationGeneration('uid-a'), isNotNull,
+          reason: 'what a crash right now would leave behind');
+      hang.complete();
+      await done;
+      consent.onSet = null;
+      expect(await s.pendingRevocationGeneration('uid-a'), isNull);
+    });
+
+    test('Android: the same retry, the same limits', () async {
+      final s = await offWithMissedRevoke(android: true);
+      await s.syncBackendState();
+      expect(calls, isEmpty);
+      elapse(const Duration(seconds: 31));
+      await s.syncBackendState();
+      expect(calls, ['revoke']);
+      expect(await s.pendingRevocationGeneration('uid-a'), isNull);
+    });
+  });
+
+  test('the retry timer fires by itself while the app runs (real clock)',
+      () async {
+    await save(cloud: ConsentState.accepted, ai: ConsentState.accepted);
+    final s = service(backoff: const [Duration(milliseconds: 40)]);
+    await s.syncBackendState();
+    consent.setError = const CaptureBackendException('offline');
+    await s.disableCloud(
+        commitLocalOff: () =>
+            save(cloud: ConsentState.declined, ai: ConsentState.declined));
+    consent.setError = null;
+    calls.clear();
+    await _waitFor(() => calls.isNotEmpty, limit: const Duration(seconds: 3));
+    final sw = Stopwatch()..start();
+    while (await service().pendingRevocationGeneration('uid-a') != null &&
+        sw.elapsed < const Duration(seconds: 3)) {
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+    }
+    s.dispose();
+    expect(calls, ['revoke']);
+    expect(await service().pendingRevocationGeneration('uid-a'), isNull);
   });
 }
 

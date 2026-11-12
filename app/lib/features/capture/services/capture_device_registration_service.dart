@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -71,6 +72,22 @@ const bool kRevokeAtCloudSwitchOff = true;
 /// 5 s covers a normal mobile round trip of this tiny content-free call, and a
 /// slower server is covered by CAP-3 retention. Timing out never blocks OFF.
 const Duration kCloudOffRevokeTimeout = Duration(seconds: 5);
+
+/// Approved 2026-11-12 (product owner): a revoke whose one-shot send did not
+/// land is retried with this bounded backoff (the last step repeats) until the
+/// server answers, a newer grant supersedes it, or it can never apply. Only the
+/// revoke itself is retried (identifiers only), only for its own signed-in
+/// owner, and only while Cloud stays OFF at that revoke's generation
+/// ([CloudEgressGate.runRevokeRetry]). Local AI never reopens because of it.
+const List<Duration> kRevokeRetryBackoff = [
+  Duration(seconds: 30),
+  Duration(minutes: 1),
+  Duration(minutes: 2),
+  Duration(minutes: 5),
+  Duration(minutes: 15),
+  Duration(minutes: 30),
+  Duration(hours: 1),
+];
 
 /// WP-6: the consent the replica holds, as projected to the server and to the
 /// native mirror. Derived ONLY from the replica's own explicit, versioned choice
@@ -279,6 +296,8 @@ class CaptureDeviceRegistrationService {
     Future<CaptureOwnerRecord?> Function()? readCaptureOwner,
     bool revokeAtSwitchOff = kRevokeAtCloudSwitchOff,
     Duration revokeTimeout = kCloudOffRevokeTimeout,
+    List<Duration> revokeRetryBackoff = kRevokeRetryBackoff,
+    DateTime Function()? now,
     Future<Directory> Function()? markerDirectory,
     CloudEgressGate? gate,
     bool Function()? isCurrentScope,
@@ -294,6 +313,8 @@ class CaptureDeviceRegistrationService {
         _gateOverride = gate,
         _revokeAtSwitchOff = revokeAtSwitchOff,
         _revokeTimeout = revokeTimeout,
+        _revokeRetryBackoff = revokeRetryBackoff,
+        _now = now ?? DateTime.now,
         _markerDirectory = markerDirectory ?? getApplicationSupportDirectory,
         _settingsRepository = settingsRepository,
         _client = client,
@@ -347,6 +368,13 @@ class CaptureDeviceRegistrationService {
   static const _serverRevocationKey = 'qirsh.capture_server_revocation.v1';
   static const _serverRevocationFile = 'capture_server_revocation.v1';
 
+  /// Revokes the server has not confirmed yet, per owner:
+  /// `{owner: {g: transition_generation, v: consent_version, n: attempts,
+  /// at: next attempt (epoch ms)}}`. Written BEFORE the one-shot send, removed
+  /// once the server answered or a newer grant superseded it. Identifiers only.
+  static const _pendingRevocationKey = 'qirsh.capture_pending_revocation.v1';
+  static const _pendingRevocationFile = 'capture_pending_revocation.v1';
+
   /// One transition at a time, process-wide (the UI and startup own different
   /// service instances).
   static Future<void>? _disableInFlight;
@@ -372,6 +400,8 @@ class CaptureDeviceRegistrationService {
   void dispose() {
     _disposed = true;
     _syncGeneration++;
+    _revokeRetryTimer?.cancel();
+    _revokeRetryTimer = null;
   }
 
   bool Function() _captureLifetime({
@@ -412,6 +442,10 @@ class CaptureDeviceRegistrationService {
   final Future<CaptureOwnerRecord?> Function() _readCaptureOwner;
   final bool _revokeAtSwitchOff;
   final Duration _revokeTimeout;
+  final List<Duration> _revokeRetryBackoff;
+  final DateTime Function() _now;
+  Timer? _revokeRetryTimer;
+  Future<void>? _revokeRetryInFlight;
   final CloudEgressGate? _gateOverride;
 
   /// App-support directory for the file copies of the revoke records.
@@ -440,6 +474,10 @@ class CaptureDeviceRegistrationService {
   _DualSlot get _serverRevocationSlots => _DualSlot(
       SecureStorageSlot(_storage, _serverRevocationKey),
       FileSlot(_markerDirectory, _serverRevocationFile));
+
+  _DualSlot get _pendingRevocationSlots => _DualSlot(
+      SecureStorageSlot(_storage, _pendingRevocationKey),
+      FileSlot(_markerDirectory, _pendingRevocationFile));
 
   bool _cloudOn(UserSettingsEntity s) => _isAndroid()
       ? s.cloudProcessingEnabled || s.aiConsentGranted
@@ -523,6 +561,10 @@ class CaptureDeviceRegistrationService {
   /// [syncNativeState] directly.
   Future<void> syncBackendState() async {
     final current = _captureLifetime();
+    if (!current()) return;
+    // Startup, resume and the periodic poll all land here: the moments a
+    // revoke that did not land may be retried (its own gate and backoff).
+    await retryPendingRevocation();
     if (!current()) return;
     final ios = _isIos();
     if (!ios && !_isAndroid()) return;
@@ -2904,6 +2946,13 @@ class CaptureDeviceRegistrationService {
   Future<void> _revokeOnce(DisableFreeze freeze, _RevokeInputs? inputs) async {
     if (inputs == null) {
       await _recordRevocation(freeze, ServerRevocation.notAttempted);
+      // Off -> On (never acknowledged by the server) -> Off: the server may
+      // still hold the grant an earlier, still-pending revoke was for. That
+      // revoke moves to THIS transition's generation (never sent here).
+      if (await pendingRevocationGeneration(freeze.owner) != null) {
+        await _notePendingRevocation(freeze);
+        _scheduleRevokeRetry(_revokeRetryBackoff.first);
+      }
       return;
     }
     if (await _attemptRecorded(freeze)) {
@@ -2917,8 +2966,12 @@ class CaptureDeviceRegistrationService {
       'transition_generation': freeze.transitionGeneration,
       'consumed': true,
     });
+    // Durable BEFORE the send: a crash, a timeout or no network leaves it for
+    // [retryPendingRevocation]; only the server's answer removes it.
+    await _notePendingRevocation(freeze);
     if (!await _revokeAttemptSlots.write(attempt)) {
       await _recordRevocation(freeze, ServerRevocation.notAttempted);
+      _scheduleRevokeRetry(_revokeRetryBackoff.first);
       return;
     }
     await _clearAck();
@@ -2938,9 +2991,230 @@ class CaptureDeviceRegistrationService {
         status = ServerRevocation.confirmed;
       }
     } catch (_) {
-      // Best-effort and final: CAP-3 retention covers a call that never lands.
+      // The one-shot is final; a revoke that did not land stays pending and is
+      // retried by [retryPendingRevocation] (bounded backoff, same owner, Cloud
+      // still OFF at this generation).
     }
     await _recordRevocation(freeze, status);
+    if (status == ServerRevocation.confirmed) {
+      await _forgetPendingRevocation(freeze.owner, freeze.transitionGeneration);
+    } else {
+      _scheduleRevokeRetry(_revokeRetryBackoff.first);
+    }
+  }
+
+  // ── Approved 2026-11-12: the retry of a revoke that did not land ──────────
+
+  Future<Map<String, Map<String, int>>> _readPendingRevocations() async {
+    final raw = await _pendingRevocationSlots.read();
+    if (raw == null || raw.isEmpty) return {};
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) throw const FormatException('pending_revocation');
+    final out = <String, Map<String, int>>{};
+    decoded.forEach((owner, entry) {
+      if (owner is! String || entry is! Map) return;
+      final g = entry['g'], v = entry['v'], n = entry['n'], at = entry['at'];
+      if (g is int && v is int && n is int && at is int) {
+        out[owner] = {'g': g, 'v': v, 'n': n, 'at': at};
+      }
+    });
+    return out;
+  }
+
+  Future<bool> _writePendingRevocations(Map<String, Map<String, int>> all) =>
+      _pendingRevocationSlots.write(jsonEncode(all));
+
+  /// Records (or replaces with) [freeze]'s revoke as pending for its owner. A
+  /// newer transition of the same owner replaces an older one.
+  Future<void> _notePendingRevocation(DisableFreeze freeze) async {
+    try {
+      final all = await _readPendingRevocations();
+      final held = all[freeze.owner];
+      if (held != null && held['g']! > freeze.transitionGeneration) return;
+      all[freeze.owner] = {
+        'g': freeze.transitionGeneration,
+        'v': freeze.reservedVersion,
+        'n': 0,
+        'at': _now()
+            .add(_revokeRetryBackoff.first)
+            .millisecondsSinceEpoch,
+      };
+      await _writePendingRevocations(all);
+    } catch (_) {}
+  }
+
+  /// Removes [owner]'s pending revoke (at or below [generation] when given).
+  Future<void> _forgetPendingRevocation(String owner, [int? generation]) async {
+    try {
+      final all = await _readPendingRevocations();
+      final held = all[owner];
+      if (held == null) return;
+      if (generation != null && held['g']! > generation) return;
+      all.remove(owner);
+      await _writePendingRevocations(all);
+    } catch (_) {}
+  }
+
+  /// Read-only diagnostics: whether [owner] has a revoke the server has not
+  /// confirmed yet. Generation only; never a uid, secret or content.
+  Future<int?> pendingRevocationGeneration(String owner) async {
+    try {
+      return (await _readPendingRevocations())[owner]?['g'];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _scheduleRevokeRetry(Duration delay) {
+    if (_disposed) return;
+    _revokeRetryTimer?.cancel();
+    _revokeRetryTimer = Timer(delay, () {
+      _revokeRetryTimer = null;
+      unawaited(retryPendingRevocation().catchError((Object _) {}));
+    });
+  }
+
+  /// Retries the signed-in owner's revoke that did not land, when its backoff
+  /// has elapsed. Never for another account (the revoke needs that owner's own
+  /// JWT), never once Cloud is ON again or a newer transition exists (then the
+  /// pending revoke is superseded and dropped), never while a transition runs.
+  /// It only ever sends the revoke; it never changes local consent.
+  Future<void> retryPendingRevocation() {
+    final running = _revokeRetryInFlight;
+    if (running != null) return running;
+    final run = _retryPendingRevocation().catchError((Object _) {});
+    _revokeRetryInFlight = run;
+    return run.whenComplete(() {
+      if (identical(_revokeRetryInFlight, run)) _revokeRetryInFlight = null;
+    });
+  }
+
+  Future<void> _retryPendingRevocation() async {
+    if (_disposed || !_revokeAtSwitchOff || !_isBackendConfigured()) return;
+    if (!_isIos() && !_isAndroid()) return;
+    final Map<String, Map<String, int>> all;
+    try {
+      all = await _readPendingRevocations();
+    } catch (_) {
+      return;
+    }
+    if (all.isEmpty) return;
+    final session = _readSession();
+    if (session == null) return; // signed out: waits for its own owner
+    final owner = session.uid;
+    final p = all[owner];
+    if (p == null) return; // another account's revoke waits for that account
+    final generation = p['g']!, version = p['v']!, attempts = p['n']!;
+    final due = DateTime.fromMillisecondsSinceEpoch(p['at']!);
+    final now = _now();
+    if (now.isBefore(due)) {
+      _scheduleRevokeRetry(due.difference(now));
+      return;
+    }
+    if (ConsentAuthority.egressFrozen ||
+        _disableInFlight != null ||
+        _enableInFlight != null) {
+      return; // a transition is running; its own outcome decides
+    }
+    if (await _readReplicaOwnerUid() != owner) return;
+    // A newer grant the SERVER acknowledged supersedes this revoke (the server
+    // refuses it from then on: stale_generation). An explicit re-enable the
+    // server never heard of does not: the revoke then waits, never sent while
+    // Cloud is ON, and a later OFF moves it to that transition.
+    final ack = await _readAck(owner);
+    if (ack != null && ack.version > version) {
+      await _forgetPendingRevocation(owner, generation);
+      return;
+    }
+    final settings = await _settingsRepository.getSettings();
+    if (_cloudOn(settings)) return; // explicitly re-enabled: dormant, not sent
+    final EgressView view;
+    try {
+      view = await _gate.view(owner: owner);
+    } catch (_) {
+      return _backOffRevokeRetry(owner, generation, attempts);
+    }
+    final rec = view.record;
+    if (view.uncertain || rec == null) {
+      return _backOffRevokeRetry(owner, generation, attempts);
+    }
+    if (rec.state != EgressState.off) return; // ON or mid-transition: not sent
+    if (rec.transitionGeneration < generation) {
+      return _backOffRevokeRetry(owner, generation, attempts);
+    }
+    var sendGeneration = generation, sendVersion = version;
+    if (rec.transitionGeneration > generation) {
+      // OFF again after an unacknowledged ON: revoke at the CURRENT transition
+      // (the gate admits nothing else) and keep the record in step with it.
+      sendGeneration = rec.transitionGeneration;
+      sendVersion = rec.reservedVersion;
+      await _notePendingRevocation(DisableFreeze(
+          owner: owner,
+          transitionGeneration: sendGeneration,
+          reservedVersion: sendVersion));
+    }
+    final secret = await _storage.read(key: _secretKey);
+    if (secret == null || secret.isEmpty) return; // nothing to authenticate
+    final installId = await _loadInstallId();
+    final freeze = DisableFreeze(
+        owner: owner,
+        transitionGeneration: sendGeneration,
+        reservedVersion: sendVersion);
+    try {
+      final result = await _gate.runRevokeRetry(owner, sendGeneration,
+          _revokeTimeout, () {
+        return _consent.revoke(
+          installId: installId,
+          deviceSecret: secret,
+          jwt: session.jwt,
+          ownerUid: owner,
+          transitionGeneration: sendGeneration,
+          version: sendVersion,
+        );
+      });
+      if (result.applied || result.reason == 'already_revoked') {
+        await _recordRevocation(freeze, ServerRevocation.confirmed);
+        await _forgetPendingRevocation(owner, sendGeneration);
+        return;
+      }
+      if (result.ok &&
+          (result.reason == 'stale_generation' ||
+              result.reason == 'owner_mismatch')) {
+        // The server holds a newer grant, or this device no longer carries
+        // this owner's consent: nothing left for this revoke to narrow.
+        await _forgetPendingRevocation(owner, sendGeneration);
+        return;
+      }
+    } on CaptureBackendException catch (e) {
+      // 409: the device row is another owner's; 400: can never apply.
+      if (e.reason == 'revoke_failed_409' || e.reason == 'revoke_failed_400') {
+        await _forgetPendingRevocation(owner, sendGeneration);
+        return;
+      }
+    } catch (_) {}
+    return _backOffRevokeRetry(owner, sendGeneration, attempts);
+  }
+
+  Future<void> _backOffRevokeRetry(
+      String owner, int generation, int attempts) async {
+    final step = attempts + 1 < _revokeRetryBackoff.length
+        ? attempts + 1
+        : _revokeRetryBackoff.length - 1;
+    final delay = _revokeRetryBackoff[step];
+    try {
+      final all = await _readPendingRevocations();
+      final held = all[owner];
+      if (held == null || held['g'] != generation) return;
+      all[owner] = {
+        ...held,
+        'n': attempts + 1,
+        'at': _now().add(delay).millisecondsSinceEpoch,
+      };
+      await _writePendingRevocations(all);
+    } catch (_) {
+      return;
+    }
+    _scheduleRevokeRetry(delay);
   }
 
   Future<void> _recordRevocation(

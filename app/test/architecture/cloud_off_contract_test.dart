@@ -514,6 +514,93 @@ void main() {
     });
   });
 
+  group(
+      'Dart: the retry of a revoke that did not land (approved 2026-11-12, '
+      'the ONE automatic Cloud-OFF exception)', () {
+    final gate =
+        File('lib/core/privacy/cloud_egress_gate.dart').readAsStringSync();
+
+    test('one function sends it, through its own grant, revoke only', () {
+      final fn = body(registration, 'Future<void> _retryPendingRevocation(');
+      inOrder(fn, [
+        '_readSession()',
+        'all[owner]', // only the signed-in owner's own record
+        'now.isBefore(due)', // bounded backoff
+        'ConsentAuthority.egressFrozen',
+        '_readAck(owner)', // superseded once the server acknowledged a grant
+        '_cloudOn(settings)', // never while Cloud is ON locally
+        '_gate.view(owner: owner)',
+        'EgressState.off',
+        '_gate.runRevokeRetry(',
+        '_consent.revoke(',
+      ]);
+      for (final forbidden in const [
+        '_withSecretRecovery',
+        '_recoverRejectedSecret',
+        'registerDevice',
+        'link(',
+        'setConsent(',
+        'saveSettings',
+        '.enable(',
+        'syncCaptures',
+        'processIosSms',
+      ]) {
+        expect(fn, isNot(contains(forbidden)), reason: forbidden);
+      }
+      expect(RegExp(r'_gate\.runRevokeRetry\(').allMatches(registration).length,
+          1);
+      expect(
+          RegExp(r'(?<!const )EgressGrant\.revokeRetry\(')
+              .allMatches(gate)
+              .length,
+          1,
+          reason: 'built only inside runRevokeRetry');
+    });
+
+    test('the gate admits it only OFF at its own generation, owner and route',
+        () {
+      final decide = body(gate, 'Future<String?> _decide(');
+      inOrder(decide, [
+        "if (!_resolved) return 'unresolved';",
+        "return 'frozen';", // not exempt from the freeze
+        "return 'state_uncertain';",
+        'if (revokeRetry) {',
+        'grant!.owner != owner',
+        'rec.state != EgressState.off',
+        'rec.transitionGeneration != grant.generation',
+        "return 'revoke_retry_superseded';",
+        "if (await _pendingDenies(owner)) return 'pending_enable';",
+        'isRevokeRetryRequest(request, _supabaseUrl())',
+      ]);
+      final scope =
+          body(gate, 'static bool isRevokeRetryRequest(AdmissionRequest');
+      for (final t in const [
+        "request.method != 'POST'",
+        "request.url.scheme != 'https'",
+        'request.url.host != base.host',
+        "'/functions/v1/set-device-consent'",
+      ]) {
+        expect(scope, contains(t), reason: t);
+      }
+    });
+
+    test('the record is durable before the one-shot send and only the '
+        "server's answer or an acknowledged newer grant removes it", () {
+      final once = body(registration,
+          'Future<void> _revokeOnce(DisableFreeze freeze, _RevokeInputs? inputs)');
+      inOrder(once, [
+        '_notePendingRevocation(freeze)',
+        '_revokeAttemptSlots.write(',
+        '_gate.runRevoke(',
+        'ServerRevocation.confirmed',
+        '_forgetPendingRevocation(',
+      ]);
+      // Re-enabling never deletes it by itself (the server may not know yet).
+      expect(body(registration, 'Future<void> _enableCloud('),
+          isNot(contains('PendingRevocation')));
+    });
+  });
+
   group('Dart: one admission gate (Astra G P1)', () {
     test('every default transport is the gated client', () {
       for (final f in const [

@@ -37,6 +37,12 @@ class _FakeRegistrationService implements CaptureDeviceRegistrationService {
   @override
   void dispose() {}
 
+  @override
+  Future<void> retryPendingRevocation() async {}
+
+  @override
+  Future<int?> pendingRevocationGeneration(String owner) async => null;
+
   _FakeRegistrationService({this.linked = true});
 
   final bool linked;

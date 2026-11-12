@@ -1306,7 +1306,7 @@ class EgressWriteFailedException implements Exception {
   String toString() => 'EgressWriteFailedException($what)';
 }
 
-enum EgressGrantKind { accountControl, revoke }
+enum EgressGrantKind { accountControl, revoke, revokeRetry }
 
 /// The ONLY operations allowed to reach the network while Cloud is OFF
 /// (Astra H2.1). They never enable Cloud and never widen any consent.
@@ -1515,8 +1515,10 @@ class AdmissionRequest {
 }
 
 /// A per-call exception to the persistent gate, carried in the [Zone] so the
-/// transport can see it. Only two exist: the one-shot revoke (DISABLING only)
-/// and an operation-scoped account-control grant (never automatic traffic).
+/// transport can see it. Only three exist: the one-shot revoke (DISABLING
+/// only), the retry of a revoke that did not land ([EgressGrant.revokeRetry],
+/// OFF at that revoke's own generation only, `set-device-consent` only) and an
+/// operation-scoped account-control grant (never automatic traffic).
 class EgressGrant {
   EgressGrant.accountControl(AccountControlGrant this.control)
       : kind = EgressGrantKind.accountControl,
@@ -1528,6 +1530,18 @@ class EgressGrant {
   const EgressGrant.revoke(
       {required String this.owner, required int this.generation})
       : kind = EgressGrantKind.revoke,
+        control = null,
+        _deletion = null;
+
+  /// Approved 2026-11-12 (product owner) — the ONE automatic exception to the
+  /// Cloud-OFF rule: re-sending a revoke whose one-shot send did not land. It
+  /// carries identifiers only (no SMS text, no financial data) and is admitted
+  /// only while [owner]'s record is still OFF at exactly [generation] (no newer
+  /// grant or transition), with no pending enable, and only as a POST to
+  /// `set-device-consent` (see [CloudEgressGate.isRevokeRetryRequest]).
+  const EgressGrant.revokeRetry(
+      {required String this.owner, required int this.generation})
+      : kind = EgressGrantKind.revokeRetry,
         control = null,
         _deletion = null;
 
@@ -2292,6 +2306,7 @@ class CloudEgressGate {
     // ASR §11.1: a transition hold denies every Dart permit path.
     if (_holds.isNotEmpty) return 'transition_hold';
     final revoke = grant?.kind == EgressGrantKind.revoke;
+    final revokeRetry = grant?.kind == EgressGrantKind.revokeRetry;
     final control = grant?.control;
     final onboarding = control?.op == AccountControlOp.onboardingStatus;
     final linking = control?.op == AccountControlOp.linkIdentity;
@@ -2325,6 +2340,22 @@ class CloudEgressGate {
     final readout = await store.read(owner: owner);
     if (readout.uncertain && !signedOutControl) return 'state_uncertain';
     final rec = readout.records[owner];
+    if (revokeRetry) {
+      // Not exempt from the freeze or the lifecycle fence above: an uncertain
+      // state just waits for the next attempt. Only the owner's OWN revoke, only
+      // while nothing superseded it, only to the revoke endpoint.
+      if (grant!.owner != owner ||
+          rec == null ||
+          rec.state != EgressState.off ||
+          rec.transitionGeneration != grant.generation) {
+        return 'revoke_retry_superseded';
+      }
+      if (await _pendingDenies(owner)) return 'pending_enable';
+      if (request != null && !isRevokeRetryRequest(request, _supabaseUrl())) {
+        return 'revoke_retry_scope';
+      }
+      return null;
+    }
     if (rec != null && rec.state == EgressState.disabling) {
       return revoke &&
               grant!.owner == owner &&
@@ -2770,6 +2801,37 @@ class CloudEgressGate {
   /// The ONE request admitted in DISABLING. At most one call per transition (the
   /// caller guards that with its durable `revoke_attempt`). A timeout cancels
   /// the request and is reported as [TimeoutException].
+  /// The ONE request [EgressGrant.revokeRetry] may make: a POST to
+  /// `set-device-consent` (the v2 `action: 'revoke'` route) on the configured
+  /// host. Anything else under that grant is denied.
+  static bool isRevokeRetryRequest(AdmissionRequest request, String baseUrl) {
+    final base = Uri.tryParse(baseUrl);
+    if (request.method != 'POST' || request.url.scheme != 'https') return false;
+    if (base != null && base.host.isNotEmpty && request.url.host != base.host) {
+      return false;
+    }
+    return request.url.path.endsWith('/functions/v1/set-device-consent');
+  }
+
+  /// Runs [body] under [EgressGrant.revokeRetry] for [owner] at [generation]:
+  /// admitted only while that owner's record is still OFF at that generation
+  /// (see [_decide]); every request [body] makes is admitted again with its
+  /// method and URL, and must be the revoke POST.
+  Future<T> runRevokeRetry<T>(String owner, int generation, Duration timeout,
+      Future<T> Function() body) async {
+    final grant = EgressGrant.revokeRetry(owner: owner, generation: generation);
+    final t = await admit(owner: owner, grant: grant);
+    try {
+      return await runZoned(() => body(), zoneValues: {_grantKey: grant})
+          .timeout(timeout, onTimeout: () {
+        if (!t._cancel.isCompleted) t._cancel.complete();
+        throw TimeoutException('revoke_retry_timeout');
+      });
+    } finally {
+      release(t);
+    }
+  }
+
   Future<T> runRevoke<T>(
       DisableFreeze freeze, Duration timeout, Future<T> Function() body) async {
     final grant = freeze.revokeGrant;
@@ -3275,7 +3337,10 @@ class GatedHttpClient extends http.BaseClient {
 
     // H2.1: a granted request must not follow redirects (a 3xx could leave the
     // allowlisted endpoint or host). Set before the request is finalized.
-    if (ticket.grant?.control != null) request.followRedirects = false;
+    if (ticket.grant?.control != null ||
+        ticket.grant?.kind == EgressGrantKind.revokeRetry) {
+      request.followRedirects = false;
+    }
     unawaited(
         ticket.cancelled.then((_) => fail(EgressDeniedException('cancelled'))));
     http.BaseRequest outgoing = request;

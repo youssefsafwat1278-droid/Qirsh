@@ -208,6 +208,103 @@ void main() {
     });
   });
 
+  // Approved 2026-11-12 (product owner): the ONE automatic exception to the
+  // Cloud-OFF rule is re-sending a revoke that did not land, identifiers only,
+  // for its own owner, while OFF at its own generation, to the revoke route.
+  group('the revoke retry (approved narrow exception)', () {
+    Future<Object?> admitRetry(EgressGrant grant,
+        {String method = 'POST',
+        String url = 'https://example.supabase.co/functions/v1/set-device-consent'}) async {
+      try {
+        final t = await gate.admit(
+            grant: grant, request: AdmissionRequest(method, Uri.parse(url)));
+        gate.release(t);
+        return null;
+      } on EgressDeniedException catch (e) {
+        return e.reason;
+      }
+    }
+
+    Future<DisableFreeze> offAfterOn() async {
+      await putOn();
+      final freeze =
+          await gate.beginDisabling(owner: 'uid-a', reservedVersion: 2);
+      await gate.commitOff(freeze);
+      return freeze;
+    }
+
+    EgressGrant retryOf(DisableFreeze f, {String? owner, int? generation}) =>
+        EgressGrant.revokeRetry(
+            owner: owner ?? f.owner,
+            generation: generation ?? f.transitionGeneration);
+
+    test('admitted only while OFF at the revoke\'s own generation', () async {
+      final freeze = await offAfterOn();
+      expect(await admitRetry(retryOf(freeze)), isNull);
+      // ordinary traffic stays blocked
+      expect(await admitError(), 'off');
+      // the one-shot grant is still DISABLING-only
+      expect(await admitError(freeze.revokeGrant), 'revoke_outside_disabling');
+    });
+
+    test('never for another owner or another generation', () async {
+      final freeze = await offAfterOn();
+      expect(await admitRetry(retryOf(freeze, owner: 'uid-b')),
+          'revoke_retry_superseded');
+      expect(
+          await admitRetry(
+              retryOf(freeze, generation: freeze.transitionGeneration - 1)),
+          'revoke_retry_superseded');
+    });
+
+    test('a newer grant supersedes it (Off -> On), and so does a newer Off',
+        () async {
+      final freeze = await offAfterOn();
+      await gate.enable(owner: 'uid-a', reservedVersion: 3);
+      expect(await admitRetry(retryOf(freeze)), 'revoke_retry_superseded');
+      final again =
+          await gate.beginDisabling(owner: 'uid-a', reservedVersion: 4);
+      expect(await admitRetry(retryOf(freeze)), 'revoke_retry_superseded',
+          reason: 'DISABLING of a newer transition');
+      await gate.commitOff(again);
+      expect(await admitRetry(retryOf(freeze)), 'revoke_retry_superseded');
+      expect(await admitRetry(retryOf(again)), isNull);
+    });
+
+    test('a pending enable denies it', () async {
+      final freeze = await offAfterOn();
+      gate.freezeEnable('uid-a');
+      expect(await admitRetry(retryOf(freeze)), 'pending_enable');
+    });
+
+    test('only the revoke POST: any other route, method or scheme is denied',
+        () async {
+      final freeze = await offAfterOn();
+      for (final (method, url) in const [
+        ('GET', 'https://example.supabase.co/functions/v1/set-device-consent'),
+        ('POST', 'https://example.supabase.co/functions/v1/parse-sms'),
+        ('POST', 'https://example.supabase.co/functions/v1/sync-captures'),
+        ('POST', 'https://example.supabase.co/rest/v1/user_settings'),
+        ('POST', 'http://example.supabase.co/functions/v1/set-device-consent'),
+        ('POST', 'https://evil.example/functions/v1/set-device-consent'),
+      ]) {
+        expect(await admitRetry(retryOf(freeze), method: method, url: url),
+            'revoke_retry_scope',
+            reason: '$method $url');
+      }
+    });
+
+    test('not exempt from the in-process freeze or an uncertain state',
+        () async {
+      final freeze = await offAfterOn();
+      ConsentAuthority.egressFrozen = true;
+      expect(await admitRetry(retryOf(freeze)), 'frozen');
+      ConsentAuthority.egressFrozen = false;
+      egress.file.value = '{not json';
+      expect(await admitRetry(retryOf(freeze)), 'state_uncertain');
+    });
+  });
+
   group('transition and reconciliation rules', () {
     test('the generation advances before the freeze; ON on enable is strictly '
         'greater; version too', () async {
