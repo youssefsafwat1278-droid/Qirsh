@@ -49,8 +49,10 @@
            • SQLCipher DB `money_companion.sqlite` — encrypted with a key held in
              flutter_secure_storage (Android Keystore). Auto Backup never restores
              the Keystore key, so a restored DB is permanently undecryptable.
-           • SharedPreferences `mali_capture_queue_v1` — raw captured bank-SMS
-             queue (user-owned sensitive data); must not survive onto another
+           • SharedPreferences `mali_capture_queue_v1` + files/capture_overflow/
+             — the captured bank-SMS queue, AES-GCM sealed with an Android
+             Keystore key that is never backed up or transferred (restored
+             sealed data would be unreadable); must not survive onto another
              device/user (Phase-2 cross-user guarantee).
            • SharedPreferences `mali_capture_settings_v1` — capture opt-in flag;
              restoring "capture enabled" onto a new device without the permission
@@ -58,7 +60,10 @@
            • SharedPreferences `FlutterSecureStorage` — Keystore-wrapped secrets
              (DB key, device secret); undecryptable after restore.
          There is no coordinated key-restoration path, so platform backup is
-         disabled entirely. Financial-data recovery is via the app's OWN
+         disabled entirely: allowBackup/fullBackupContent for Android <= 11, and
+         dataExtractionRules (res/xml/data_extraction_rules.xml, every domain
+         excluded) for Android 12+, where allowBackup="false" alone does NOT
+         stop device-to-device transfer. Financial-data recovery is via the app's OWN
          passphrase-encrypted cloud backup (backup_snapshot_builder /
          restore_backup_usecase), not Android Auto Backup. -->
     <application
@@ -66,6 +71,7 @@
         android:name="${applicationName}"
         android:allowBackup="false"
         android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/launcher_icon">
         <meta-data
             android:name="com.dexterous.flutterlocalnotifications.default_notification_icon"

@@ -11,6 +11,7 @@ import java.util.Locale
 import java.util.TimeZone
 import java.util.UUID
 import javax.crypto.Mac
+import javax.crypto.SecretKey
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -44,6 +45,16 @@ import org.json.JSONObject
  *     ([QueueUnreadableException]), never an empty queue.
  * Failures are surfaced to Dart as counts only ([healthJson]). Raw bodies are
  * never logged.
+ *
+ * Encryption at rest: every record (the main blob, each overflow file, each
+ * quarantined blob/file) is an AES-256-GCM envelope ([CaptureSealer]) under a
+ * non-exportable Keystore key ([CaptureQueueKey]); no plaintext capture, not
+ * even in a temp file, is written. A sealed key check in the prefs tells a
+ * damaged record (quarantined) from a key that is gone, invalidated or wrong
+ * (the queue is unreadable: nothing is quarantined, deleted or overwritten, new
+ * captures are NOT_PERSISTED, and no new key is minted while sealed data exists
+ * — iOS parity). Pre-encryption plaintext is sealed, then removed, on the first
+ * read ([readAll], [migrateLegacyOverflow]).
  *
  * Account isolation (the Android counterpart of the iOS queue's owner model):
  *   - Dart publishes the admitted account as the ACTIVE OWNER; the queue keeps
@@ -151,13 +162,26 @@ class DurableCaptureQueue private constructor(
     companion object {
         private const val PREFS_NAME = "mali_capture_queue_v1"
         private const val OVERFLOW_DIR = "capture_overflow"
-        private const val KEY_ITEMS = "items"
-        /** An unreadable `items` blob is moved here verbatim, never deleted. */
-        private const val QUARANTINE_PREFIX = "items_quarantine_"
-        private const val FILE_SUFFIX = ".json"
+        /** The sealed main segment. */
+        private const val KEY_ITEMS = "items_sealed"
+        /** An unreadable main blob is moved here as the sealed bytes it was, never deleted. */
+        private const val QUARANTINE_PREFIX = "sealed_quarantine_"
+        /** Sealed overflow capture: `<20-digit sequence>_<sha256(id)>.qcs`. */
+        private const val FILE_SUFFIX = ".qcs"
+        /** Temp files only ever hold sealed bytes. */
         private const val TEMP_SUFFIX = ".tmp"
         /** An unreadable overflow file is renamed with this, never deleted. */
         private const val QUARANTINE_SUFFIX = ".quarantine"
+        // Pre-encryption (plaintext) storage: read once, sealed, then removed.
+        private const val KEY_LEGACY_ITEMS = "items"
+        private const val LEGACY_QUARANTINE_PREFIX = "items_quarantine_"
+        private const val LEGACY_FILE_SUFFIX = ".json"
+        /** A known plaintext sealed with the queue key: proves the key is the right one. */
+        private const val KEY_KEY_CHECK = "key_check"
+        private const val KEY_CHECK_TEXT = "qirsh-capture-key-check"
+        /** AAD prefix: format version; the slot follows. */
+        private const val AAD = "qirsh.capture.queue.v2/"
+        private const val MAIN_SLOT = "main"
         /** Overflow items returned by one peek; the rest follow on later drains. */
         private const val OVERFLOW_PEEK = 300
         // Privacy-safe counters (counts only, never content).
@@ -184,6 +208,13 @@ class DurableCaptureQueue private constructor(
          */
         @Volatile
         internal var macFactory: () -> Mac = { CaptureOwnerKey.newMac() }
+
+        /**
+         * The key that seals the queue at rest. Production: the Android
+         * Keystore ([CaptureQueueKey]). A JVM test substitutes an in-memory key.
+         */
+        @Volatile
+        internal var keySource: CaptureQueueKeySource = CaptureQueueKey
 
         /**
          * Called (on the caller's thread) after an item was durably stored, so a
@@ -322,49 +353,230 @@ class DurableCaptureQueue private constructor(
         return array.toString()
     }
 
-    // ── main segment (SharedPreferences) ──────────────────────────────────────
-
-    /**
-     * Reads the main segment. Null means it is unreadable AND could not be
-     * quarantined: the caller must not write, or it would overwrite the blob.
-     *
-     * A blob that does not parse (or holds a malformed element) is copied
-     * verbatim to a quarantine key and the well-formed items are written back
-     * as the live segment, in ONE commit. Nothing is deleted.
-     */
-    @Synchronized
-    private fun readAll(): MutableList<Item>? {
-        val stored: String? = try {
-            prefs.getString(KEY_ITEMS, null)
-        } catch (_: Throwable) {
-            return null
-        }
-        val raw = stored ?: return mutableListOf()
-        val out = ArrayList<Item>()
-        var damaged = false
+    /** Appends the well-formed items of [raw]; false when anything was damaged. */
+    private fun decodeInto(raw: String?, out: MutableList<Item>): Boolean {
+        if (raw == null) return false
+        var intact = true
         try {
             val array = JSONArray(raw)
             for (i in 0 until array.length()) {
                 try {
                     out.add(fromJson(array.getJSONObject(i)))
                 } catch (_: Throwable) {
-                    damaged = true
+                    intact = false
                 }
             }
         } catch (_: Throwable) {
-            damaged = true
+            intact = false
         }
-        if (!damaged) return out
-        val quarantined = prefs.edit()
-            .putString(QUARANTINE_PREFIX + System.currentTimeMillis(), raw)
-            .putString(KEY_ITEMS, encode(out))
-            .putInt(KEY_QUARANTINED, prefs.getInt(KEY_QUARANTINED, 0) + 1)
-            // The quarantined part will not be imported: the user is told.
-            .putInt(KEY_UNSEEN, prefs.getInt(KEY_UNSEEN, 0) + 1)
-            .commit()
-        volatileUnseen++
-        android.util.Log.w(TAG, "unreadable queue blob quarantined=$quarantined salvaged=${out.size}")
-        if (!quarantined) return null
+        return intact
+    }
+
+    // ── encryption at rest ────────────────────────────────────────────────────
+
+    /** The key, once checked against [KEY_KEY_CHECK] in this process. */
+    @Volatile
+    private var verifiedKey: SecretKey? = null
+
+    private fun overflowSlot(stem: String) = "overflow/$stem"
+    private fun quarantineSlot(name: String) = "quarantine/$name"
+
+    /** A quarantine key that never collides with an earlier one. */
+    private fun newQuarantineKey(): String =
+        QUARANTINE_PREFIX + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().take(8)
+
+    /**
+     * Sealed capture data on disk — live or quarantined (a temp file is never
+     * data). A directory that exists but cannot be listed counts as data.
+     */
+    private fun sealedDataExists(): Boolean {
+        if (prefs.getString(KEY_ITEMS, null) != null) return true
+        if (prefs.all.keys.any { it.startsWith(QUARANTINE_PREFIX) }) return true
+        val files = overflowDir.listFiles() ?: return overflowDir.isDirectory
+        return files.any {
+            it.name.endsWith(FILE_SUFFIX) || it.name.endsWith(FILE_SUFFIX + QUARANTINE_SUFFIX)
+        }
+    }
+
+    /**
+     * The queue key, proven by the key check. Null only when no sealed data
+     * exists and [mint] is false (there is nothing to open).
+     *
+     * A key is minted ONLY when [mint] and no sealed capture data exists: a key
+     * that is gone, permanently invalidated or wrong (the check fails
+     * authentication) while sealed data exists throws [CaptureKeyException]
+     * (`lost`), and one the Keystore could not answer for throws it not-lost.
+     * Neither case changes anything on disk — iOS parity (`encryptionKey()`):
+     * a new key would orphan the sealed data for good.
+     */
+    private fun queueKey(mint: Boolean): SecretKey? {
+        verifiedKey?.let { return it }
+        val check = prefs.getString(KEY_KEY_CHECK, null)
+        val key = try {
+            keySource.load()
+        } catch (_: Throwable) {
+            throw CaptureKeyException(lost = false)
+        }
+        var lost = key == null
+        if (key != null && check != null) {
+            val proven = try {
+                CaptureSealer.open(key, check, AAD + "key-check") != null
+            } catch (e: CaptureKeyException) {
+                if (!e.lost) throw e
+                false
+            }
+            if (proven) {
+                verifiedKey = key
+                return key
+            }
+            lost = true
+        }
+        if (sealedDataExists()) throw CaptureKeyException(lost)
+        if (!mint) return null
+        // Nothing sealed exists: a missing, unusable or unproven key is replaced.
+        val fresh = try {
+            if (key != null) keySource.delete()
+            keySource.create()
+        } catch (_: Throwable) {
+            throw CaptureKeyException(lost = false)
+        }
+        val sealedCheck = CaptureSealer.seal(fresh, KEY_CHECK_TEXT.toByteArray(Charsets.UTF_8), AAD + "key-check")
+        // The check is durable BEFORE anything is sealed with the new key.
+        if (!prefs.edit().putString(KEY_KEY_CHECK, sealedCheck).commit()) {
+            throw CaptureKeyException(lost = false)
+        }
+        verifiedKey = fresh
+        return fresh
+    }
+
+    /** True when the key is definitively gone, invalidated or wrong. */
+    private fun keyLost(): Boolean = try {
+        queueKey(mint = false)
+        false
+    } catch (e: CaptureKeyException) {
+        e.lost
+    } catch (_: Throwable) {
+        false
+    }
+
+    /** Seals [plain] for [slot]; throws when no key can be used (nothing is written then). */
+    private fun seal(plain: ByteArray, slot: String): String =
+        CaptureSealer.seal(queueKey(mint = true)!!, plain, AAD + slot)
+
+    private fun seal(plain: String, slot: String): String = seal(plain.toByteArray(Charsets.UTF_8), slot)
+
+    /**
+     * Opens a sealed record of [slot]. Null: the record is damaged or tampered
+     * (the caller quarantines it). Throws [QueueUnreadableException] when the
+     * key cannot be used: the record is fine as far as anyone knows and must be
+     * left exactly as it is.
+     */
+    private fun open(envelope: String, slot: String): String? {
+        val key = try {
+            queueKey(mint = false)
+        } catch (_: Throwable) {
+            null
+        } ?: throw QueueUnreadableException()
+        return try {
+            CaptureSealer.open(key, envelope, AAD + slot)?.toString(Charsets.UTF_8)
+        } catch (_: Throwable) {
+            verifiedKey = null
+            throw QueueUnreadableException()
+        }
+    }
+
+    /** Counts only: whether the key is unusable, and the sealed records it holds hostage. */
+    private fun keyUnavailableRecords(): Int {
+        val unusable = try {
+            queueKey(mint = false)
+            false
+        } catch (_: Throwable) {
+            true
+        }
+        if (!unusable) return 0
+        val main = try { if (prefs.getString(KEY_ITEMS, null) != null) 1 else 0 } catch (_: Throwable) { 0 }
+        return main + (try { overflowFiles().size } catch (_: Throwable) { 0 })
+    }
+
+    // ── main segment (SharedPreferences) ──────────────────────────────────────
+
+    /**
+     * Reads the main segment. Null means it is unreadable AND could not be
+     * quarantined, its key cannot be used, or pre-encryption plaintext could
+     * not be sealed: the caller must not write, or it would overwrite the blob.
+     *
+     * A blob that fails authentication or does not parse (or holds a malformed
+     * element) is kept as the SEALED bytes it was under a quarantine key and the
+     * well-formed items are sealed back as the live segment, in ONE commit.
+     * Nothing is deleted.
+     *
+     * Migration: a pre-encryption plaintext main blob (and plaintext quarantined
+     * blobs) is read unchanged, merged after the sealed items (a copy already
+     * sealed wins: duplicates are resolved by id) and replaced by its sealed form
+     * in that SAME commit, so an interruption leaves it either plaintext or
+     * sealed, never neither. A damaged plaintext blob is kept only sealed.
+     */
+    @Synchronized
+    private fun readAll(): MutableList<Item>? {
+        if (!migrateLegacyOverflow()) return null
+        val stored: String?
+        val legacy: String?
+        val legacyQuarantine: Map<String, String>
+        try {
+            stored = prefs.getString(KEY_ITEMS, null)
+            legacy = prefs.getString(KEY_LEGACY_ITEMS, null)
+            legacyQuarantine = prefs.all
+                .filterKeys { it.startsWith(LEGACY_QUARANTINE_PREFIX) }
+                .mapValues { it.value?.toString().orEmpty() }
+        } catch (_: Throwable) {
+            return null
+        }
+        val out = ArrayList<Item>()
+        var damaged = false
+        if (stored != null) {
+            val raw = try {
+                open(stored, MAIN_SLOT)
+            } catch (_: QueueUnreadableException) {
+                return null
+            }
+            damaged = !decodeInto(raw, out)
+        }
+        var legacyDamaged = false
+        if (legacy != null) {
+            val ids = out.mapTo(HashSet()) { it.id }
+            val legacyItems = ArrayList<Item>()
+            legacyDamaged = !decodeInto(legacy, legacyItems)
+            legacyItems.filterTo(out) { ids.add(it.id) }
+        }
+        if (!damaged && legacy == null && legacyQuarantine.isEmpty()) return out
+        val newlyQuarantined = (if (damaged) 1 else 0) + (if (legacyDamaged) 1 else 0)
+        val committed = try {
+            val editor = prefs.edit()
+                .putString(KEY_ITEMS, seal(encode(out), MAIN_SLOT))
+                .remove(KEY_LEGACY_ITEMS)
+            if (damaged) editor.putString(newQuarantineKey(), stored)
+            if (legacyDamaged) {
+                val key = newQuarantineKey()
+                editor.putString(key, seal(legacy!!, quarantineSlot(key)))
+            }
+            for ((old, raw) in legacyQuarantine) {
+                val key = QUARANTINE_PREFIX + old.removePrefix(LEGACY_QUARANTINE_PREFIX)
+                editor.putString(key, seal(raw, quarantineSlot(key))).remove(old)
+            }
+            if (newlyQuarantined > 0) {
+                editor.putInt(KEY_QUARANTINED, prefs.getInt(KEY_QUARANTINED, 0) + newlyQuarantined)
+                    // The quarantined part will not be imported: the user is told.
+                    .putInt(KEY_UNSEEN, prefs.getInt(KEY_UNSEEN, 0) + newlyQuarantined)
+            }
+            editor.commit()
+        } catch (_: Throwable) {
+            false
+        }
+        if (newlyQuarantined > 0) {
+            volatileUnseen += newlyQuarantined
+            android.util.Log.w(TAG, "unreadable queue blob quarantined=$committed salvaged=${out.size}")
+        }
+        if (!committed) return null
         return out
     }
 
@@ -374,16 +586,21 @@ class DurableCaptureQueue private constructor(
      * enqueue and the per-item acknowledge must be durably on disk before the
      * caller proceeds — otherwise a captured message is lost, or a re-delivered
      * one resurrects an already-acknowledged item. Returns whether the write was
-     * durably committed.
+     * durably committed. The segment is sealed first; no key, no write.
      */
     @Synchronized
     private fun writeAll(items: List<Item>): Boolean {
-        return prefs.edit().putString(KEY_ITEMS, encode(items)).commit()
+        val sealed = try {
+            seal(encode(items), MAIN_SLOT)
+        } catch (_: Throwable) {
+            return false
+        }
+        return prefs.edit().putString(KEY_ITEMS, sealed).commit()
     }
 
     // ── overflow (one atomically written file per capture) ────────────────────
 
-    /** `<20-digit sequence>_<sha256(id)>.json`, sorted by name == arrival order. */
+    /** `<20-digit sequence>_<sha256(id)>.qcs`, sorted by name == arrival order. */
     private fun overflowFiles(): List<File> =
         (overflowDir.listFiles() ?: emptyArray())
             .filter { it.isFile && it.name.endsWith(FILE_SUFFIX) }
@@ -400,21 +617,23 @@ class DurableCaptureQueue private constructor(
     }
 
     /**
-     * Writes one capture to its own file: temp file → fsync → rename. Either
-     * the complete file exists under its final name or nothing does; an existing
-     * capture file is never opened for writing. False on ANY failure (disk
-     * full, I/O error, directory not creatable).
+     * Writes one capture to its own file: seal → temp file → fsync → rename.
+     * Either the complete sealed file exists under its final name or nothing
+     * does; an existing capture file is never opened for writing; the temp file
+     * only ever holds the sealed bytes. False on ANY failure (no usable key,
+     * disk full, I/O error, directory not creatable).
      */
     private fun writeOverflow(item: Item): Boolean {
         return try {
             if (!overflowDir.isDirectory && !overflowDir.mkdirs()) return false
             val name = "%020d_%s".format(Locale.US, nextSequence(), sha256Hex(item.id))
-            val temp = File(overflowDir, name + TEMP_SUFFIX)
+            val temp = File(overflowDir, name + FILE_SUFFIX + TEMP_SUFFIX)
             val target = File(overflowDir, name + FILE_SUFFIX)
             if (target.exists()) return false
+            val sealed = seal(toJson(item).toString(), overflowSlot(name))
             try {
                 FileOutputStream(temp).use { stream ->
-                    stream.write(toJson(item).toString().toByteArray(Charsets.UTF_8))
+                    stream.write(sealed.toByteArray(Charsets.UTF_8))
                     stream.flush()
                     stream.fd.sync()
                 }
@@ -428,19 +647,19 @@ class DurableCaptureQueue private constructor(
     }
 
     /**
-     * Replaces one overflow capture's content (a claim binding it): temp file →
-     * fsync → rename over the same name, so the file is either the old or the
-     * new complete capture. False on any failure (the old one is then intact).
+     * Writes [sealed] as [target]'s complete content: temp file → fsync →
+     * rename over [target], so [target] is either its old or its new content.
+     * False on any failure.
      */
-    private fun replaceOverflow(file: File, item: Item): Boolean {
-        val temp = File(file.path + TEMP_SUFFIX)
+    private fun writeAtomically(target: File, sealed: String): Boolean {
+        val temp = File(target.path + TEMP_SUFFIX)
         return try {
             FileOutputStream(temp).use { stream ->
-                stream.write(toJson(item).toString().toByteArray(Charsets.UTF_8))
+                stream.write(sealed.toByteArray(Charsets.UTF_8))
                 stream.flush()
                 stream.fd.sync()
             }
-            temp.renameTo(file)
+            temp.renameTo(target)
         } catch (_: Throwable) {
             false
         } finally {
@@ -449,13 +668,103 @@ class DurableCaptureQueue private constructor(
     }
 
     /**
-     * Reads one overflow file. An unreadable file is renamed (kept verbatim,
-     * never deleted) so it stops blocking the queue; if it cannot even be
-     * renamed the store is unreadable.
+     * Replaces one overflow capture's content (a claim binding it), sealed for
+     * the same slot, so the file is either the old or the new complete capture.
+     * False on any failure (the old one is then intact).
+     */
+    private fun replaceOverflow(file: File, item: Item): Boolean {
+        val sealed = try {
+            seal(toJson(item).toString(), overflowSlot(file.name.removeSuffix(FILE_SUFFIX)))
+        } catch (_: Throwable) {
+            return false
+        }
+        return writeAtomically(file, sealed)
+    }
+
+    /**
+     * Opens one sealed overflow file. Throws [QueueUnreadableException] when the
+     * key cannot be used, any other exception when the file is damaged.
+     */
+    private fun openOverflow(file: File): Item {
+        val plain = open(file.readText(Charsets.UTF_8), overflowSlot(file.name.removeSuffix(FILE_SUFFIX)))
+            ?: throw IllegalStateException("damaged")
+        return fromJson(JSONObject(plain))
+    }
+
+    /**
+     * Makes a rename in [dir] durable before a migration deletes its plaintext
+     * source. Best effort: ext4/f2fs also commit directory operations in order.
+     */
+    private fun syncDir(dir: File) {
+        try {
+            val fd = android.system.Os.open(dir.path, android.system.OsConstants.O_RDONLY, 0)
+            try {
+                android.system.Os.fsync(fd)
+            } finally {
+                android.system.Os.close(fd)
+            }
+        } catch (_: Throwable) {
+        }
+    }
+
+    /**
+     * Seals every pre-encryption overflow file before its plaintext is deleted:
+     * the sealed copy is written (temp → fsync → rename → directory sync), and
+     * only then is the plaintext removed. An interruption at any point leaves
+     * each capture readable as plaintext, as sealed, or both; the next run
+     * deletes a plaintext whose sealed copy opens (same name stem = same id, so
+     * the duplicate is resolved by id). A live file keeps its sequence name
+     * (arrival order); a quarantined or unfinished temp file becomes a sealed
+     * quarantined file (kept, never imported).
+     *
+     * False while any plaintext remains: the queue is then unreadable (fail
+     * closed) until a retry completes, so a capture acknowledged from its
+     * sealed copy can never be resurrected from a stale plaintext one.
+     */
+    private fun migrateLegacyOverflow(): Boolean {
+        val legacy = (overflowDir.listFiles() ?: return true).filter {
+            val name = it.name
+            name.endsWith(LEGACY_FILE_SUFFIX) ||
+                name.endsWith(LEGACY_FILE_SUFFIX + QUARANTINE_SUFFIX) ||
+                name.endsWith(LEGACY_FILE_SUFFIX + TEMP_SUFFIX)
+        }
+        if (legacy.isEmpty()) return true
+        return try {
+            for (file in legacy.sortedBy { it.name }) {
+                val name = file.name
+                val target: File
+                val slot: String
+                if (name.endsWith(LEGACY_FILE_SUFFIX)) {
+                    val stem = name.removeSuffix(LEGACY_FILE_SUFFIX)
+                    target = File(overflowDir, stem + FILE_SUFFIX)
+                    slot = overflowSlot(stem)
+                } else {
+                    target = File(overflowDir, name + FILE_SUFFIX + QUARANTINE_SUFFIX)
+                    slot = quarantineSlot(target.name)
+                }
+                val sealedCopy = target.isFile && open(target.readText(Charsets.UTF_8), slot) != null
+                if (!sealedCopy && !writeAtomically(target, seal(file.readBytes(), slot))) return false
+                syncDir(overflowDir)
+                if (!file.delete()) return false
+            }
+            true
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * Reads one overflow file. A damaged file (fails authentication or does not
+     * parse) is renamed (kept as the sealed bytes it was, never deleted) so it
+     * stops blocking the queue; if it cannot even be renamed the store is
+     * unreadable. A key that cannot be used is never treated as damage: it
+     * throws [QueueUnreadableException] and the file is left as it is.
      */
     private fun readOverflow(file: File): Item? {
         return try {
-            fromJson(JSONObject(file.readText(Charsets.UTF_8)))
+            openOverflow(file)
+        } catch (e: QueueUnreadableException) {
+            throw e
         } catch (_: Throwable) {
             val moved = file.renameTo(File(file.path + QUARANTINE_SUFFIX))
             // The quarantined capture will not be imported: the user is told.
@@ -559,13 +868,18 @@ class DurableCaptureQueue private constructor(
         val o = JSONObject()
         val main = readAll()?.size
         val overflow = try { overflowFiles().size } catch (_: Throwable) { 0 }
-        o.put("size", if (main == null) -1 else main + overflow)
+        // Sealed records kept on disk but unreadable because the key cannot be
+        // used (gone, invalidated, wrong, or the Keystore not answering).
+        val hostage = keyUnavailableRecords()
+        o.put("size", if (main == null || hostage > 0) -1 else main + overflow)
         o.put("capacity", CaptureQueuePolicy.MAIN_CAPACITY)
         o.put("overflow", overflow)
         o.put("refusedFull", 0) // capacity never refuses a capture any more
         o.put("notPersisted", prefs.getInt(KEY_NOT_PERSISTED, 0))
         o.put("quarantined", prefs.getInt(KEY_QUARANTINED, 0))
         o.put("unseen", maxOf(prefs.getInt(KEY_UNSEEN, 0), volatileUnseen))
+        o.put("keyUnavailable", hostage > 0)
+        o.put("unreadable", hostage)
         return o.toString()
     }
 
@@ -659,7 +973,11 @@ class DurableCaptureQueue private constructor(
      * destructive user-lifecycle boundary whose success the caller must be able
      * to confirm before admitting a new user. Returns true on verified removal.
      * Overflow files, quarantined blobs/files and the counters belong to the
-     * same identity and go with it.
+     * same identity and go with it — sealed or plaintext, readable or not.
+     *
+     * The queue key is deleted only AFTER every sealed byte is verifiably gone
+     * (crypto-shredding whatever the filesystem may still hold); if anything is
+     * left the key stays, so nothing is orphaned, and the purge reports false.
      */
     @Synchronized
     fun purge(): Boolean {
@@ -667,11 +985,24 @@ class DurableCaptureQueue private constructor(
         // The owner, hint and barrier go too; the epoch only moves forward, so a
         // publish that read it before this purge is refused.
         val epoch = try { prefs.getInt(KEY_EPOCH, 0) } catch (_: Throwable) { 0 }
-        val prefsCleared = prefs.edit().clear().commit() &&
-            prefs.edit().putInt(KEY_EPOCH, epoch + 1).commit()
+        // Files first: if the process dies in between, the prefs (and the key
+        // check) still describe what is left.
         var filesCleared = true
         (overflowDir.listFiles() ?: emptyArray()).forEach {
             if (!it.delete()) filesCleared = false
+        }
+        val prefsCleared = prefs.edit().clear().commit() &&
+            prefs.edit().putInt(KEY_EPOCH, epoch + 1).commit()
+        verifiedKey = null
+        val dataGone = prefsCleared && filesCleared &&
+            try { !sealedDataExists() } catch (_: Throwable) { false }
+        if (dataGone) {
+            try {
+                keySource.delete()
+            } catch (_: Throwable) {
+                // No data is left under it; the next capture replaces it.
+                android.util.Log.w(TAG, "queue key not deleted after purge")
+            }
         }
         return prefsCleared && filesCleared
     }
@@ -910,14 +1241,22 @@ class DurableCaptureQueue private constructor(
      * VERIFIES nothing of [uid] remains, and only then clears the barrier.
      * Anything left throws `removal_incomplete` with the barrier KEPT, so the
      * next launch resumes. Returns the number of captures deleted.
+     *
+     * Sealed data whose key is DEFINITIVELY gone (absent, permanently
+     * invalidated, or failing the key check) can never be imported by anyone
+     * and may hold this owner's captures: it is swept like quarantined residue
+     * (all of it, whoever it was stamped to), and only then is the dead key
+     * deleted. A key the Keystore merely did not answer for is never treated so:
+     * the removal stays incomplete and is retried.
      */
     @Synchronized
     fun finishRemoval(uid: String): Int {
         val barrier = readBarrier() ?: return 0
         val hash = hashOf(uid)
         if (barrier.uidHash != hash) throw CaptureOwnerException("removal_in_progress")
-        val main = readAll() ?: throw CaptureOwnerException("removal_incomplete")
         var removed = 0
+        if (keyLost()) removed += sweepUnreadable()
+        val main = readAll() ?: throw CaptureOwnerException("removal_incomplete")
         var failed = false
         for (file in overflowFiles()) {
             val item = try {
@@ -939,7 +1278,12 @@ class DurableCaptureQueue private constructor(
         }
         val keep = main.filterNot { CaptureOwnerPolicy.sweptBy(it.ownerHash, it.ownerHint, hash) }
         removed += main.size - keep.size
-        val editor = prefs.edit().putString(KEY_ITEMS, encode(keep))
+        val sealedKeep = try {
+            seal(encode(keep), MAIN_SLOT)
+        } catch (_: Throwable) {
+            throw CaptureOwnerException("removal_incomplete")
+        }
+        val editor = prefs.edit().putString(KEY_ITEMS, sealedKeep)
         val quarantineKeys = try {
             prefs.all.keys.filter { it.startsWith(QUARANTINE_PREFIX) }
         } catch (_: Throwable) {
@@ -962,6 +1306,45 @@ class DurableCaptureQueue private constructor(
         return removed
     }
 
+    /**
+     * Deletes every sealed record (main, overflow, quarantined, temp) and the
+     * key check, VERIFIES none is left, and only then deletes the dead key.
+     * Plaintext pre-encryption files are readable and stay for the normal
+     * sweep. Returns the number of sealed records deleted; throws
+     * `removal_incomplete` if anything could not be deleted.
+     */
+    private fun sweepUnreadable(): Int {
+        var swept = 0
+        var failed = false
+        for (file in overflowDir.listFiles() ?: emptyArray()) {
+            val name = file.name
+            val live = name.endsWith(FILE_SUFFIX)
+            if (live || name.endsWith(QUARANTINE_SUFFIX) || name.endsWith(TEMP_SUFFIX)) {
+                if (!file.delete()) failed = true else if (live) swept++
+            }
+        }
+        val committed = try {
+            val editor = prefs.edit().remove(KEY_ITEMS).remove(KEY_KEY_CHECK)
+            if (prefs.getString(KEY_ITEMS, null) != null) swept++
+            prefs.all.keys.filter { it.startsWith(QUARANTINE_PREFIX) }.forEach { editor.remove(it) }
+            editor.commit()
+        } catch (_: Throwable) {
+            false
+        }
+        verifiedKey = null
+        val gone = committed && !failed && try { !sealedDataExists() } catch (_: Throwable) { false }
+        if (!gone) {
+            android.util.Log.w(TAG, "unreadable sweep incomplete committed=$committed")
+            throw CaptureOwnerException("removal_incomplete")
+        }
+        try {
+            keySource.delete()
+        } catch (_: Throwable) {
+            // Nothing is sealed under it any more; the next capture replaces it.
+        }
+        return swept
+    }
+
     /** Verification read: anything of [hash], or any quarantined residue, left. */
     private fun remainsFor(hash: String): Boolean {
         val main = readAll() ?: return true
@@ -972,7 +1355,7 @@ class DurableCaptureQueue private constructor(
             if (name.endsWith(QUARANTINE_SUFFIX) || name.endsWith(TEMP_SUFFIX)) return true
             if (!file.isFile || !name.endsWith(FILE_SUFFIX)) continue
             val item = try {
-                fromJson(JSONObject(file.readText(Charsets.UTF_8)))
+                openOverflow(file)
             } catch (_: Throwable) {
                 return true
             }
