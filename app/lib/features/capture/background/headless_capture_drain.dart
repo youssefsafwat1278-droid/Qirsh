@@ -174,14 +174,14 @@ Future<CaptureDrainPass> runHeadlessCapturePass(
   final database = container.read(appDatabaseProvider);
   final preferences =
       await container.read(loadNotificationPreferencesUseCaseProvider).call();
-  if (_flagOn('capture_import_v3') && Platform.isIOS) {
+  if (_flagOn(() => featureFlags.getBool('capture_import_v3')) && Platform.isIOS) {
     final CaptureImportReport report;
     try {
       report = await container.read(captureImportServiceProvider).run();
     } on AuthRepoException {
       return const CaptureDrainPass(authRequired: true);
     }
-    final notifyV2 = _flagOn('capture_notify_v2');
+    final notifyV2 = _flagOn(() => featureFlags.getBool('capture_notify_v2'));
     for (final item in report.imported) {
       if (item.path == CaptureImportPath.alreadyImported) continue;
       await CaptureIdentityMetrics.record(
@@ -242,9 +242,11 @@ Future<void> _budgetAlerts(ProviderContainer container,
   } catch (_) {}
 }
 
-bool _flagOn(String key) {
+/// [read] is always a literal-key `featureFlags.getBool('…')` so the admin flag
+/// registry can derive this reader from the source.
+bool _flagOn(bool Function() read) {
   try {
-    return featureFlags.getBool(key);
+    return read();
   } catch (_) {
     return false;
   }

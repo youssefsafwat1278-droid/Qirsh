@@ -10,7 +10,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:drift/drift.dart' show driftRuntimeOptions;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -266,8 +265,9 @@ Future<List<AppDatabase>> _fileConnections(Directory dir, int n) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  // Two AppDatabase objects on one FILE is the scenario under test here.
-  driftRuntimeOptions.dontWarnAboutMultipleDatabases = true;
+  // Two AppDatabase objects on one FILE is the scenario under test here; Drift
+  // prints its multiple-databases warning, which is expected and harmless. The
+  // warning is not suppressed: MALI-040 forbids the suppression everywhere.
 
   group('local processing (AddTransactionUseCase, stable capture ids)', () {
     late _Conn c;

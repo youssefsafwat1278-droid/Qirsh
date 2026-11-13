@@ -70,8 +70,10 @@ class PrefsCaptureRetryStore implements CaptureRetryStore {
   static const _key = 'capture_retry_ledger_v1';
 
   @override
-  Future<String?> read() async =>
-      (await SharedPreferences.getInstance()).getString(_key);
+  Future<String?> read() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_key);
+  }
 
   @override
   Future<void> write(String value) async {

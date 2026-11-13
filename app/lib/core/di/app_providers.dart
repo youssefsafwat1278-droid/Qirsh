@@ -1572,7 +1572,15 @@ final legacyCaptureDrainProvider = writerProvider<LegacyCaptureDrain>((ref) {
     // Read fresh for every message: a revoked consent never re-sends.
     loadSettings: () => DriftUserSettingsRepository(db).getSettings(),
     retryLedger: ref.watch(captureRetryLedgerProvider),
-    flag: (key) => featureFlags.getBool(key),
+    // Literal keys only: the admin flag registry derives every reader from the
+    // source, so a dynamic `getBool(key)` here hides a flag from it.
+    flag: (key) => switch (key) {
+      'capture_ai_fallback_enabled' =>
+        featureFlags.getBool('capture_ai_fallback_enabled'),
+      'android_capture_ai_enabled' =>
+        featureFlags.getBool('android_capture_ai_enabled'),
+      _ => false,
+    },
   );
 });
 

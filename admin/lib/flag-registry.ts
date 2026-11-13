@@ -135,6 +135,12 @@ export const FLAG_REGISTRY: Record<string, FlagMeta> = {
     "مسار إشعارات الالتقاطات الجديد على iOS؛ يغيّر قرارات الإشعار ومحتوى التنبيه المحلي.",
   ),
 
+  android_capture_ai_enabled: appBool(
+    "smart_capture_ai",
+    "medium",
+    "تحليل الذكاء الاصطناعي لرسائل الالتقاط على Android داخل التطبيق؛ إيقافه يُبقي التحليل محليًا فقط.",
+  ),
+
   // ── Not wired: no reader anywhere ──────────────────────────────────────────
   ledger_dual_write: { ...notWired("experimental_high_risk", `متقاعد. ${NO_EFFECT}`), risk: "high" },
   capture_direct_supabase_write: { ...notWired("experimental_high_risk", `متقاعد. ${NO_EFFECT}`), risk: "high" },
