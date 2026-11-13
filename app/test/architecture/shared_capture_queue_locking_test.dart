@@ -83,7 +83,12 @@ void main() {
   test('the lock is a cross-PROCESS file lock, not an in-process one', () {
     final at = source.indexOf('func withQueueLock');
     expect(at, greaterThan(-1), reason: 'withQueueLock must exist');
-    final body = source.substring(at, at + 700);
+    // 800: the function also takes a suspension guard before the flock (iOS
+    // kills a process suspended while holding an App Group lock, 0xdead10cc).
+    final body = source.substring(at, at + 800);
+
+    expect(body, contains('beginSuspensionGuard()'),
+        reason: 'the lock must not be held across a suspension');
 
     expect(body, contains('containerURL('),
         reason: 'the lock file must live in the APP GROUP container — a lock '

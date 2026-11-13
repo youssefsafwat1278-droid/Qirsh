@@ -1459,6 +1459,21 @@ enum SharedCaptureStore {
   }
   #endif
 
+  /// iOS kills a process that is SUSPENDED while it holds a lock on an App
+  /// Group file (exit 0xdead10cc). This holds an expiring-activity assertion
+  /// until the returned closure is called, so suspension waits for the unlock.
+  /// Best effort: when the system refuses the assertion the work still runs.
+  private static func beginSuspensionGuard() -> () -> Void {
+    let done = DispatchSemaphore(value: 0)
+    let started = DispatchSemaphore(value: 0)
+    ProcessInfo.processInfo.performExpiringActivity(withReason: "qirsh.capture-queue") { expired in
+      started.signal()
+      if !expired { done.wait() }
+    }
+    _ = started.wait(timeout: .now() + .milliseconds(200))
+    return { done.signal() }
+  }
+
   /// CAP-0: the body NEVER runs without the exclusive lock. If the container,
   /// the lock file or the flock itself is unavailable this throws instead.
   private static func withQueueLock<T>(_ body: () throws -> T) throws -> T {
@@ -1474,6 +1489,8 @@ enum SharedCaptureStore {
       throw QueueError.lockUnavailable
     }
     defer { close(fd) }
+    let endSuspensionGuard = beginSuspensionGuard()
+    defer { endSuspensionGuard() }
     while flock(fd, LOCK_EX) != 0 {
       guard errno == EINTR else { throw QueueError.lockUnavailable }
     }
