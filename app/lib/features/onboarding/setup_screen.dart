@@ -25,6 +25,7 @@ import '../settings/settings_providers.dart';
 import 'onboarding_account_step.dart';
 import 'onboarding_consent_steps.dart';
 import 'onboarding_options.dart';
+import 'shortcut_guide_video.dart';
 import 'shortcut_setup_actions.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../../core/theme/app_colors.dart';
@@ -548,6 +549,8 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const ShortcutGuideVideo(),
+                const SizedBox(height: 12),
                 ShortcutSetupActions(currencyCode: _selectedCountry(context).currency),
                 const SizedBox(height: 12),
                 ExpansionTile(
