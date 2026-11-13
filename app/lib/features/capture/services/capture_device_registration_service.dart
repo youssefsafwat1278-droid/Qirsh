@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/backend/supabase_config.dart';
+import '../../../core/observability/diagnostics.dart';
 import '../../../core/privacy/cloud_egress_gate.dart';
 import '../../../core/privacy/cloud_resume_reminder.dart';
 import '../../../core/privacy/consent_authority.dart';
@@ -463,6 +464,31 @@ class CaptureDeviceRegistrationService {
     debugPrint('[ConsentDisable] native_withdraw $lastNativeWithdrawal');
     return report?.denies ?? false;
   }
+
+  /// D-SO1: a start-up reconciliation that aligns Cloud consent DOWN must close
+  /// the native upload paths BEFORE it completes: the App Intent decides from
+  /// the native consent mirror alone, so a downgrade Dart keeps to itself leaves
+  /// SMS uploads running while the app shows Cloud as off.
+  ///
+  /// [record] is why the downgrade happens: `missing` (no activation record),
+  /// `disabled` (an OFF record) or `new_lifetime`. Returns false when native
+  /// could not be confirmed closed; the caller then keeps Dart egress frozen.
+  /// The release log line carries constants only (no uid, no content).
+  Future<bool> _closeNativeForDowngrade(String owner, String record,
+      {required bool settingsOn}) async {
+    // No native lane (Android) or no owner: native holds nothing to close for
+    // this account (an ownerless capture is never admitted for upload).
+    if (!_isIos() || owner.isEmpty) return true;
+    final closed = await _withdrawNativeFirst(owner, 'reconcile_record_$record');
+    Diag.log(
+        '[ConsentDisable]',
+        'reconcile_downgrade record=$record settings=${settingsOn ? 'on' : 'off'} '
+            'native=${closed ? 'closed' : 'unconfirmed'}');
+    return closed;
+  }
+
+  /// Once per process: the OFF + missing-record state is re-closed natively.
+  bool _missingRecordNativeClosed = false;
 
   static Future<bool> _defaultRepairOwnerGeneration(String uid) async =>
       await NativeCaptureBridge.repairActiveOwnerGeneration(uid: uid) != null;
@@ -3493,6 +3519,12 @@ class CaptureDeviceRegistrationService {
             final settings = await _settingsRepository.getSettings();
             if (!ownsRecovery()) return _Gate.blocked;
             if (settings.cloudProcessingEnabled || settings.aiConsentGranted) {
+              final closed = await _closeNativeForDowngrade(owner, 'new_lifetime',
+                  settingsOn: settings.cloudProcessingEnabled);
+              if (!ownsRecovery()) return _Gate.blocked;
+              if (!closed) {
+                ConsentAuthority.freeze('reconcile_new_lifetime:native_unconfirmed');
+              }
               final saved = await _settingsRepository.saveSettings(settings.copyWith(
                 cloudConsentState: ConsentState.declined,
                 aiConsentState: ConsentState.declined,
@@ -3514,6 +3546,9 @@ class CaptureDeviceRegistrationService {
     if (view.uncertain) {
       ConsentAuthority.freeze(
           'reconcile_uncertain:${view.readout.problems.join(',')}');
+      // Allowlisted problem tags only (layer names and reasons, never a uid).
+      Diag.log('[ConsentDisable]',
+          'reconcile_downgrade record=unreadable problems=${view.readout.problems.length}');
       // Unreadable Dart state with a local choice of OFF: the native paths
       // must not stay open on a record nobody can read. Restrictive only; an
       // ON choice is left to the native layers' own (fail-closed) evidence.
@@ -3548,6 +3583,16 @@ class CaptureDeviceRegistrationService {
         // a durable ON record, so an upgraded user whose settings say ON but who
         // has no record sees Cloud as OFF until they re-enable it: the persisted
         // value is aligned DOWN (never up), exactly like the OFF-record case.
+        // D-SO1: close native FIRST. Also when the settings already read OFF
+        // (once per process): an earlier build aligned them down without
+        // telling native, and that state must not keep uploading.
+        var closed = true;
+        if (on || !_missingRecordNativeClosed) {
+          closed = await _closeNativeForDowngrade(owner, 'missing',
+              settingsOn: on);
+          if (!current()) return _Gate.blocked;
+          _missingRecordNativeClosed = closed;
+        }
         if (on) {
           final saved = await _settingsRepository.saveSettings(settings.copyWith(
             cloudConsentState: ConsentState.declined,
@@ -3555,6 +3600,15 @@ class CaptureDeviceRegistrationService {
                 _isAndroid() ? ConsentState.declined : settings.aiConsentState,
           ));
           await _rememberCloudResume(owner, saved, current);
+        }
+        if (!closed && on) {
+          // A downgrade whose native close could not be confirmed: keep every
+          // Dart egress denied for this process. Captures stay in the queue
+          // for local parsing. (Settings already OFF: Dart sends nothing as it
+          // is; the repair is retried on the next reconciliation.)
+          if (!current()) return _Gate.blocked;
+          ConsentAuthority.freeze('reconcile_record_missing:native_unconfirmed');
+          return _Gate.blocked;
         }
         return _Gate.off;
       }
@@ -3582,13 +3636,20 @@ class CaptureDeviceRegistrationService {
       }
       if (rec.state == EgressState.off && on) {
         // The persistent OFF gate wins over a settings value that widened
-        // without an explicit enable.
+        // without an explicit enable. D-SO1: native is closed first.
+        final closed =
+            await _closeNativeForDowngrade(rec.ownerUid, 'disabled', settingsOn: true);
+        if (!current()) return _Gate.blocked;
+        if (!closed) {
+          ConsentAuthority.freeze('reconcile_record_disabled:native_unconfirmed');
+        }
         final saved = await _settingsRepository.saveSettings(settings.copyWith(
           cloudConsentState: ConsentState.declined,
           aiConsentState:
               _isAndroid() ? ConsentState.declined : settings.aiConsentState,
         ));
         await _rememberCloudResume(owner, saved, current);
+        if (!closed) return _Gate.blocked;
       }
     } catch (e) {
       if (!current()) return _Gate.blocked;

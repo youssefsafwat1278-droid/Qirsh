@@ -1758,6 +1758,138 @@ void main() {
       expect(calls, isEmpty);
     });
 
+    // D-SO1 (found on device 2026-11-13): a start-up reconciliation aligned
+    // Cloud consent down without telling native, so the App Intent kept
+    // uploading SMS text while the app showed Cloud as off.
+    group('D-SO1: a start-up downgrade closes native first', () {
+      Future<void> settingsOnWithoutEnable() => save(
+          cloud: ConsentState.accepted,
+          ai: ConsentState.accepted,
+          enable: false);
+
+      test('activation record MISSING while settings are ON', () async {
+        await settingsOnWithoutEnable();
+
+        await service().syncBackendState();
+
+        expect(withdrawals.map((w) => w.uid), ['uid-a']);
+        expect(withdrawals.single.callsBefore, 0,
+            reason: 'native is closed before any request of this start');
+        expect(CaptureDeviceRegistrationService.lastNativeWithdrawal,
+            startsWith('reconcile_record_missing:'));
+        expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+        expect(ConsentAuthority.egressFrozen, isFalse);
+        expect(calls, isEmpty, reason: 'no upload, no link, no revoke');
+      });
+
+      test('activation record DISABLED (OFF) while settings are ON', () async {
+        await egress.gate.writeRecord(const CloudEgressRecord(
+            state: EgressState.off,
+            ownerUid: 'uid-a',
+            transitionGeneration: 2,
+            reservedVersion: 2));
+        await settingsOnWithoutEnable();
+
+        await service().syncBackendState();
+
+        expect(withdrawals.map((w) => w.uid), ['uid-a']);
+        expect(CaptureDeviceRegistrationService.lastNativeWithdrawal,
+            startsWith('reconcile_record_disabled:'));
+        expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+        expect((await recordOf('uid-a'))!.state, EgressState.off);
+        expect(calls, isEmpty);
+      });
+
+      for (final record in ['missing', 'disabled']) {
+        test('$record: the native close cannot be confirmed -> Dart stays '
+            'frozen, settings still go OFF, nothing is sent', () async {
+          if (record == 'disabled') {
+            await egress.gate.writeRecord(const CloudEgressRecord(
+                state: EgressState.off,
+                ownerUid: 'uid-a',
+                transitionGeneration: 2,
+                reservedVersion: 2));
+          }
+          await settingsOnWithoutEnable();
+          withdrawError = StateError('channel down');
+
+          await service().syncBackendState();
+
+          expect(withdrawals, hasLength(1));
+          expect(ConsentAuthority.egressFrozen, isTrue);
+          expect(ConsentAuthority.egressFreezeTag,
+              'reconcile_record_$record:native_unconfirmed');
+          expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+          expect(calls, isEmpty);
+          for (final c in EgressClass.values) {
+            expect(await ConsentAuthority(repo.getSettings).allows(c), isFalse);
+          }
+        });
+      }
+
+      test('restart in the state an older build left (settings OFF, record '
+          'missing): native is closed once per process, never frozen', () async {
+        await settingsOnWithoutEnable();
+        await service().syncBackendState(); // the downgrade itself
+        withdrawals.clear();
+
+        final restarted = service(); // a new process
+        await restarted.syncBackendState();
+        await restarted.syncBackendState();
+
+        expect(withdrawals.map((w) => w.uid), ['uid-a'],
+            reason: 'once per process, not on every reconciliation');
+        expect(CaptureDeviceRegistrationService.lastNativeWithdrawal,
+            startsWith('reconcile_record_missing:'));
+        expect(ConsentAuthority.egressFrozen, isFalse);
+        expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+        expect(calls, isEmpty);
+      });
+
+      test('restart, settings already OFF, native unreachable: not frozen '
+          '(Dart sends nothing as it is) and the repair is retried', () async {
+        withdrawError = StateError('channel down');
+        final s = service();
+
+        await s.syncBackendState();
+        await s.syncBackendState();
+
+        expect(withdrawals.length, greaterThan(1),
+            reason: 'retried on later reconciliations until confirmed');
+        expect(ConsentAuthority.egressFrozen, isFalse);
+        expect(calls, isEmpty);
+      });
+
+      test('an App Intent upload in flight during the downgrade is cancelled '
+          'by the same native call, before any Dart request', () async {
+        await settingsOnWithoutEnable();
+        withdrawReport = const NativeEgressWithdrawal(
+            mirror: 'restricted',
+            config: 'restricted',
+            egress: 'absent',
+            inflightBefore: 1,
+            cancelled: 1);
+
+        await service().syncBackendState();
+
+        expect(withdrawals.single.callsBefore, 0);
+        expect(CaptureDeviceRegistrationService.lastNativeWithdrawal,
+            'reconcile_record_missing:mirror=restricted;config=restricted;'
+            'egress=absent;inflight_before=1;cancelled=1');
+        expect(calls, isEmpty);
+      });
+
+      test('Android has no native lane: the downgrade is unchanged', () async {
+        await settingsOnWithoutEnable();
+
+        await service(android: true).syncBackendState();
+
+        expect(withdrawals, isEmpty);
+        expect(ConsentAuthority.egressFrozen, isFalse);
+        expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+      });
+    });
+
     test('offline disable, then connectivity: only the content-free revoke '
         'is retried, nothing is uploaded, nothing is reopened', () async {
       await save(cloud: ConsentState.accepted, ai: ConsentState.accepted);

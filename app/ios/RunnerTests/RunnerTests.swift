@@ -4647,6 +4647,43 @@ class RunnerTests: XCTestCase {
                    "already_denied")
   }
 
+  // D-SO1 (device, 2026-11-13): the owner's consent mirror says ON and NO
+  // activation (egress) record exists in either layer. Native admission has no
+  // rule against that state on its own (documented by the first assertion: it
+  // is the open follow-up "require an explicit ON record"). The Dart start-up
+  // downgrade now calls the withdrawal, which must close it for good.
+  func testWithdrawClosesMirrorOnWithNoActivationRecordAndSurvivesARestart() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    let (id, _) = try stampedAllowedItem()
+    XCTAssertEqual(try egressState(ownerA), .unset, "no activation record at all")
+    XCTAssertNotEqual(SharedCaptureStore.admitUpload(payloadID: id), .localOnly,
+                      "known gap: mirror ON + absent record is admitted natively")
+
+    let report = SharedCaptureStore.withdrawCloudEgress(ownerUid: ownerA)
+
+    XCTAssertEqual(report.mirror, "restricted")
+    XCTAssertEqual(report.config, "restricted")
+    XCTAssertEqual(report.egress, "absent")
+    XCTAssertTrue(report.denies)
+    XCTAssertEqual(report.inflightBefore, 1, "the upload admitted just before")
+    XCTAssertFalse(SharedCaptureStore.backendConfig().cloudProcessingEnabled,
+                   "the App Intent no longer asks to upload")
+    // A concurrent App Intent run that asks after the withdrawal is refused, and
+    // the capture stays queued on the device for local parsing.
+    XCTAssertEqual(SharedCaptureStore.authorizeUpload(payloadID: id), .localOnly)
+    XCTAssertEqual(SharedCaptureStore.admitUpload(payloadID: id), .localOnly)
+    guard case .enqueued(let later) = put("egress 6.00 SAR") else {
+      return XCTFail("a new capture is still stored locally")
+    }
+    XCTAssertEqual(SharedCaptureStore.admitUpload(payloadID: try XCTUnwrap(later.id)),
+                   .localOnly, "a capture taken after the downgrade never uploads")
+    // Restart: the same call again (Dart repeats it once per process) still denies.
+    let again = SharedCaptureStore.withdrawCloudEgress(ownerUid: ownerA)
+    XCTAssertTrue(again.denies)
+    XCTAssertEqual(SharedCaptureStore.admitUpload(payloadID: id), .localOnly)
+  }
+
   func testWithdrawIgnoresAnotherAccountsUnverifiableRecordAndLeavesItAlone() throws {
     resetCapSeams()
     defer { resetCapSeams() }
