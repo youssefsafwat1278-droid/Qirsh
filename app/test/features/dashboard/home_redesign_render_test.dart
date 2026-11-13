@@ -286,6 +286,31 @@ void main() {
     await HomeHeroPeriodController.preload();
   });
 
+  // iOS can launch the app in the background (App Intent) with no visible
+  // UI, so Home is laid out at a zero or near-zero size. The pace bar's tick
+  // used to clamp into [0, width - 2], which throws once width < 2.
+  for (final size in const [Size.zero, Size(1, 1), Size(2, 2), Size(3, 3)]) {
+    testWidgets('Home budget pace bar survives a $size layout',
+        (tester) async {
+      final errors = <FlutterErrorDetails>[];
+      final previous = FlutterError.onError;
+      // Overflow reports are expected at these sizes; only a thrown build or
+      // layout error (the ArgumentError from clamp) is a failure.
+      FlutterError.onError = (details) {
+        if (details.exception is FlutterError &&
+            details.exception.toString().contains('overflowed')) {
+          return;
+        }
+        errors.add(details);
+      };
+      addTearDown(() => FlutterError.onError = previous);
+      await _pump(tester, withData: true, theme: AppTheme.light, size: size);
+      FlutterError.onError = previous;
+      expect(errors.map((e) => e.exception), isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('Home blue fade reveals the grain canvas without a dark seam',
       (tester) async {
     final boundary = GlobalKey();

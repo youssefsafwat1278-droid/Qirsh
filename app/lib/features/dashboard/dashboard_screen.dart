@@ -1462,7 +1462,9 @@ class _BlueZone extends ConsumerWidget {
                 ),
               ),
               PositionedDirectional(
-                start: ((w - 2) * expected).clamp(0.0, w - 2),
+                // A background launch lays this out at zero width; an
+                // upper bound below 0 makes clamp throw.
+                start: w <= 2 ? 0.0 : ((w - 2) * expected).clamp(0.0, w - 2),
                 top: 0,
                 child: Opacity(
                   opacity: used == 0 ? 1 : (v / used).clamp(0.0, 1.0),
