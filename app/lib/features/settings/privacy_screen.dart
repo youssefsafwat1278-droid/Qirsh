@@ -497,7 +497,10 @@ class _ConsentManagementCardState
         (status == ConsentStatus.active ||
             status == ConsentStatus.partial ||
             status == ConsentStatus.unknown ||
-            status == ConsentStatus.turningOn);
+            status == ConsentStatus.turningOn ||
+            // Cloud OFF with a kept AI choice reads "Off"; the withdrawal
+            // that clears the kept choice stays available.
+            (status == ConsentStatus.off && widget.settings.aiConsentGranted));
     final canRefresh = settled &&
         (status == ConsentStatus.unknown ||
             status == ConsentStatus.turningOn ||

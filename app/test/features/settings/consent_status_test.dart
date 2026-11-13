@@ -34,8 +34,10 @@ void main() {
       expect(deriveConsentStatus(_settings(a, d), _on), ConsentStatus.partial);
       expect(deriveConsentStatus(_settings(a, u), _on), ConsentStatus.partial);
     });
-    test('legacy AI-only is partial, never silently normalised', () {
-      expect(deriveConsentStatus(_settings(d, a), _on), ConsentStatus.partial);
+    test('Cloud OFF with a kept AI choice is off, never "partially on"', () {
+      // The state iOS is left in after sign-out pauses Cloud: nothing is sent.
+      expect(deriveConsentStatus(_settings(d, a), _on), ConsentStatus.off);
+      expect(deriveConsentStatus(_settings(u, a), _on), ConsentStatus.off);
     });
     test('nothing accepted is off', () {
       expect(deriveConsentStatus(_settings(d, d), _on), ConsentStatus.off);

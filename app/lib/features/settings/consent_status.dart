@@ -95,6 +95,10 @@ ConsentStatus deriveConsentStatus(
   final ai = settings.aiConsentGranted;
   if (!cloud && !ai) return ConsentStatus.off;
   if (facts.uncertain || !facts.resolved) return ConsentStatus.unknown;
+  // Cloud OFF sends nothing, whatever the stored AI choice says (iOS keeps the
+  // AI choice when sign-out pauses Cloud). Reporting that as "partially on"
+  // made a paused account look active; it is OFF.
+  if (!cloud) return ConsentStatus.off;
   // A stored ON is never reported as active unless the live ON is verified in
   // every layer (the Dart records AND, where it exists, the native ones).
   if (cloud && (facts.egressState != EgressState.on || !facts.nativeVerified)) {
