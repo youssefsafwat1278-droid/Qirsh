@@ -312,7 +312,7 @@ export async function handleProcessIosSms(
     let status = (outcome.accepted && parsed.amount && parsed.currency ? 'processed' : 'rejected') as CaptureStatus;
 
     if (status !== 'rejected') {
-      const duplicate = await detectDuplicate(supabase, auth.installIdHash, payloadId, parsed);
+      const duplicate = await detectDuplicate(supabase, auth.installIdHash, payloadId, parsed, ownerUid);
       if (duplicate) {
         status = 'duplicate';
         parsed.duplicateStatus = 'suspicious_duplicate';
@@ -495,21 +495,37 @@ async function bumpRateLimit(
   return false;
 }
 
+/**
+ * The part of the duplicate fingerprint that does not depend on time. An
+ * owner-bound capture is scoped to its account: the same bank message captured
+ * by two accounts on one device is two transactions, not a duplicate, and one
+ * account never learns what another captured. An ownerless (legacy) capture
+ * keeps the device-wide fingerprint it always had.
+ */
+export function duplicateFingerprintBase(
+  parsed: { amount?: number | null; currency?: string | null; merchant?: string | null;
+    rawMessage?: string | null; last4?: string | null },
+  ownerUid = '',
+): string {
+  const fields = [
+    (parsed.amount ?? 0).toFixed(2),
+    (parsed.currency ?? '').toUpperCase(),
+    normalizeMerchant(parsed.merchant ?? parsed.rawMessage ?? ''),
+    parsed.last4 ?? '',
+  ];
+  const owner = ownerUid.trim().toLowerCase();
+  return (owner ? [`owner:${owner}`, ...fields] : fields).join('|');
+}
+
 async function detectDuplicate(
   supabase: ReturnType<typeof serviceClient>,
   installIdHash: string,
   payloadId: string,
   parsed: ParsedCapture,
+  ownerUid = '',
 ): Promise<string | null> {
   if (!parsed.amount || !parsed.currency || !parsed.comparisonTimestamp) return null;
-  const merchant = normalizeMerchant(parsed.merchant ?? parsed.rawMessage ?? '');
-  const card = parsed.last4 ?? '';
-  const base = [
-    parsed.amount.toFixed(2),
-    parsed.currency.toUpperCase(),
-    merchant,
-    card,
-  ].join('|');
+  const base = duplicateFingerprintBase(parsed, ownerUid);
 
   // Exact timestamps for both sources; stable payload IDs handle retries.
   const timeKeys = fingerprintTimeKeys(
