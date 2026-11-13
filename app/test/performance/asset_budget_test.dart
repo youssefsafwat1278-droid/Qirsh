@@ -18,7 +18,17 @@ void main() {
   // Vazirmatn primary-family switch: four more TTFs at ~120 KiB each (+~0.48
   // MiB, total ~8.95 MiB). Ceiling still 11 MiB — ~2 MiB (≈19%) margin remains.
   const perFileMax = 1024 * 1024; // 1 MiB — no single packaged asset may exceed
-  const totalMax = 11 * 1024 * 1024; // ~11 MiB — whole assets/ tree ceiling
+  const totalMax = 11 * 1024 * 1024; // 11 MiB — non-walkthrough assets
+
+  // The two bundled Shortcut walkthroughs are intentional video assets (~3 MiB
+  // together). Keep their allowance separate so the original image/font budgets
+  // still catch regressions; other videos do not inherit this exception.
+  const walkthroughs = {
+    'assets/shortcut_guide/qirsh_shortcut_setup_ar.mp4',
+    'assets/shortcut_guide/qirsh_shortcut_setup_en.mp4',
+  };
+  const walkthroughPerFileMax = 2 * 1024 * 1024; // 2 MiB per walkthrough
+  const walkthroughTotalMax = 3328 * 1024; // 3.25 MiB for both videos
 
   final assetsDir = Directory('assets');
 
@@ -44,8 +54,11 @@ void main() {
     for (final e in assetsDir.listSync(recursive: true)) {
       if (e is! File) continue;
       final size = e.lengthSync();
-      if (size > perFileMax) {
-        offenders.add('${e.path} = ${(size / 1024).round()} KiB');
+      final limit =
+          walkthroughs.contains(e.path) ? walkthroughPerFileMax : perFileMax;
+      if (size > limit) {
+        offenders.add('${e.path} = ${(size / 1024).round()} KiB '
+            '(limit ${limit ~/ 1024} KiB)');
       }
     }
     expect(offenders, isEmpty,
@@ -55,12 +68,20 @@ void main() {
 
   test('total packaged asset payload stays within budget', () {
     var total = 0;
+    var walkthroughTotal = 0;
     for (final e in assetsDir.listSync(recursive: true)) {
-      if (e is File) total += e.lengthSync();
+      if (e is! File) continue;
+      if (walkthroughs.contains(e.path)) {
+        walkthroughTotal += e.lengthSync();
+      } else {
+        total += e.lengthSync();
+      }
     }
+    expect(walkthroughTotal, lessThanOrEqualTo(walkthroughTotalMax),
+        reason: 'Shortcut walkthroughs exceed their 3.25 MiB budget');
     expect(total, lessThanOrEqualTo(totalMax),
         reason:
-            'assets/ total is ${(total / (1024 * 1024)).toStringAsFixed(1)} '
+            'non-walkthrough assets/ total is ${(total / (1024 * 1024)).toStringAsFixed(1)} '
             'MiB, over the ${totalMax ~/ (1024 * 1024)} MiB budget');
   });
 }
