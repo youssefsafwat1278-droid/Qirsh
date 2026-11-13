@@ -1887,6 +1887,69 @@ enum SharedCaptureStore {
     (try? withQueueLock { try authorizeUploadLocked(payloadID) }) ?? .waiting
   }
 
+  /// Diagnostics only (constants, no uid, no content): WHY [authorizeUpload]
+  /// answers what it does for this capture. Mirrors [authorizeUploadLocked]
+  /// branch by branch so a capture that went local can be explained from the
+  /// device log. Never used to decide anything.
+  static func uploadDecisionReason(payloadID: String) -> String {
+    (try? withQueueLock { () throws -> String in
+      guard try readBarrier() == nil else { return "barrier_active" }
+      guard let item = try loadQueue().first(where: { $0.id == payloadID }) else {
+        return "item_missing"
+      }
+      if item.ownerState == ownerStateUnbound { return "item_unbound" }
+      guard item.ownerState == ownerStateStamped, let uid = item.ownerUid,
+            let generation = item.ownerGeneration else { return "item_unstamped" }
+      guard let owner = try readActiveOwner() else { return "no_active_owner" }
+      if owner.uid != uid { return "owner_uid_changed" }
+      if owner.generation != generation { return "owner_generation_changed" }
+      if let denial = egressDenialReason(forOwner: uid) { return "egress_" + denial }
+      if item.localOnly == true { return "item_local_only_at_capture" }
+      guard let mirror = consentMirror(forHash: owner.uidHash) else { return "mirror_missing" }
+      return mirror.cloud ? (mirror.ai ? "allowed_ai" : "allowed_no_ai") : "mirror_cloud_off"
+    }) ?? "lock_or_storage_error"
+  }
+
+  /// Diagnostics only: the branch of [egressDenied] that denies, or nil.
+  private static func egressDenialReason(forOwner owner: String) -> String? {
+    let view = egressView()
+    if view.uncertain { return "store_unreadable" }
+    let pending = pendingView()
+    if pending.anyUnreadable { return "pending_unreadable" }
+    guard let hash = try? uidHash(owner) else { return "hash_failed" }
+    if pending.holds(hash) { return "enable_pending" }
+    let mine = view.maps.compactMap { $0.owners[hash] }
+    if mine.contains(where: { $0.state != "ON" }) { return "state_not_on" }
+    if mine.contains(where: { $0.retirement != nil }) { return "retired" }
+    if mine.contains(where: { $0.lifetimeOwnerGeneration != nil || $0.lifetimeOwnerEpoch != nil }) {
+      guard let active = try? readActiveOwner(), let defaults,
+            active.uid == normalizedUID(owner), active.uidHash == hash,
+            active.generation > 0 else { return "lifetime_owner_unverified" }
+      if snapshotCounter(ownerGenerationKey, in: defaults) != active.generation {
+        return "lifetime_counter_mismatch"
+      }
+      guard let epoch = snapshotCounter(ownerEpochKey, in: defaults) else {
+        return "lifetime_epoch_unreadable"
+      }
+      if mine.count != 2 { return "lifetime_layer_missing" }
+      if !mine.allSatisfy({ ($0.lifetimeOwnerGeneration ?? 0) > 0
+        && $0.lifetimeOwnerGeneration == active.generation }) { return "lifetime_generation_stale" }
+      if !mine.allSatisfy({ $0.lifetimeOwnerEpoch == epoch }) { return "lifetime_epoch_stale" }
+    }
+    if mine.count == 2 && mine[0] != mine[1] { return "layers_disagree" }
+    return nil
+  }
+
+  /// Diagnostics only: why the backend config cannot be used, or nil.
+  static func backendConfigGap(_ config: BackendConfig) -> String? {
+    if !config.cloudProcessingEnabled { return "config_cloud_off" }
+    if config.installID?.isEmpty ?? true { return "config_install_missing" }
+    if config.deviceSecret?.isEmpty ?? true { return "config_secret_missing" }
+    if config.backendURL?.isEmpty ?? true { return "config_url_missing" }
+    if config.anonKey?.isEmpty ?? true { return "config_key_missing" }
+    return nil
+  }
+
   /// The authorizeUpload decision; the caller holds the queue flock.
   private static func authorizeUploadLocked(_ payloadID: String) throws -> UploadDecision {
       guard try readBarrier() == nil else { return .waiting }

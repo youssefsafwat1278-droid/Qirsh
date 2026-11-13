@@ -1,6 +1,7 @@
 import AppIntents
 import Foundation
 import UserNotifications
+import os
 
 /// App Intent exposed to Shortcuts as "Process Bank SMS".
 ///
@@ -118,7 +119,12 @@ struct PostBankStatusIntent: AppIntent {
       let ownerUid: String
       let ownerGeneration: Int
       let mirrorAllowsAi: Bool
-      switch SharedCaptureStore.authorizeUpload(payloadID: payloadID) {
+      let decision = SharedCaptureStore.authorizeUpload(payloadID: payloadID)
+      // Release diagnostic (constants only): which route and why.
+      // os_log with a public format: NSLog arguments are redacted on device.
+      os_log("[QirshShortcut] route decision=%{public}@",
+             SharedCaptureStore.uploadDecisionReason(payloadID: payloadID))
+      switch decision {
       case let .allowed(uid, generation, allowAi):
         ownerUid = uid
         ownerGeneration = generation
@@ -218,6 +224,8 @@ struct PostBankStatusIntent: AppIntent {
       return .result()
     }
 
+    os_log("[QirshShortcut] route decision=local_%{public}@",
+           SharedCaptureStore.backendConfigGap(config) ?? "config_ok")
     let outcome = try service.capture(request, status: .sent, payloadID: payloadID)
     if case .enqueued = outcome {
       if config.captureNotifyV2 {

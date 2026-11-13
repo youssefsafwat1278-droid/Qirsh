@@ -927,7 +927,10 @@ class CaptureDeviceRegistrationService {
     if (!current() || !_isIos()) return false;
     final gateState = await _gateState(current: current);
     if (!current()) return false;
-    if (gateState == _Gate.blocked) return false;
+    if (gateState == _Gate.blocked) {
+      Diag.log('[CaptureOwner]', 'publish skipped gate=blocked');
+      return false;
+    }
     final session = _readSession();
     if (session == null) return false;
     if (await _readReplicaOwnerUid() != session.uid || !current()) return false;
@@ -964,6 +967,13 @@ class CaptureDeviceRegistrationService {
     if (!await _holds(tx)) return false;
     final transitionGeneration = await _clientGeneration(session.uid);
     if (!current() || !await _holds(tx)) return false;
+    // Release diagnostic (booleans and a state name only): what the native
+    // capture paths are told. A capture goes local when this says cloud=false.
+    Diag.log(
+        '[CaptureOwner]',
+        'publish mirror_cloud=${mirror.cloud} mirror_ai=${mirror.ai} '
+            'gate=${gateState.name} settings_cloud=${now.cloud} '
+            'linked_cloud=${linked.cloud}');
     await _publishOwner(
       uid: session.uid,
       cloud: mirror.cloud,
@@ -1134,6 +1144,9 @@ class CaptureDeviceRegistrationService {
     if (last != null && snapshot.version < last) return;
     final generation = await _clientGeneration(uid);
     if (!current()) return;
+    // Release diagnostic (booleans only).
+    Diag.log('[CaptureOwner]',
+        'mirror write cloud=${snapshot.cloud} ai=${snapshot.ai}');
     await _writeConsentMirror(
       uid: uid,
       cloud: snapshot.cloud,
