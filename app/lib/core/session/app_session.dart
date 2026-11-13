@@ -76,7 +76,10 @@ class DatabaseHostAdmission {
 
 /// The account's setup state could not be verified and can be retried.
 class OnboardingStatusUnavailable implements Exception {
-  const OnboardingStatusUnavailable();
+  const OnboardingStatusUnavailable([this.cause]);
+
+  /// The lookup's own failure, for a non-sensitive reason code only.
+  final Object? cause;
 }
 
 /// MALI-054n: thrown when a new identity cannot be admitted because the previous
@@ -4862,7 +4865,7 @@ class AppSession extends ValueNotifier<SessionStatus> {
       );
       if (!adm.current || lossSeq != _authLossSeq) return null;
       if (remoteCompleted == null && requireOnboardingResult) {
-        throw const OnboardingStatusUnavailable();
+        throw OnboardingStatusUnavailable(_lastOnboardingLookupError);
       }
       completed = remoteCompleted ?? false;
     }
@@ -4951,11 +4954,14 @@ class AppSession extends ValueNotifier<SessionStatus> {
     return publishedCompletion;
   }
 
+  Object? _lastOnboardingLookupError;
+
   Future<bool?> _readRemoteOnboardingCompletion(
     supabase.SupabaseClient client,
     supabase.Session session, {
     AdmissionAuthority? authority,
   }) async {
+    _lastOnboardingLookupError = null;
     try {
       Future<bool> read() async {
         final row = await client
@@ -4975,6 +4981,7 @@ class AppSession extends ValueNotifier<SessionStatus> {
         onboarding: (authority: authority, accessToken: session.accessToken),
       );
     } catch (error) {
+      _lastOnboardingLookupError = error;
       // An unavailable lookup is distinct from confirmed incomplete setup.
       // Interactive sign-in can retry, while automatic startup keeps its fallback.
       if (kDebugMode) {

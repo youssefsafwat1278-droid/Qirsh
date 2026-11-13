@@ -7023,6 +7023,9 @@ class AppL10nAr extends AppL10n {
       'تعذّر التحقق من إعداد حسابك. تحقّق من اتصالك ثم أعد المحاولة.';
 
   @override
+  String get onboardingUseAnotherAccount => 'الدخول بحساب آخر';
+
+  @override
   String get shortcutVisualInstallTitle => 'أضف اختصار قرش';
 
   @override

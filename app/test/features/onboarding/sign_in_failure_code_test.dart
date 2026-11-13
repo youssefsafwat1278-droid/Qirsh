@@ -27,4 +27,23 @@ void main() {
         isNot(contains('example')));
     expect(signInFailureCode(const FormatException('secret')), 'FormatException');
   });
+
+  // Audit W1: only the server's rejection of the code itself is "wrong code".
+  test('emailCodeRejected: only an expired/invalid code from the server', () {
+    expect(
+        emailCodeRejected(AuthApiException('Token has expired or is invalid',
+            statusCode: '403', code: 'otp_expired')),
+        isTrue);
+    expect(emailCodeRejected(EgressDeniedException('disabling')), isFalse);
+    expect(
+        emailCodeRejected(AuthRetryableFetchException(
+            message: 'ClientException: egress_denied:frozen')),
+        isFalse);
+    expect(emailCodeRejected(const StaleAdmissionException()), isFalse);
+    expect(
+        emailCodeRejected(
+            AuthApiException('rate limited', statusCode: '429',
+                code: 'over_request_rate_limit')),
+        isFalse);
+  });
 }

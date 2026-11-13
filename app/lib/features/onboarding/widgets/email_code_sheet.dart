@@ -7,6 +7,13 @@ import '../../../core/utils/l10n_ext.dart';
 
 enum EmailCodeResult { verified, needsCurrentCode, invalid }
 
+/// Thrown by an `onVerify` callback for a failure that is not a wrong code;
+/// the sheet shows [message] instead of the wrong-code text.
+class EmailCodeFailure implements Exception {
+  const EmailCodeFailure(this.message);
+  final String message;
+}
+
 /// Shared by sign-in and authenticated email linking. The caller owns admission;
 /// this form never installs a session or creates an application account itself.
 class EmailCodeSheet extends StatefulWidget {
@@ -110,8 +117,12 @@ class _EmailCodeSheetState extends State<EmailCodeSheet> {
         case EmailCodeResult.invalid:
           setState(() => _error = context.l10n.authCodeVerifyFailed);
       }
-    } catch (_) {
-      if (mounted) setState(() => _error = context.l10n.authCodeVerifyFailed);
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = error is EmailCodeFailure
+            ? error.message
+            : context.l10n.authCodeVerifyFailed);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

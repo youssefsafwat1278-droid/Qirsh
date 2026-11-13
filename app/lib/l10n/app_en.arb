@@ -3609,6 +3609,7 @@
   "pasteSavedForAnalysis": "Message saved in Smart Inbox for analysis.",
   "retryBankAnalysis": "Retry smart analysis",
   "onboardingAccountCheckFailed": "We couldn't check your account setup. Check your connection and try again.",
+  "onboardingUseAnotherAccount": "Use another account",
   "shortcutVisualInstallTitle": "Add the Qirsh shortcut",
   "shortcutVisualInstallBody": "Tap Add Qirsh Shortcut, then Add Shortcut in iOS. Keep the new template name QIRSH so the connection test can find it.",
   "shortcutVisualFilterTitle": "Choose which bank messages to capture",

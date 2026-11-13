@@ -86,4 +86,28 @@ void main() {
     expect(find.textContaining('private-token'), findsNothing);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('a failure that is not a wrong code shows its own message',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        theme: AppTheme.light,
+        localizationsDelegates: AppL10n.localizationsDelegates,
+        supportedLocales: AppL10n.supportedLocales,
+        home: Scaffold(
+            body: EmailCodeSheet(
+                initialEmail: 'a@example.test',
+                onSend: (_) async {},
+                onVerify: (email, code, confirming) async =>
+                    throw const EmailCodeFailure('SIGN-IN FAILED (E: X)')))));
+    await tester.tap(find.byKey(const ValueKey('auth-email-submit')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('auth-email-code')), '123456');
+    await tester.tap(find.byKey(const ValueKey('auth-email-submit')));
+    await tester.pumpAndSettle();
+    final l = AppL10n.of(tester.element(find.byType(EmailCodeSheet)));
+    expect(find.text('SIGN-IN FAILED (E: X)'), findsOneWidget);
+    expect(find.text(l.authCodeVerifyFailed), findsNothing);
+  });
 }
+

@@ -3812,6 +3812,7 @@
   "pasteSavedForAnalysis": "الرسالة محفوظة في الوارد الذكي وبانتظار التحليل.",
   "retryBankAnalysis": "أعد التحليل بالذكاء الاصطناعي",
   "onboardingAccountCheckFailed": "تعذّر التحقق من إعداد حسابك. تحقّق من اتصالك ثم أعد المحاولة.",
+  "onboardingUseAnotherAccount": "الدخول بحساب آخر",
   "shortcutVisualInstallTitle": "أضف اختصار قرش",
   "shortcutVisualInstallBody": "اضغط «إضافة اختصار قرش»، ثم Add Shortcut في iOS. احتفظ باسم القالب الجديد QIRSH ليتمكّن اختبار الاتصال من فتحه.",
   "shortcutVisualFilterTitle": "اختار الرسائل البنكية المطلوبة",

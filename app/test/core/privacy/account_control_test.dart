@@ -204,6 +204,69 @@ void main() {
       expect(await egress.gate.permits(), isFalse);
     });
 
+    test('after sign-in, the setup lookup passes a leftover DISABLING; the '
+        'rest of the account stays closed', () async {
+      await client.auth.setInitialSession(jsonEncode(_sessionJson(expired: false)));
+      await egress.gate.beginDisabling(owner: 'uid-a', reservedVersion: 2);
+      final token = client.auth.currentSession!.accessToken;
+      await egress.gate.runAccountControl(
+        AccountControlOp.onboardingStatus,
+        () async {
+          expect(await client.from('profiles')
+              .select('onboarding_completed_at').eq('id', 'uid-a').maybeSingle(),
+              isNull);
+          expect(await expectDenied(() => client.from('profiles')
+              .select().eq('id', 'uid-a')), isA<EgressDeniedException>());
+        },
+        onboarding: (
+          authority: AdmissionAuthority('uid-a', () => true, canCreate: false),
+          accessToken: token,
+        ),
+      );
+      expect(spy.calls,
+          ['GET /rest/v1/profiles?select=onboarding_completed_at&id=eq.uid-a']);
+      await expectLater(client.from('transactions').select(),
+          throwsA(isA<EgressDeniedException>()));
+      expect(spy.seen, hasLength(1));
+    });
+
+    // Audit L1 (2026-11-14): a freeze, an uncertain view or a pending enable
+    // denied the setup lookup, so the account-check screen retried forever.
+    for (final state in ['frozen', 'state_uncertain', 'pending_enable']) {
+      test('after sign-in, the setup lookup passes $state; the rest of the '
+          'account stays closed', () async {
+        await client.auth
+            .setInitialSession(jsonEncode(_sessionJson(expired: false)));
+        if (state == 'frozen') ConsentAuthority.egressFrozen = true;
+        addTearDown(() => ConsentAuthority.egressFrozen = false);
+        if (state == 'state_uncertain') egress.file.value = '{broken';
+        if (state == 'pending_enable') egress.pendingSecure.value = '{broken';
+        await expectLater(egress.gate.admit(),
+            throwsA(isA<EgressDeniedException>()
+                .having((e) => e.reason, 'reason', state)));
+        final token = client.auth.currentSession!.accessToken;
+        await egress.gate.runAccountControl(
+          AccountControlOp.onboardingStatus,
+          () async {
+            expect(await client.from('profiles')
+                .select('onboarding_completed_at').eq('id', 'uid-a')
+                .maybeSingle(), isNull);
+            expect(await expectDenied(() => client.from('profiles')
+                .select().eq('id', 'uid-a')), isA<EgressDeniedException>());
+          },
+          onboarding: (
+            authority: AdmissionAuthority('uid-a', () => true, canCreate: false),
+            accessToken: token,
+          ),
+        );
+        expect(spy.calls,
+            ['GET /rest/v1/profiles?select=onboarding_completed_at&id=eq.uid-a']);
+        await expectLater(egress.gate.admit(),
+            throwsA(isA<EgressDeniedException>()
+                .having((e) => e.reason, 'reason', state)));
+      });
+    }
+
     test('deleteAccount: the RPC', () async {
       await client.auth.setInitialSession(jsonEncode(_sessionJson(expired: false)));
       final r = await gateRun(AccountControlOp.deleteAccount,
@@ -496,6 +559,42 @@ void main() {
       egress = TestEgress().install();
       egress.file.value = '{broken';
       expect(await reason(), 'state_uncertain');
+    });
+
+    // Device report (TestFlight, 2026-11-14): "Couldn't sign in
+    // (E: EgressDenied:disabling)". A disable left DISABLING behind; it is
+    // completed only by the signed-in reconciliation (the account database must
+    // be open), so a signed-out device could never sign in again.
+    test('signed out: a leftover DISABLING never blocks sign-in itself',
+        () async {
+      Future<String?> reason(AccountControlOp op, String path) =>
+          gateRun(op, () async {
+            try {
+              final t = await egress.gate.admit(
+                  request: AdmissionRequest('POST', Uri.parse('$_url$path')));
+              egress.gate.release(t);
+              return null;
+            } on EgressDeniedException catch (e) {
+              return e.reason;
+            }
+          });
+      await egress.gate.beginDisabling(owner: 'uid-a', reservedVersion: 2);
+      egress.gate.configureSessionUsable(() => false);
+      addTearDown(() => egress.gate.configureSessionUsable(() => true));
+      expect(await reason(AccountControlOp.signIn, '/auth/v1/otp'), isNull);
+      // Only the sign-in endpoints: anything else in the grant stays denied.
+      expect(await reason(AccountControlOp.signIn, '/rest/v1/profiles'),
+          isNotNull);
+      // Ordinary traffic and other control operations stay denied.
+      await expectLater(egress.gate.admit(),
+          throwsA(isA<EgressDeniedException>()
+              .having((e) => e.reason, 'reason', 'disabling')));
+      expect(await reason(AccountControlOp.deleteAccount, '/auth/v1/otp'),
+          'disabling');
+      // A usable session is not "signed out": DISABLING still wins.
+      egress.gate.configureSessionUsable(() => true);
+      expect(await reason(AccountControlOp.signIn, '/auth/v1/otp'),
+          'disabling');
     });
   });
 

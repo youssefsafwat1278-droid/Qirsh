@@ -61,14 +61,19 @@ String _egressCode(String reason) {
 /// token, an email or a uid. The Supabase client wraps a refused request in its
 /// own exception type, so the reason is read from the stable `egress_denied:`
 /// prefix that [EgressDeniedException] puts in its message (reason strings are
-/// lower-case identifiers).
-@visibleForTesting
+/// lower-case identifiers). Also shown by the account-check screen.
 String signInFailureCode(Object error) {
   if (error is EgressDeniedException) return _egressCode(error.reason);
   final wrapped = RegExp(r'egress_denied:([a-z_]+)').firstMatch('$error');
   if (wrapped != null) return _egressCode(wrapped.group(1)!);
   return error.runtimeType.toString();
 }
+
+/// Whether a failed email verification was the server rejecting the code
+/// itself (wrong or expired), as opposed to any other sign-in failure.
+@visibleForTesting
+bool emailCodeRejected(Object error) =>
+    error is supabase.AuthApiException && error.code == 'otp_expired';
 
 /// Entry point for both first sign-in and recovery of an existing account.
 class OnboardingAuthScreen extends ConsumerStatefulWidget {
@@ -95,7 +100,9 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
   }
 
   Future<bool> _signIn(Future<AuthIdentity> Function() method,
-      {required String provider, bool showFailureToast = true}) async {
+      {required String provider,
+      bool showFailureToast = true,
+      void Function(Object error)? onFailure}) async {
     if (_busy) return false;
     HapticFeedback.lightImpact();
     _pendingMethod.value = provider;
@@ -149,6 +156,7 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
         );
         debugPrintStack(stackTrace: stackTrace);
       }
+      onFailure?.call(error);
       if (mounted && showFailureToast) {
         // A CONFIGURATION failure is permanent: "try again" would be a lie the
         // user could follow forever. Surface the service's own message for
@@ -453,13 +461,28 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
                   : service.sendEmailCode,
               creatingAccount: _creatingAccount,
               onVerify: (email, code, _) async {
+                Object? failure;
                 final ok = await _signIn(() async {
                   final identity =
                       await service.verifyEmailCode(email: email, code: code);
                   if (identity == null) throw const StaleAdmissionException();
                   return identity;
-                }, provider: 'email', showFailureToast: false);
-                return ok ? EmailCodeResult.verified : EmailCodeResult.invalid;
+                },
+                    provider: 'email',
+                    showFailureToast: false,
+                    onFailure: (error) => failure = error);
+                if (ok) return EmailCodeResult.verified;
+                // Only the server's rejection of the code itself is "wrong
+                // code". Any other failure (network, a refused request, a
+                // stale attempt) is reported as a sign-in failure with its
+                // reason code, so the user is not told to re-type a good code.
+                final error = failure;
+                if (error == null || emailCodeRejected(error)) {
+                  return EmailCodeResult.invalid;
+                }
+                if (!mounted) return EmailCodeResult.invalid;
+                throw EmailCodeFailure('${context.l10n.authSignInError} '
+                    '(E: ${signInFailureCode(error)})');
               },
             ));
   }

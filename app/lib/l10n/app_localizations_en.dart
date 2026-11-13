@@ -7018,6 +7018,9 @@ class AppL10nEn extends AppL10n {
       'We couldn\'t check your account setup. Check your connection and try again.';
 
   @override
+  String get onboardingUseAnotherAccount => 'Use another account';
+
+  @override
   String get shortcutVisualInstallTitle => 'Add the Qirsh shortcut';
 
   @override

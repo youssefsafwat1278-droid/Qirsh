@@ -11767,6 +11767,12 @@ abstract class AppL10n {
   /// **'تعذّر التحقق من إعداد حسابك. تحقّق من اتصالك ثم أعد المحاولة.'**
   String get onboardingAccountCheckFailed;
 
+  /// No description provided for @onboardingUseAnotherAccount.
+  ///
+  /// In ar, this message translates to:
+  /// **'الدخول بحساب آخر'**
+  String get onboardingUseAnotherAccount;
+
   /// No description provided for @shortcutVisualInstallTitle.
   ///
   /// In ar, this message translates to:

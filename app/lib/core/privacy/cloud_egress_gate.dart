@@ -2377,7 +2377,16 @@ class CloudEgressGate {
     // which keeps or lifts the freeze for the real uid. Ordinary egress is
     // untouched.
     final signedOutControl = _signedOutControl(control, owner);
-    if (ConsentAuthority.egressFrozen && !revoke && !signedOutControl) {
+    // The setup-status lookup (one GET of the signed-in account's own
+    // onboarding flag, bound below to the admitted identity, its bearer and an
+    // empty body) carries no financial data, SMS or consent. Denying it on a
+    // freeze, an uncertain view or a pending enable left the account-check
+    // screen retrying forever: those states are settled only by the signed-in
+    // reconciliation that this lookup leads to. Ordinary egress is untouched.
+    if (ConsentAuthority.egressFrozen &&
+        !revoke &&
+        !signedOutControl &&
+        !onboarding) {
       return 'frozen';
     }
     // N2: an unconfirmed native lifecycle fence denies ordinary egress. The
@@ -2386,7 +2395,9 @@ class CloudEgressGate {
       return 'lifecycle_fence';
     }
     final readout = await store.read(owner: owner);
-    if (readout.uncertain && !signedOutControl) return 'state_uncertain';
+    if (readout.uncertain && !signedOutControl && !onboarding) {
+      return 'state_uncertain';
+    }
     final rec = readout.records[owner];
     if (revokeRetry) {
       // Not exempt from the freeze or the lifecycle fence above: an uncertain
@@ -2404,7 +2415,17 @@ class CloudEgressGate {
       }
       return null;
     }
-    if (rec != null && rec.state == EgressState.disabling) {
+    // The sign-in chain is never blocked by a leftover DISABLING: that record
+    // is completed only by the signed-in reconciliation (it needs the account
+    // database), so denying the sign-in (or the setup-status lookup that
+    // completes it) would lock the device out for good. DISABLING is treated
+    // like OFF for them, where account control is allowed: only their scoped
+    // endpoints and identity checks below apply. Ordinary egress stays denied
+    // until the reconciliation commits OFF.
+    if (rec != null &&
+        rec.state == EgressState.disabling &&
+        !signedOutControl &&
+        !onboarding) {
       return revoke &&
               grant!.owner == owner &&
               grant.generation == rec.transitionGeneration
@@ -2413,7 +2434,6 @@ class CloudEgressGate {
     }
     if (revoke) return 'revoke_outside_disabling';
     if (onboarding) {
-      if (await _pendingDenies(owner)) return 'pending_enable';
       final identity = control?.onboarding;
       if (identity == null ||
           !identity.authority.isCurrent ||

@@ -1,3 +1,4 @@
+import 'profile_image_store.dart';
 import '../../core/utils/l10n_ext.dart';
 import '../capture/widgets/sms_auto_capture_enable.dart';
 import '../capture/services/native_capture_bridge.dart';
@@ -12,7 +13,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
@@ -1188,20 +1188,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       imageQuality: 86,
     );
     if (picked == null) return;
-    final directory = await getApplicationDocumentsDirectory();
-    final extension = p.extension(picked.path).isEmpty
-        ? '.jpg'
-        : p.extension(picked.path).toLowerCase();
-    final avatarsDir = Directory(p.join(directory.path, 'profile'));
-    if (!await avatarsDir.exists()) {
-      await avatarsDir.create(recursive: true);
-    }
-    final destination = File(
-      p.join(avatarsDir.path, 'avatar$extension'),
+    final destination = await storeProfileImage(
+      pickedPath: picked.path,
+      documents: await getApplicationDocumentsDirectory(),
+      previousPath: settings.avatarPath,
     );
-    await File(picked.path).copy(destination.path);
     await ref.read(userSettingsRepositoryProvider).saveSettings(
-          settings.copyWith(avatarPath: destination.path),
+          settings.copyWith(avatarPath: destination),
         );
     _refreshSettingsDependents(ref);
     if (!context.mounted) return;

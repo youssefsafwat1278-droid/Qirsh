@@ -1427,8 +1427,11 @@ class BootstrapRunner {
       final cleared =
           await captureQueue.clearCaptureOwner(clearHint: clearHint);
       final filesCleared = await PendingNotificationActions.clear();
-      // MALI-019 §10 — clear the previous user's pending OS reminders too.
-      await LocalNotificationService.instance.cancelScheduledReminders();
+      // MALI-019 §10 — clear the previous user's pending OS reminders too, and
+      // (audit P2, 2026-11-14) the ones already delivered: a capture or bill
+      // notification carries a merchant and an amount, and must not stay on
+      // the lock screen after sign-out or an account switch.
+      await LocalNotificationService.instance.clearAllForRemovedOwner();
       return cleared && filesCleared;
     }
 
