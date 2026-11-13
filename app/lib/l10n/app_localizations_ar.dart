@@ -31,6 +31,12 @@ class AppL10nAr extends AppL10n {
       'تعذّر فتح الاختصارات. تأكّد من تثبيت تطبيق Shortcuts وحاول مرة أخرى.';
 
   @override
+  String get shortcutVideoTitle => 'شاهد الشرح بالفيديو';
+
+  @override
+  String get shortcutVideoSubtitle => 'أقل من دقيقة · بدون صوت';
+
+  @override
   String get shortcutManualSteps => 'تعليمات الإعداد بالتفصيل';
 
   @override

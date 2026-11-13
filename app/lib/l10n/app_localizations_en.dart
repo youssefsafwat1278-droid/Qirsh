@@ -31,6 +31,12 @@ class AppL10nEn extends AppL10n {
       'Couldn’t open Shortcuts. Make sure the Shortcuts app is installed and try again.';
 
   @override
+  String get shortcutVideoTitle => 'Watch the video guide';
+
+  @override
+  String get shortcutVideoSubtitle => 'Under a minute · no sound';
+
+  @override
   String get shortcutManualSteps => 'Detailed setup instructions';
 
   @override

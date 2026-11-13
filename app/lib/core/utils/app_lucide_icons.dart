@@ -468,6 +468,11 @@ class AppLucideIcons {
     fontFamily: _fontFamily,
     fontPackage: _fontPackage,
   );
+  static const IconData playCircle = IconData(
+    0xf458,
+    fontFamily: _fontFamily,
+    fontPackage: _fontPackage,
+  );
   static const IconData plusCircle = IconData(
     0xf45f,
     fontFamily: _fontFamily,

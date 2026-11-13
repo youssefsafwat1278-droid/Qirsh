@@ -6,6 +6,8 @@
   "shortcutProbeWaiting": "شغّل الاختصار ثم ارجع لقرش. الاختبار لا يضيف معاملة مالية.",
   "shortcutProbePassed": "تم التحقق من الاتصال. التسجيل التلقائي يتطلب تفعيل أتمتة الرسائل أيضًا.",
   "shortcutOpenFailed": "تعذّر فتح الاختصارات. تأكّد من تثبيت تطبيق Shortcuts وحاول مرة أخرى.",
+  "shortcutVideoTitle": "شاهد الشرح بالفيديو",
+  "shortcutVideoSubtitle": "أقل من دقيقة · بدون صوت",
   "shortcutManualSteps": "تعليمات الإعداد بالتفصيل",
   "appTitle": "قرش",
   "setupHeaderTitle": "لنُجهّز قِرش",

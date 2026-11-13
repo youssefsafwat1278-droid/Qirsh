@@ -133,6 +133,18 @@ abstract class AppL10n {
   /// **'تعذّر فتح الاختصارات. تأكّد من تثبيت تطبيق Shortcuts وحاول مرة أخرى.'**
   String get shortcutOpenFailed;
 
+  /// No description provided for @shortcutVideoTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'شاهد الشرح بالفيديو'**
+  String get shortcutVideoTitle;
+
+  /// No description provided for @shortcutVideoSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'أقل من دقيقة · بدون صوت'**
+  String get shortcutVideoSubtitle;
+
   /// No description provided for @shortcutManualSteps.
   ///
   /// In ar, this message translates to:

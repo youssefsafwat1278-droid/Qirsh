@@ -6,6 +6,8 @@
   "shortcutProbeWaiting": "Run the shortcut, then return to Qirsh. This test does not add a transaction.",
   "shortcutProbePassed": "Connection verified. Automatic capture still needs the Message automation enabled.",
   "shortcutOpenFailed": "Couldn’t open Shortcuts. Make sure the Shortcuts app is installed and try again.",
+  "shortcutVideoTitle": "Watch the video guide",
+  "shortcutVideoSubtitle": "Under a minute · no sound",
   "shortcutManualSteps": "Detailed setup instructions",
   "appTitle": "Qirsh",
   "setupHeaderTitle": "Let's set up Qirsh",

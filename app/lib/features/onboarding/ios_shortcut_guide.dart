@@ -12,6 +12,7 @@ import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../core/utils/l10n_ext.dart';
 import '../../core/theme/widgets/mali_card.dart';
 import '../../core/utils/app_lucide_icons.dart';
+import 'shortcut_guide_video.dart';
 import 'shortcut_setup_actions.dart';
 
 TextStyle _alex(double size, FontWeight weight, double height, Color color,
@@ -75,6 +76,8 @@ class IosShortcutGuide extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const ShortcutGuideVideo(),
+        const SizedBox(height: 16),
         ShortcutSetupActions(currencyCode: _shortcutCurrency(currencyCode)),
         const SizedBox(height: 20),
         ExpansionTile(
