@@ -1618,6 +1618,15 @@ enum SharedCaptureStore {
     uid.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
   }
 
+  /// Owner decision 2026-11-13: with no signed-in account nothing is captured
+  /// (the App Intent returns without storing, uploading or notifying; a share
+  /// is refused). True ONLY when the owner record was read and there is none.
+  /// Any read failure (before first unlock, lock unavailable) is NOT "signed
+  /// out": the caller then follows its normal path and reports that failure.
+  static func isSignedOutForCertain() -> Bool {
+    (try? withQueueLock { try readActiveOwner() == nil }) ?? false
+  }
+
   private static func readActiveOwner() throws -> OwnerRecord? {
     let read = ownerRecordReadOverride?() ?? SharedKeychain.read(forKey: activeOwnerKC)
     switch read.status {

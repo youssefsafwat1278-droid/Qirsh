@@ -64,6 +64,12 @@ struct PostBankStatusIntent: AppIntent {
       SharedCaptureStore.recordShortcutSetupProbe()
       return .result()
     }
+    // Signed out: nothing is captured. No queue entry, no upload and no
+    // notification (silent by the owner's decision): a bank message is only
+    // recorded for an account that is signed in.
+    if SharedCaptureStore.isSignedOutForCertain() {
+      return .result()
+    }
     let receivedAt = dateReceived ?? Date()
     let request = BankSMSCaptureRequest(
       smsText: smsText,

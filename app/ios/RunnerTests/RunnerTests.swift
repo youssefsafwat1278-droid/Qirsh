@@ -811,6 +811,9 @@ class RunnerTests: XCTestCase {
   func testIntentThrowsVisibleErrorWhenQueueUnavailable() async throws {
     SharedCaptureStore.purgeUserOwnedState()
     defer { resetCapSeams() }
+    // A signed-in account: with none the intent now returns silently (nothing
+    // is captured while signed out), which is not the case under test here.
+    _ = try publish(ownerA)
     SharedCaptureStore.queueKeyReadOverride = { (status: errSecInteractionNotAllowed, data: nil) }
     let intent = PostBankStatusIntent()
     intent.smsText = "ACME: purchase 12.00 SAR"
@@ -866,6 +869,52 @@ class RunnerTests: XCTestCase {
   }
 
   // Stamping: owner present -> stamped; none -> unbound + hint; transition -> no hint.
+  // Owner decision 2026-11-13: signed out = nothing is captured. The App Intent
+  // and the Share Extension ask this before they store anything.
+  func testSignedOutIsCertainOnlyWhenTheOwnerRecordIsReadAndAbsent() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    XCTAssertTrue(SharedCaptureStore.isSignedOutForCertain(), "no owner record")
+    _ = try publish(ownerA)
+    XCTAssertFalse(SharedCaptureStore.isSignedOutForCertain(), "signed in")
+    try SharedCaptureStore.clearActiveOwner(clearHint: false)   // sign-out
+    XCTAssertTrue(SharedCaptureStore.isSignedOutForCertain())
+    // An unreadable owner record (before first unlock) is NOT "signed out": the
+    // caller must take its normal path and report the storage failure.
+    SharedCaptureStore.ownerRecordReadOverride = { (errSecInteractionNotAllowed, nil) }
+    XCTAssertFalse(SharedCaptureStore.isSignedOutForCertain())
+  }
+
+  func testIntentCapturesNothingAndStaysSilentWhileSignedOut() async throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    SharedCaptureStore.purgeUserOwnedState()
+    let intent = PostBankStatusIntent()
+    intent.smsText = "ACME: purchase 12.00 SAR"
+    intent.dateReceived = Date()
+
+    _ = try await intent.perform()   // no error: the automation stays silent
+
+    XCTAssertTrue(try items().isEmpty, "nothing was stored")
+    // Signed in again: the same call captures.
+    _ = try publish(ownerA, cloud: false)
+    _ = try await intent.perform()
+    XCTAssertEqual(try items().count, 1)
+  }
+
+  func testSignedOutCheckComesBeforeAnyCaptureInTheIntentAndTheShareExtension() throws {
+    let intent = try iosSource("BankMessageShortcuts/BankMessageShortcuts.swift")
+    let check = try XCTUnwrap(intent.range(of: "SharedCaptureStore.isSignedOutForCertain()"))
+    let capture = try XCTUnwrap(intent.range(of: "try service.capture("))
+    let payload = try XCTUnwrap(intent.range(of: "SharedCaptureStore.makePayloadID("))
+    XCTAssertLessThan(check.lowerBound, capture.lowerBound)
+    XCTAssertLessThan(check.lowerBound, payload.lowerBound, "before the text is even hashed")
+    let share = try iosSource("ShareBankMessage/ShareViewController.swift")
+    let shareCheck = try XCTUnwrap(share.range(of: "SharedCaptureStore.isSignedOutForCertain()"))
+    let enqueue = try XCTUnwrap(share.range(of: "SharedCaptureStore.enqueue("))
+    XCTAssertLessThan(shareCheck.lowerBound, enqueue.lowerBound)
+  }
+
   func testStampingOwnerUnboundHintAndTransition() throws {
     resetCapSeams()
     defer { resetCapSeams() }
