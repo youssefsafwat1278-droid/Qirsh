@@ -2128,6 +2128,17 @@ class RunnerTests: XCTestCase {
       "a bundle with neither a profile nor a receipt must fail closed")
   }
 
+  func testApnsStoreReceiptNameDoesNotRequireTheFile() {
+    // Field report 2026-11-14: a fresh TestFlight install has no receipt file
+    // on disk, and requiring it withheld every TestFlight token. The NAME the
+    // system assigns is the evidence.
+    XCTAssertTrue(ApnsEnvironment.isStoreReceiptName("sandboxReceipt"))
+    XCTAssertTrue(ApnsEnvironment.isStoreReceiptName("receipt"))
+    XCTAssertFalse(ApnsEnvironment.isStoreReceiptName(nil))
+    XCTAssertFalse(ApnsEnvironment.isStoreReceiptName(""))
+    XCTAssertFalse(ApnsEnvironment.isStoreReceiptName("receipt.bak"))
+  }
+
   func testApnsRoutingDoesNotDependOnDebugCompileFlag() throws {
     // The dead `#if DEBUG` branch is what shipped the defect. Assert the
     // registration handler derives the environment from the entitlement.

@@ -29,6 +29,10 @@ void main() {
       expect(src, contains('appStoreReceiptURL'),
           reason: 'the receipt is the evidence, not the configuration name');
       expect(src, contains('name == "receipt" || name == "sandboxReceipt"'));
+      // Field report 2026-11-14: a fresh TestFlight install has no receipt
+      // file, so its existence must not be required; simulators never count.
+      expect(src.contains('fileExists(atPath: url.path)'), isFalse);
+      expect(src, contains('#if targetEnvironment(simulator)'));
       expect(src, contains('return isStoreDistributed ? "production" : nil'),
           reason: 'no receipt must fail closed');
     });

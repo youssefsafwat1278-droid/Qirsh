@@ -59,13 +59,25 @@ enum ApnsEnvironment {
   /// production APNs environment. The receipt is the artefact that proves it:
   /// `receipt` for the App Store, `sandboxReceipt` for TestFlight (which is a
   /// StoreKit sandbox, unrelated to the APNs sandbox — a TestFlight build's
-  /// pushes go to the PRODUCTION host). A development build has no receipt, so
-  /// "no profile" alone can never be mistaken for "shipped by Apple".
+  /// pushes go to the PRODUCTION host).
+  ///
+  /// Only the receipt URL's NAME is checked, never whether the file exists:
+  /// iOS does not guarantee the receipt file is on disk, and a fresh TestFlight
+  /// install routinely has none. Requiring the file withheld every TestFlight
+  /// token (field report, 2026-11-14). Development and ad-hoc builds always
+  /// embed a profile, so they never reach this branch. A simulator build has
+  /// no profile and is never store-distributed.
   static func isStoreDistributed(bundle: Bundle = .main) -> Bool {
-    guard let url = bundle.appStoreReceiptURL else { return false }
-    let name = url.lastPathComponent
-    guard name == "receipt" || name == "sandboxReceipt" else { return false }
-    return FileManager.default.fileExists(atPath: url.path)
+    #if targetEnvironment(simulator)
+    return false
+    #else
+    return isStoreReceiptName(bundle.appStoreReceiptURL?.lastPathComponent)
+    #endif
+  }
+
+  /// Pure seam for `isStoreDistributed`.
+  static func isStoreReceiptName(_ name: String?) -> Bool {
+    return name == "receipt" || name == "sandboxReceipt"
   }
 
   /// Pure resolution seam — both missing-profile branches are testable.
