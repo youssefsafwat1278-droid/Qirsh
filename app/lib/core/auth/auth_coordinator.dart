@@ -329,6 +329,8 @@ class AuthCoordinator {
     DateTime Function()? wallClock,
     Duration Function()? monotonic,
     Random? random,
+    this.transportQuiesceBound = const Duration(seconds: 15),
+    this.transportAbandonAfter = const Duration(seconds: 60),
   })  : _wall = wallClock ?? DateTime.now,
         _mono = monotonic ?? _processClock,
         _random = random ?? Random.secure();
@@ -344,6 +346,17 @@ class AuthCoordinator {
   final DateTime Function() _wall;
   final Duration Function() _mono;
   final Random _random;
+
+  /// L4: how long [runRefresh] waits for an op's transport closure to be
+  /// confirmed before treating it as unconfirmed (B8 latch, terminal denial)
+  /// and releasing the ticket anyway — a closing future that never completes
+  /// must not hold the op (and every later sign-in) forever.
+  final Duration transportQuiesceBound;
+
+  /// L4: how long the B8 transport latch refuses exchanges (monotonic). After
+  /// it the unconfirmed descriptor is abandoned: explicit sign-in (and routine
+  /// refresh) may run again. A confirmed explicit commit clears it sooner.
+  final Duration transportAbandonAfter;
 
   final AuthMutationSection section = AuthMutationSection();
 
@@ -574,20 +587,20 @@ class AuthCoordinator {
   /// until [commitExplicit] or [abandonExplicit].
   ///
   /// Phase 4c B8: refused while a previous op's transport closure is
-  /// unconfirmed ([transportUnconfirmed]) — checked on entry and again
-  /// immediately before [sdkCall] runs, so no authentication exchange starts
-  /// beside an unconfirmed descriptor.
+  /// unconfirmed and not yet abandoned ([transportLatched]) — checked on entry
+  /// and again immediately before [sdkCall] runs, so no authentication
+  /// exchange starts beside a recently unconfirmed descriptor.
   Future<T> explicitExchange<T>(int attemptId, Future<T> Function() sdkCall) {
     if (removalSince(attemptId)) {
       return Future.error(const ExplicitRefused('removal'));
     }
-    if (_transportUnconfirmed) {
+    if (_latched) {
       return Future.error(const ExplicitRefused('transport_unconfirmed'));
     }
     _explicitExclusion = attemptId;
     return section.run(() async {
       try {
-        if (_transportUnconfirmed) {
+        if (_latched) {
           throw const ExplicitRefused('transport_unconfirmed');
         }
         return await _mutate(AuthTag(AuthTagKind.explicit, attemptId), sdkCall);
@@ -654,6 +667,10 @@ class AuthCoordinator {
     // terminal denial.
     if (!removalSince(attemptId) && attemptCurrent()) {
       gate.clearTerminalDenial();
+      // L4: a confirmed sign-in also ends the B8 transport latch, so routine
+      // refresh resumes without waiting for [transportAbandonAfter].
+      _transportUnconfirmed = false;
+      _unconfirmedAt = null;
     }
     return next;
   }
@@ -808,11 +825,12 @@ class AuthCoordinator {
   }
 
   /// §11.3 explicit handover: [quiesced], then — Phase 4c B8 — a prompt
-  /// refusal when an op's transport closure is unconfirmed: quiescence beside
-  /// such a descriptor is no handover.
+  /// refusal while an op's transport closure is unconfirmed and not yet
+  /// abandoned ([transportLatched]): quiescence beside such a descriptor is no
+  /// handover.
   Future<void> handoverQuiesced() async {
     await quiesced();
-    if (_transportUnconfirmed) {
+    if (_latched) {
       throw const ExplicitRefused('transport_unconfirmed');
     }
   }
@@ -820,23 +838,35 @@ class AuthCoordinator {
   /// Cancels the running op (deadline, background, explicit intent).
   void cancelActive(String reason) => _activeOp?.cancel(reason);
 
-  /// Phase 4c B8: set when an op's transport closure could not be confirmed.
-  /// An unconfirmed descriptor is never confirmed later in this process, so the
-  /// latch holds for the process lifetime: no replacement refresh exchange runs
-  /// beside it. Separate from the gate's terminal denial — an explicit commit
-  /// that clears that denial never clears this.
+  /// Phase 4c B8: set when an op's transport closure could not be confirmed
+  /// (closure failed, or not confirmed within [transportQuiesceBound]). While
+  /// latched ([_latched]) no replacement exchange — refresh, explicit sign-in
+  /// or handover — runs beside the descriptor. L4: the latch is not for the
+  /// process lifetime; it lapses [transportAbandonAfter] (monotonic) after it
+  /// was set, and a confirmed explicit commit clears it, so a stuck closure
+  /// can never bar sign-in until the app is force-quit.
   bool _transportUnconfirmed = false;
+  Duration? _unconfirmedAt;
 
-  /// Whether a previous op's transport closure is unconfirmed ([runRefresh]
-  /// refuses every op until the process restarts).
+  bool get _latched =>
+      _transportUnconfirmed &&
+      _mono() - _unconfirmedAt! < transportAbandonAfter;
+
+  /// Whether a previous op's transport closure was unconfirmed and no
+  /// confirmed explicit commit has since cleared it (the gate's terminal
+  /// denial set with it also stands until such a commit).
   bool get transportUnconfirmed => _transportUnconfirmed;
+
+  /// Whether exchanges are currently refused for an unconfirmed closure
+  /// ([transportUnconfirmed] and [transportAbandonAfter] not yet elapsed).
+  bool get transportLatched => _latched;
 
   /// Runs one refresh op of [spec.kind] for the committed owner.
   Future<RefreshOutcome> runRefresh(RefreshOpSpec spec) async {
     if (_activeOp != null) {
       return const RefreshOutcome(RefreshOutcomeKind.denied, reason: 'busy');
     }
-    if (_transportUnconfirmed) {
+    if (_latched) {
       return const RefreshOutcome(RefreshOutcomeKind.denied,
           reason: 'transport_unconfirmed');
     }
@@ -858,12 +888,18 @@ class AuthCoordinator {
       if (ch != null) {
         ch.cancel();
         try {
-          await ch.quiesced();
+          // L4: bounded — a closing future that never completes must not hold
+          // the op (ticket, _activeOp) forever. _drive has returned, so the
+          // channel's response is no longer awaited by anything: a late reply
+          // can never be validated, committed or installed.
+          await ch.quiesced().timeout(transportQuiesceBound);
         } catch (_) {
-          // §10.4: closure not confirmed — no quiescence to rely on, so this
-          // process fails closed before the ticket is released, and the
-          // transport latch bars every later exchange (B8).
+          // §10.4: closure not confirmed (failed or timed out) — no quiescence
+          // to rely on, so this process fails closed before the ticket is
+          // released, and the transport latch bars later exchanges (B8) until
+          // it is abandoned or an explicit commit clears it.
           _transportUnconfirmed = true;
+          _unconfirmedAt = _mono();
           gate.terminalDeny();
         }
       }

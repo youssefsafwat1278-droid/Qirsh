@@ -467,9 +467,8 @@ void main() {
       expect(quiet, isTrue);
     });
 
-    test('Phase 4c B8: an unconfirmed transport closure latches for the '
-        'process — every later exchange is refused, even after an explicit '
-        'commit cleared the terminal denial', () async {
+    test('Phase 4c B8 / L4: an unconfirmed transport closure latches — every '
+        'later exchange is refused until the latch is abandoned', () async {
       await seed();
       script.quiesceError = const TransportCloseUnconfirmed();
       await coord.runRefresh(routine());
@@ -496,6 +495,93 @@ void main() {
           'transport_unconfirmed');
       expect(script.opens, opens, reason: 'no replacement exchange opened');
       expect(coord.transportUnconfirmed, isTrue);
+    });
+
+    group('L4: the transport latch is abandonable', () {
+      late Duration mono;
+
+      /// A coordinator on a fake monotonic clock (and an optional short
+      /// quiescence bound).
+      void fakeClock({Duration bound = const Duration(seconds: 15)}) {
+        coord.dispose();
+        mono = const Duration(seconds: 1000);
+        coord = AuthCoordinator(
+            store: store,
+            gate: egress.gate,
+            channelFactory: () => FakeChannel(script),
+            monotonic: () => mono,
+            transportQuiesceBound: bound,
+            transportAbandonAfter: const Duration(seconds: 60))
+          ..attach(sdk);
+      }
+
+      Session signedIn() => Session.fromJson(
+          sessionJson(uid: 'uid-b', exp: _now() + 3600, refreshToken: 'rb'))!;
+
+      test('explicit sign-in is refused inside the abandon window and runs '
+          'after it', () async {
+        fakeClock();
+        await seed();
+        script.quiesceError = const TransportCloseUnconfirmed();
+        await coord.runRefresh(routine());
+        script.quiesceError = null;
+        expect(coord.transportLatched, isTrue);
+        var invoked = 0;
+        mono += const Duration(seconds: 59);
+        await expectLater(
+            coord.explicitExchange(
+                coord.registerAttemptIntent(), () async => invoked++),
+            throwsA(isA<ExplicitRefused>().having(
+                (e) => e.reason, 'reason', 'transport_unconfirmed')));
+        await expectLater(coord.handoverQuiesced(),
+            throwsA(isA<ExplicitRefused>()));
+        expect((await coord.runRefresh(routine())).reason,
+            'transport_unconfirmed');
+        expect(invoked, 0);
+        mono += const Duration(seconds: 2);
+        expect(coord.transportLatched, isFalse);
+        await coord.handoverQuiesced();
+        final id = coord.registerAttemptIntent();
+        await coord.explicitExchange(id, () async => invoked++);
+        expect(invoked, 1);
+        await coord.abandonExplicit(id);
+      });
+
+      test('a closure that never completes is bounded: the op ends, the '
+          'ticket is released and the latch is set', () async {
+        fakeClock(bound: const Duration(milliseconds: 100));
+        await seed();
+        script.quiesceHold = Completer<void>(); // never completed
+        final out = await coord
+            .runRefresh(routine())
+            .timeout(const Duration(seconds: 5));
+        expect(out.kind, RefreshOutcomeKind.committed);
+        expect(coord.refreshing, isFalse);
+        expect(coord.transportUnconfirmed, isTrue);
+        expect(coord.transportLatched, isTrue);
+        expect(egress.gate.terminalDenied, isTrue);
+        await coord.quiesced().timeout(const Duration(seconds: 5));
+      });
+
+      test('a confirmed explicit commit clears the latch', () async {
+        fakeClock();
+        await seed();
+        script.quiesceError = const TransportCloseUnconfirmed();
+        await coord.runRefresh(routine());
+        script.quiesceError = null;
+        mono += const Duration(seconds: 61);
+        final id = coord.registerAttemptIntent();
+        await coord.explicitExchange(id, () async {
+          sdk.current = signedIn();
+          sdk.emit(AuthChangeEvent.signedIn);
+        });
+        expect(coord.transportUnconfirmed, isTrue);
+        final r = await coord.commitExplicit(id, attemptCurrent: () => true);
+        expect(r, isNotNull);
+        expect(coord.transportUnconfirmed, isFalse);
+        expect(coord.transportLatched, isFalse);
+        expect(egress.gate.terminalDenied, isFalse);
+      });
     });
 
     test('Phase 4c B8: the latch is rechecked immediately before the explicit '

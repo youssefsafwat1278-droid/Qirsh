@@ -17,11 +17,25 @@ class CloudResumeReminder {
   String _choice(UserSettingsEntity settings) =>
       '${settings.cloudConsentVersion}:${settings.cloudConsentAt?.toUtc().toIso8601String() ?? "-"}';
 
-  Future<void> rememberPaused(String uid, UserSettingsEntity savedOff) async {
+  /// Records that the app itself paused Cloud (never the user's own OFF).
+  /// [aiWasOn]: whether AI was ON before the pause, so the automatic resume
+  /// restores the same choice (owner decision 2026-11-14).
+  Future<void> rememberPaused(String uid, UserSettingsEntity savedOff,
+      {bool aiWasOn = false}) async {
     if (uid.isEmpty || savedOff.cloudConsentState != ConsentState.declined) return;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key(uid), _choice(savedOff));
+    await prefs.setString(
+        _key(uid), '${_choice(savedOff)}${aiWasOn ? _aiSuffix : ''}');
     changes.value++;
+  }
+
+  static const _aiSuffix = '#ai';
+
+  /// Whether AI was ON when the app paused Cloud for [uid].
+  Future<bool> aiWasOn(String uid) async {
+    if (uid.isEmpty) return false;
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_key(uid))?.endsWith(_aiSuffix) ?? false;
   }
 
   Future<bool> shouldShow(String uid, UserSettingsEntity current) async {
@@ -29,7 +43,10 @@ class CloudResumeReminder {
     final prefs = await SharedPreferences.getInstance();
     final recorded = prefs.getString(_key(uid));
     if (recorded == null) return false;
-    if (!current.cloudProcessingEnabled && recorded == _choice(current)) {
+    final choice = recorded.endsWith(_aiSuffix)
+        ? recorded.substring(0, recorded.length - _aiSuffix.length)
+        : recorded;
+    if (!current.cloudProcessingEnabled && choice == _choice(current)) {
       return true;
     }
     // Any later consent decision or a fresh replica ends the old reminder.

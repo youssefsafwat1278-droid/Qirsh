@@ -378,6 +378,45 @@ void main() {
       ]);
     });
 
+    test(
+        'P3: sign-out takes the unlink ticket before any revocation and sends '
+        'it ungated; Cloud OFF never arms one', () {
+      final session =
+          File('lib/core/session/app_session.dart').readAsStringSync();
+      final signOut = body(session, 'Future<SignOutOutcome> signOut()');
+      inOrder(signOut, [
+        'final fromLocalRead = localReadEgressDenied;',
+        'fromLocalRead ? null : _takeCaptureUnlinkTicket?.call()',
+        '_denyLocalRead(',
+        '_admissionEpoch++;',
+        '_revokeConsentProof();',
+        'await _accountScope?.lock();',
+        'locked = true;',
+        '_finishSignedOut(remoteEffects: false, unlinkTicket: unlinkTicket)',
+      ]);
+      // W4: the flush after admission closed was dead; the UI flushes first.
+      expect(signOut, isNot(contains('flushPendingForSignOut')));
+      // The ticket is fired before the owner marker is released.
+      final finish = session.substring(
+          session.indexOf('Future<void> _finishSignedOut({'));
+      inOrder(finish, [
+        'unlinkTicket()',
+        '_runOwnerClear(signOut: true)',
+        '_storage.delete(key: _kLocalDataOwnerUid)',
+      ]);
+      final take =
+          body(registration, 'static CaptureUnlinkTicket? takeUnlinkTicket()');
+      expect(take, isNot(contains('_gateState')));
+      expect(take, isNot(contains('_recoverRejectedSecret')));
+      expect(take, contains('unlinkDevice('));
+      // Armed only by a Cloud-ON ack; every ack clear disarms.
+      inOrder(body(registration,
+          'Future<void> _writeAck(String uid, _ConsentSnapshot snapshot)'),
+          ['if (snapshot.cloud)', '_armUnlink(uid, seq)', '_disarmUnlink()']);
+      expect(body(registration, 'Future<void> _clearAck()'),
+          contains('_disarmUnlink()'));
+    });
+
     test('legacy device-credential calls need the uid-bound ack', () {
       final fn = body(registration, 'Future<bool> isLinkedForCloud()');
       expect(fn, contains('_readAck(uid)'));

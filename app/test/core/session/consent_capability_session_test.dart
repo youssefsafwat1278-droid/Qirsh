@@ -445,20 +445,20 @@ void main() {
     test('a concurrent sign-in during the logout flush is rejected, and the '
         'old cleanup never touches the new owner', () async {
       await f.signIn('uid-x');
-      final flushHold = Completer<void>();
-      f.session.configureSignOutFlush(() => flushHold.future);
-      addTearDown(() => f.session.configureSignOutFlush(null));
+      // W4: signOut no longer flushes; park it on the owner-marker release.
+      final hold = f.storage.holdOnce(
+          (op, key) => op == 'delete' && key == 'local_data_owner_uid');
       var done = false;
       final logout = f.session.signOut().whenComplete(() => done = true);
-      await pumpEventQueue(times: 40);
-      expect(done, isFalse, reason: 'parked in the flush');
+      await hold.reached.future;
+      expect(done, isFalse, reason: 'parked mid-logout');
       // The closure is held through the flush: an admission is refused.
       await expectLater(
           f.session.setIdentity(method: 'google', userId: 'uid-y'),
           throwsA(isA<StaleAdmissionException>()));
       expect(await f.session.readLocalDataOwnerUid(), 'uid-x',
           reason: 'nothing of the new owner was written');
-      flushHold.complete();
+      hold.release.complete();
       await logout;
       expect(await f.session.readLocalDataOwnerUid(), isNull,
           reason: 'the logout cleaned up exactly the outgoing owner');

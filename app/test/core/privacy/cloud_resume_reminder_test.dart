@@ -50,4 +50,13 @@ void main() {
     await store.dismiss('a');
     expect(await CloudResumeReminder().shouldShow('a', off), isFalse);
   });
+  test('the AI choice before the pause is remembered with the reminder',
+      () async {
+    await store.rememberPaused('a', off, aiWasOn: true);
+    expect(await store.shouldShow('a', off), isTrue);
+    expect(await store.aiWasOn('a'), isTrue);
+    await store.rememberPaused('b', off);
+    expect(await store.aiWasOn('b'), isFalse);
+    expect(await store.aiWasOn('c'), isFalse);
+  });
 }

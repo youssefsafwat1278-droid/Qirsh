@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:money_companion/core/auth/immediate_deletion_receipt_store.dart';
 import 'package:money_companion/core/privacy/cloud_egress_gate.dart';
 import 'package:money_companion/core/session/account_fence_authority.dart';
 import 'package:money_companion/core/session/admission_authority.dart';
@@ -849,4 +850,74 @@ void main() {
                     contains('delete:onboarding_current_account_v1'))));
             expect(w.session.captureDatabaseHostAdmission()?.isCurrent, isTrue);
           }));
+
+  group('P4: server-completed deletion killed before local removal', () {
+    const secret = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ0123';
+    Future<void> seed(_World w, ImmediateDeletionPhase phase) async {
+      await ImmediateDeletionReceiptStore().writeVerified(
+          ImmediateDeletionReceipt(
+              owner: _owner,
+              operationId: 'op-p4',
+              receiptSecret: secret,
+              phase: phase));
+      expect(await w.fixture.artifactsOf(_owner),
+          containsAll(['dir', 'key', 'registry']));
+      expect(w.fixture.storage.data[kMarkerKey], _owner);
+      // The process dies: no SDK session survives (the server deleted the
+      // user), nothing local was removed.
+      await _bounded(w.session.debugResetAuthBinding());
+      await _bounded(w.fixture.restart());
+    }
+
+    test('a COMPLETED receipt removes the replica and clears the marker at launch',
+        () => _world((w) async {
+              await seed(w, ImmediateDeletionPhase.completed);
+              final launch = await _bounded(w.session.prepareLaunchAdmission());
+              expect(launch.blocked, isFalse);
+              expect(launch.uid, isNull);
+              expect(await w.fixture.artifactsOf(_owner), isEmpty);
+              expect(w.fixture.storage.data[kMarkerKey], isNull);
+              expect(w.fixture.storage.data['auth_method'], isNull);
+              expect(w.fixture.storage.data['onboarding_current_account_v1'],
+                  isNull);
+              expect(w.fixture.storage.data[RemoveDataFlow.barrierKey], isNull);
+              expect(await w.fixture.flow.revokedUids(), contains(_owner));
+              expect(w.session.status, isNot(SessionStatus.authenticated));
+              final retired = await ImmediateDeletionReceiptStore().load(_owner);
+              expect(retired?.phase, ImmediateDeletionPhase.completed);
+              expect(retired?.receiptSecret, isNull);
+              // Idempotent: the next launch has nothing left to do.
+              final again =
+                  await _bounded(w.session.prepareLaunchAdmission());
+              expect(again.blocked, isFalse);
+              expect(again.uid, isNull);
+            }));
+
+    test('an unconfirmed removal blocks the launch and keeps the barrier',
+        () => _world((w) async {
+              await seed(w, ImmediateDeletionPhase.completed);
+              w.fixture.barrier.failFinish = true;
+              final launch = await _bounded(w.session.prepareLaunchAdmission());
+              expect(launch.blocked, isTrue);
+              expect(w.fixture.storage.data[RemoveDataFlow.barrierKey],
+                  isNotNull);
+              expect((await ImmediateDeletionReceiptStore().load(_owner))
+                  ?.receiptSecret, secret);
+              w.fixture.barrier.failFinish = false;
+            }));
+
+    test('a receipt NOT in the completed phase triggers no removal',
+        () => _world((w) async {
+              await seed(w, ImmediateDeletionPhase.mayHaveBeenSent);
+              final launch = await _bounded(w.session.prepareLaunchAdmission());
+              expect(launch.blocked, isFalse);
+              expect(launch.uid, _owner);
+              expect(await w.fixture.artifactsOf(_owner),
+                  containsAll(['dir', 'key', 'registry']));
+              expect(w.fixture.storage.data[kMarkerKey], _owner);
+              final kept = await ImmediateDeletionReceiptStore().load(_owner);
+              expect(kept?.phase, ImmediateDeletionPhase.mayHaveBeenSent);
+              expect(kept?.receiptSecret, secret);
+            }));
+  });
 }

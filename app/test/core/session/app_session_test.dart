@@ -11,6 +11,7 @@ import 'package:money_companion/core/router/app_router.dart';
 import 'package:money_companion/core/session/app_session.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
 import 'fake_account_scope.dart';
+import 'recording_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Builds a [SupabaseClient] whose `auth.currentSession` can be set to a
@@ -54,6 +55,7 @@ void main() {
   setUp(() async {
     FlutterSecureStorage.setMockInitialValues({});
     AppSession.instance.configureCaptureDeviceUnlink(null);
+    AppSession.instance.configureCaptureUnlinkTicket(null);
     // MALI-054n: production always registers the native/file residue purge
     // hook (bootstrap capture_registration). Default it to success here so the
     // owner-lifecycle tests exercise the production wiring; fail-closed tests
@@ -63,15 +65,40 @@ void main() {
     await AppSession.instance.wipeAndReset();
   });
 
-  test('sign out requests best-effort capture device unlink', () async {
-    final called = Completer<void>();
-    AppSession.instance.configureCaptureDeviceUnlink(() async {
-      if (!called.isCompleted) called.complete();
+  test(
+      'P3: sign out takes the unlink ticket before revoking and sends it '
+      'exactly once (never the gated hook)', () async {
+    await AppSession.instance.completeOnboarding(
+      method: 'google',
+      email: 'user@example.com',
+      userId: 'uid-1',
+    );
+    final events = <String>[];
+    var gatedHook = 0;
+    AppSession.instance.configureCaptureDeviceUnlink(() async => gatedHook++);
+    AppSession.instance.configureCaptureUnlinkTicket(() {
+      // Taken while the outgoing admission is still current.
+      events.add('take:${AppSession.instance.status.name}');
+      return () async => events.add('send');
     });
 
     await AppSession.instance.signOut();
+    await pumpEventQueue();
 
-    await called.future.timeout(const Duration(seconds: 1));
+    expect(events, ['take:authenticated', 'send']);
+    expect(gatedHook, 0);
+    expect(AppSession.instance.status, SessionStatus.needsOnboarding);
+  });
+
+  test('P3: Cloud OFF (no ticket) sign-out sends nothing', () async {
+    var gatedHook = 0;
+    AppSession.instance.configureCaptureDeviceUnlink(() async => gatedHook++);
+    AppSession.instance.configureCaptureUnlinkTicket(() => null);
+
+    await AppSession.instance.signOut();
+    await pumpEventQueue();
+
+    expect(gatedHook, 0);
     expect(AppSession.instance.status, SessionStatus.needsOnboarding);
   });
 
@@ -522,6 +549,29 @@ void main() {
       expect(AppSession.instance.hasCompletedOnboarding, isTrue);
     });
 
+    test(
+        'W2: a failure AFTER the lock routes to sign-in (sessionExpired), '
+        'never a dead authenticated shell', () async {
+      final storage = RecordingSecureStorage().install();
+      await AppSession.instance.completeOnboarding(
+        method: 'google',
+        email: 'user@example.com',
+        userId: 'uid-1',
+      );
+      final scope = FakeAccountScope();
+      AppSession.instance.configureAccountScope(scope);
+      storage.gate = (op, key) async {
+        if (op == 'delete' && key == 'auth_method') {
+          throw Exception('keychain');
+        }
+      };
+
+      await expectLater(AppSession.instance.signOut(), throwsA(isException));
+
+      expect(scope.calls, ['lock']);
+      expect(AppSession.instance.status, SessionStatus.sessionExpired);
+    });
+
     test('repeated sign-out is idempotent', () async {
       await AppSession.instance.completeOnboarding(
         method: 'google',
@@ -706,6 +756,96 @@ void main() {
       expect(scope.calls, ['activate:uid-a'],
           reason: 'idempotent re-admission of the same uid; nothing is locked');
       expect(await AppSession.instance.readLocalDataOwnerUid(), 'uid-a');
+    });
+  });
+
+  group('W5 — app killed mid sign-out', () {
+    /// Completes onboarding as uid-1, then starts a sign-out whose residue
+    /// purge never returns (the process is killed there: method, email and
+    /// account are still persisted) and simulates a fresh process.
+    Future<void> killMidSignOut() async {
+      await AppSession.instance.completeOnboarding(
+        method: 'google',
+        email: 'one@example.com',
+        userId: 'uid-1',
+      );
+      expect(AppSession.instance.status, SessionStatus.authenticated);
+      final reached = Completer<void>();
+      AppSession.instance.configureCaptureOwnerClear(() {
+        if (!reached.isCompleted) reached.complete();
+        return Completer<bool>().future; // never completes: the kill point
+      });
+      unawaited(AppSession.instance.signOut());
+      await reached.future.timeout(const Duration(seconds: 2));
+      const storage = FlutterSecureStorage();
+      expect(await storage.read(key: 'auth_method'), 'google',
+          reason: 'killed before the identity was cleared');
+      expect(await storage.read(key: 'logout_pending_v1'), isNotNull);
+      // New process.
+      AppSession.instance.configureCaptureOwnerClear(() async => true);
+      AppSession.instance.debugResetAdmissionState();
+    }
+
+    test('load() never restores the outgoing identity as authenticated',
+        () async {
+      await killMidSignOut();
+      await AppSession.instance.load();
+
+      expect(AppSession.instance.status, SessionStatus.needsOnboarding);
+      expect(AppSession.instance.hasCompletedOnboarding, isFalse);
+      expect(AppSession.instance.authMethod, isNull);
+    });
+
+    test('automatic reconcile with the outgoing SDK session does not re-admit',
+        () async {
+      await killMidSignOut();
+      await AppSession.instance.load();
+      final client = _client();
+      await _recoverValidSession(client,
+          userId: 'uid-1', email: 'one@example.com');
+      await AppSession.instance.bindSupabaseAuth(client);
+
+      expect(AppSession.instance.status,
+          isNot(SessionStatus.authenticated));
+    });
+
+    test('an explicit sign-in (same or another account) clears the pending key',
+        () async {
+      await killMidSignOut();
+      await AppSession.instance.load();
+
+      await AppSession.instance.setIdentity(
+        method: 'google',
+        email: 'two@example.com',
+        userId: 'uid-2',
+      );
+      await AppSession.instance.finishOnboarding();
+      expect(AppSession.instance.status, SessionStatus.authenticated);
+      await Future<void>.delayed(Duration.zero);
+
+      AppSession.instance.debugResetAdmissionState();
+      await AppSession.instance.load();
+      expect(AppSession.instance.status, SessionStatus.authenticated);
+      expect(AppSession.instance.email, 'two@example.com');
+    });
+
+    test('a completed sign-out leaves no pending key behind', () async {
+      await AppSession.instance.completeOnboarding(
+        method: 'google',
+        email: 'one@example.com',
+        userId: 'uid-1',
+      );
+      await AppSession.instance.signOut();
+      expect(await const FlutterSecureStorage().read(key: 'logout_pending_v1'),
+          isNull);
+      await AppSession.instance.setIdentity(
+        method: 'google',
+        email: 'one@example.com',
+        userId: 'uid-1',
+      );
+      AppSession.instance.debugResetAdmissionState();
+      await AppSession.instance.load();
+      expect(AppSession.instance.status, SessionStatus.authenticated);
     });
   });
 }

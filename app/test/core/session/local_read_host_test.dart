@@ -917,23 +917,28 @@ void main() {
       var flushes = 0;
       var unlinks = 0;
       f.session.configureSignOutFlush(() async => flushes++);
-      f.session.configureCaptureDeviceUnlink(() async => unlinks++);
+      // P3: sign-out sends the pre-taken unlink ticket, never the gated hook.
+      f.session.configureCaptureDeviceUnlink(() async => unlinks += 100);
+      f.session.configureCaptureUnlinkTicket(() => () async => unlinks++);
       return (() => flushes, () => unlinks);
     }
 
     tearDown(() {
       f.session.configureSignOutFlush(null);
       f.session.configureCaptureDeviceUnlink(null);
+      f.session.configureCaptureUnlinkTicket(null);
     });
 
-    test('control: an ordinary (writable) sign-out still flushes and unlinks',
+    test('control: an ordinary (writable) sign-out still unlinks',
         () async {
       final sdk = await liveSdk();
       await signInFirstAccount(sdk);
       final (flushes, unlinks) = await spies();
       await f.session.signOut();
       await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(flushes(), 1);
+      // W4: signOut no longer flushes (the UI flushes before it, while
+      // admission is still open).
+      expect(flushes(), 0);
       expect(unlinks(), 1);
     });
 

@@ -275,6 +275,42 @@ void main() {
       expect(spy.calls, ['POST /rest/v1/rpc/request_account_deletion']);
     });
 
+    // P5 (2026-11-14): no Cloud consent state refuses account deletion; the
+    // cancel stays gated and the rest of the account stays closed.
+    for (final state in ['frozen', 'disabling', 'state_uncertain', 'pending_enable']) {
+      test('deleteAccount: the RPC passes $state; cancelDelete and ordinary '
+          'egress stay denied', () async {
+        await client.auth
+            .setInitialSession(jsonEncode(_sessionJson(expired: false)));
+        if (state == 'frozen') ConsentAuthority.egressFrozen = true;
+        addTearDown(() => ConsentAuthority.egressFrozen = false);
+        if (state == 'disabling') {
+          await egress.gate.beginDisabling(owner: 'uid-a', reservedVersion: 2);
+        }
+        if (state == 'state_uncertain') egress.file.value = '{broken';
+        if (state == 'pending_enable') egress.pendingSecure.value = '{broken';
+        await expectLater(egress.gate.admit(),
+            throwsA(isA<EgressDeniedException>()
+                .having((e) => e.reason, 'reason', state)));
+        final r = await gateRun(AccountControlOp.deleteAccount,
+            () => client.rpc('request_account_deletion'));
+        expect(r, '2026-02-01T00:00:00Z');
+        expect(spy.calls, ['POST /rest/v1/rpc/request_account_deletion']);
+        // Only the deletion RPC: the grant's scope still applies.
+        expect(await expectDenied(() => gateRun(AccountControlOp.deleteAccount,
+            () => client.rpc('cancel_account_deletion'))), isNotNull);
+        if (state != 'pending_enable') {
+          // A pending enable never gated account control (N-E); the others do.
+          expect(await expectDenied(() => gateRun(AccountControlOp.cancelDelete,
+              () => client.rpc('cancel_account_deletion'))), isNotNull);
+        }
+        await expectLater(egress.gate.admit(),
+            throwsA(isA<EgressDeniedException>()
+                .having((e) => e.reason, 'reason', state)));
+        expect(spy.seen, hasLength(1));
+      });
+    }
+
     test('cancelDelete: the RPC', () async {
       await client.auth.setInitialSession(jsonEncode(_sessionJson(expired: false)));
       await gateRun(AccountControlOp.cancelDelete,
@@ -589,7 +625,7 @@ void main() {
       await expectLater(egress.gate.admit(),
           throwsA(isA<EgressDeniedException>()
               .having((e) => e.reason, 'reason', 'disabling')));
-      expect(await reason(AccountControlOp.deleteAccount, '/auth/v1/otp'),
+      expect(await reason(AccountControlOp.cancelDelete, '/auth/v1/otp'),
           'disabling');
       // A usable session is not "signed out": DISABLING still wins.
       egress.gate.configureSessionUsable(() => true);
@@ -930,21 +966,58 @@ void _immediateDeletionTests() {
       });
     }
 
-    test('freeze becoming restrictive during durable admission denies before transport', () async {
+    test('a freeze still denies ordinary egress and a non-deletion control '
+        'before transport', () async {
+      ConsentAuthority.egressFrozen = true;
+      addTearDown(() => ConsentAuthority.egressFrozen = false);
+      await expectLater(send(), throwsA(isA<EgressDeniedException>()
+          .having((e) => e.reason, 'reason', 'frozen')));
+      await expectLater(
+          egress.gate.runAccountControl(AccountControlOp.cancelDelete,
+              () => send(url: Uri.parse('$_url/rest/v1/rpc/cancel_account_deletion'))),
+          throwsA(isA<EgressDeniedException>()
+              .having((e) => e.reason, 'reason', 'frozen')));
+      expect(sent, isEmpty);
+      expect(egress.gate.inFlightCount, 0);
+    });
+
+    // P5 (2026-11-14): no Cloud consent state refuses the immediate deletion
+    // exchange, including a freeze that becomes restrictive mid-admission.
+    for (final state in ['frozen', 'disabling', 'state_uncertain', 'pending_enable']) {
+      test('immediate deletion status passes $state; ordinary egress stays denied',
+          () async {
+        if (state == 'frozen') ConsentAuthority.egressFrozen = true;
+        addTearDown(() => ConsentAuthority.egressFrozen = false);
+        if (state == 'disabling') {
+          await egress.gate.beginDisabling(owner: 'uid-a', reservedVersion: 2);
+        }
+        if (state == 'state_uncertain') egress.file.value = '{broken';
+        if (state == 'pending_enable') egress.pendingSecure.value = '{broken';
+        await grant(() => send());
+        expect(sent.length, 1);
+        await expectLater(egress.gate.admit(),
+            throwsA(isA<EgressDeniedException>()
+                .having((e) => e.reason, 'reason', state)));
+        expect(egress.gate.inFlightCount, 0);
+      });
+    }
+
+    test('a freeze becoming restrictive during durable admission does not refuse '
+        'the deletion exchange', () async {
       final blocked = _DeferredAdmissionSlot();
       final gate = CloudEgressGate(store: CloudEgressStore(secure: blocked, file: MemorySlot(),
           pendingSecure: MemorySlot(), pendingFile: MemorySlot()),
           activeOwner: () async => 'uid-a', resolved: true, supabaseUrl: () => _url);
       CloudEgressGate.instance = gate;
+      addTearDown(() => ConsentAuthority.egressFrozen = false);
       final future = gate.runImmediateDeletion(action: ImmediateDeletionAction.status,
           owner: 'uid-a', activeOwner: 'uid-a', epoch: gate.epoch, isCurrent: () => true,
           functionUrl: endpoint, serializedBody: statusBody, exchange: () => send());
-      final caught = expectLater(future, throwsA(isA<EgressDeniedException>()));
       await blocked.arrived.future;
       ConsentAuthority.egressFrozen = true;
       blocked.release.complete();
-      await caught;
-      expect(sent, isEmpty);
+      await future;
+      expect(sent.length, 1);
       expect(gate.inFlightCount, 0);
     });
 

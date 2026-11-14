@@ -738,6 +738,13 @@ class CloudEgressStore {
     );
   }
 
+  /// Native uncertainty reasons that describe only the owner asked about.
+  static const _ownerScopedNativeReasons = {
+    'lifetime_fields_unbound',
+    'pending_held',
+    'record_copies_differ',
+  };
+
   Future<({List<Map<String, CloudEgressRecord>> layers, List<String> problems})>
       _collect(String? owner, {bool verifyNative = false, bool onlyOwner = false}) async {
     final problems = <String>[];
@@ -790,13 +797,15 @@ class CloudEgressStore {
               : e is FormatException
               ? e.message.replaceFirst('native_egress_uncertain:', '')
               : e.runtimeType.toString();
-          // A bound ON for an inactive UID cannot match the active native
-          // lifetime. Keep other uncertainty, including any for this owner.
+          // Another account's owner-scoped uncertainty (a bound ON for an
+          // inactive UID, its held pending enable, its disagreeing record
+          // copies) cannot decide this account. Keep global uncertainty and
+          // any for this owner.
           if (!verifyNative &&
               owner != null &&
               owner.isNotEmpty &&
               o != owner &&
-              detail == 'lifetime_fields_unbound') {
+              _ownerScopedNativeReasons.contains(detail)) {
             continue;
           }
           problems.add('native:$detail');
@@ -1354,7 +1363,7 @@ class EgressWriteFailedException implements Exception {
   String toString() => 'EgressWriteFailedException($what)';
 }
 
-enum EgressGrantKind { accountControl, revoke, revokeRetry }
+enum EgressGrantKind { accountControl, revoke, revokeRetry, deviceUnlink }
 
 /// The ONLY operations allowed to reach the network while Cloud is OFF
 /// (Astra H2.1). They never enable Cloud and never widen any consent.
@@ -1590,6 +1599,18 @@ class EgressGrant {
   const EgressGrant.revokeRetry(
       {required String this.owner, required int this.generation})
       : kind = EgressGrantKind.revokeRetry,
+        control = null,
+        _deletion = null;
+
+  /// P3 (2026-11-14): the sign-out unlink of this install from [owner] on the
+  /// server. It only narrows server state (it removes the device's link and
+  /// push token for that account), so it is admitted whatever the Cloud or
+  /// lifecycle state — sign-out has already revoked the consent proof and set
+  /// the lifecycle fence when it is sent — but only as the POST to
+  /// `unlink-capture-device` (see [CloudEgressGate.isDeviceUnlinkRequest]).
+  const EgressGrant.deviceUnlink({required String this.owner})
+      : kind = EgressGrantKind.deviceUnlink,
+        generation = null,
         control = null,
         _deletion = null;
 
@@ -2323,6 +2344,14 @@ class CloudEgressGate {
       String owner, EgressGrant? grant, AdmissionRequest? request) async {
     if (!_resolved) return 'unresolved';
     if (inAlignmentZone) return 'alignment';
+    // P3: the sign-out unlink only narrows server state; its scope is exact.
+    if (grant?.kind == EgressGrantKind.deviceUnlink) {
+      return request != null &&
+              grant!.owner == owner &&
+              isDeviceUnlinkRequest(request, _supabaseUrl())
+          ? null
+          : 'unlink_scope';
+    }
     // ASR §11.1: a transition hold denies every Dart permit path.
     if (_holds.isNotEmpty) return 'transition_hold';
     final revoke = grant?.kind == EgressGrantKind.revoke;
@@ -2331,6 +2360,13 @@ class CloudEgressGate {
     final onboarding = control?.op == AccountControlOp.onboardingStatus;
     final linking = control?.op == AccountControlOp.linkIdentity;
     final lifecycleRestricted = control == null || onboarding || linking;
+    // P5: account deletion (the legacy deleteAccount control and the immediate
+    // deletion grant) is never refused by a Cloud consent state: a freeze, an
+    // uncertain view, a DISABLING record or a pending enable. Deleting the
+    // account removes every server copy, so it can only narrow egress. Its own
+    // scope/body/token/epoch binding and every non-consent denial still apply.
+    final deleting = grant?._deletion != null ||
+        control?.op == AccountControlOp.deleteAccount;
     // The setup lookup requires an admitted account and cannot recover one.
     if (lifecycleRestricted && _localReadDenies) return 'local_read';
     if (lifecycleRestricted && _terminalDenied) return 'terminal';
@@ -2358,7 +2394,8 @@ class CloudEgressGate {
     if (ConsentAuthority.egressFrozen &&
         !revoke &&
         !signedOutControl &&
-        !onboarding) {
+        !onboarding &&
+        !deleting) {
       return 'frozen';
     }
     // N2: an unconfirmed native lifecycle fence denies ordinary egress. The
@@ -2367,7 +2404,7 @@ class CloudEgressGate {
       return 'lifecycle_fence';
     }
     final readout = await store.read(owner: owner);
-    if (readout.uncertain && !signedOutControl && !onboarding) {
+    if (readout.uncertain && !signedOutControl && !onboarding && !deleting) {
       return 'state_uncertain';
     }
     final rec = readout.records[owner];
@@ -2397,7 +2434,8 @@ class CloudEgressGate {
     if (rec != null &&
         rec.state == EgressState.disabling &&
         !signedOutControl &&
-        !onboarding) {
+        !onboarding &&
+        !deleting) {
       return revoke &&
               grant!.owner == owner &&
               grant.generation == rec.transitionGeneration
@@ -2429,8 +2467,8 @@ class CloudEgressGate {
     }
     // N-E: a pending enable denies every ordinary request (account control and
     // the one-shot revoke are exempt above, exactly like the lifecycle fence).
-    if (await _pendingDenies(owner)) return 'pending_enable';
     if (grant?._deletion != null) return grant!._deletion!.violation(request, _epoch);
+    if (await _pendingDenies(owner)) return 'pending_enable';
     if (rec == null || rec.state == EgressState.off) return 'off';
     return null;
   }
@@ -2443,21 +2481,28 @@ class CloudEgressGate {
     // order: a request made before a disable was called is decided before it.
     return _lock.synchronized(() async {
       final deletion = g?._deletion;
-      final activeOwner = deletion == null ? await _owner(owner) : await _deletionOwner();
+      final unlinkOwner =
+          g?.kind == EgressGrantKind.deviceUnlink ? g!.owner : null;
+      final activeOwner = deletion == null
+          ? await _owner(owner ?? unlinkOwner)
+          : await _deletionOwner();
       if (deletion != null && activeOwner != deletion.activeOwner) {
         throw EgressDeniedException('deletion_owner');
       }
       final o = deletion?.owner ?? activeOwner!;
       var deny = await _decide(o, g, request);
       // ASR §11.1: recheck the hold synchronously after the last await.
-      if (deny == null && _holds.isNotEmpty) deny = 'transition_hold';
+      if (deny == null &&
+          _holds.isNotEmpty &&
+          g?.kind != EgressGrantKind.deviceUnlink) {
+        deny = 'transition_hold';
+      }
       // A granted request says nothing about whether AUTOMATIC traffic may run.
       if (g == null) _setMirror(deny == null);
       if (deny != null) throw EgressDeniedException(deny);
       if (deletion != null) {
-        if (!_resolved || ConsentAuthority.egressFrozen) {
-          throw EgressDeniedException(!_resolved ? 'unresolved' : 'frozen');
-        }
+        // P5: the Cloud freeze does not refuse deletion (see [_decide]).
+        if (!_resolved) throw EgressDeniedException('unresolved');
         final stale = deletion.violation(request, _epoch);
         if (stale != null) throw EgressDeniedException(stale);
         deletion.dispatched = true;
@@ -2846,6 +2891,22 @@ class CloudEgressGate {
   /// The ONE request [EgressGrant.revokeRetry] may make: a POST to
   /// `set-device-consent` (the v2 `action: 'revoke'` route) on the configured
   /// host. Anything else under that grant is denied.
+  /// P3: the one request [EgressGrant.deviceUnlink] admits.
+  static bool isDeviceUnlinkRequest(AdmissionRequest request, String baseUrl) {
+    final base = Uri.tryParse(baseUrl);
+    if (request.method != 'POST' || request.url.scheme != 'https') return false;
+    if (base != null && base.host.isNotEmpty && request.url.host != base.host) {
+      return false;
+    }
+    return request.url.path.endsWith('/functions/v1/unlink-capture-device');
+  }
+
+  /// P3: runs [body] (the sign-out unlink) under [EgressGrant.deviceUnlink]
+  /// for [owner]; every request [body] makes must be the unlink POST.
+  Future<T> runDeviceUnlink<T>(String owner, Future<T> Function() body) =>
+      runZoned(body,
+          zoneValues: {_grantKey: EgressGrant.deviceUnlink(owner: owner)});
+
   static bool isRevokeRetryRequest(AdmissionRequest request, String baseUrl) {
     final base = Uri.tryParse(baseUrl);
     if (request.method != 'POST' || request.url.scheme != 'https') return false;
@@ -3380,7 +3441,8 @@ class GatedHttpClient extends http.BaseClient {
     // H2.1: a granted request must not follow redirects (a 3xx could leave the
     // allowlisted endpoint or host). Set before the request is finalized.
     if (ticket.grant?.control != null ||
-        ticket.grant?.kind == EgressGrantKind.revokeRetry) {
+        ticket.grant?.kind == EgressGrantKind.revokeRetry ||
+        ticket.grant?.kind == EgressGrantKind.deviceUnlink) {
       request.followRedirects = false;
     }
     unawaited(

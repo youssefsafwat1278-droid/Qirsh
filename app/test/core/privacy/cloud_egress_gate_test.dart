@@ -208,6 +208,71 @@ void main() {
     });
   });
 
+  // P3 (2026-11-14): the sign-out unlink only narrows server state, so it is
+  // admitted after sign-out set the lifecycle fence, under a freeze and over
+  // a DISABLING record, but only as the unlink POST for its own owner.
+  group('the sign-out device unlink grant', () {
+    const unlinkUrl =
+        'https://example.supabase.co/functions/v1/unlink-capture-device';
+    Future<Object?> admitUnlink(
+        {String owner = 'uid-a',
+        String method = 'POST',
+        String url = unlinkUrl}) async {
+      try {
+        final t = await gate.admit(
+            grant: EgressGrant.deviceUnlink(owner: owner),
+            request: AdmissionRequest(method, Uri.parse(url)));
+        gate.release(t);
+        return null;
+      } on EgressDeniedException catch (e) {
+        return e.reason;
+      }
+    }
+
+    test('admitted after the lifecycle fence, under a freeze and in DISABLING; '
+        'ordinary egress stays denied', () async {
+      await putOn();
+      gate.denyForLifecycleLoss();
+      expect(await admitUnlink(), isNull);
+      expect(await admitError(), isNotNull);
+      ConsentAuthority.egressFrozen = true;
+      addTearDown(() => ConsentAuthority.egressFrozen = false);
+      expect(await admitUnlink(), isNull);
+      gate.releaseLifecycleDenial();
+      ConsentAuthority.egressFrozen = false;
+      await gate.beginDisabling(owner: 'uid-a', reservedVersion: 2);
+      expect(await admitUnlink(), isNull);
+      expect(await admitError(), isNotNull);
+    });
+
+    test('only the unlink POST over https to the backend host', () async {
+      await putOn();
+      for (final (method, url) in const [
+        ('GET', unlinkUrl),
+        ('POST', 'https://example.supabase.co/functions/v1/parse-sms'),
+        ('POST', 'https://example.supabase.co/functions/v1/sync-captures'),
+        ('POST', 'https://example.supabase.co/rest/v1/user_settings'),
+        ('POST', 'http://example.supabase.co/functions/v1/unlink-capture-device'),
+        ('POST', 'https://evil.example/functions/v1/unlink-capture-device'),
+      ]) {
+        expect(await admitUnlink(method: method, url: url), 'unlink_scope',
+            reason: '$method $url');
+      }
+    });
+
+    test('a request without a URL is denied', () async {
+      await putOn();
+      try {
+        final t =
+            await gate.admit(grant: const EgressGrant.deviceUnlink(owner: 'uid-a'));
+        gate.release(t);
+        fail('admitted without a request');
+      } on EgressDeniedException catch (e) {
+        expect(e.reason, 'unlink_scope');
+      }
+    });
+  });
+
   // Approved 2026-11-12 (product owner): the ONE automatic exception to the
   // Cloud-OFF rule is re-sending a revoke that did not land, identifiers only,
   // for its own owner, while OFF at its own generation, to the revoke route.
@@ -393,6 +458,45 @@ void main() {
       expect(await admitError(), 'disabling');
     });
 
+    test('another account\'s owner-scoped native uncertainty does not decide '
+        'this account (L3)', () async {
+      var throwForA = false;
+      final native = NativeEgressSlot(
+        read: (o) async {
+          if (o == 'uid-a' && throwForA) {
+            throw const FormatException('native_egress_uncertain:pending_held');
+          }
+          return null;
+        },
+        write: (_) async {},
+      );
+      egress = TestEgress(native: native).install();
+      gate = egress.gate;
+      await putOn(owner: 'uid-a');
+      throwForA = true;
+      expect((await gate.view(owner: 'uid-b')).uncertain, isFalse);
+      expect((await gate.view(owner: 'uid-a')).uncertain, isTrue);
+    });
+
+    test('another account\'s GLOBAL native uncertainty still counts', () async {
+      var throwForA = false;
+      final native = NativeEgressSlot(
+        read: (o) async {
+          if (o == 'uid-a' && throwForA) {
+            throw const FormatException(
+                'native_egress_uncertain:egress_view_uncertain');
+          }
+          return null;
+        },
+        write: (_) async {},
+      );
+      egress = TestEgress(native: native).install();
+      gate = egress.gate;
+      await putOn(owner: 'uid-a');
+      throwForA = true;
+      expect((await gate.view(owner: 'uid-b')).uncertain, isTrue);
+    });
+
     test('an unavailable / uncertain native store fails closed, and every '
         'write reaches it', () async {
       var fail = true;
@@ -546,11 +650,14 @@ void main() {
     });
   });
 
-  group('E6 immediate status never bypasses restrictive state', () {
+  // P5 (2026-11-14): Cloud consent states (freeze, uncertain/unreadable view,
+  // DISABLING, native uncertainty) no longer refuse account deletion; an
+  // unresolved process and an owner mismatch still do.
+  group('E6 immediate status: non-consent state still wins; consent state does not', () {
     final endpoint = Uri.parse('https://example.supabase.co/functions/v1/delete-account-immediate');
     final body = jsonEncode({'action': 'status', 'receipt_secret': 'A' * 43});
     for (final state in ['unresolved', 'frozen', 'uncertain', 'unreadable', 'owner-mismatch', 'disabling', 'native-unavailable', 'native-disabling']) {
-      test('$state wins over an exact status grant before transport', () async {
+      test('$state and an exact status grant', () async {
         NativeEgressSlot? native;
         if (state.startsWith('native-')) {
           native = NativeEgressSlot(read: (_) async {
@@ -567,12 +674,18 @@ void main() {
         if (state == 'disabling') await h.gate.beginDisabling(owner: 'uid-a', reservedVersion: 2);
         var sent = 0;
         final client = GatedHttpClient(MockClient((_) async { sent++; return http.Response('{}', 200); }));
-        await expectLater(h.gate.runImmediateDeletion(action: ImmediateDeletionAction.status,
+        addTearDown(() => ConsentAuthority.egressFrozen = false);
+        final run = h.gate.runImmediateDeletion(action: ImmediateDeletionAction.status,
             owner: 'uid-a', activeOwner: 'uid-a', epoch: h.gate.epoch, isCurrent: () => true,
             functionUrl: endpoint, serializedBody: body,
-            exchange: () => client.post(endpoint, headers: {'content-type': 'application/json'}, body: body)),
-            throwsA(isA<EgressDeniedException>()));
-        expect(sent, 0);
+            exchange: () => client.post(endpoint, headers: {'content-type': 'application/json'}, body: body));
+        if (state == 'unresolved' || state == 'owner-mismatch') {
+          await expectLater(run, throwsA(isA<EgressDeniedException>()));
+          expect(sent, 0);
+        } else {
+          await run;
+          expect(sent, 1);
+        }
         expect(h.gate.inFlightCount, 0);
         expect(h.gate.permitsNetworkSync, isFalse);
       });

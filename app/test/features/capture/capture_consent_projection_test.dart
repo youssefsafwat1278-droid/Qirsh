@@ -1,6 +1,7 @@
 import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/core/session/admission_authority.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
 import 'package:money_companion/data/repositories/drift_user_settings_repository.dart';
@@ -33,9 +34,12 @@ class _Backend extends CaptureBackendClient {
     return 'device-secret';
   }
 
+  final unlinks = <({String installId, String deviceSecret})>[];
   @override
   Future<void> unlinkDevice(
-      {required String installId, required String deviceSecret}) async {}
+      {required String installId, required String deviceSecret}) async {
+    unlinks.add((installId: installId, deviceSecret: deviceSecret));
+  }
 }
 
 /// Records every call into the shared [events] log so ordering is assertable.
@@ -169,6 +173,7 @@ void main() {
 
   setUp(() async {
     FlutterSecureStorage.setMockInitialValues({});
+    CaptureDeviceRegistrationService.debugResetUnlinkTarget();
     db = await AppDatabase.open(
         executor: NativeDatabase.memory(), keyStore: _MemoryKeyStore());
     repo = DriftUserSettingsRepository(db);
@@ -432,6 +437,121 @@ void main() {
       await s.unlinkCurrentDevice();
       await s.linkToCurrentUser();
       expect(server.links, hasLength(2));
+    });
+  });
+
+  group('P3: sign-out unlinks the install from the outgoing user', () {
+    CaptureDeviceRegistrationService gated(
+            bool Function() live, AdmissionAuthority authority) =>
+        CaptureDeviceRegistrationService(
+          settingsRepository: repo,
+          client: backend,
+          consentClient: server,
+          storage: const FlutterSecureStorage(),
+          isIos: () => true,
+          isAndroid: () => false,
+          isBackendConfigured: () => true,
+          loadInstallId: () async => 'install-id',
+          readSession: () => session,
+          readReplicaOwnerUid: () async => replicaOwner,
+          writeConsentMirror: ({
+            required uid,
+            required cloud,
+            required ai,
+            required version,
+            int? transitionGeneration,
+          }) async {},
+          readOwnerEpoch: () async => 0,
+          publishOwner: ({
+            required uid,
+            required cloud,
+            required ai,
+            required version,
+            required expectedEpoch,
+            int? transitionGeneration,
+          }) async =>
+              published.add(uid),
+          isCurrentScope: live,
+          captureWorkAuthority: () => authority,
+        );
+
+    test(
+        'a Cloud-ON link taken as a ticket before revocation is sent after '
+        'the authority went stale and the scope closed', () async {
+      await save(cloud: ConsentState.accepted);
+      var live = true;
+      final authority = AdmissionAuthority('uid-a', () => live);
+      final s = gated(() => live, authority);
+      await s.linkToCurrentUser();
+      expect(server.links, hasLength(1));
+      expect(await s.consentAckSnapshot(), isNotNull);
+
+      // signOut: the ticket is taken first, then everything is revoked.
+      final ticket = CaptureDeviceRegistrationService.takeUnlinkTicket();
+      live = false; // authority stale AND scope no longer current
+      session = null;
+
+      // Before the fix: the gated unlink refuses (blocked) and sends nothing.
+      await s.unlinkCurrentDevice();
+      expect(backend.unlinks, isEmpty);
+
+      expect(ticket, isNotNull);
+      expect(ticket!.uid, 'uid-a');
+      await ticket.send();
+      expect(backend.unlinks,
+          [(installId: 'install-id', deviceSecret: 'device-secret')]);
+      expect(
+          await const FlutterSecureStorage()
+              .read(key: 'qirsh_capture_consent_ack'),
+          isNull);
+      // One-shot: a second take has nothing to send.
+      expect(CaptureDeviceRegistrationService.takeUnlinkTicket(), isNull);
+    });
+
+    test('the ticket leaves another user\'s ack alone', () async {
+      await save(cloud: ConsentState.accepted);
+      final s = gated(() => true, const AdmissionAuthority.forTest('uid-a'));
+      await s.linkToCurrentUser();
+      final ticket = CaptureDeviceRegistrationService.takeUnlinkTicket()!;
+      await const FlutterSecureStorage()
+          .write(key: 'qirsh_capture_consent_ack', value: 'uid-b|1|0|1');
+      await ticket.send();
+      expect(backend.unlinks, hasLength(1));
+      expect(
+          await const FlutterSecureStorage()
+              .read(key: 'qirsh_capture_consent_ack'),
+          'uid-b|1|0|1');
+    });
+
+    test('Cloud OFF: no ticket, no request', () async {
+      await save(cloud: ConsentState.declined);
+      final s = gated(() => true, const AdmissionAuthority.forTest('uid-a'));
+      await s.linkToCurrentUser();
+      expect(server.links, isEmpty);
+      expect(CaptureDeviceRegistrationService.takeUnlinkTicket(), isNull);
+      expect(backend.unlinks, isEmpty);
+    });
+
+    test('a cleared ack (Cloud OFF transition / unlink) drops the ticket',
+        () async {
+      await save(cloud: ConsentState.accepted);
+      final s = gated(() => true, const AdmissionAuthority.forTest('uid-a'));
+      await s.linkToCurrentUser();
+      await s.unlinkCurrentDevice(); // clears the ack (and sends once)
+      expect(backend.unlinks, hasLength(1));
+      expect(CaptureDeviceRegistrationService.takeUnlinkTicket(), isNull);
+    });
+
+    test('an ack confirmed by a later process re-arms the ticket', () async {
+      await save(cloud: ConsentState.accepted);
+      final s = gated(() => true, const AdmissionAuthority.forTest('uid-a'));
+      await s.linkToCurrentUser();
+      CaptureDeviceRegistrationService.debugResetUnlinkTarget(); // "restart"
+      await gated(() => true, const AdmissionAuthority.forTest('uid-a'))
+          .linkToCurrentUser();
+      expect(server.links, hasLength(1)); // ack matched: no re-link
+      expect(CaptureDeviceRegistrationService.takeUnlinkTicket()?.uid,
+          'uid-a');
     });
   });
 

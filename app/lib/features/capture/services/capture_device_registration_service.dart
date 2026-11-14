@@ -275,6 +275,33 @@ class CaptureRegistrationStatus {
   int get hashCode => Object.hash(phase, failureCode);
 }
 
+/// P3: a sign-out's one-shot unlink of this install from the outgoing user,
+/// captured synchronously BEFORE the session's authority is revoked
+/// ([CaptureDeviceRegistrationService.takeUnlinkTicket]). [send] posts the same
+/// `unlink-capture-device` request as
+/// [CaptureDeviceRegistrationService.unlinkCurrentDevice] (install id + device
+/// secret, no user JWT) without the capture gate: the unlink only narrows server
+/// state (it nulls the user/APNs association), so the revoked authority the gate
+/// checks is not needed. No 401 recovery (that would register a new credential).
+class CaptureUnlinkTicket {
+  CaptureUnlinkTicket._(this.uid, this._send);
+
+  /// The user the install is unlinked from.
+  final String uid;
+  final Future<void> Function() _send;
+
+  /// Hands the request to the HTTP client synchronously (no await before it),
+  /// then forgets the acknowledgement if it is still [uid]'s.
+  Future<void> send() => _send();
+}
+
+typedef _UnlinkTarget = ({
+  String uid,
+  String installId,
+  String secret,
+  CaptureDeviceRegistrationService service,
+});
+
 class CaptureDeviceRegistrationService {
   CaptureDeviceRegistrationService({
     required DriftUserSettingsRepository settingsRepository,
@@ -393,6 +420,74 @@ class CaptureDeviceRegistrationService {
   /// validated, and never for another owner's enable.
   static final Map<String, int> _withdrawalEpochs = {};
   static int _withdrawalEpochOf(String uid) => _withdrawalEpochs[uid] ?? 0;
+
+  /// P3: what a sign-out needs to unlink this install from the user it is
+  /// linked to, known in memory (process-wide: the UI and startup own different
+  /// instances) from the moment a Cloud-ON link ack is written or confirmed.
+  /// Dropped wherever the ack is cleared. A Cloud-OFF install never has one, so
+  /// its sign-out sends nothing.
+  static _UnlinkTarget? _unlinkTarget;
+
+  /// Advanced by every clear/take, so an arm whose storage reads straddle one
+  /// never re-arms a target that was already dropped.
+  static int _unlinkTargetSeq = 0;
+
+  @visibleForTesting
+  static void debugResetUnlinkTarget() => _disarmUnlink();
+
+  static void _disarmUnlink() {
+    _unlinkTarget = null;
+    _unlinkTargetSeq++;
+  }
+
+  /// P3: synchronously takes (and forgets) the pending unlink target. Null when
+  /// this install has no Cloud-ON link (Cloud OFF, never linked, already
+  /// unlinked). [AppSession.signOut] takes it before it revokes anything.
+  static CaptureUnlinkTicket? takeUnlinkTicket() {
+    final target = _unlinkTarget;
+    _disarmUnlink();
+    if (target == null) return null;
+    return CaptureUnlinkTicket._(target.uid, () {
+      final svc = target.service;
+      // The same request as [unlinkCurrentDevice], no 401 recovery. Sign-out
+      // has already set the lifecycle fence, so it runs under the gate's
+      // narrow unlink grant (only this POST, only narrowing server state).
+      final request = svc._gate.runDeviceUnlink(
+          target.uid,
+          () => svc._backendClient.unlinkDevice(
+                installId: target.installId,
+                deviceSecret: target.secret,
+              ));
+      final forget = svc._forgetAckOf(target.uid);
+      return Future.wait([request, forget]).then((_) {});
+    });
+  }
+
+  /// Arms the unlink target for [uid] after its Cloud-ON ack was written or
+  /// confirmed. [seq] is [_unlinkTargetSeq] as read before that ack was.
+  Future<void> _armUnlink(String uid, int seq) async {
+    try {
+      if (!_isIos() || !_isBackendConfigured()) return;
+      final installId = await _loadInstallId();
+      final secret = await _storage.read(key: _secretKey);
+      if (seq != _unlinkTargetSeq || secret == null || secret.isEmpty) return;
+      _unlinkTarget =
+          (uid: uid, installId: installId, secret: secret, service: this);
+      AppSession.instance
+          .configureCaptureUnlinkTicket(() => takeUnlinkTicket()?.send);
+    } catch (_) {
+      // Best effort: without a target the sign-out simply sends nothing.
+    }
+  }
+
+  /// Deletes the ack only while it is still [uid]'s (a successor may already
+  /// have linked). Never touches the in-memory target.
+  Future<void> _forgetAckOf(String uid) async {
+    try {
+      final ack = await _readAckAny();
+      if (ack != null && ack.uid == uid) await _storage.delete(key: _ackKey);
+    } catch (_) {}
+  }
 
   final DriftUserSettingsRepository _settingsRepository;
   final bool Function() _isCurrentScope;
@@ -945,10 +1040,14 @@ class CaptureDeviceRegistrationService {
     var linked = (cloud: false, ai: false, version: snapshot.version);
     if (snapshot.cloud && gateState == _Gate.open) {
       if (!_isBackendConfigured()) return false;
+      final seq = _unlinkTargetSeq;
       final ack = await _readAck(session.uid);
       if (!current()) return false;
       if (ack != snapshot) {
         if (!await _linkWithConsent(session, snapshot, tx)) return false;
+      } else {
+        // P3: an ack from an earlier process is known now; arm its unlink.
+        await _armUnlink(session.uid, seq);
       }
       linked = snapshot;
     }
@@ -1174,14 +1273,23 @@ class CaptureDeviceRegistrationService {
     );
   }
 
-  Future<void> _writeAck(String uid, _ConsentSnapshot snapshot) =>
-      _storage.write(
-        key: _ackKey,
-        value:
-            '$uid|${snapshot.cloud ? 1 : 0}|${snapshot.ai ? 1 : 0}|${snapshot.version}',
-      );
+  Future<void> _writeAck(String uid, _ConsentSnapshot snapshot) async {
+    final seq = _unlinkTargetSeq;
+    await _storage.write(
+      key: _ackKey,
+      value:
+          '$uid|${snapshot.cloud ? 1 : 0}|${snapshot.ai ? 1 : 0}|${snapshot.version}',
+    );
+    // P3: a Cloud-ON ack is what a sign-out unlinks; any other ack is not.
+    if (snapshot.cloud) {
+      await _armUnlink(uid, seq);
+    } else {
+      _disarmUnlink();
+    }
+  }
 
   Future<void> _clearAck() async {
+    _disarmUnlink();
     try {
       await _storage.delete(key: _ackKey);
     } catch (_) {}
@@ -3544,7 +3652,8 @@ class CaptureDeviceRegistrationService {
               ));
               if (!ownsRecovery()) return _Gate.blocked;
               if (settings.cloudProcessingEnabled) {
-                await _rememberCloudResume(owner, saved, ownsRecovery);
+                await _rememberCloudResume(owner, saved, ownsRecovery,
+                    aiWasOn: settings.aiConsentGranted);
               }
             }
             await _repairStaleEgressOff(owner, 0, ownsRecovery);
@@ -3661,7 +3770,8 @@ class CaptureDeviceRegistrationService {
           aiConsentState:
               _isAndroid() ? ConsentState.declined : settings.aiConsentState,
         ));
-        await _rememberCloudResume(owner, saved, current);
+        await _rememberCloudResume(owner, saved, current,
+            aiWasOn: settings.aiConsentGranted);
         if (!closed) return _Gate.blocked;
       }
     } catch (e) {
@@ -3674,10 +3784,11 @@ class CaptureDeviceRegistrationService {
   }
 
   Future<void> _rememberCloudResume(String owner, UserSettingsEntity saved,
-      bool Function() current) async {
+      bool Function() current, {bool aiWasOn = false}) async {
     if (!current() || owner.isEmpty || _readSession()?.uid != owner) return;
     try {
-      await CloudResumeReminder().rememberPaused(owner, saved);
+      await CloudResumeReminder()
+          .rememberPaused(owner, saved, aiWasOn: aiWasOn);
     } catch (_) {
       // Presentation failure must never change or block privacy reconciliation.
     }

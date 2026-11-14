@@ -19,6 +19,7 @@ import '../privacy/cloud_egress_gate.dart';
 import '../auth/auth_coordinator.dart';
 import '../auth/auth_diagnostics.dart';
 import '../auth/email_sign_in_status.dart' show emailSignInReceiptStorageKey;
+import '../auth/immediate_deletion_receipt_store.dart';
 import '../auth/session_record.dart' show AdmissionDisposition;
 import '../privacy/consent_authority.dart';
 import '../startup/asr_storage_reads.dart';
@@ -484,6 +485,12 @@ class AppSession extends ValueNotifier<SessionStatus> {
   static const String _kLocalDataOwnerGeneration =
       'local_data_owner_generation';
 
+  /// W5: a sign-out that started and has not completed. Written as the first
+  /// await of [signOut] and deleted when it completes; cleared by an explicit
+  /// successful admission. While present, [load] never publishes the persisted
+  /// identity as authenticated and automatic admission stays closed.
+  static const String _kLogoutPending = 'logout_pending_v1';
+
   /// Deterministic fallback for the H-8 wipe when secure storage cannot
   /// enumerate its entries. The sweep prefers `readAll()` (which also catches
   /// other modules' keys, e.g. backup material) and only falls back to this
@@ -537,6 +544,7 @@ class AppSession extends ValueNotifier<SessionStatus> {
   final Set<String> _completedAccountKeys = <String>{};
   StreamSubscription<supabase.AuthState>? _supabaseAuthSubscription;
   Future<void> Function()? _unlinkCaptureDevice;
+  Future<void> Function()? Function()? _takeCaptureUnlinkTicket;
   Future<void> Function()? _flushPendingSync;
 
   /// WP-3b: the account-scope layer. Null before bootstrap has opened a database
@@ -1574,6 +1582,14 @@ class AppSession extends ValueNotifier<SessionStatus> {
 
   void configureCaptureDeviceUnlink(Future<void> Function()? unlink) {
     _unlinkCaptureDevice = unlink;
+  }
+
+  /// P3: registers the synchronous taker of the sign-out unlink ticket (the
+  /// capture service arms it when a Cloud-ON link is acknowledged). [take]
+  /// returns the ticket's send, or null when nothing is linked.
+  void configureCaptureUnlinkTicket(
+      Future<void> Function()? Function()? take) {
+    _takeCaptureUnlinkTicket = take;
   }
 
   Future<void> Function()? _localReminderClear;
@@ -2902,6 +2918,8 @@ class AppSession extends ValueNotifier<SessionStatus> {
       final coachMarks = await read(_kCoachMarksSeen);
       final method = await read(_kMethod);
       final storedEmail = await read(_kEmail);
+      // W5: a sign-out the previous process accepted but never completed.
+      final logoutPending = await read(_kLogoutPending) != null;
       final completed = await _readCompletedAccountKeys();
       check();
       var accountKey = await read(_kCurrentAccount);
@@ -2959,6 +2977,23 @@ class AppSession extends ValueNotifier<SessionStatus> {
       _welcomeManifestoSeen = welcomeSeen == '1' || legacyOnboardingDone;
       _coachMarksSeen = (coachMarks ?? '').split(',')
           .map((id) => id.trim()).where((id) => id.isNotEmpty).toSet();
+      if (logoutPending) {
+        // W5: the persisted identity is the outgoing one of an interrupted
+        // sign-out. It is presented exactly as a completed sign-out leaves it
+        // (signed out, onboarding not done) and no automatic path may restore
+        // it: only an explicit successful admission (or a completed sign-out)
+        // clears the pending key and reopens automatic admission.
+        _logoutIncomplete = true;
+        _completedAccountKeys..clear()..addAll(completed);
+        authMethod = null;
+        email = null;
+        _currentAccountKey = null;
+        _onboardingDone = false;
+        _unresolvedOwnerUid = null;
+        _admittedUid = null;
+        value = SessionStatus.needsOnboarding;
+        return;
+      }
       authMethod = method;
       email = storedEmail;
       _completedAccountKeys..clear()..addAll(completed);
@@ -3196,6 +3231,12 @@ class AppSession extends ValueNotifier<SessionStatus> {
             // logout or a closed switch: it is a new epoch with its own commit.
             _accountSwitchEpoch = null;
             _logoutIncomplete = false;
+            // W5: the durable half of the same recovery. Not awaited, so the
+            // publication's ordering is unchanged; a later sign-out's write of
+            // the key is issued after this delete on the same storage channel.
+            unawaited(_storage
+                .delete(key: _kLogoutPending)
+                .catchError((Object _) {}));
             // The consent-only capability is issued HERE, from the committed
             // publication and after the durable revocation clearance above, and
             // only while every condition still holds, including the ACTUAL SDK
@@ -3545,6 +3586,12 @@ class AppSession extends ValueNotifier<SessionStatus> {
     // is pushed (the outbox flush) and no backend call is made (device unlink).
     // Captured BEFORE the denial below drops the local-read proof.
     final fromLocalRead = localReadEgressDenied;
+    // P3: the capture-device unlink is taken BEFORE any authority is revoked
+    // below (afterwards the capture gate refuses it and the server keeps
+    // pushing the outgoing user's notifications to this phone). Null when the
+    // install has no Cloud-ON link: a Cloud-OFF sign-out sends nothing.
+    final unlinkTicket =
+        fromLocalRead ? null : _takeCaptureUnlinkTicket?.call();
     // Lock + durable deny start NOW (synchronously revoked in memory); the scope
     // is locked just below, so the denial does not lock it a second time.
     final denial = _denyLocalRead(lockScope: false);
@@ -3562,7 +3609,9 @@ class AppSession extends ValueNotifier<SessionStatus> {
     _revokeConsentProof();
     // ----------------------------------------------------------------
     var completed = false;
+    var locked = false;
     try {
+      await _storage.write(key: _kLogoutPending, value: '1').catchError((Object _) {}); // W5
       // Bounded local/admission work already dispatched (a consent write holding
       // a transaction on the database about to be locked) settles BEFORE the
       // generation is invalidated and the scope locked: its authority is already
@@ -3574,14 +3623,13 @@ class AppSession extends ValueNotifier<SessionStatus> {
       // is rejected at its next validation boundary and can neither commit nor
       // acknowledge under the outgoing (or a subsequent) admission.
       await _invalidateOwnerGeneration();
-      // Best-effort final push BEFORE the replica is closed: a change made in the
-      // last seconds should reach the cloud now rather than wait for the next
-      // sign-in. Offline sign-out still proceeds; nothing is discarded either way.
-      await flushPendingForSignOut(skipRemote: fromLocalRead);
       // Lock + close the active replica and publish the signed-out scope.
       await _accountScope?.lock();
-      await _finishSignedOut(remoteEffects: !fromLocalRead);
+      locked = true;
+      // The ticket replaces the gated unlink hook (remoteEffects: false).
+      await _finishSignedOut(remoteEffects: false, unlinkTicket: unlinkTicket);
       await denial;
+      await _storage.delete(key: _kLogoutPending).catchError((Object _) {}); // W5
       completed = true;
     } finally {
       // Whatever was issued DURING the closure (an auth attempt, an authority)
@@ -3599,6 +3647,13 @@ class AppSession extends ValueNotifier<SessionStatus> {
         // work stay closed and nothing restores the outgoing authority; the
         // failure is rethrown to the caller as an incomplete logout.
         _logoutIncomplete = true;
+        // W2: once the replica is locked nothing saves any more, so an
+        // authenticated status would be a dead end. Route to sign-in instead (an
+        // explicit admission clears _logoutIncomplete). A lock failure keeps
+        // the old status: the database may still be open behind it.
+        if (locked && !isGuest && authMethod != null) {
+          value = SessionStatus.sessionExpired;
+        }
       }
       _logoutsAccepted--;
     }
@@ -3618,10 +3673,22 @@ class AppSession extends ValueNotifier<SessionStatus> {
     bool releaseOwner = true,
     String? onlyOwner,
     bool remoteEffects = true,
+    Future<void> Function()? unlinkTicket,
     bool Function()? current,
   }) async {
     bool live() => current?.call() ?? true;
     if (!live()) return;
+    // P3: a sign-out's pre-captured unlink is sent FIRST, before the owner
+    // marker is released below: the HTTP egress gate judges the active owner's
+    // Cloud state, which must still be the outgoing (Cloud-ON) user's.
+    if (unlinkTicket != null) {
+      unawaited(
+        unlinkTicket().timeout(const Duration(seconds: 4)).catchError((_) {
+          // Best effort, like the hook below; the ack it could not clear is
+          // superseded by the next link.
+        }),
+      );
+    }
     var release = releaseOwner;
     if (release && onlyOwner != null) {
       try {
@@ -4114,6 +4181,61 @@ class AppSession extends ValueNotifier<SessionStatus> {
         }
         if (epoch != _admissionEpoch) return const LaunchAdmission.blocked();
       }
+      // P4: the server confirmed this owner's account deletion (a durable
+      // COMPLETED receipt, retained until the original local removal), but the
+      // process died before that removal ran. The prepared cleanup needs a live
+      // admission and SDK session the deleted account can never obtain again,
+      // so the receipt itself is the evidence here: the replica, key, marker and
+      // identity are removed by uid, and the uid stays revoked. An unconfirmed
+      // removal keeps its barrier and blocks; the next launch resumes it.
+      final String? deletedOwner;
+      try {
+        final m = await _storage.read(key: _kLocalDataOwnerUid);
+        if (epoch != _admissionEpoch) return const LaunchAdmission.blocked();
+        deletedOwner = m != null &&
+                m.isNotEmpty &&
+                m == intendedOwner &&
+                !m.startsWith(_kOwnerTransitionPrefix)
+            ? m
+            : null;
+      } catch (_) {
+        return blocked();
+      }
+      if (deletedOwner != null) {
+        final receipts = ImmediateDeletionReceiptStore();
+        ImmediateDeletionReceipt? receipt;
+        try {
+          receipt =
+              await receipts.serialized(() => receipts.load(deletedOwner!));
+        } catch (_) {
+          // An unreadable receipt is not completion evidence.
+          receipt = null;
+        }
+        if (epoch != _admissionEpoch) return const LaunchAdmission.blocked();
+        if (receipt != null &&
+            receipt.phase == ImmediateDeletionPhase.completed) {
+          try {
+            await removal.remove(deletedOwner);
+          } catch (_) {
+            return blocked();
+          }
+          if (epoch != _admissionEpoch) return const LaunchAdmission.blocked();
+          await mutate(() => _finishSignedOut(
+              onlyOwner: deletedOwner,
+              remoteEffects: false,
+              current: () => epoch == _admissionEpoch));
+          if (epoch != _admissionEpoch) return const LaunchAdmission.blocked();
+          await _retireCompletedDeletionReceipt(receipts, receipt);
+          try {
+            revoked = await removal.revokedUids();
+            if (epoch != _admissionEpoch) {
+              return const LaunchAdmission.blocked();
+            }
+          } catch (_) {
+            return blocked();
+          }
+        }
+      }
     }
     final String? marker;
     try {
@@ -4138,6 +4260,33 @@ class AppSession extends ValueNotifier<SessionStatus> {
       return _chosenLaunch(LaunchAdmission.open(null));
     }
     return _chosenLaunch(LaunchAdmission.open(marker));
+  }
+
+  /// P4: erases the secret of a COMPLETED receipt once its local removal was
+  /// confirmed at launch, exactly as the prepared gateway's retirement does
+  /// after a confirmed original local removal: only that same operation's
+  /// record, still completed. Best effort: a leftover completed receipt only
+  /// ever allows a read-only status call.
+  Future<void> _retireCompletedDeletionReceipt(
+      ImmediateDeletionReceiptStore receipts,
+      ImmediateDeletionReceipt removed) async {
+    if (removed.receiptSecret == null) return;
+    try {
+      await receipts.serialized(() async {
+        final record = await receipts.load(removed.owner);
+        if (record == null ||
+            record.operationId != removed.operationId ||
+            record.phase != ImmediateDeletionPhase.completed ||
+            record.receiptSecret != removed.receiptSecret) {
+          return;
+        }
+        await receipts.writeVerified(ImmediateDeletionReceipt(
+            owner: removed.owner,
+            operationId: removed.operationId,
+            receiptSecret: null,
+            phase: ImmediateDeletionPhase.completed));
+      });
+    } catch (_) {}
   }
 
   /// The launch admission this session itself chose last (identity only): the

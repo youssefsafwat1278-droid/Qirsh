@@ -18,6 +18,7 @@ void main() {
   late FakeRegistrationService service;
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    CloudResumeBannerDebug.reset();
     repo = FakeSettingsRepository();
     repo.settings = repo.settings.copyWith(
         cloudConsentState: ConsentState.declined, cloudConsentVersion: 2);
@@ -34,7 +35,7 @@ void main() {
       locale: language,
       home: Theme(data: dark ? AppTheme.dark : AppTheme.light,
         child: MediaQuery(data: MediaQueryData(textScaler: TextScaler.linear(scale)),
-          child: const Scaffold(body: SingleChildScrollView(child: CloudResumeBanner()))))));
+          child: const Scaffold(body: SingleChildScrollView(child: CloudResumeBanner(autoResume: false)))))));
     await tester.pumpAndSettle();
   }
 
@@ -126,5 +127,57 @@ void main() {
     expect(repo.settings.cloudConsentState, ConsentState.accepted);
     expect(find.byKey(const Key('cloudResumeEnable')), findsNothing);
     expect(await CloudResumeReminder().shouldShow('uid-fake', repo.settings), isFalse);
+  });
+
+  group('automatic resume of an app-made pause (owner decision 2026-11-14)', () {
+    Future<void> pumpAuto(WidgetTester tester, {bool aiWasOn = false}) async {
+      await CloudResumeReminder()
+          .rememberPaused('uid-fake', repo.settings, aiWasOn: aiWasOn);
+      await tester.pumpWidget(consentApp(
+          overrides: consentOverrides(repo, service),
+          home: const Scaffold(
+              body: SingleChildScrollView(child: CloudResumeBanner()))));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('Cloud comes back ON through the typed enable, no tap',
+        (tester) async {
+      await pumpAuto(tester);
+      expect(service.enableCalls, 1);
+      expect(repo.settings.cloudConsentState, ConsentState.accepted);
+      expect(find.byKey(const Key('cloudResumeEnable')), findsNothing);
+      expect(await CloudResumeReminder().shouldShow('uid-fake', repo.settings),
+          isFalse);
+    });
+
+    testWidgets('AI that was ON before the pause comes back ON too',
+        (tester) async {
+      repo.settings =
+          repo.settings.copyWith(aiConsentState: ConsentState.declined);
+      await pumpAuto(tester, aiWasOn: true);
+      expect(repo.settings.cloudConsentState, ConsentState.accepted);
+      expect(repo.settings.aiConsentState, ConsentState.accepted);
+    });
+
+    testWidgets('a failed resume keeps the one-tap banner and is not retried',
+        (tester) async {
+      service.enableError = StateError('native_unconfirmed');
+      await pumpAuto(tester);
+      expect(service.enableCalls, 1);
+      expect(repo.settings.cloudConsentState, ConsentState.declined);
+      expect(find.byKey(const Key('cloudResumeEnable')), findsOneWidget);
+      await tester.pumpAndSettle();
+      expect(service.enableCalls, 1);
+    });
+
+    testWidgets("the user's own OFF (no reminder) is never turned back on",
+        (tester) async {
+      await tester.pumpWidget(consentApp(
+          overrides: consentOverrides(repo, service),
+          home: const Scaffold(body: CloudResumeBanner())));
+      await tester.pumpAndSettle();
+      expect(service.enableCalls, 0);
+      expect(repo.saveCalls, 0);
+    });
   });
 }
