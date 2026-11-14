@@ -614,11 +614,10 @@ class PlanningOutboxQueue {
       opName: op.name,
       payload: enriched,
       baseRevision: baseRevision,
-      // A settings row parked for its bind must NOT flip to 'pending': the pull
-      // treats a pending settings row as a conflict and would refuse to merge
-      // the remote state that binds it.
+      // Neither a parked pre-bind edit nor a narrow consent write can change
+      // the remote profile before binding. Don't block the pull that binds it.
       localUpdateSql: entityType == settingsEntityType &&
-              parkReason == kParkDependencyWait
+              (parkReason == kParkDependencyWait || enriched['consent_only'] == true)
           ? 'UPDATE $table SET id = id WHERE 1 = 0;'
           : "UPDATE $table SET sync_status = 'pending' WHERE id = ${sqlString(entityId)};",
       parkReason: parkReason,
@@ -1127,7 +1126,7 @@ class PlanningOutboxQueue {
     if (entityType == settingsEntityType) {
       if (!settingsPullCompleted) return false;
       final row = await _db.customSelect("SELECT * FROM user_settings WHERE id = ${sqlString(entityId)} "
-          "AND server_id IS NULL AND COALESCE(sync_status, '') != 'pending' LIMIT 1;").getSingleOrNull();
+          "AND server_id IS NULL AND COALESCE(sync_status, '') NOT IN ('pending', 'conflict') LIMIT 1;").getSingleOrNull();
       if (row == null) return false;
       final held = await _db.customSelect(
           "SELECT entity_id, owner_uid, operation, status, failure_class, "

@@ -37,6 +37,7 @@ class _FakeRemote implements PlanningRemoteSink, PlanningRemoteSource {
   /// NEW-H-4: when set, fetching this table throws — a transport failure for
   /// exactly one entity, which the pull swallows into an incomplete result.
   String? failFetchTable;
+  SyncCursor? settingsFetchAfter;
 
   /// WP-5: the last field patch an update sent (to assert what left the device).
   Map<String, dynamic>? lastPatch;
@@ -50,6 +51,7 @@ class _FakeRemote implements PlanningRemoteSink, PlanningRemoteSource {
     if (failFetchTable == table) {
       throw StateError('injected transport failure for $table');
     }
+    if (table == 'user_settings') settingsFetchAfter = after;
     return (rows[table]?.values ?? const <Map<String, dynamic>>[])
         .take(limit)
         .map(Map<String, dynamic>.from)
@@ -849,6 +851,66 @@ void main() {
     await registration.registerMissingRows(
         settingsPullCompleted: settingsPullCompleted);
     await _push(db, queue, remote).push();
+  }
+
+  for (final legacyStatus in [null, 'conflict', 'synced']) {
+    test(
+        switch (legacyStatus) {
+          'conflict' => 'first settings restore retries an unbound conflict',
+          'synced' => 'first settings restore repairs a premature binding',
+          _ => 'first settings restore follows an explicit Cloud and AI grant',
+        },
+        () async {
+      final initial = await settings.getSettings();
+      final language = initial.language == 'en' ? 'ar' : 'en';
+      const phone = '+15550100123';
+      remote.rows['user_settings'] = {
+        'user_settings': {
+          ..._remoteSettingsRow(),
+          'phone_number': phone,
+          'language': language,
+        },
+      };
+      final granted = await settings.saveSettings(initial.copyWith(
+        cloudConsentState: ConsentState.accepted,
+        aiConsentState: ConsentState.accepted,
+      ));
+      final pushed = await _push(db, queue, remote).push();
+      expect(pushed.pushed, 1);
+      expect(await _col(db, 'server_id'), isNull);
+      if (legacyStatus != null) {
+        await db.customStatement(
+            "UPDATE user_settings SET sync_status = '$legacyStatus';");
+        if (legacyStatus == 'synced') await bind();
+        await writeSyncCursor(
+          db,
+          'planning_settings',
+          SyncCursor.fromServerRow(remote.rows['user_settings']!['user_settings']!),
+        );
+      }
+
+      await engineTail(remote);
+
+      final restored = await settings.getSettings();
+      expect(await _col(db, 'server_id'), 'server-user_settings');
+      expect(remote.settingsFetchAfter?.id, isEmpty);
+      expect(restored.phoneNumber, phone);
+      expect(restored.country, 'US');
+      expect(restored.currency, 'USD');
+      expect(restored.language, language);
+      expect(restored.cloudConsentState, ConsentState.accepted);
+      expect(restored.aiConsentState, ConsentState.accepted);
+      expect(restored.consentVersion, granted.consentVersion);
+      final serverRow = remote.rows['user_settings']!['user_settings']!;
+      expect(serverRow['phone_number'], phone);
+      expect(serverRow['country'], 'US');
+      expect(serverRow['currency'], 'USD');
+      expect(serverRow['language'], language);
+
+      await engineTail(remote);
+      expect(remote.settingsFetchAfter?.id, 'server-user_settings',
+          reason: 'subsequent syncs use the incremental cursor again');
+    });
   }
 
   test(

@@ -464,6 +464,28 @@ void main() {
   });
 
   group('server-head short-circuit (T4)', () {
+    test('settings repair replays a previously skipped sequence row', () async {
+      seq.put('user_settings', {
+        'id': 'server-settings',
+        'local_id': 'user_settings',
+        'sync_seq': 1,
+        'currency': 'EGP',
+        'updated_at': '2026-01-01T00:00:00.000Z',
+      });
+      await writeSeqCursor(db, _uid, 'planning_settings', 1);
+
+      await planning(gate()).pull();
+
+      final profile = await db
+          .customSelect('SELECT currency, server_id FROM user_settings LIMIT 1;')
+          .getSingle();
+      expect(profile.read<String>('currency'), 'EGP');
+      expect(profile.read<String>('server_id'), 'server-settings');
+      expect(seq.fetchAfters['user_settings'], [0]);
+      await planning(gate()).pull();
+      expect(seq.fetchAfters['user_settings'], [0]);
+    });
+
     test('an idle cycle costs exactly one head call and zero table calls',
         () async {
       seq.put('user_accounts', _acct('a1', 1));

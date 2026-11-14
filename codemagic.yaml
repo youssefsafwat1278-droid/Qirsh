@@ -725,7 +725,7 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        IOS_BUILD_NUMBER_FLOOR: "142"
+        IOS_BUILD_NUMBER_FLOOR: "144"
         QIRSH_GOOGLE_AUTH_ENABLED: "true"
         QIRSH_EMAIL_AUTH_ENABLED: "true"
         QIRSH_ALTERNATE_SIGNUP_ENABLED: "true"

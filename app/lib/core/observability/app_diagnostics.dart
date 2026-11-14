@@ -18,6 +18,7 @@ enum AppOperation {
   accountConsent,
   settingsQueue,
   settingsSync,
+  settingsRestore,
   sync,
   syncLedger,
   syncPlanning,

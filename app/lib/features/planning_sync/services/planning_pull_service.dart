@@ -8,7 +8,9 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/backend/supabase_config.dart';
+import '../../../core/observability/app_diagnostics.dart';
 import '../../../core/security/lock_prompt_language.dart';
+import '../../../core/sync/outbox_failure.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../data/db/app_database.dart';
 import '../../../data/db/bounded_lookup.dart';
@@ -394,17 +396,26 @@ class PlanningPullService {
         final upgradeThresholds = entityType == PlanningOutboxQueue.budgetsEntityType &&
             _outboxQueue != null &&
             (await readSyncCursor(_db, thresholdMarker)).id != 'done';
+        // Older clients could skip applying this row and still advance the
+        // cursor, then even attach its id through registration. Re-read it
+        // once per replica, using the negotiated pull protocol.
+        final settingsRestoreMarker = 'settings_restore_v1:$userId';
+        final needsSettingsRestore = isSettings &&
+            (await readSyncCursor(_db, settingsRestoreMarker)).id != 'done';
         final forcedFromEpoch = upgradeThresholds ||
             (fromEpochEntities?.contains(entityType) ?? false);
         final useSeq = plan.mode == SeqMode.seq && !forcedFromEpoch;
-        var cursor = forcedFromEpoch
+        var cursor = forcedFromEpoch || needsSettingsRestore
             ? const SyncCursor.epoch()
             : await readSyncCursor(_db, cursorKey);
-        var seqCursor =
-            useSeq ? await readSeqCursor(_db, userId, cursorKey) : 0;
-        var entityReachedEof = useSeq && plan.isIdle(seqCursor);
+        var seqCursor = useSeq && !needsSettingsRestore
+            ? await readSeqCursor(_db, userId, cursorKey)
+            : 0;
+        var entityReachedEof =
+            useSeq && !needsSettingsRestore && plan.isIdle(seqCursor);
         final capped = !forcedFromEpoch;
         var pages = 0;
+        var sawSettingsRow = false;
         while (!entityReachedEof) {
           if (!admitted()) break;
           final rows = useSeq
@@ -425,6 +436,7 @@ class PlanningPullService {
             entityReachedEof = true;
             break;
           }
+          if (needsSettingsRestore) sawSettingsRow = true;
 
           final nextSeq = useSeq ? nextSeqOf(rows, seqCursor) : 0;
           final nextCursor =
@@ -500,6 +512,10 @@ class PlanningPullService {
             } else {
               await writeSyncCursor(_db, cursorKey, nextCursor);
             }
+            if (needsSettingsRestore && pageUpdated > 0) {
+              await writeSyncCursor(_db, settingsRestoreMarker,
+                  const SyncCursor(updatedAt: syncCursorEpoch, id: 'done'));
+            }
             return (
               imported: pageImported,
               updated: pageUpdated,
@@ -511,6 +527,10 @@ class PlanningPullService {
           updated += pageResult.updated;
           conflicts += pageResult.conflicts;
           tombstoned += pageResult.tombstoned;
+          if (needsSettingsRestore && pageResult.updated > 0) {
+            AppDiagnostics.record(
+                AppOperation.settingsRestore, AppEventState.succeeded);
+          }
           cursor = nextCursor;
           if (useSeq) seqCursor = nextSeq;
           if (rows.length < _pageSize) {
@@ -523,6 +543,12 @@ class PlanningPullService {
           await _seqGate!.markCaughtUp(userId, cursorKey, seqCursor, plan);
         }
         if (entityReachedEof && admitted()) {
+          if (needsSettingsRestore && !sawSettingsRow) {
+            // A successful empty read also completes the repair. Future
+            // incremental cycles will see any newly created server row.
+            await writeSyncCursor(_db, settingsRestoreMarker,
+                const SyncCursor(updatedAt: syncCursorEpoch, id: 'done'));
+          }
           completedEntities.add(entityType);
           if (upgradeThresholds) {
             await writeSyncCursor(_db, thresholdMarker,
@@ -999,10 +1025,22 @@ class PlanningPullService {
       );
       return _PlanningPullOutcome.updated;
     }
-    if (status == 'conflict') return _PlanningPullOutcome.conflict;
-    if (status == 'pending') {
-      await _markConflict('user_settings', id);
-      return _PlanningPullOutcome.conflict;
+    if (status == 'pending' || status == 'conflict') {
+      // A pre-bind consent write used to leave this flag behind after ACK.
+      // Allow that replica to recover, while protecting real profile edits.
+      final hasProfileWrite = !isUnbound ||
+          await _db.customSelect('''
+            SELECT 1 FROM planning_sync_outbox
+            WHERE entity_type = 'settings' AND entity_id = ${sqlString(id)}
+              AND payload_json NOT LIKE '%"consent_only":true%'
+              AND NOT (status = 'parked'
+                       AND failure_class IS '$kParkDependencyWait')
+            LIMIT 1;
+          ''').getSingleOrNull() != null;
+      if (hasProfileWrite) {
+        if (status == 'pending') await _markConflict('user_settings', id);
+        return _PlanningPullOutcome.conflict;
+      }
     }
     await _updateSettings(
         id, serverId, row, local.read<String>('notifications_json'));
