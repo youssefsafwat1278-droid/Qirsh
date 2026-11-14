@@ -519,8 +519,23 @@ void main() {
         () => expectSessionOnly(() => native.state = 'ON'));
     test('L2: a native DISABLING record recovers the session only',
         () => expectSessionOnly(() => native.state = 'DISABLING'));
-    test('L2: Dart neither ON nor verified OFF recovers the session only',
+    test(
+        'L2: Dart not verified OFF (DISABLING, mixed, uncertain) with the '
+        'saved choice not accepted recovers the session only',
         () => expectSessionOnly(() => capture.dartOff = false));
+    // A Cloud the user's saved choice keeps ON is never restricted by
+    // recovery.
+    test('Dart not verified ON or OFF while the saved choice is ON: denied, '
+        'Cloud untouched',
+        () => expectDenied(() => capture
+          ..dartOff = false
+          ..consent = true));
+    test('the diagnostic names the Dart layer state', () async {
+      await expectDenied(() => capture
+        ..dartOff = false
+        ..consent = true);
+      expect(AutomaticSessionRecovery.diagnostic.value, startsWith('cloud:'));
+    });
     test('native none for an unproven owner or barrier denies',
         () => expectDenied(() => native.ownerProven = false));
     test('every other P_elig denial still applies',
@@ -592,6 +607,8 @@ void main() {
         () => expectSkipped(() => host.owner = null, AsrOutcome.skipped));
     test('E3–E11 denial',
         () => expectSkipped(() => host.eligibility = 'x', AsrOutcome.skipped));
+    test('Cloud OFF in Dart (E2)',
+        () => expectSkipped(() => capture.dartOn = false, AsrOutcome.skipped));
     test('consent not accepted (E4)',
         () => expectSkipped(() => capture.consent = false, AsrOutcome.skipped));
     test(

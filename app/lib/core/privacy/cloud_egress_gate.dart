@@ -2623,9 +2623,13 @@ class CloudEgressGate {
               deny = await _decide(owner, zoneGrant, AdmissionRequest('POST', uri));
             }
           case RefreshOpKind.asr:
-            // L2 (2026-11-14): a pending enable does not stop the
-            // session-only exchange; it carries the refresh token only.
-            if (!_localReadDenies) deny = 'not_local_read';
+            // A pending enable still stops recovery: its adoption would
+            // publish the restrictive owner over the user's ON choice.
+            if (!_localReadDenies) {
+              deny = 'not_local_read';
+            } else if (await _pendingDenies(owner)) {
+              deny = 'pending_enable';
+            }
         }
       }
       // Synchronously after the last await.

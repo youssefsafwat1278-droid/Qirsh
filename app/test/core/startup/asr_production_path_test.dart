@@ -949,6 +949,59 @@ void main() {
     expectNativeCloudRestrictive(nativeFrom);
   });
 
+  /// Overwrites both Dart layers of [_uid] with [secure] / [file] states.
+  void writeDartLayers(EgressState secure, EgressState file) {
+    String body(EgressState st) => jsonEncode({
+          'v': 1,
+          'records': {
+            _uid: CloudEgressRecord(
+                    state: st,
+                    ownerUid: _uid,
+                    transitionGeneration: 3,
+                    reservedVersion: 1)
+                .toJson()
+          }
+        });
+    storage.data[CloudEgressStore.kSecureKey] = body(secure);
+    File(p.join(support.path, CloudEgressStore.kFileName))
+        .writeAsStringSync(body(file));
+  }
+
+  test(
+      'a Cloud OFF the user started but never committed (Dart DISABLING) '
+      'freezes egress at startup: recovery waits in local read, sends '
+      'nothing and leaves native as it is (explicit sign-in completes it)',
+      () async {
+    await accountWithCloudOffThenKill();
+    writeDartLayers(EgressState.disabling, EgressState.disabling);
+    sim.seedLiveOn(transitionGeneration: 1, reservedVersion: 1);
+    await commitExpiredRecord();
+    await bootProcess();
+    await resume();
+    expect(AutomaticSessionRecovery.active!.lastStop, 'elig', reason: diag());
+    expect(AutomaticSessionRecovery.diagnostic.value, 'elig:frozen');
+    expect(script.sends, 0);
+    expect(session.asrLocalReadOwner, _uid);
+    expect(sim.egress?.state, 'ON');
+  });
+
+  test(
+      'L2: disagreeing Dart layers while the saved Cloud choice is declined '
+      'recover the session only and restrict Cloud natively', () async {
+    await accountWithCloudOffThenKill();
+    writeDartLayers(EgressState.on, EgressState.off);
+    sim.seedLiveOn(transitionGeneration: 1, reservedVersion: 1);
+    await commitExpiredRecord();
+    await bootProcess();
+    final nativeFrom = sim.calls.length;
+    await resume();
+    expect(AutomaticSessionRecovery.active!.lastStop, 'recovered',
+        reason: diag());
+    expect(script.sends, 1);
+    expect(requests, isEmpty, reason: 'only the token exchange');
+    expectNativeCloudRestrictive(nativeFrom);
+  });
+
   test('PROBE latency', () async {
     AuthDiagnostics.debugReset();
     await accountWithCloudOffThenKill();

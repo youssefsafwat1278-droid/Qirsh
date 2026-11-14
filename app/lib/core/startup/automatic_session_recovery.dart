@@ -385,12 +385,14 @@ class AutomaticSessionRecovery {
       _detail = denial;
       return _stop('elig', AsrOutcome.skipped);
     }
-    // Owner decisions (2026-10-29, L2 2026-11-14): unless Cloud is verified
-    // ON the session alone is recovered (no Cloud consent is needed: nothing
-    // but the token exchange leaves the device). That includes the states
-    // between ON and OFF (DISABLING, pending enable, an unreadable record),
-    // which otherwise signed the user out once the session expired. Cloud
-    // capture stays exactly as restrictive as the gate already keeps it.
+    // Owner decisions (2026-10-29, L2 2026-11-14): with Cloud verified OFF,
+    // or whenever the saved Cloud choice is not accepted (e.g. a DISABLING
+    // the user started that was never committed), the session alone is
+    // recovered (no Cloud consent is needed: nothing but the token exchange
+    // leaves the device). Session-only adoption publishes the restrictive
+    // owner (native OFF), so it never runs while the user's saved choice is
+    // ON: a pending enable, a disagreement or an unreadable record stops here
+    // and leaves that choice untouched.
     final bool sessionOnly;
     if (await capture.dartEgressOn(owner)) {
       if (!await capture.consentAccepted(owner)) {
@@ -398,8 +400,12 @@ class AutomaticSessionRecovery {
         return _stop('cloud', AsrOutcome.skipped);
       }
       sessionOnly = false;
-    } else {
+    } else if (await capture.dartEgressOff(owner) ||
+        !await capture.consentAccepted(owner)) {
       sessionOnly = true;
+    } else {
+      _detail = await gate.describeDartLayers(owner);
+      return _stop('cloud', AsrOutcome.skipped);
     }
     if (host.processDenial(owner, adopting: false) != null ||
         !_recordEligible(coordinator.store.committed, owner) ||
