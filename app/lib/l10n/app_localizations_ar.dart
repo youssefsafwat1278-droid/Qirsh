@@ -6370,6 +6370,12 @@ class AppL10nAr extends AppL10n {
       'اكتملت المعالجة السحابية باختيارك السابق، ولم يُحفظ اختيارك الجديد. راجِع الخيارات واختر من جديد لإضافته.';
 
   @override
+  String get restoreCloudTitle => 'استعادة بياناتك السحابية';
+
+  @override
+  String get restoreCloudOnly => 'استعادة بالمزامنة السحابية فقط';
+
+  @override
   String get initialConsentAccept => 'أوافق على المزامنة والتحليل الذكي';
 
   @override

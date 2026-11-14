@@ -43,7 +43,8 @@ class _RevokeFailsService extends FakeRegistrationService {
   @override
   Future<void> disableCloud({required Future<void> Function() commitLocalOff}) async {
     disableCalls++;
-    revokeFailed = true; // the server revoke failed; local OFF is still committed
+    revokeFailed = true;
+
     await commitLocalOff();
   }
 }
@@ -715,6 +716,23 @@ void main() {
       expect(failing.revokeFailed, isTrue);
       expect(repo.settings.cloudConsentState, ConsentState.declined);
       expect(repo.settings.aiConsentState, ConsentState.declined);
+    });
+
+    testWidgets('local OFF after a failed revoke must stay unconfirmed',
+        (tester) async {
+      final failing = _RevokeFailsService();
+      service = failing;
+      set(ConsentState.accepted, ConsentState.accepted);
+      await pump(tester);
+      await openWithdraw(tester);
+      facts = const ConsentLiveFacts(
+          egressState: EgressState.off, serverOffPending: true);
+      await tester.tap(find.byKey(const Key('consentWithdrawConfirm')));
+      await tester.pumpAndSettle();
+      expect(failing.revokeFailed, isTrue);
+      expect(repo.settings.cloudProcessingEnabled, isFalse);
+      expect(status(_en.consentStatusOff), findsNothing,
+          reason: 'Supabase has not confirmed OFF');
     });
 
     testWidgets('a failed local OFF write is reported and never claimed as '

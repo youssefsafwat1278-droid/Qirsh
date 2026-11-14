@@ -66,11 +66,17 @@ class FakeRegistrationService implements CaptureDeviceRegistrationService {
 
   CaptureRegistrationStatus outcome;
   int retryCalls = 0;
+  @override
+  final consentServerRevision = ValueNotifier<int>(0);
   final notifier = ValueNotifier(const CaptureRegistrationStatus(
       CaptureRegistrationPhase.notRequested));
 
   @override
   ValueListenable<CaptureRegistrationStatus> get status => notifier;
+
+  @override
+  Future<bool> serverConsentMatches(UserSettingsEntity settings) async =>
+      outcome.phase == CaptureRegistrationPhase.connected;
 
   @override
   Future<void> retry() async {

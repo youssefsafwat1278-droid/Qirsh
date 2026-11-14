@@ -16,6 +16,7 @@ import '../../../core/privacy/consent_authority.dart';
 import '../../../core/session/admission_authority.dart';
 import '../../../core/session/app_session.dart';
 import '../../../core/session/consent_capability.dart';
+import '../../../core/sync/sync_wakeup.dart';
 import '../../../core/utils/install_id.dart';
 import '../../../data/repositories/drift_user_settings_repository.dart';
 import '../../../domain/entities/supporting_entities.dart';
@@ -386,6 +387,8 @@ class CaptureDeviceRegistrationService {
   /// call, and it is the floor for a restrictive-first mirror write. Cleared on
   /// unlink and whenever the device credential is replaced.
   static const _ackKey = 'qirsh_capture_consent_ack';
+  static const _verifiedAckKey = 'qirsh_capture_consent_verified_ack';
+  static const _grantAttemptKey = 'qirsh_capture_consent_grant_attempt';
 
   /// C.4: the durable, consumed `revoke_attempt = {owner, transition_generation,
   /// consumed: true}`, written BEFORE the single send and SEPARATE from the
@@ -485,7 +488,10 @@ class CaptureDeviceRegistrationService {
   Future<void> _forgetAckOf(String uid) async {
     try {
       final ack = await _readAckAny();
-      if (ack != null && ack.uid == uid) await _storage.delete(key: _ackKey);
+      if (ack != null && ack.uid == uid) {
+        await _storage.delete(key: _ackKey);
+        await _storage.delete(key: _verifiedAckKey);
+      }
     } catch (_) {}
   }
 
@@ -502,6 +508,7 @@ class CaptureDeviceRegistrationService {
     _syncGeneration++;
     _revokeRetryTimer?.cancel();
     _revokeRetryTimer = null;
+    consentServerRevision.dispose();
   }
 
   bool Function() _captureLifetime({
@@ -613,6 +620,32 @@ class CaptureDeviceRegistrationService {
   int _syncGeneration = 0;
 
   ValueListenable<CaptureRegistrationStatus> get status => _status;
+
+  final ValueNotifier<int> consentServerRevision = ValueNotifier(0);
+
+  Future<bool> serverConsentMatches(UserSettingsEntity settings) async {
+    if (!_isBackendConfigured() || (!_isIos() && !_isAndroid())) return true;
+    final current = _captureLifetime();
+    final owner = _readSession()?.uid;
+    if (owner == null || !current()) return false;
+    try {
+      return await _hasVerifiedAck(owner, _snapshotOf(settings)) && current();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> serverOffUnconfirmed(String owner, int generation) async {
+    final pending = await _readPendingRevocations();
+    if (pending[owner]?['g'] == generation) return true;
+    final raw = await _serverRevocationSlots.read();
+    if (raw == null) return false;
+    final record = jsonDecode(raw);
+    return record is Map &&
+        record['owner'] == owner &&
+        record['transition_generation'] == generation &&
+        record['status'] == ServerRevocation.unconfirmed.name;
+  }
 
   CloudEgressGate get _gate => _gateOverride ?? CloudEgressGate.instance;
 
@@ -829,12 +862,8 @@ class CaptureDeviceRegistrationService {
     if (session != null &&
         tx.owner == session.uid &&
         tx.sessionUid == session.uid) {
-      final snapshot = (
-        cloud: settings.cloudProcessingEnabled,
-        ai: settings.aiConsentGranted,
-        version: settings.consentVersion,
-      );
-      if (await _readAck(session.uid) == snapshot) return;
+      final snapshot = _snapshotOf(settings);
+      if (await _hasVerifiedAck(session.uid, snapshot)) return;
       if (!await _linkWithConsent(session, snapshot, tx)) {
         outcome.consentPushFailed = true;
       }
@@ -1062,7 +1091,7 @@ class CaptureDeviceRegistrationService {
       final seq = _unlinkTargetSeq;
       final ack = await _readAck(session.uid);
       if (!current()) return false;
-      if (ack != snapshot) {
+      if (ack != snapshot || !await _hasVerifiedAck(session.uid, snapshot)) {
         if (!await _linkWithConsent(session, snapshot, tx)) return false;
       } else {
         // P3: an ack from an earlier process is known now; arm its unlink.
@@ -1126,6 +1155,10 @@ class CaptureDeviceRegistrationService {
       }
       await _withSecretRecovery(installId, secret, (deviceSecret) async {
         if (!await _holds(tx)) throw const StaleAdmissionException();
+        if (snapshot.cloud) {
+          await _storage.write(key: _grantAttemptKey, value: session.uid);
+          if (!await _holds(tx)) throw const StaleAdmissionException();
+        }
         return _consent.link(
           installId: installId,
           deviceSecret: deviceSecret,
@@ -1172,12 +1205,25 @@ class CaptureDeviceRegistrationService {
     final ack = await _readAck(session.uid);
     if (!await _holds(tx)) return;
     if (ack == null || ack.version > snapshot.version) {
-      if (!await _linkOnce() && snapshot.cloud) {
+      // Setup can have a committed consent capability before the ordinary
+      // writable app shell is admitted. Confirm the device row for that
+      // capability; the normal admission hook will publish the native owner.
+      final capability = AppSession.instance.captureConsentCapability();
+      final linked = AppSession.instance.status == SessionStatus.needsOnboarding &&
+              capability?.uid == session.uid
+          ? await _linkWithConsent(session, snapshot, tx)
+          : await _linkOnce();
+      if (!linked && snapshot.cloud) {
         outcome.consentPushFailed = true;
       }
       return;
     }
-    if (ack == snapshot) return;
+    if (ack == snapshot) {
+      if (!await _hasVerifiedAck(session.uid, snapshot) && !await _linkOnce()) {
+        outcome.consentPushFailed = snapshot.cloud;
+      }
+      return;
+    }
     if (!await _holds(tx)) return;
     await _writeMirror(session.uid, (
       cloud: snapshot.cloud && ack.cloud,
@@ -1292,13 +1338,23 @@ class CaptureDeviceRegistrationService {
     );
   }
 
+  String _encodeAck(String uid, _ConsentSnapshot snapshot) =>
+      '$uid|${snapshot.cloud ? 1 : 0}|${snapshot.ai ? 1 : 0}|${snapshot.version}';
+
+  Future<bool> _hasVerifiedAck(String uid, _ConsentSnapshot snapshot) async =>
+      await _readAck(uid) == snapshot &&
+      await _storage.read(key: _verifiedAckKey) == _encodeAck(uid, snapshot);
+
   Future<void> _writeAck(String uid, _ConsentSnapshot snapshot) async {
     final seq = _unlinkTargetSeq;
-    await _storage.write(
-      key: _ackKey,
-      value:
-          '$uid|${snapshot.cloud ? 1 : 0}|${snapshot.ai ? 1 : 0}|${snapshot.version}',
-    );
+    final encoded = _encodeAck(uid, snapshot);
+    await _storage.write(key: _ackKey, value: encoded);
+    await _storage.write(key: _verifiedAckKey, value: encoded);
+    await _storage.delete(key: _grantAttemptKey);
+    if (!_disposed) {
+      consentServerRevision.value++;
+      if (snapshot.cloud) SyncWakeup.notify();
+    }
     // P3: a Cloud-ON ack is what a sign-out unlinks; any other ack is not.
     if (snapshot.cloud) {
       await _armUnlink(uid, seq);
@@ -1311,6 +1367,8 @@ class CaptureDeviceRegistrationService {
     _disarmUnlink();
     try {
       await _storage.delete(key: _ackKey);
+      await _storage.delete(key: _verifiedAckKey);
+      if (!_disposed) consentServerRevision.value++;
     } catch (_) {}
   }
 
@@ -3142,7 +3200,10 @@ class CaptureDeviceRegistrationService {
     final session = _readSession();
     if (session == null || session.uid != freeze.owner) return null;
     final ack = await _readAck(freeze.owner);
-    if (ack == null || !(_isAndroid() ? ack.cloud || ack.ai : ack.cloud)) {
+    final acknowledged =
+        ack != null && (_isAndroid() ? ack.cloud || ack.ai : ack.cloud);
+    if (!acknowledged &&
+        await _storage.read(key: _grantAttemptKey) != freeze.owner) {
       return null;
     }
     final secret = await _storage.read(key: _secretKey);
@@ -3197,7 +3258,7 @@ class CaptureDeviceRegistrationService {
           version: freeze.reservedVersion,
         );
       });
-      if (result.applied || result.reason == 'already_revoked') {
+      if (result.ok && (result.applied || result.reason == 'already_revoked')) {
         status = ServerRevocation.confirmed;
       }
     } catch (_) {
@@ -3207,7 +3268,9 @@ class CaptureDeviceRegistrationService {
     }
     await _recordRevocation(freeze, status);
     if (status == ServerRevocation.confirmed) {
+      await _storage.delete(key: _grantAttemptKey);
       await _forgetPendingRevocation(freeze.owner, freeze.transitionGeneration);
+      if (!_disposed) consentServerRevision.value++;
     } else {
       _scheduleRevokeRetry(_revokeRetryBackoff.first);
     }
@@ -3382,9 +3445,10 @@ class CaptureDeviceRegistrationService {
           version: sendVersion,
         );
       });
-      if (result.applied || result.reason == 'already_revoked') {
+      if (result.ok && (result.applied || result.reason == 'already_revoked')) {
         await _recordRevocation(freeze, ServerRevocation.confirmed);
         await _forgetPendingRevocation(owner, sendGeneration);
+        if (!_disposed) consentServerRevision.value++;
         return;
       }
       if (result.ok &&
@@ -3434,6 +3498,7 @@ class CaptureDeviceRegistrationService {
       'transition_generation': freeze.transitionGeneration,
       'status': status.name,
     }));
+    if (!_disposed) consentServerRevision.value++;
   }
 
   /// WP-8 diagnostics (read-only): how the last revoke ended. Status and

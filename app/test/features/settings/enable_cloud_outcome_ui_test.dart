@@ -85,6 +85,25 @@ void main() {
     });
   }
 
+  testWidgets('sheet must wait for confirmed server ON', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    service.outcome = const CaptureRegistrationStatus(
+        CaptureRegistrationPhase.failed, 'consent_sync_failed');
+    bool? result;
+    await tester.pumpWidget(consentApp(
+      overrides: consentOverrides(repo, service),
+      home: _Opener((v) => result = v),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('initialConsentAccept')));
+    await tester.pumpAndSettle();
+    expect(service.retryCalls, 1);
+    expect(result, isNot(true), reason: 'Supabase has not confirmed ON');
+    await tester.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('sheet: a revoked lifecycle reports nothing into the live scope',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1600));

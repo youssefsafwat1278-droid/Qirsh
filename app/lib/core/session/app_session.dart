@@ -522,6 +522,13 @@ class AppSession extends ValueNotifier<SessionStatus> {
   /// These are onboarding UI flags, never auth, owner, consent or key material.
   Future<void> resetInstallPresentation() async {
     _languageChoiceMade = false;
+    // The Keychain can survive reinstall. These records only track whether
+    // the prompt was answered in the app container that was just replaced.
+    final keys = await _storage.readAll();
+    for (final key in keys.keys.where((key) =>
+        key.startsWith(kConsentAskedKeyPrefix)).toList()) {
+      await _storage.delete(key: key);
+    }
     for (final key in [_kDone, _kWelcomeManifestoSeen, _kCoachMarksSeen,
       _kCurrentAccount, 'app_theme_mode']) {
       await _storage.delete(key: key);
@@ -3445,9 +3452,45 @@ class AppSession extends ValueNotifier<SessionStatus> {
     unawaited(UserActivityService.onSignIn());
   }
 
-  /// Whether the consent question was already shown for the admitted uid on this
-  /// device. True when no uid is admitted (nothing to ask for; consent stays
-  /// unset = denied).
+  /// Reads the signed-in account's Cloud preference to decide what to offer
+  /// on this installation. Local consent is granted only by the disclosure.
+  Future<bool?> readAccountCloudPreference(
+      supabase.SupabaseClient client, AdmissionAuthority authority) async {
+    final session = client.auth.currentSession;
+    if (session == null ||
+        session.isExpired ||
+        session.user.id != authority.uid ||
+        !authority.isCurrent) {
+      return null;
+    }
+    try {
+      final row = await CloudEgressGate.instance.runAccountControl(
+        AccountControlOp.cloudPreference,
+        () async => await client
+            .from('user_settings')
+            .select('cloud_processing_enabled,consent_version')
+            .eq('user_id', authority.uid)
+            .eq('local_id', 'user_settings')
+            .isFilter('deleted_at', null)
+            .maybeSingle()
+            .retry(enabled: false)
+            .timeout(const Duration(seconds: 5)),
+        onboarding: (authority: authority, accessToken: session.accessToken),
+      );
+      if (!authority.isCurrent ||
+          client.auth.currentSession?.user.id != authority.uid) {
+        return null;
+      }
+      final version = row?['consent_version'];
+      final enabled = row?['cloud_processing_enabled'];
+      return version is int && version > 0 && enabled is bool ? enabled : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// True when this installation has already asked this owner, or no owner
+  /// is admitted yet.
   Future<bool> consentPromptSeen() async {
     final uid = await _storage.read(key: _kLocalDataOwnerUid);
     if (uid == null || uid.isEmpty || uid.startsWith(_kOwnerTransitionPrefix)) {

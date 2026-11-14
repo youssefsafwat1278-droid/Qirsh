@@ -1368,7 +1368,7 @@ enum EgressGrantKind { accountControl, revoke, revokeRetry, deviceUnlink }
 /// The ONLY operations allowed to reach the network while Cloud is OFF
 /// (Astra H2.1). They never enable Cloud and never widen any consent.
 enum AccountControlOp {
-  signIn, reauthenticate, deleteAccount, cancelDelete, onboardingStatus, linkIdentity,
+  signIn, reauthenticate, deleteAccount, cancelDelete, onboardingStatus, linkIdentity, cloudPreference,
 }
 
 /// One exact endpoint: method + path (+ the one permitted `grant_type` query).
@@ -1497,6 +1497,21 @@ class AccountControlGrant {
         : base.path;
     if (!uri.path.startsWith(prefix)) return 'grant_endpoint';
     final relative = uri.path.substring(prefix.length);
+    if (op == AccountControlOp.cloudPreference) {
+      final identity = onboarding;
+      final query = uri.queryParametersAll;
+      return identity != null &&
+              method.toUpperCase() == 'GET' &&
+              relative == '/rest/v1/user_settings' &&
+              query.length == 4 &&
+              listEquals(query['select'],
+                  ['cloud_processing_enabled,consent_version']) &&
+              listEquals(query['user_id'], ['eq.${identity.authority.uid}']) &&
+              listEquals(query['local_id'], ['eq.user_settings']) &&
+              listEquals(query['deleted_at'], ['is.null'])
+          ? null
+          : 'grant_endpoint';
+    }
     if (op == AccountControlOp.onboardingStatus) {
       final identity = onboarding;
       final query = uri.queryParametersAll;
@@ -2357,7 +2372,8 @@ class CloudEgressGate {
     final revoke = grant?.kind == EgressGrantKind.revoke;
     final revokeRetry = grant?.kind == EgressGrantKind.revokeRetry;
     final control = grant?.control;
-    final onboarding = control?.op == AccountControlOp.onboardingStatus;
+    final onboarding = control?.op == AccountControlOp.onboardingStatus ||
+        control?.op == AccountControlOp.cloudPreference;
     final linking = control?.op == AccountControlOp.linkIdentity;
     final lifecycleRestricted = control == null || onboarding || linking;
     // P5: account deletion (the legacy deleteAccount control and the immediate
@@ -3425,7 +3441,9 @@ class GatedHttpClient extends http.BaseClient {
     final grant = Zone.current[CloudEgressGate._grantKey] as EgressGrant?;
     final deletion = grant?._deletion;
     final bindsBody =
-        deletion != null || grant?.control?.op == AccountControlOp.onboardingStatus;
+        deletion != null ||
+        grant?.control?.op == AccountControlOp.onboardingStatus ||
+        grant?.control?.op == AccountControlOp.cloudPreference;
     if (deletion != null && bytes == null) {
       throw EgressDeniedException('deletion_stream');
     }

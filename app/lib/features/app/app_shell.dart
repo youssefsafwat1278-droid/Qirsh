@@ -1,4 +1,5 @@
 import '../../domain/entities/transaction_entity.dart';
+import '../../domain/entities/supporting_entities.dart';
 import '../../core/backend/auth_client_provider.dart';
 import '../../core/sync/sync_health.dart';
 import '../../core/sync/outbox_failure.dart';
@@ -205,18 +206,6 @@ class _AppShellState extends ConsumerState<AppShell> {
     super.initState();
     _lastSessionStatus = AppSession.instance.status;
     _mountAdmission = AppSession.instance.captureLocalWorkAuthority();
-    // First-use guidance (charter RC-5 Layer A). Deferred to after the first
-    // frame: the shell is still building here, and the restore gate above may
-    // still be covering the screen — showing a dialog into that is how a tour
-    // ends up behind a loader with no way to reach it.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (AppSession.instance.status != SessionStatus.authenticated) return;
-
-      // After the restore gate has had its frame to open (see below).
-      WidgetsBinding.instance
-          .addPostFrameCallback((_) => _scheduleConsentReask());
-    });
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _recoverImmediateDeletionAtStart());
     AppSession.instance.addListener(_handleSessionStatusChange);
@@ -240,6 +229,11 @@ class _AppShellState extends ConsumerState<AppShell> {
         _closeRestoreGate();
       });
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && AppSession.instance.status == SessionStatus.authenticated) {
+        _scheduleConsentReask();
+      }
+    });
     _lifecycleListener = AppLifecycleListener(onResume: _onResume);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_reconcileAchievements(announce: false));
@@ -1089,6 +1083,24 @@ class _AppShellState extends ConsumerState<AppShell> {
       if (outcome != RebootstrapOutcome.notNeeded) return;
     }
     if (ReplicaFreeze.instance.frozen) return;
+    if (work == null || !originalCurrent()) return;
+    final registration = ref.read(captureDeviceRegistrationServiceProvider);
+    final repository = ref.read(userSettingsRepositoryProvider);
+    final UserSettingsEntity settings;
+    try {
+      settings = await work.local(repository.getSettings);
+    } on StaleAdmissionException {
+      return;
+    }
+    if (!originalCurrent()) return;
+    if (settings.cloudProcessingEnabled &&
+        !await registration.serverConsentMatches(settings)) {
+      if (originalCurrent()) await registration.retry();
+      if (!originalCurrent() || !await registration.serverConsentMatches(settings)) {
+        return;
+      }
+    }
+    if (!originalCurrent()) return;
     // Reconcile local accounts/transactions that never reached Supabase BEFORE
     // the normal push/pull, so back-filled rows are marked synced and the
     // outbox path takes over cleanly. One-shot per session; the service guards

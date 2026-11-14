@@ -487,7 +487,7 @@ class _ConsentManagementCardState
         (status == ConsentStatus.off ||
             status == ConsentStatus.partial ||
             (status == ConsentStatus.turningOn &&
-                facts.pendingResumable));
+                (facts.pendingResumable || !facts.serverOnConfirmed)));
     // N-CR-4: unresolved pending provenance has no supported action but a
     // re-check: Turn on is refused by the route and the withdrawal cannot clear
     // the evidence, so neither is offered, and no recovery is promised.
@@ -548,7 +548,7 @@ class _ConsentManagementCardState
                   !unresolved &&
                   (status == ConsentStatus.unknown ||
                       (status == ConsentStatus.turningOn &&
-                          !facts.pendingResumable))) ...[
+                          !facts.pendingResumable && facts.serverOnConfirmed))) ...[
                 const SizedBox(height: AppSpacing.s1),
                 Text(l10n.consentStatusUnknownRecovery,
                     style: AppTypography.caption(c.textLight)),
@@ -585,7 +585,11 @@ class _ConsentManagementCardState
                         style: Theme.of(context).brightness == Brightness.dark
                             ? TextButton.styleFrom(foregroundColor: c.primary)
                             : null,
-                        onPressed: _busy ? null : _refresh,
+                        onPressed: _busy ? null : () async {
+                          await ref.read(captureDeviceRegistrationServiceProvider)
+                              .retry();
+                          _refresh();
+                        },
                         child: Text(l10n.consentRefresh),
                       ),
                   ],

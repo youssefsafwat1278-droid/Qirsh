@@ -6359,6 +6359,12 @@ class AppL10nEn extends AppL10n {
       'Cloud processing was finished with your earlier choice. Your new choice was not saved. Review and choose again to add it.';
 
   @override
+  String get restoreCloudTitle => 'Restore your cloud data';
+
+  @override
+  String get restoreCloudOnly => 'Restore with cloud sync only';
+
+  @override
   String get initialConsentAccept => 'Accept cloud sync and smart analysis';
 
   @override

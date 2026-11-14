@@ -10711,6 +10711,18 @@ abstract class AppL10n {
   /// **'اكتملت المعالجة السحابية باختيارك السابق، ولم يُحفظ اختيارك الجديد. راجِع الخيارات واختر من جديد لإضافته.'**
   String get cloudEnableChoiceNotSaved;
 
+  /// No description provided for @restoreCloudTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'استعادة بياناتك السحابية'**
+  String get restoreCloudTitle;
+
+  /// No description provided for @restoreCloudOnly.
+  ///
+  /// In ar, this message translates to:
+  /// **'استعادة بالمزامنة السحابية فقط'**
+  String get restoreCloudOnly;
+
   /// No description provided for @initialConsentAccept.
   ///
   /// In ar, this message translates to:

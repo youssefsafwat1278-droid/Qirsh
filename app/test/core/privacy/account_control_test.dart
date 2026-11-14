@@ -508,7 +508,8 @@ void main() {
             await client.rpc('request_account_deletion');
           } else if (op == AccountControlOp.cancelDelete) {
             await client.rpc('cancel_account_deletion');
-          } else if (op != AccountControlOp.onboardingStatus) {
+          } else if (op != AccountControlOp.onboardingStatus &&
+              op != AccountControlOp.cloudPreference) {
             await client.auth.signInWithOtp(email: 'a@b.c');
           }
         });

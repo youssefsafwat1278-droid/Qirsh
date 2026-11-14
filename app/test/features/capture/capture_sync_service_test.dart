@@ -35,6 +35,9 @@ class _MemoryKeyStore implements DatabaseKeyStore {
 
 class _FakeRegistrationService implements CaptureDeviceRegistrationService {
   @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+
+  @override
   void dispose() {}
 
   @override

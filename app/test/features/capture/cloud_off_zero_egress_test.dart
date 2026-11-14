@@ -875,7 +875,7 @@ void main() {
       expect(calls, isEmpty);
     });
 
-    test('no revoke without a Cloud-ON ack for this uid; OFF still commits',
+    test('withdrawal revokes a possibly applied grant whose receipt was lost',
         () async {
       await save(cloud: ConsentState.accepted);
       consent.linkError = const CaptureBackendException('offline');
@@ -884,7 +884,7 @@ void main() {
       calls.clear();
       commits = 0;
       await s.disableCloud(commitLocalOff: commit);
-      expect(calls, isEmpty);
+      expect(calls, ['revoke']);
       expect(commits, 1);
     });
 

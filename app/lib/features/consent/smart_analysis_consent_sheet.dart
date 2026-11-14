@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/backend/auth_client_provider.dart';
 
 import '../../core/di/app_providers.dart';
 import '../../core/privacy/consent_authority.dart';
@@ -35,6 +36,7 @@ Future<bool> showSmartAnalysisConsentSheet(
   VoidCallback? onAnswered,
   ConsentLocalWork? work,
   bool management = false,
+  bool restoreCloud = false,
 }) async {
   final scope = work ?? ref.read(consentLocalWorkProvider)();
   final granted = await showGlassSheet<bool>(
@@ -48,6 +50,7 @@ Future<bool> showSmartAnalysisConsentSheet(
         child: SmartAnalysisConsentPanel(
           work: scope,
           management: management,
+          restoreCloud: restoreCloud,
           onDone: (granted) {
             onAnswered?.call();
             Navigator.of(sheetContext).pop(granted);
@@ -87,10 +90,31 @@ Future<void> maybeReaskConsent(
     return;
   }
   if (!context.mounted || !work.current) return;
+  bool? previousChoice;
+  final client = ref.read(authClientProvider);
+  if (client != null) {
+    previousChoice = await AppSession.instance.readAccountCloudPreference(
+      client,
+      AdmissionAuthority(work.capability.uid, () => work.current,
+          epoch: work.capability.epoch),
+    );
+  }
+  if (!context.mounted || !work.current || previousChoice == false) return;
+  try {
+    final latest = await work.run(repository.getSettings);
+    if (!context.mounted || !work.current ||
+        latest.cloudConsentState != ConsentState.unset ||
+        latest.aiConsentState != ConsentState.unset) {
+      return;
+    }
+  } on StaleAdmissionException {
+    return;
+  }
   await showSmartAnalysisConsentSheet(
     context,
     ref,
     work: work,
+    restoreCloud: previousChoice == true,
     onAnswered: () {
       // markConsentPromptSeen binds to the epoch at ITS call: only the scope
       // that was asked may mark it.
@@ -252,6 +276,7 @@ class SmartAnalysisConsentPanel extends ConsumerStatefulWidget {
     this.privacyRoute = '/privacy',
     this.work,
     this.management = false,
+    this.restoreCloud = false,
   });
 
   final ValueChanged<bool> onDone;
@@ -265,6 +290,7 @@ class SmartAnalysisConsentPanel extends ConsumerStatefulWidget {
   /// Re-consent from Privacy management: Cancel (no write) instead of the
   /// first-use denial, and no link back to the page it is shown on.
   final bool management;
+  final bool restoreCloud;
 
   @override
   ConsumerState<SmartAnalysisConsentPanel> createState() =>
@@ -311,8 +337,9 @@ class _SmartAnalysisConsentPanelState
     if (!work.current) return;
     final service = ref.read(captureDeviceRegistrationServiceProvider);
     setState(() => _granting = true);
+    final UserSettingsEntity saved;
     try {
-      await saveConsentChoice(ref,
+      saved = await saveConsentChoice(ref,
           cloud: cloud, ai: ai, work: work, registration: service);
     } catch (error) {
       // Saving failed: nothing was granted; the user can tap Enable again. A
@@ -335,7 +362,7 @@ class _SmartAnalysisConsentPanelState
       if (mounted) setState(() => _granting = false);
       return;
     }
-    // Consent IS saved from here on. A registration failure is reported by the
+    // Consent is locally saved from here on. A registration failure is reported by the
     // live status below (connected / failed + Retry), never as a save failure.
     try {
       if (work.current) {
@@ -346,8 +373,18 @@ class _SmartAnalysisConsentPanelState
         }
       }
     } catch (_) {}
-    if (mounted) setState(() => _granting = false);
-    _complete(work, true);
+    try {
+      if (!mounted || !work.current) return;
+      if (await service.serverConsentMatches(saved)) {
+        _complete(work, true);
+      } else if (mounted && work.current) {
+        AppToast.showError(context, context.l10n.smartConsentStatusFailed);
+      }
+    } on StaleAdmissionException {
+      // An old sheet cannot update the new account.
+    } finally {
+      if (mounted) setState(() => _granting = false);
+    }
   }
 
   Future<void> _decline() async {
@@ -382,7 +419,8 @@ class _SmartAnalysisConsentPanelState
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(l10n.smartConsentTitle, style: AppTypography.sectionTitle(fg)),
+        Text(widget.restoreCloud ? l10n.restoreCloudTitle : l10n.smartConsentTitle,
+            style: AppTypography.sectionTitle(fg)),
         const SizedBox(height: AppSpacing.s3),
         for (final text in [l10n.smartConsentBullet2, l10n.smartConsentBullet1, l10n.smartConsentBullet3])
           Padding(padding: const EdgeInsets.only(bottom: AppSpacing.s3),
@@ -390,8 +428,14 @@ class _SmartAnalysisConsentPanelState
         FilledButton(
           key: const Key('initialConsentAccept'),
           onPressed: _granting ? null : () => _grant(cloud: true, ai: true),
-          child: Text(l10n.initialConsentAccept),
+          child: Text(_granting ? l10n.consentStatusTurningOn : l10n.initialConsentAccept),
         ),
+        if (widget.restoreCloud)
+          TextButton(
+            key: const Key('restoreCloudOnly'),
+            onPressed: _granting ? null : () => _grant(cloud: true, ai: false),
+            child: Text(l10n.restoreCloudOnly),
+          ),
         if (widget.management)
           TextButton(
             key: const Key('consentManageCancel'),

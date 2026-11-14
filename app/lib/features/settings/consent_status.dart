@@ -40,6 +40,8 @@ class ConsentLiveFacts {
     this.frozen = false,
     this.resolved = true,
     this.nativeVerified = true,
+    this.serverOnConfirmed = true,
+    this.serverOffPending = false,
   });
 
   /// The durable egress record's state for the active owner (null = absent).
@@ -73,6 +75,8 @@ class ConsentLiveFacts {
   /// where a native barrier exists, the same ON read back from the native
   /// layers. False when it cannot (native unset, OFF, unreadable, disagreeing).
   final bool nativeVerified;
+  final bool serverOnConfirmed;
+  final bool serverOffPending;
 
   /// A clean, resolved, durable ON.
   static const confirmedOn = ConsentLiveFacts(egressState: EgressState.on);
@@ -88,7 +92,9 @@ ConsentStatus deriveConsentStatus(
   if (facts == null) return ConsentStatus.unknown;
   if (facts.pendingUnresolved) return ConsentStatus.unknown;
   if (facts.enablePending) return ConsentStatus.turningOn;
-  if (facts.frozen || facts.egressState == EgressState.disabling) {
+  if (facts.frozen ||
+      facts.egressState == EgressState.disabling ||
+      facts.serverOffPending) {
     return ConsentStatus.turningOff;
   }
   final cloud = settings.cloudProcessingEnabled;
@@ -104,6 +110,7 @@ ConsentStatus deriveConsentStatus(
   if (cloud && (facts.egressState != EgressState.on || !facts.nativeVerified)) {
     return ConsentStatus.unknown;
   }
+  if (!facts.serverOnConfirmed) return ConsentStatus.turningOn;
   return cloud && ai ? ConsentStatus.active : ConsentStatus.partial;
 }
 
@@ -112,14 +119,23 @@ ConsentStatus deriveConsentStatus(
 final consentLiveFactsProvider =
     FutureProvider.autoDispose<ConsentLiveFacts>((ref) async {
   final gate = CloudEgressGate.instance;
+  final service = ref.watch(captureDeviceRegistrationServiceProvider);
+  final revisions = service.consentServerRevision;
+  final registration = service.status;
+  void changed() => ref.invalidateSelf();
+  revisions.addListener(changed);
+  registration.addListener(changed);
+  ref.onDispose(() {
+    revisions.removeListener(changed);
+    registration.removeListener(changed);
+  });
   try {
     final view = await gate.view();
     // An unreadable pending layer is uncertainty, not a claim that an enable is
     // in flight.
     final unreadable = (await gate.readPending()).unreadable;
-    final pending =
-        !unreadable && await gate.pendingBlocks(owner: view.owner);
-    final service = ref.read(captureDeviceRegistrationServiceProvider);
+    final pending = !unreadable && await gate.pendingBlocks(owner: view.owner);
+
     final verified = view.record?.state == EgressState.on &&
         await service.liveOnVerified(owner: view.owner);
     // N-PV: pending provenance is inspected independently of whether the Dart
@@ -136,13 +152,26 @@ final consentLiveFactsProvider =
     var resumable = false;
     if (pending && !unresolved) {
       try {
-        final stored = await ref.read(userSettingsRepositoryProvider).getSettings();
-        resumable = await service.pendingEnableState(stored,
-                ownerUid: view.owner) ==
-            PendingEnableState.resumable;
+        final stored =
+            await ref.read(userSettingsRepositoryProvider).getSettings();
+        resumable =
+            await service.pendingEnableState(stored, ownerUid: view.owner) ==
+                PendingEnableState.resumable;
       } catch (_) {}
     }
+    final record = view.record;
+    final settings =
+        await ref.read(userSettingsRepositoryProvider).getSettings();
+    final serverOn = !settings.cloudProcessingEnabled ||
+        await service.serverConsentMatches(settings);
+    final serverOffPending = !settings.cloudProcessingEnabled &&
+        record != null &&
+        record.state == EgressState.off &&
+        await service.serverOffUnconfirmed(
+            view.owner, record.transitionGeneration);
     return ConsentLiveFacts(
+      serverOnConfirmed: serverOn,
+      serverOffPending: serverOffPending,
       egressState: view.record?.state,
       uncertain: view.uncertain || unreadable,
       enablePending: pending,

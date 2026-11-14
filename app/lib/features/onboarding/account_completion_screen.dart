@@ -37,6 +37,7 @@ class _AccountCompletionState extends State<OnboardingAccountCompletionScreen> {
   bool _busy = false;
   bool _failed = false;
   String? _failureCode;
+  Timer? _retry;
 
   @override
   void initState() {
@@ -44,8 +45,15 @@ class _AccountCompletionState extends State<OnboardingAccountCompletionScreen> {
     unawaited(_check());
   }
 
+  @override
+  void dispose() {
+    _retry?.cancel();
+    super.dispose();
+  }
+
   Future<void> _check() async {
     if (_busy) return;
+    _retry?.cancel();
     setState(() {
       _busy = true;
       _failed = false;
@@ -68,6 +76,7 @@ class _AccountCompletionState extends State<OnboardingAccountCompletionScreen> {
           _failed = true;
           _failureCode = cause == null ? null : signInFailureCode(cause);
         });
+        _retry = Timer(const Duration(seconds: 5), () => unawaited(_check()));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -76,6 +85,7 @@ class _AccountCompletionState extends State<OnboardingAccountCompletionScreen> {
 
   Future<void> _useAnotherAccount() async {
     if (_busy) return;
+    _retry?.cancel();
     setState(() => _busy = true);
     try {
       final action = widget.signOutAction;

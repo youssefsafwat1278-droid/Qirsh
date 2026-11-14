@@ -3238,6 +3238,8 @@
   "cloudEnableIncomplete": "Couldn't turn on cloud processing. It stays off. Please try again.",
   "cloudEnableWithdrawFirst": "We can't confirm the current state, so nothing was changed. Turn it off first, then turn it on again.",
   "cloudEnableChoiceNotSaved": "Cloud processing was finished with your earlier choice. Your new choice was not saved. Review and choose again to add it.",
+  "restoreCloudTitle": "Restore your cloud data",
+  "restoreCloudOnly": "Restore with cloud sync only",
   "initialConsentAccept": "Accept cloud sync and smart analysis",
   "initialConsentDecline": "Continue locally",
   "consentMgmtTitle": "Cloud sync & Smart Analysis",

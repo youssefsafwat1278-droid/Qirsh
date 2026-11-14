@@ -21,6 +21,8 @@ void main() {
   late SupabaseClient sdk;
   late Future<http.Response> Function(http.Request) respond;
   late List<http.Request> profileRequests;
+  late List<http.Request> cloudRequests;
+  late List<Map<String, Object?>> cloudRows;
   late TestEgress egress;
 
   setUp(() async {
@@ -28,6 +30,8 @@ void main() {
     egress.install();
     f = await F2Fixture.create();
     profileRequests = [];
+    cloudRequests = [];
+    cloudRows = [];
     respond = (request) async => http.Response(
           jsonEncode([
             {'onboarding_completed_at': '2026-10-01T00:00:00Z'}
@@ -45,6 +49,11 @@ void main() {
           final reply = await respond(request);
           return http.Response(reply.body, reply.statusCode,
               headers: reply.headers, request: request);
+        }
+        if (request.url.path.endsWith('/user_settings')) {
+          cloudRequests.add(request);
+          return http.Response(jsonEncode(cloudRows), 200,
+              headers: {'content-type': 'application/json'}, request: request);
         }
         return http.Response('{}', 200);
       })),
@@ -113,6 +122,34 @@ void main() {
     expect(profileRequests, isEmpty);
     expect(presentation.requiresSetup, isFalse);
     expect(await egress.gate.permits(), isFalse);
+  });
+
+  test('fresh installation must ask again when only the old prompt marker survives',
+      () async {
+    f.storage.data['qirsh.consent_asked.v1.returning-owner'] = '1';
+    await f.session.resetInstallPresentation();
+    expect(await verify(), isTrue);
+    expect(await egress.gate.permits(), isFalse);
+    expect(await f.session.consentPromptSeen(), isFalse,
+        reason: 'the previous installation answered, the new one has not');
+  });
+
+  test('Cloud preference can be read while off for this account only', () async {
+    expect(await verify(), isTrue);
+    final authority = AdmissionAuthority('returning-owner', () => true);
+    cloudRows = [{'cloud_processing_enabled': true, 'consent_version': 7}];
+    expect(await f.session.readAccountCloudPreference(sdk, authority), isTrue);
+    expect(cloudRequests.single.url.queryParameters['user_id'],
+        'eq.returning-owner');
+    expect(await egress.gate.permits(), isFalse);
+
+    cloudRows = [{'cloud_processing_enabled': false, 'consent_version': 8}];
+    expect(await f.session.readAccountCloudPreference(sdk, authority), isFalse);
+    cloudRows = [{'cloud_processing_enabled': true, 'consent_version': 0}];
+    expect(await f.session.readAccountCloudPreference(sdk, authority), isNull);
+    expect(await f.session.readAccountCloudPreference(
+        sdk, AdmissionAuthority('different-owner', () => true)), isNull);
+    expect(cloudRequests, hasLength(3));
   });
 
   test('another UID completion cannot skip the current account setup',

@@ -60,10 +60,7 @@ class CaptureConsentClient {
           }),
         )
         .timeout(const Duration(seconds: 12));
-    if (response.statusCode != 200) {
-      throw CaptureBackendException(
-          'link_device_failed_${response.statusCode}');
-    }
+    _requireApplied(response, 'link_device');
   }
 
   /// `set-device-consent` v2: owner-scoped, applied only when [version] is newer
@@ -92,10 +89,21 @@ class CaptureConsentClient {
           }),
         )
         .timeout(const Duration(seconds: 12));
+    _requireApplied(response, 'set_consent');
+  }
+
+  void _requireApplied(http.Response response, String operation) {
     if (response.statusCode != 200) {
       throw CaptureBackendException(
-          'set_consent_failed_${response.statusCode}');
+          '${operation}_failed_${response.statusCode}');
     }
+    try {
+      final body = jsonDecode(response.body);
+      if (body is Map && body['ok'] == true && body['applied'] == true) return;
+    } on FormatException {
+      throw CaptureBackendException('${operation}_invalid_receipt');
+    }
+    throw CaptureBackendException('${operation}_not_applied');
   }
 
   /// Astra G C.3: the ONE-SHOT revoke (`revoke_capture_consent`, JWT required;
@@ -135,7 +143,8 @@ class CaptureConsentClient {
         return RevokeResult(
           ok: decoded['ok'] == true,
           applied: decoded['applied'] == true,
-          reason: decoded['reason'] is String ? decoded['reason'] as String : null,
+          reason:
+              decoded['reason'] is String ? decoded['reason'] as String : null,
         );
       }
     } catch (_) {}

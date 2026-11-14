@@ -589,9 +589,13 @@ void main() {
         'nothing in DISABLING and after OFF', () async {
       final s = await linkedOn();
       var sent = 0;
-      final inner = MockClient((_) async {
+      final inner = MockClient((request) async {
         sent++;
-        return http.Response('{"captures":[]}', 200);
+        return http.Response(
+            request.url.path.endsWith('/link-capture-device')
+                ? '{"ok":true,"applied":true}'
+                : '{"captures":[]}',
+            200);
       });
       final gated = CaptureBackendClient(
           supabaseUrl: 'https://x.invalid',
