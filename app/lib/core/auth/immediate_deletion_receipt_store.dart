@@ -38,10 +38,20 @@ class ImmediateDeletionReceiptStoreException implements Exception {
 }
 
 class _ReceiptLock {
-  Future<void> _tail = Future.value();
+  Future<void>? _tail;
+
   Future<T> run<T>(Future<T> Function() body) {
-    final result = _tail.then((_) => body());
-    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    final result = (_tail ?? Future<void>.value()).then((_) => body());
+    late final Future<void> tail;
+    void release() {
+      // Keep queued work serialized, but do not retain an idle future from
+      // the async zone of a previous caller (such as a widget test).
+      if (identical(_tail, tail)) _tail = null;
+    }
+
+    tail = result.then<void>((_) => release(),
+        onError: (Object _, StackTrace __) => release());
+    _tail = tail;
     return result;
   }
 }

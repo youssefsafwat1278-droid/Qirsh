@@ -708,7 +708,7 @@ workflows:
           success: true
           failure: true
 
-  # Personal iOS branch: manually select ios-signed. No publishing step.
+  # Personal iOS branch: manually select ios-signed for internal TestFlight.
   ios-signed:
     name: iOS Signed
     instance_type: mac_mini_m2
@@ -945,9 +945,9 @@ workflows:
       - ${IOS_RELEASE_IPA}.sha256
       - ${IOS_RELEASE_IPA}.signing-verification.txt
     publishing:
-      # TESTFLIGHT ONLY (owner-authorised for 1.0.0 (67)): internal testers,
-      # no App Review and no external groups. Set back to false when a build
-      # is not authorised for upload.
+      # Upload the internal-only IPA to App Store Connect. The separate
+      # submit_to_testflight action requests external beta review, which Apple
+      # rejects for builds exported with testFlightInternalTestingOnly.
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
+        submit_to_testflight: false
