@@ -288,8 +288,9 @@ void _egressInventory() {
     test('the grant vocabulary is exactly the documented set', () {
       expect(EgressGrantKind.values.map((e) => e.name).toSet(),
           {'accountControl', 'revoke', 'revokeRetry', 'deviceUnlink'});
-      // signIn/reauthenticate, delete/cancel, onboarding lookup and identity
-      // linking (explicit account management; not in the brief's list).
+      // signIn/reauthenticate, delete/cancel, onboarding lookup, identity
+      // linking and the owner's two-field cloud-preference lookup. The latter
+      // only offers restore; it cannot enable cloud or fetch financial data.
       expect(AccountControlOp.values.map((e) => e.name).toSet(), {
         'signIn',
         'reauthenticate',
@@ -297,6 +298,7 @@ void _egressInventory() {
         'cancelDelete',
         'onboardingStatus',
         'linkIdentity',
+        'cloudPreference',
       });
     });
 
