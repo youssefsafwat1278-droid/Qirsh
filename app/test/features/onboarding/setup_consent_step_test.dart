@@ -111,20 +111,24 @@ void main() {
     expect(find.text('Step 3 of 6'), findsOneWidget);
   });
 
-  testWidgets('readiness shows live status and a failure never blocks',
+  testWidgets('Cloud activation waits for a server receipt during setup',
       (tester) async {
     await pumpSetup(tester);
     service.outcome = const CaptureRegistrationStatus(
         CaptureRegistrationPhase.failed, 'register_failed');
-    await tester.tap(find.byKey(const Key('initialConsentAccept')));
+    final accept = find.byKey(const Key('initialConsentAccept'));
+    await tester.tap(accept);
     await advance(tester);
 
-    expect(find.text('Step 3 of 6'), findsOneWidget);
+    expect(find.text('Step 3 of 6'), findsNothing);
+    expect(accept, findsOneWidget);
     expect(find.textContaining("isn't connected"), findsOneWidget);
-    expect(find.text('Retry'), findsOneWidget);
-    await tester.tap(find.text('Continue'));
+    await tester.pump(const Duration(seconds: 4));
+    service.outcome =
+        const CaptureRegistrationStatus(CaptureRegistrationPhase.connected);
+    await tester.tap(accept);
     await advance(tester);
-    expect(find.text('Step 4 of 6'), findsOneWidget);
+    expect(find.text('Step 3 of 6'), findsOneWidget);
   });
 
   testWidgets('Account Setup: name is required, currency defaults to the '

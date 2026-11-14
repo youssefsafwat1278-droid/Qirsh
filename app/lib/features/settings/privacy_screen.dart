@@ -586,8 +586,12 @@ class _ConsentManagementCardState
                             ? TextButton.styleFrom(foregroundColor: c.primary)
                             : null,
                         onPressed: _busy ? null : () async {
-                          await ref.read(captureDeviceRegistrationServiceProvider)
-                              .retry();
+                          if (facts.serverOffPending ||
+                              !facts.serverOnConfirmed) {
+                            await ref
+                                .read(captureDeviceRegistrationServiceProvider)
+                                .retry();
+                          }
                           _refresh();
                         },
                         child: Text(l10n.consentRefresh),
