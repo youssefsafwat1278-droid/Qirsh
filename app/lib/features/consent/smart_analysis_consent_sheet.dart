@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/backend/auth_client_provider.dart';
+import '../../core/backend/supabase_config.dart';
 
 import '../../core/di/app_providers.dart';
 import '../../core/privacy/consent_authority.dart';
@@ -265,6 +266,30 @@ Future<UserSettingsEntity> applyConsentChoice({
   return persisted;
 }
 
+/// Flush the durable choice even if the shell is paused or unmounted while a
+/// settings route is open. The push retains all normal owner/consent fences.
+Future<bool> confirmSavedConsent(
+    WidgetRef ref, ConsentLocalWork work,
+    CaptureDeviceRegistrationService service, UserSettingsEntity saved) async {
+  if (!work.current) return false;
+  // Setup can advance with a pending choice before authenticated workers exist;
+  // the live status still waits for the independent account confirmation.
+  if (AppSession.instance.status == SessionStatus.needsOnboarding) {
+    return service.deviceConsentMatches(saved);
+  }
+  if (SupabaseConfig.isConfigured) {
+    try {
+      await ref.read(planningPushServiceProvider).pushSettings()
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // A busy/offline worker keeps the durable row. Never turn a failed push
+      // into confirmation; the subsequent account read decides the UI result.
+    }
+  }
+  return work.current &&
+      await service.serverConsentMatches(saved, waitForAccount: true);
+}
+
 /// Disclosure + actions of the sheet.
 /// [onDone] fires with true after a grant (once the user continues past the
 /// live status) or false for "Not now".
@@ -375,7 +400,8 @@ class _SmartAnalysisConsentPanelState
     } catch (_) {}
     try {
       if (!mounted || !work.current) return;
-      if (await service.serverConsentMatches(saved)) {
+      final confirmed = await confirmSavedConsent(ref, work, service, saved);
+      if (confirmed) {
         _complete(work, true);
       } else if (mounted && work.current) {
         AppToast.showError(context, context.l10n.smartConsentStatusFailed);

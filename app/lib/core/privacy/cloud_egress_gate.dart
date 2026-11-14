@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../features/capture/services/native_capture_bridge.dart';
 import '../backend/supabase_config.dart';
+import '../observability/app_diagnostics.dart';
 import '../security/secure_storage_options.dart';
 import '../session/admission_authority.dart';
 import '../session/consent_capability.dart';
@@ -472,13 +473,15 @@ final class PendingEnableLifetimeProof {
         throw const StaleAdmissionException();
       }
     }
+
     check();
     final b = pending.binding!;
     final dartPending = await _store.readPending();
     check();
     final dart = await _store.readDartOwnerLayers(capability.uid);
     check();
-    final inspected = await NativeCaptureBridge.getCloudEgressPending(ownerUid: capability.uid);
+    final inspected = await NativeCaptureBridge.getCloudEgressPending(
+        ownerUid: capability.uid);
     check();
     final owner = await NativeCaptureBridge.getCaptureOwner();
     check();
@@ -1172,7 +1175,9 @@ class CloudEgressStore {
       var version = record.reservedVersion;
       for (final layer in collected.layers) {
         final held = layer[record.ownerUid];
-        if (held != null && held.reservedVersion > version) version = held.reservedVersion;
+        if (held != null && held.reservedVersion > version) {
+          version = held.reservedVersion;
+        }
         if (held != null &&
             held.transitionGeneration > record.transitionGeneration) {
           lastWriteRefusal = 'newer_generation';
@@ -1234,7 +1239,9 @@ class CloudEgressStore {
       var version = 0;
       for (final layer in collected.layers) {
         final held = layer[owner];
-        if (held != null && held.reservedVersion > version) version = held.reservedVersion;
+        if (held != null && held.reservedVersion > version) {
+          version = held.reservedVersion;
+        }
         if (held != null && held.transitionGeneration > highest) {
           highest = held.transitionGeneration;
         }
@@ -1504,8 +1511,10 @@ class AccountControlGrant {
               method.toUpperCase() == 'GET' &&
               relative == '/rest/v1/user_settings' &&
               query.length == 4 &&
-              listEquals(query['select'],
-                  ['cloud_processing_enabled,consent_version']) &&
+              (listEquals(query['select'],
+                  ['cloud_processing_enabled,consent_version']) ||
+               listEquals(query['select'],
+                  ['cloud_processing_enabled,ai_consent_granted,consent_version'])) &&
               listEquals(query['user_id'], ['eq.${identity.authority.uid}']) &&
               listEquals(query['local_id'], ['eq.user_settings']) &&
               listEquals(query['deleted_at'], ['is.null'])
@@ -3224,7 +3233,8 @@ class CloudEgressGate {
     capability.requireCurrent();
     final epoch = await NativeCaptureBridge.captureOwnerEpoch();
     capability.requireCurrent();
-    final inspected = await NativeCaptureBridge.getCloudEgressPending(ownerUid: capability.uid);
+    final inspected = await NativeCaptureBridge.getCloudEgressPending(
+        ownerUid: capability.uid);
     capability.requireCurrent();
     bool physical(List<CloudEgressLayerReport> layers) => layers.length == 2 &&
         layers[0].layer == 'file' && layers[1].layer == 'keychain';
@@ -3416,6 +3426,54 @@ class GatedHttpClient extends http.BaseClient {
 
   @override
   Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final trace = AppDiagnostics.begin(_diagnosticOperation(request.url));
+    try {
+      final response = await _send(request, trace);
+      trace.event(AppEventState.response, statusCode: response.statusCode);
+      return response;
+    } on EgressDeniedException {
+      trace.finish(state: AppEventState.blocked, reason: AppEventReason.denied);
+      rethrow;
+    } catch (error) {
+      trace.finish(
+          state: AppEventState.failed, reason: AppDiagnostics.classify(error));
+      rethrow;
+    }
+  }
+
+  // Classify only against fixed names. Never store the URI, query, body or headers.
+  static AppOperation _diagnosticOperation(Uri uri) {
+    final List<String> path;
+    try {
+      path = uri.pathSegments;
+    } catch (_) {
+      return AppOperation.networkOther;
+    }
+    if (path.contains('auth')) return AppOperation.networkAuth;
+    if (path.contains('user_settings')) return AppOperation.networkSettings;
+    if (path.contains('storage')) return AppOperation.networkBackup;
+    if (path.contains('functions') &&
+        path.any((p) => const {'parse-sms', 'enrich-merchant'}.contains(p))) {
+      return AppOperation.networkAi;
+    }
+    if (path.any((p) => const {
+          'register-device',
+          'link-capture-device',
+          'set-device-consent',
+          'link_capture_device',
+          'set_capture_consent',
+          'revoke_capture_consent',
+          'process-ios-sms',
+          'sync-captures'
+        }.contains(p))) {
+      return AppOperation.networkCapture;
+    }
+    if (path.contains('rest')) return AppOperation.networkData;
+    return AppOperation.networkOther;
+  }
+
+  Future<http.StreamedResponse> _send(
+      http.BaseRequest request, AppTrace trace) async {
     final gate = CloudEgressGate.instance;
     // Freeze bytes AND headers before classification and the first admission
     // await. The same private snapshot is classified, fingerprinted and sent,
@@ -3491,6 +3549,7 @@ class GatedHttpClient extends http.BaseClient {
         ..persistentConnection = request.persistentConnection;
     }
     final Future<http.StreamedResponse> transport;
+    trace.event(AppEventState.sent);
     if (deletion != null) {
       try {
         transport = _inner.send(outgoing);
@@ -3508,7 +3567,7 @@ class GatedHttpClient extends http.BaseClient {
       }
       settled = true;
       result.complete(http.StreamedResponse(
-        _track(gate, ticket, resp.stream),
+        _track(gate, ticket, resp.stream, trace),
         resp.statusCode,
         contentLength: resp.contentLength,
         request: resp.request,
@@ -3522,14 +3581,22 @@ class GatedHttpClient extends http.BaseClient {
   }
 
   static Stream<List<int>> _track(CloudEgressGate gate, EgressTicket ticket,
-      Stream<List<int>> body) async* {
+      Stream<List<int>> body, AppTrace trace) async* {
     try {
       await for (final chunk in body) {
         if (!gate.isCurrent(ticket)) throw EgressDeniedException('stale');
         yield chunk;
       }
       if (!gate.isCurrent(ticket)) throw EgressDeniedException('stale');
+      trace.finish(state: AppEventState.completed);
+    } catch (error) {
+      trace.finish(state: error is EgressDeniedException
+          ? AppEventState.cancelled : AppEventState.failed,
+          reason: error is EgressDeniedException
+              ? AppEventReason.stale : AppDiagnostics.classify(error));
+      rethrow;
     } finally {
+      trace.finish(state: AppEventState.cancelled);
       gate.release(ticket);
     }
   }

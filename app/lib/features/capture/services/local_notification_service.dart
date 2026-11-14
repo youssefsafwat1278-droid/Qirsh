@@ -1,3 +1,4 @@
+import '../../../core/observability/app_diagnostics.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -222,6 +223,7 @@ class LocalNotificationService {
   static const String _dailyReminderChannelId = 'daily_reminders';
   static const String _billReminderChannelId = 'bill_reminders';
   static const String _goalMilestoneChannelId = 'goal_milestones';
+
   /// RETIRED in V1 — the streak reminder was removed from the product. The id
   /// is kept so already-scheduled reminders on existing installs can still be
   /// found and cancelled; nothing schedules it any more.
@@ -681,101 +683,103 @@ class LocalNotificationService {
   Future<void> schedulePlannedNotifications(
     List<PlannedLocalNotification> notifications,
   ) async {
-    // MALI-025 — schedule within the pending-capacity budget (iOS silently
-    // drops requests past ~64 pending). Reserve headroom for immediate alerts,
-    // prefer importance then nearest-due, and roll the window forward instead of
-    // burning the budget on far-future recurrences.
-    final Set<int> managedPending;
-    try {
-      if (!_initialized) {
-        await initialize();
-      }
-      final pending = await _plugin.pendingNotificationRequests();
-      managedPending = {
-        for (final request in pending)
-          if (_isManagedScheduledId(request.id)) request.id,
-      };
-    } catch (error) {
-      // Setup (init/read-pending) failed — nothing durable was scheduled yet.
-      // Stop rather than schedule on top of an uncertain plugin state.
-      debugPrint('[Notif] schedulePlannedNotifications setup failed: $error');
-      return;
-    }
-
-    final byId = {for (final n in notifications) n.id: n};
-    final plan = _capacityPlanner.plan(
-      currentManagedPending: managedPending,
-      desired: [
-        for (final n in notifications)
-          ScheduleCandidate(
-            id: n.id,
-            due: n.scheduledAtRiyadh,
-            priority: _plannedPriority(n.kind),
-          ),
-      ],
-      now: DateTime.now(),
-    );
-
-    // Cancel stale/dropped managed pending before adding replacements.
-    for (final staleId in plan.toCancel) {
+    return AppDiagnostics.run(AppOperation.notification, () async {
+      // MALI-025 — schedule within the pending-capacity budget (iOS silently
+      // drops requests past ~64 pending). Reserve headroom for immediate alerts,
+      // prefer importance then nearest-due, and roll the window forward instead of
+      // burning the budget on far-future recurrences.
+      final Set<int> managedPending;
       try {
-        await _plugin.cancel(id: staleId);
-      } catch (_) {}
-    }
+        if (!_initialized) {
+          await initialize();
+        }
+        final pending = await _plugin.pendingNotificationRequests();
+        managedPending = {
+          for (final request in pending)
+            if (_isManagedScheduledId(request.id)) request.id,
+        };
+      } catch (error) {
+        // Setup (init/read-pending) failed — nothing durable was scheduled yet.
+        // Stop rather than schedule on top of an uncertain plugin state.
+        debugPrint('[Notif] schedulePlannedNotifications setup failed: $error');
+        return;
+      }
 
-    for (final candidate in plan.toSchedule) {
-      final notification = byId[candidate.id];
-      if (notification == null) continue;
-      final notificationType = notification.kind.name;
-      final logId = await logService?.recordCreated(
-        channel: _localChannel,
-        notificationType: notificationType,
+      final byId = {for (final n in notifications) n.id: n};
+      final plan = _capacityPlanner.plan(
+        currentManagedPending: managedPending,
+        desired: [
+          for (final n in notifications)
+            ScheduleCandidate(
+              id: n.id,
+              due: n.scheduledAtRiyadh,
+              priority: _plannedPriority(n.kind),
+            ),
+        ],
+        now: DateTime.now(),
       );
-      try {
-        await _plugin.zonedSchedule(
-          id: notification.id,
-          title: notification.title,
-          body: notification.body,
-          scheduledDate: _riyadhDate(notification.scheduledAtRiyadh),
-          notificationDetails: _detailsFor(notification.kind),
-          payload: CaptureNotificationPayload(
-            kind: notification.payload ?? notification.kind.name,
-            route: _routeFor(notification.payload),
-            notificationLogId: logId,
-            notificationType: notificationType,
-          ).encode(),
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+
+      // Cancel stale/dropped managed pending before adding replacements.
+      for (final staleId in plan.toCancel) {
+        try {
+          await _plugin.cancel(id: staleId);
+        } catch (_) {}
+      }
+
+      for (final candidate in plan.toSchedule) {
+        final notification = byId[candidate.id];
+        if (notification == null) continue;
+        final notificationType = notification.kind.name;
+        final logId = await logService?.recordCreated(
+          channel: _localChannel,
+          notificationType: notificationType,
         );
-        if (logId != null) {
-          await logService?.recordSent(
-            logId: logId,
-            channel: _localChannel,
-            notificationType: notificationType,
+        try {
+          await _plugin.zonedSchedule(
+            id: notification.id,
+            title: notification.title,
+            body: notification.body,
+            scheduledDate: _riyadhDate(notification.scheduledAtRiyadh),
+            notificationDetails: _detailsFor(notification.kind),
+            payload: CaptureNotificationPayload(
+              kind: notification.payload ?? notification.kind.name,
+              route: _routeFor(notification.payload),
+              notificationLogId: logId,
+              notificationType: notificationType,
+            ).encode(),
+            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           );
-        }
-      } catch (error, stackTrace) {
-        if (logId != null) {
-          await logService?.recordFailed(
-            logId: logId,
-            channel: _localChannel,
-            notificationType: notificationType,
-            error: error,
-            stackTrace: stackTrace,
-          );
+          if (logId != null) {
+            await logService?.recordSent(
+              logId: logId,
+              channel: _localChannel,
+              notificationType: notificationType,
+            );
+          }
+        } catch (error, stackTrace) {
+          if (logId != null) {
+            await logService?.recordFailed(
+              logId: logId,
+              channel: _localChannel,
+              notificationType: notificationType,
+              error: error,
+              stackTrace: stackTrace,
+            );
+          }
         }
       }
-    }
 
-    // MALI-025 — verify the actual pending set instead of assuming every
-    // schedule was accepted. Safe count only, no financial content.
-    try {
-      final after = await _plugin.pendingNotificationRequests();
-      final managed = after.where((r) => _isManagedScheduledId(r.id)).length;
-      debugPrint('[Notif] window: planned=${plan.toSchedule.length} '
-          'managedPending=$managed cap=${_capacityPlanner.capacity}');
-    } catch (_) {
-      // Verification is best-effort diagnostics.
-    }
+      // MALI-025 — verify the actual pending set instead of assuming every
+      // schedule was accepted. Safe count only, no financial content.
+      try {
+        final after = await _plugin.pendingNotificationRequests();
+        final managed = after.where((r) => _isManagedScheduledId(r.id)).length;
+        debugPrint('[Notif] window: planned=${plan.toSchedule.length} '
+            'managedPending=$managed cap=${_capacityPlanner.capacity}');
+      } catch (_) {
+        // Verification is best-effort diagnostics.
+      }
+    });
   }
 
   /// Ids the CAPACITY planner owns: bill/subscription reminders and the weekly
@@ -928,6 +932,8 @@ class LocalNotificationService {
     debugPrint(
         '[Notif] _show type=$notificationType enabled=${preferences.isEnabled(notificationType)}');
     if (!preferences.isEnabled(notificationType)) {
+      AppDiagnostics.record(AppOperation.notification, AppEventState.blocked,
+          reason: AppEventReason.denied);
       return false;
     }
 
@@ -998,10 +1004,13 @@ class LocalNotificationService {
         payload: effectivePayload,
       );
       debugPrint('[Notif] plugin.show done');
+      AppDiagnostics.record(AppOperation.notification, AppEventState.succeeded);
       await _recordSent(logId, notificationType);
       await _recordHistory(id, title, body, notificationType, effectivePayload, store);
       return true;
     } catch (error, stackTrace) {
+      AppDiagnostics.record(AppOperation.notification, AppEventState.failed,
+          reason: AppDiagnostics.classify(error));
       // A show/schedule failure must never crash the caller (many call sites
       // are unawaited fire-and-forget) — record it and stop here instead of
       // rethrowing. See docs/NOTIFICATION_PIPELINE_AUDIT.md.

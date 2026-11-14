@@ -75,7 +75,12 @@ class FakeRegistrationService implements CaptureDeviceRegistrationService {
   ValueListenable<CaptureRegistrationStatus> get status => notifier;
 
   @override
-  Future<bool> serverConsentMatches(UserSettingsEntity settings) async =>
+  Future<bool> deviceConsentMatches(UserSettingsEntity settings) async =>
+      outcome.phase == CaptureRegistrationPhase.connected;
+
+  @override
+  Future<bool> serverConsentMatches(UserSettingsEntity settings,
+      {bool waitForAccount = false}) async =>
       outcome.phase == CaptureRegistrationPhase.connected;
 
   @override

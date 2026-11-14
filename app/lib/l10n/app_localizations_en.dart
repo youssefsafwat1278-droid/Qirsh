@@ -1606,6 +1606,16 @@ class AppL10nEn extends AppL10n {
   String get setCopyEmail => 'Copy email';
 
   @override
+  String get copyAppDiagnostics => 'Copy diagnostic log';
+
+  @override
+  String get copyAppDiagnosticsDescription =>
+      'Technical events without your messages or financial details. Review before sharing.';
+
+  @override
+  String get appDiagnosticsCopied => 'Diagnostic log copied.';
+
+  @override
   String get setEraseAllQ => 'Erase all data?';
 
   @override
@@ -6417,7 +6427,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get consentStatusTurningOffBody =>
-      'Sync and analysis are already stopped. Finishing up.';
+      'Sync and analysis are stopped on this device. Server confirmation is pending until a connection is available. Tap Check again to retry now.';
 
   @override
   String get consentTurnOn => 'Review and turn on';

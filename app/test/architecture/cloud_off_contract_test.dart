@@ -566,7 +566,9 @@ void main() {
         File('lib/core/privacy/cloud_egress_gate.dart').readAsStringSync();
 
     test('one function sends it, through its own grant, revoke only', () {
-      final fn = body(registration, 'Future<void> _retryPendingRevocation(');
+      final fn = body(registration,
+          'Future<void> _retryPendingRevocation({bool force = false}) async');
+      expect(fn, contains('!force && now.isBefore(due)'));
       inOrder(fn, [
         '_readSession()',
         'all[owner]', // only the signed-in owner's own record

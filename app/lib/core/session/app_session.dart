@@ -42,6 +42,9 @@ import 'remove_data_flow.dart';
 /// the separate, intentional full-reset path).
 enum SessionStatus { unknown, needsOnboarding, authenticated, sessionExpired }
 
+/// Account metadata only; it never grants local consent or opens egress.
+typedef AccountConsentStatus = ({bool cloud, bool ai, int version});
+
 /// Why a session judgment was lost (ASR §7.3/§7.7). Only a plain expiry keeps
 /// the native expiry evidence; [awaitingAdoption] is ASR's own wait for a
 /// committed `requiresAdoption` record (not a loss); everything else is
@@ -3484,6 +3487,40 @@ class AppSession extends ValueNotifier<SessionStatus> {
       final version = row?['consent_version'];
       final enabled = row?['cloud_processing_enabled'];
       return version is int && version > 0 && enabled is bool ? enabled : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Confirms the account's consent independently of a device registration.
+  /// The narrow metadata read remains possible while Cloud is OFF.
+  Future<AccountConsentStatus?> readAccountConsentStatus(
+      supabase.SupabaseClient client, AdmissionAuthority authority) async {
+    final session = client.auth.currentSession;
+    bool current() => authority.isCurrent &&
+        session != null && !session.isExpired &&
+        identical(client.auth.currentSession, session) &&
+        session.user.id == authority.uid;
+    if (!current()) return null;
+    try {
+      final row = await CloudEgressGate.instance.runAccountControl(
+        AccountControlOp.cloudPreference,
+        () async => await client.from('user_settings')
+            .select('cloud_processing_enabled,ai_consent_granted,consent_version')
+            .eq('user_id', authority.uid)
+            .eq('local_id', 'user_settings')
+            .isFilter('deleted_at', null)
+            .maybeSingle()
+            .retry(enabled: false)
+            .timeout(const Duration(seconds: 5)),
+        onboarding: (authority: authority, accessToken: session!.accessToken),
+      );
+      if (!current()) return null;
+      final cloud = row?['cloud_processing_enabled'];
+      final ai = row?['ai_consent_granted'];
+      final version = row?['consent_version'];
+      return cloud is bool && ai is bool && version is int && version > 0
+          ? (cloud: cloud, ai: ai, version: version) : null;
     } catch (_) {
       return null;
     }

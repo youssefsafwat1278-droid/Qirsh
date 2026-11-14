@@ -85,7 +85,8 @@ class _CloudResumeBannerState extends ConsumerState<CloudResumeBanner> {
       if (!mounted || !work.current || !saved.cloudProcessingEnabled) return;
       final registration = ref.read(captureDeviceRegistrationServiceProvider);
       await registration.retry();
-      if (work.current && await registration.serverConsentMatches(saved)) {
+      if (work.current &&
+          await confirmSavedConsent(ref, work, registration, saved)) {
         await CloudResumeReminder().dismiss(uid);
       }
     } catch (_) {

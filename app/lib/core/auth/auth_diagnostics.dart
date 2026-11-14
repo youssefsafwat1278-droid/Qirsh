@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import '../observability/app_diagnostics.dart';
 
 /// Diagnostic only (Beta 1): the last few refresh attempts and recovery stops,
 /// kept on this device so a tester can report why a token refresh did not
@@ -40,6 +41,7 @@ class AuthDiagnostics {
   /// Prepends the local time and the app lifecycle state to [summary]. Never
   /// throws: a diagnostic must not change what its caller does.
   static void add(String summary) {
+    AppDiagnostics.record(AppOperation.authentication, AppEventState.pending);
     try {
       final now = DateTime.now();
       String two(int v) => v.toString().padLeft(2, '0');

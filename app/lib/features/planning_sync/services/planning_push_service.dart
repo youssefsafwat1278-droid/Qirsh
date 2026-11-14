@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../../../core/observability/app_diagnostics.dart';
 
 import '../../../core/session/account_fence_authority.dart';
 import '../../../core/session/admission_authority.dart';
@@ -102,7 +103,6 @@ abstract class PlanningRemoteSink {
     String expectedUpdatedAt,
     Map<String, dynamic> row,
   );
-
 }
 
 class SupabasePlanningRemoteSink implements PlanningRemoteSink {
@@ -253,10 +253,12 @@ class PlanningPushService {
     // column), independent of the exact decimal-string transport capability.
     ExactTransportCapability Function() planningCurrencyCapability =
         _defaultPushCapability,
+
     /// C-3 / G13 — budgets, goals, plans, subscriptions, cards and categories
     /// are financial data. Consent is asked fresh per push and defaults to
     /// DENY, so a caller that omits it performs no network at all.
     Future<bool> Function()? mayEgress,
+
     /// `user_settings` carries PII (profile) — a separate egress class. Falls
     /// back to [mayEgress] (and therefore to DENY) when omitted.
     Future<bool> Function()? mayEgressProfile,
@@ -366,7 +368,16 @@ class PlanningPushService {
 
   Future<PlanningPushResult> push() => pushWithPhase(SyncPhaseBinding());
 
-  Future<PlanningPushResult> pushWithPhase(SyncPhaseBinding phase) async {
+  /// An explicit consent action flushes its settings without waiting for the
+  /// shell's periodic worker or uploading other planning entities first.
+  Future<PlanningPushResult> pushSettings() =>
+      _pushWithPhase(SyncPhaseBinding(), settingsOnly: true);
+
+  Future<PlanningPushResult> pushWithPhase(SyncPhaseBinding phase) =>
+      _pushWithPhase(phase);
+
+  Future<PlanningPushResult> _pushWithPhase(SyncPhaseBinding phase,
+      {bool settingsOnly = false}) async {
     if (_busy) throw const PlanningDeliveryStopped(PlanningDeliveryStopReason.overlap);
     _busy = true;
     final inherited = phase.isBound ? phase : null;
@@ -375,6 +386,7 @@ class PlanningPushService {
         throw const PlanningDeliveryStopped(PlanningDeliveryStopReason.stale);
       }
     }
+
     try {
       supplied();
       final authority = AccountFenceAuthority.shared;
@@ -388,7 +400,7 @@ class PlanningPushService {
         _revocationDelivered.clear();
       }
       _revocationHandle = handle;
-      final result = await _pushBound();
+      final result = await _pushBound(settingsOnly: settingsOnly);
       _requireCurrent();
       return result;
     } on StaleAdmissionException {
@@ -425,7 +437,8 @@ class PlanningPushService {
       if (error is _ParentMutationRefusal && identical(error, call.minted)) rethrow;
       if (error is AccountFenceDeliveryCancellation) rethrow;
       if (error is _ParentMutationRefusal) {
-        throw const PlanningDeliveryStopped(PlanningDeliveryStopReason.provenance);
+        throw const PlanningDeliveryStopped(
+            PlanningDeliveryStopReason.provenance);
       }
       _requireCurrent(); rethrow;
     } finally {
@@ -435,7 +448,8 @@ class PlanningPushService {
 
   Future<void> _prepare(PlanningOutboxItem item, {required bool off}) async {
     if (item.operationId == null || !_operationId.hasMatch(item.operationId!)) {
-      throw const PlanningDeliveryStopped(PlanningDeliveryStopReason.provenance);
+      throw const PlanningDeliveryStopped(
+          PlanningDeliveryStopReason.provenance);
     }
     final current = _invocation!;
     _intent = off ? await current.authority.captureParentSettingsOffIntent(current.handle, _db,
@@ -480,10 +494,14 @@ class PlanningPushService {
         accepted: result.accepted, parked: result.parked, complete: result.complete);
   }
 
-  Future<PlanningPushResult> _pushBound() async {
+  Future<PlanningPushResult> _pushBound({bool settingsOnly = false}) async {
     final userId = await _getAuthUserId();
     _requireCurrent();
-    if (userId == null) return const PlanningPushResult();
+    if (userId == null) {
+      AppDiagnostics.record(AppOperation.settingsSync, AppEventState.blocked,
+          reason: AppEventReason.authMissing);
+      return const PlanningPushResult();
+    }
     if (userId != _invocation!.authority.ownerUid(_invocation!.handle)) {
       throw const PlanningDeliveryStopped(PlanningDeliveryStopReason.stale);
     }
@@ -492,7 +510,11 @@ class PlanningPushService {
     _plan = _casGate == null ? const CasPlan(CasMode.legacy) : await _casGate.planForPlanningParent(userId, authority: _invocation!.authority,
         handle: _invocation!.handle, database: _db);
     _requireCurrent();
-    if (_plan.mode == CasMode.stopped) return const PlanningPushResult();
+    if (_plan.mode == CasMode.stopped) {
+      AppDiagnostics.record(AppOperation.settingsSync, AppEventState.blocked,
+          reason: AppEventReason.capability);
+      return const PlanningPushResult();
+    }
     var epochStale = false;
 
     // D-7: the AuthSessionValid broadcast has no replay, so a cold start can miss
@@ -538,20 +560,40 @@ class PlanningPushService {
     }
 
     for (final entityType in _entityTable.keys) {
+      if (settingsOnly && entityType != PlanningOutboxQueue.settingsEntityType) {
+        continue;
+      }
       if (epochStale || fenceStopped) break;
-      if (!_isEnabled(entityType)) continue;
+      if (!_isEnabled(entityType)) {
+        if (entityType == PlanningOutboxQueue.settingsEntityType) {
+          AppDiagnostics.record(AppOperation.settingsSync, AppEventState.blocked,
+              reason: AppEventReason.capability);
+        }
+        continue;
+      }
       final isSettings = entityType == PlanningOutboxQueue.settingsEntityType;
       final allowed = isSettings ? profileAllowed : financialAllowed;
       if (!allowed && !isSettings) continue;
       final items = await _local(() => _queue.pendingItems(entityType: entityType));
+      if (isSettings && items.isEmpty) {
+        AppDiagnostics.record(AppOperation.settingsSync, AppEventState.blocked,
+            reason: AppEventReason.noPendingWork);
+      }
       for (final item in items) {
         try {
           if (!allowed) {
             // The ONE deliberate exception: a consent REVOCATION must still
             // reach the server (user_settings is its consent authority).
-            if (_consentOffPatch(item) == null) continue;
+            if (_consentOffPatch(item) == null) {
+              AppDiagnostics.record(
+                  AppOperation.settingsSync, AppEventState.blocked,
+                  reason: AppEventReason.consentOff);
+              continue;
+            }
             if (item.payloadJson['consent_only'] != true &&
                 await _serverIdForLocal('user_settings', item.entityId) == null) {
+              AppDiagnostics.record(AppOperation.settingsSync, AppEventState.blocked,
+                  reason: AppEventReason.dependency);
               continue; // Existing unbound full intent remains deferred.
             }
             await _prepare(item, off: true);
@@ -565,11 +607,33 @@ class PlanningPushService {
             // exactly as before.
           }
           if (allowed) await _prepare(item, off: false);
+          if (isSettings) {
+            AppDiagnostics.record(
+                AppOperation.settingsSync, AppEventState.started,
+                revision: item.payloadJson['consent_version'] is int
+                    ? item.payloadJson['consent_version'] as int
+                    : null);
+          }
           final outcome = await _fenceRetry.runItem(
               isCurrent: () => _retryCurrent(item, userId, off: !allowed),
               body: () => _process(item, userId));
+          if (isSettings && outcome != _PlanningPushOutcome.pushed) {
+            AppDiagnostics.record(AppOperation.settingsSync, AppEventState.blocked,
+                reason: switch (outcome) {
+                  _PlanningPushOutcome.conflict => AppEventReason.conflict,
+                  _PlanningPushOutcome.parked => AppEventReason.capability,
+                  _ => AppEventReason.stale,
+                });
+          }
           switch (outcome) {
             case _PlanningPushOutcome.pushed:
+              if (isSettings) {
+                AppDiagnostics.record(
+                    AppOperation.settingsSync, AppEventState.succeeded,
+                    revision: item.payloadJson['consent_version'] is int
+                        ? item.payloadJson['consent_version'] as int
+                        : null);
+              }
               pushed++;
             case _PlanningPushOutcome.conflict:
               conflicts++;
@@ -596,6 +660,11 @@ class PlanningPushService {
         } on _ParentMutationRefusal catch (refusal) {
           await _deny(item, refusal);
         } catch (e) {
+          if (isSettings) {
+            AppDiagnostics.record(
+                AppOperation.settingsSync, AppEventState.failed,
+                reason: AppDiagnostics.classify(e));
+          }
           // A raw QD (or a stray CAS proof) that was not minted at an awaited
           // concrete mutation is not mutation proof: stop, no hold/ACK/attempt.
           if (decodeParentAccountDenial(e) != null ||
@@ -697,7 +766,13 @@ class PlanningPushService {
     switch (item.operation) {
       case PlanningSyncOperation.create:
       case PlanningSyncOperation.update:
-        if (cas && isSettings) {
+        // A preceding revoke updates the account timestamp independently of
+        // this outbox. An explicit newer choice must not be dropped as a stale
+        // full-row update in legacy mode. Reuse the field-scoped settings path.
+        final explicitConsent =
+            item.payloadJson['cloud_processing_enabled'] == true &&
+            (item.payloadJson['changed_fields'] as List?)?.contains('consent') == true;
+        if (isSettings && (cas || explicitConsent)) {
           return _pushSettingsLww(item, userId, remoteTable, localTable);
         }
         return cas
@@ -722,7 +797,8 @@ class PlanningPushService {
         : _toServerRow(item.entityType, item.payloadJson, userId);
     var serverId = await _serverIdForLocal(localTable, item.entityId);
     if (_intent!.isPrebindOff && serverId != null) {
-      throw const PlanningDeliveryStopped(PlanningDeliveryStopReason.provenance);
+      throw const PlanningDeliveryStopped(
+          PlanningDeliveryStopReason.provenance);
     }
     // Tokens of the row we are about to update. Normally the locally stored
     // base; after an idempotent create REPLAY they are the freshly fetched ones.
@@ -879,10 +955,10 @@ class PlanningPushService {
   ) async {
     var serverId = await _serverIdForLocal(localTable, item.entityId);
     serverId ??= (await _remote(() => _remoteSink.findByLocalId(
-      remoteTable,
-      userId,
-      item.entityId,
-    )))?['id'] as String?;
+          remoteTable,
+          userId,
+          item.entityId,
+        )))?['id'] as String?;
     if (serverId == null) {
       // Never reached the server — nothing to tombstone.
       await _markSynced(localTable, item.entityId, null, item: item);
@@ -976,10 +1052,10 @@ class PlanningPushService {
   ) async {
     var serverId = await _serverIdForLocal(localTable, item.entityId);
     serverId ??= (await _remote(() => _remoteSink.findByLocalId(
-      remoteTable,
-      userId,
-      item.entityId,
-    )))?['id'] as String?;
+          remoteTable,
+          userId,
+          item.entityId,
+        )))?['id'] as String?;
     if (serverId == null) {
       await _markSynced(localTable, item.entityId, null, item: item);
       return _PlanningPushOutcome.pushed;
@@ -1508,6 +1584,7 @@ class _ParentInvocation implements SyncPhaseLifecycle {
   void requireCurrent() {
     if (!isCurrent) throw const PlanningDeliveryStopped(PlanningDeliveryStopReason.stale);
   }
+
   String get ownerUid => authority.ownerUid(handle);
   @override
   bool get isCurrent => authority.isCurrentForDatabase(handle, database) &&
@@ -1516,7 +1593,6 @@ class _ParentInvocation implements SyncPhaseLifecycle {
   Future<T> runLocal<T>(Future<T> Function() action) =>
       authority.runCurrentLocal(handle, database, action);
 }
-
 
 /// Guard the actual underlying method after the retry predicate's final await.
 /// Each semantic mutation gets a fresh observation; only a proof that escapes
@@ -1561,7 +1637,8 @@ class _ParentCasRemote implements CasRemote {
       if (error is CasMutationAwaitDenial ||
           error is CasMutationObservationRejected ||
           decodeParentAccountDenial(error) != null) {
-        throw const PlanningDeliveryStopped(PlanningDeliveryStopReason.provenance);
+        throw const PlanningDeliveryStopped(
+            PlanningDeliveryStopReason.provenance);
       }
       rethrow;
     }

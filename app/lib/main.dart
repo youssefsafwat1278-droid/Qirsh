@@ -14,6 +14,8 @@ import 'app.dart';
 import 'core/backend/sentry_config.dart';
 import 'core/di/local_read_providers.dart';
 import 'core/observability/diagnostics.dart';
+import 'core/observability/app_diagnostics.dart';
+import 'core/observability/flutter_diagnostics.dart';
 import 'core/observability/sentry_lifecycle.dart';
 import 'core/session/account_scope.dart';
 import 'core/session/app_session.dart';
@@ -46,6 +48,22 @@ Future<void> main() async {
   // MALI-039 — redact + bound every diagnostic line (all call sites, plugins,
   // future code) before it reaches the platform log, in debug and release.
   Diag.installRedactingSink();
+  FlutterDiagnostics.install();
+  unawaited(getApplicationSupportDirectory()
+      .then(AppDiagnostics.attach)
+      .catchError((Object _) {}));
+  var lastSessionStatus = AppSession.instance.status;
+  AppSession.instance.addListener(() {
+    final next = AppSession.instance.status;
+    if (next == lastSessionStatus) return;
+    lastSessionStatus = next;
+    AppDiagnostics.record(AppOperation.session, switch (next) {
+      SessionStatus.authenticated => AppEventState.confirmed,
+      SessionStatus.needsOnboarding => AppEventState.pending,
+      SessionStatus.sessionExpired => AppEventState.blocked,
+      SessionStatus.unknown => AppEventState.started,
+    });
+  });
   // Astra H2.5: Sentry is NOT initialised here. It is started (and closed again)
   // by SentryLifecycle only while the egress gate permits and diagnostics
   // consent is open — never before bootstrap resolved the gate, never while
@@ -73,8 +91,19 @@ Future<void> captureBackgroundMain() async {
   // Sentry opens only per diagnostics consent (resolved during bootstrap).
   if (SentryConfig.isConfigured) SentryLifecycle.attach();
   final drain = HeadlessCaptureDrain();
+  final journal = getApplicationSupportDirectory()
+      .then((directory) => AppDiagnostics.attach(directory, background: true))
+      .catchError((Object _) {});
   NativeCaptureBridge.setBackgroundDrainHandler(
-    () async => (await drain.run()).name,
+    () async {
+      try {
+        return (await AppDiagnostics.run(AppOperation.capture, drain.run)).name;
+      } finally {
+        // Diagnostics must never consume the background worker's deadline.
+        await journal.timeout(const Duration(milliseconds: 500), onTimeout: () {});
+        await AppDiagnostics.flush().timeout(const Duration(milliseconds: 500), onTimeout: () {});
+      }
+    },
     cancel: drain.cancel,
   );
   await NativeCaptureBridge.setBackgroundDrainReady(true);
@@ -255,7 +284,10 @@ class _StartupAppState extends State<StartupApp> {
         // A new generation is a new database and therefore a new provider
         // graph: nothing built for the previous account survives the switch.
         key: ValueKey(scope.generation),
-        observers: widget.externalObservers,
+        observers: [
+          const DiagnosticProviderObserver(),
+          ...widget.externalObservers
+        ],
         overrides: [
           ...widget.externalOverrides,
           if (scope.isLocalRead) ...localReadProviderOverrides(scope),

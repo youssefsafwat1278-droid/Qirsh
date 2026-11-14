@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
 import 'package:money_companion/data/repositories/drift_user_settings_repository.dart';
+import 'package:money_companion/data/repositories/drift_category_repository.dart';
 import 'package:money_companion/data/sync/sync_cursor.dart';
 import 'package:money_companion/domain/entities/supporting_entities.dart';
 import 'package:money_companion/domain/entities/engagement_entities.dart';
@@ -28,6 +29,7 @@ class _MemoryKeyStore implements DatabaseKeyStore {
 class _FakeRemote implements PlanningRemoteSink, PlanningRemoteSource {
   final rows = <String, Map<String, Map<String, dynamic>>>{};
   bool forceCasConflict = false;
+  bool forceGuardConflict = false;
   int consentUpdateFailuresRemaining = 0;
   int casCalls = 0;
   int guardedUpdateCalls = 0;
@@ -144,6 +146,7 @@ class _FakeRemote implements PlanningRemoteSink, PlanningRemoteSource {
   ) async {
     // C-6: no concurrent writer is modelled here; guard REJECTION is covered in
     // planning_guarded_update_atomicity_test.dart.
+    if (forceGuardConflict) return null;
     return updateByServerId(table, serverId, row);
   }
 
@@ -439,6 +442,56 @@ void main() {
     expect(serverRow['cloud_processing_enabled'], isFalse);
     expect(serverRow['theme'], 'newer-local-theme',
         reason: 'the field this device changed is last-writer-wins');
+  });
+
+  test('explicit ON survives the account timestamp advanced by its preceding OFF '
+      'in legacy transport', () async {
+    await db.customStatement('''
+      UPDATE user_settings SET server_id = 'server-user_settings',
+          server_updated_at = 'before-revoke', sync_status = 'synced',
+          ai_consent_state = 'declined', cloud_consent_state = 'declined',
+          cloud_processing_enabled = 0, ai_consent_granted = 0;
+    ''');
+    remote.rows['user_settings'] = {
+      'user_settings': {
+        ..._remoteSettingsRow(theme: 'other-device-theme'),
+        'updated_at': 'after-revoke',
+        'cloud_processing_enabled': false,
+        'ai_consent_granted': false,
+      },
+    };
+    remote.forceGuardConflict = true;
+    final current = await settings.getSettings();
+    final saved = await settings.saveSettings(current.copyWith(
+        cloudConsentState: ConsentState.accepted,
+        aiConsentState: ConsentState.accepted));
+    final result = await _push(db, queue, remote).push();
+    expect(result.pushed, 1);
+    expect(result.conflicts, 0);
+    expect(remote.lastPatch!.keys.toSet(),
+        {'cloud_processing_enabled', 'ai_consent_granted', 'consent_version'});
+    final row = remote.rows['user_settings']!['user_settings']!;
+    expect(row['cloud_processing_enabled'], isTrue);
+    expect(row['ai_consent_granted'], isTrue);
+    expect(row['consent_version'], saved.consentVersion);
+    expect(row['theme'], 'other-device-theme');
+    expect(await queue.pendingItems(entityType: 'settings'), isEmpty);
+  });
+
+  test('explicit settings flush sends no unrelated planning rows', () async {
+    await bind();
+    final category = await DriftCategoryRepository(db, outboxQueue: queue)
+        .createCategory(nameAr: 'Test', icon: 'test', color: '#000000',
+            isIncome: false);
+    final current = await settings.getSettings();
+    await settings.saveSettings(current.copyWith(
+        cloudConsentState: ConsentState.accepted));
+    final result = await _push(db, queue, remote).pushSettings();
+    expect(result.pushed, 1);
+    expect(remote.rows['user_settings'], isNotEmpty);
+    expect(remote.rows['user_categories'], isNull);
+    final remaining = await queue.pendingItems(entityType: 'category');
+    expect(remaining.map((item) => item.entityId), [category.id]);
   });
 
   test('field LWW sends ONLY the changed fields and never consent unless the '

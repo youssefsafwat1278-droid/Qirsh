@@ -1,3 +1,4 @@
+import '../../core/observability/app_diagnostics.dart';
 import 'dart:async';
 
 import '../ads/report_banner_suppression.dart';
@@ -84,100 +85,102 @@ class ReportExportCoordinator {
     Future<void> Function() generate, {
     Future<bool> Function()? confirmAdNotice,
   }) async {
-    if (_inFlight) return; // single-flight: ignore repeated taps
-    _inFlight = true;
-    // The Reports banner stays down for the WHOLE journey from here: resolving
-    // entitlement, UMP, preloading, the notice, the native presentation and the
-    // generation after it. The route gate covers only the Flutter routes in
-    // that sequence, and a native interstitial is not one — it pushes no route
-    // at all, so nothing else would suppress the banner underneath it.
-    ReportBannerSuppression.beginJourney();
-    final attempt = _mintAttemptId();
-    _currentAttemptId = attempt;
-    _analytics.exportRequested();
+    return AppDiagnostics.run(AppOperation.reportExport, () async {
+      if (_inFlight) return; // single-flight: ignore repeated taps
+      _inFlight = true;
+      // The Reports banner stays down for the WHOLE journey from here: resolving
+      // entitlement, UMP, preloading, the notice, the native presentation and the
+      // generation after it. The route gate covers only the Flutter routes in
+      // that sequence, and a native interstitial is not one — it pushes no route
+      // at all, so nothing else would suppress the banner underneath it.
+      ReportBannerSuppression.beginJourney();
+      final attempt = _mintAttemptId();
+      _currentAttemptId = attempt;
+      _analytics.exportRequested();
 
-    var advanced = false;
-    Future<void> advanceOnce() async {
-      // The ONE continuation: generate exactly once, and never for a superseded
-      // attempt (stale callback protection).
-      if (advanced || _currentAttemptId != attempt) return;
-      advanced = true;
-      _phase = ReportExportPhase.generating;
-      await generate();
-      _phase = ReportExportPhase.completed;
-      _analytics.exportCompleted();
-    }
+      var advanced = false;
+      Future<void> advanceOnce() async {
+        // The ONE continuation: generate exactly once, and never for a superseded
+        // attempt (stale callback protection).
+        if (advanced || _currentAttemptId != attempt) return;
+        advanced = true;
+        _phase = ReportExportPhase.generating;
+        await generate();
+        _phase = ReportExportPhase.completed;
+        _analytics.exportCompleted();
+      }
 
-    try {
-      // One deadline owns the complete ad opportunity: entitlement, UMP,
-      // preload, notice, the ad.show() trigger and the terminal show callback.
-      // Future.microtask ensures the timer is attached before any stage starts.
-      // Report generation deliberately sits outside this deadline.
-      var opportunityOpen = true;
-      bool isCurrentOpportunity() =>
-          opportunityOpen && _currentAttemptId == attempt;
-      void closeOpportunity() {
+      try {
+        // One deadline owns the complete ad opportunity: entitlement, UMP,
+        // preload, notice, the ad.show() trigger and the terminal show callback.
+        // Future.microtask ensures the timer is attached before any stage starts.
+        // Report generation deliberately sits outside this deadline.
+        var opportunityOpen = true;
+        bool isCurrentOpportunity() =>
+            opportunityOpen && _currentAttemptId == attempt;
+        void closeOpportunity() {
+          opportunityOpen = false;
+          if (_phase != ReportExportPhase.preparingAd &&
+              _phase != ReportExportPhase.confirmingAd &&
+              _phase != ReportExportPhase.presentingAd) {
+            return;
+          }
+          try {
+            // The concrete gateway's disposal is reusable: it also invalidates
+            // late load callbacks and clears any active presentation.
+            _gateway.dispose();
+          } catch (_) {
+            // Cleanup is best-effort; report generation remains fail-open.
+          }
+        }
+
+        _AdOpportunityResult result;
+        try {
+          final opportunity = Future<_AdOpportunityResult>.microtask(
+            () => _runAdOpportunity(
+              isCurrentOpportunity,
+              confirmAdNotice: confirmAdNotice,
+            ),
+          );
+          result = await opportunity.timeout(
+            _adOpportunityDeadline,
+            onTimeout: () {
+              // Future.timeout cannot cancel its source. Close this attempt's ad
+              // token so a late consent/load/show continuation cannot create a
+              // second opportunity after the report has already advanced.
+              closeOpportunity();
+              return _AdOpportunityResult.proceed;
+            },
+          );
+        } catch (_) {
+          // Audit H-6: an exception anywhere in the ad stage must never cost the
+          // user their accepted report-export attempt.
+          closeOpportunity();
+          result = _AdOpportunityResult.proceed;
+        }
+        if (_currentAttemptId != attempt) return; // superseded
         opportunityOpen = false;
-        if (_phase != ReportExportPhase.preparingAd &&
-            _phase != ReportExportPhase.confirmingAd &&
-            _phase != ReportExportPhase.presentingAd) {
+        if (result == _AdOpportunityResult.cancelled) {
+          // Explicit cancellation of this attempt. Deliberately NOT fail-open:
+          // the user asked to stop, so do not quietly generate the report.
           return;
         }
-        try {
-          // The concrete gateway's disposal is reusable: it also invalidates
-          // late load callbacks and clears any active presentation.
-          _gateway.dispose();
-        } catch (_) {
-          // Cleanup is best-effort; report generation remains fail-open.
+        if (result == _AdOpportunityResult.superseded) return;
+        // Fail-open: every path (ad shown / skipped / failed / interrupted) lands
+        // here and generates exactly once.
+        await advanceOnce();
+      } finally {
+        // Always paired, on every exit: an early return, a cancellation, a
+        // supersession or a throw. A journey left open is a banner that never
+        // comes back.
+        ReportBannerSuppression.endJourney();
+        if (_currentAttemptId == attempt) {
+          _inFlight = false;
+          _currentAttemptId = null;
+          _phase = ReportExportPhase.idle;
         }
       }
-
-      _AdOpportunityResult result;
-      try {
-        final opportunity = Future<_AdOpportunityResult>.microtask(
-          () => _runAdOpportunity(
-            isCurrentOpportunity,
-            confirmAdNotice: confirmAdNotice,
-          ),
-        );
-        result = await opportunity.timeout(
-          _adOpportunityDeadline,
-          onTimeout: () {
-            // Future.timeout cannot cancel its source. Close this attempt's ad
-            // token so a late consent/load/show continuation cannot create a
-            // second opportunity after the report has already advanced.
-            closeOpportunity();
-            return _AdOpportunityResult.proceed;
-          },
-        );
-      } catch (_) {
-        // Audit H-6: an exception anywhere in the ad stage must never cost the
-        // user their accepted report-export attempt.
-        closeOpportunity();
-        result = _AdOpportunityResult.proceed;
-      }
-      if (_currentAttemptId != attempt) return; // superseded
-      opportunityOpen = false;
-      if (result == _AdOpportunityResult.cancelled) {
-        // Explicit cancellation of this attempt. Deliberately NOT fail-open:
-        // the user asked to stop, so do not quietly generate the report.
-        return;
-      }
-      if (result == _AdOpportunityResult.superseded) return;
-      // Fail-open: every path (ad shown / skipped / failed / interrupted) lands
-      // here and generates exactly once.
-      await advanceOnce();
-    } finally {
-      // Always paired, on every exit: an early return, a cancellation, a
-      // supersession or a throw. A journey left open is a banner that never
-      // comes back.
-      ReportBannerSuppression.endJourney();
-      if (_currentAttemptId == attempt) {
-        _inFlight = false;
-        _currentAttemptId = null;
-        _phase = ReportExportPhase.idle;
-      }
-    }
+    });
   }
 
   Future<_AdOpportunityResult> _runAdOpportunity(

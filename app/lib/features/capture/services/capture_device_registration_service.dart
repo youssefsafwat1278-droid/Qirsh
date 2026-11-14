@@ -19,6 +19,7 @@ import '../../../core/session/consent_capability.dart';
 import '../../../core/sync/sync_wakeup.dart';
 import '../../../core/utils/install_id.dart';
 import '../../../data/repositories/drift_user_settings_repository.dart';
+import '../../../core/observability/app_diagnostics.dart';
 import '../../../domain/entities/supporting_entities.dart';
 import '../../planning_sync/services/outbox_queue_factory.dart'
     show localDataOwnerUid;
@@ -333,7 +334,9 @@ class CaptureDeviceRegistrationService {
     CloudEgressGate? gate,
     bool Function()? isCurrentScope,
     AdmissionAuthority? Function()? captureWorkAuthority,
-  })  : _isCurrentScope = isCurrentScope ?? (() => true),
+    Future<AccountConsentStatus?> Function(AdmissionAuthority)? readAccountConsent,
+  })  : _readAccountConsent = readAccountConsent ?? _defaultReadAccountConsent,
+        _isCurrentScope = isCurrentScope ?? (() => true),
         _captureWorkAuthority = captureWorkAuthority ??
             (readSession == null
                 ? AppSession.instance.captureLocalWorkAuthority
@@ -623,7 +626,22 @@ class CaptureDeviceRegistrationService {
 
   final ValueNotifier<int> consentServerRevision = ValueNotifier(0);
 
-  Future<bool> serverConsentMatches(UserSettingsEntity settings) async {
+  final Future<AccountConsentStatus?> Function(AdmissionAuthority)
+      _readAccountConsent;
+
+  static Future<AccountConsentStatus?> _defaultReadAccountConsent(
+      AdmissionAuthority authority) async {
+    try {
+      return await AppSession.instance.readAccountConsentStatus(
+          Supabase.instance.client, authority);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The device acknowledgement is the prerequisite for the settings push.
+  /// It must not wait for the account update that this push will deliver.
+  Future<bool> deviceConsentMatches(UserSettingsEntity settings) async {
     if (!_isBackendConfigured() || (!_isIos() && !_isAndroid())) return true;
     final current = _captureLifetime();
     final owner = _readSession()?.uid;
@@ -633,6 +651,39 @@ class CaptureDeviceRegistrationService {
     } catch (_) {
       return false;
     }
+  }
+
+  /// A device receipt alone cannot confirm the account's Cloud/AI preference.
+  /// UI actions briefly await the independent, queued settings delivery.
+  Future<bool> serverConsentMatches(UserSettingsEntity settings,
+      {bool waitForAccount = false}) async {
+    if (!_isBackendConfigured() || (!_isIos() && !_isAndroid())) return true;
+    final capability = AppSession.instance.captureConsentCapability();
+    final authority = capability == null ? _captureWorkAuthority()
+        : AdmissionAuthority(capability.uid, () => capability.isCurrent,
+            epoch: capability.epoch);
+    final current = _captureLifetime(admissionAuthority: authority);
+    if (authority == null || !current() ||
+        !await deviceConsentMatches(settings)) {
+      return false;
+    }
+    final expected = _snapshotOf(settings);
+    for (final delay in waitForAccount
+        ? const [0, 200, 400, 800, 1600, 2000] : const [0]) {
+      if (delay > 0) await Future<void>.delayed(Duration(milliseconds: delay));
+      if (!current()) return false;
+      final actual = await _readAccountConsent(authority);
+      if (!current() || actual == null) return false;
+      if (actual.cloud == expected.cloud && actual.ai == expected.ai &&
+          actual.version == expected.version) {
+        AppDiagnostics.record(AppOperation.accountConsent,
+            AppEventState.confirmed, revision: actual.version);
+        return true;
+      }
+    }
+    AppDiagnostics.record(AppOperation.accountConsent, AppEventState.pending,
+        revision: expected.version);
+    return false;
   }
 
   Future<bool> serverOffUnconfirmed(String owner, int generation) async {
@@ -803,6 +854,7 @@ class CaptureDeviceRegistrationService {
   /// [status] instead of thrown.
   Future<void> retry() async {
     try {
+      await retryPendingRevocationNow();
       await syncBackendState();
     } catch (_) {
       // Recorded in [status].
@@ -1351,6 +1403,8 @@ class CaptureDeviceRegistrationService {
     await _storage.write(key: _ackKey, value: encoded);
     await _storage.write(key: _verifiedAckKey, value: encoded);
     await _storage.delete(key: _grantAttemptKey);
+    AppDiagnostics.record(AppOperation.deviceConsent, AppEventState.confirmed,
+        revision: snapshot.version);
     if (!_disposed) {
       consentServerRevision.value++;
       if (snapshot.cloud) SyncWakeup.notify();
@@ -3352,17 +3406,25 @@ class CaptureDeviceRegistrationService {
   /// JWT), never once Cloud is ON again or a newer transition exists (then the
   /// pending revoke is superseded and dropped), never while a transition runs.
   /// It only ever sends the revoke; it never changes local consent.
-  Future<void> retryPendingRevocation() {
+  Future<void> retryPendingRevocation() => _runPendingRevocationRetry();
+
+  /// A foreground resume or explicit Retry is a fresh recovery opportunity.
+  /// Only the already-pending OFF is sent; every owner, gate and newer-grant
+  /// check is unchanged. Automatic timer retries keep their bounded backoff.
+  Future<void> retryPendingRevocationNow() =>
+      _runPendingRevocationRetry(force: true);
+
+  Future<void> _runPendingRevocationRetry({bool force = false}) {
     final running = _revokeRetryInFlight;
     if (running != null) return running;
-    final run = _retryPendingRevocation().catchError((Object _) {});
+    final run = _retryPendingRevocation(force: force).catchError((Object _) {});
     _revokeRetryInFlight = run;
     return run.whenComplete(() {
       if (identical(_revokeRetryInFlight, run)) _revokeRetryInFlight = null;
     });
   }
 
-  Future<void> _retryPendingRevocation() async {
+  Future<void> _retryPendingRevocation({bool force = false}) async {
     if (_disposed || !_revokeAtSwitchOff || !_isBackendConfigured()) return;
     if (!_isIos() && !_isAndroid()) return;
     final Map<String, Map<String, int>> all;
@@ -3380,7 +3442,7 @@ class CaptureDeviceRegistrationService {
     final generation = p['g']!, version = p['v']!, attempts = p['n']!;
     final due = DateTime.fromMillisecondsSinceEpoch(p['at']!);
     final now = _now();
-    if (now.isBefore(due)) {
+    if (!force && now.isBefore(due)) {
       _scheduleRevokeRetry(due.difference(now));
       return;
     }

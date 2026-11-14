@@ -114,8 +114,8 @@ ConsentStatus deriveConsentStatus(
   return cloud && ai ? ConsentStatus.active : ConsentStatus.partial;
 }
 
-/// The live facts, read from the egress gate (local stores only). Any failure
-/// is reported as uncertain, never as on.
+/// Local gate facts and independent device/account confirmations. Any failure
+/// is reported as unconfirmed, never as on.
 final consentLiveFactsProvider =
     FutureProvider.autoDispose<ConsentLiveFacts>((ref) async {
   final gate = CloudEgressGate.instance;

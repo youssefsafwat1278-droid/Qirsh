@@ -152,6 +152,31 @@ void main() {
     expect(cloudRequests, hasLength(3));
   });
 
+  test('account consent confirmation reads only flags and version while OFF',
+      () async {
+    expect(await verify(), isTrue);
+    final authority = AdmissionAuthority('returning-owner', () => true);
+    cloudRows = [{
+      'cloud_processing_enabled': true,
+      'ai_consent_granted': false,
+      'consent_version': 9,
+    }];
+    expect(await f.session.readAccountConsentStatus(sdk, authority),
+        (cloud: true, ai: false, version: 9));
+    expect(cloudRequests.single.url.queryParameters['select'],
+        'cloud_processing_enabled,ai_consent_granted,consent_version');
+    expect(cloudRequests.single.url.queryParameters['user_id'],
+        'eq.returning-owner');
+    expect(await egress.gate.permits(), isFalse);
+    expect(await f.session.readAccountConsentStatus(sdk,
+        AdmissionAuthority('other-owner', () => true)), isNull);
+    expect(await f.session.readAccountConsentStatus(sdk,
+        AdmissionAuthority('returning-owner', () => false)), isNull);
+    expect(cloudRequests, hasLength(1));
+    cloudRows = [{'cloud_processing_enabled': true, 'consent_version': 9}];
+    expect(await f.session.readAccountConsentStatus(sdk, authority), isNull);
+  });
+
   test('another UID completion cannot skip the current account setup',
       () async {
     f.storage.data['onboarding_completed_accounts_v1'] = '["uid:other-owner"]';

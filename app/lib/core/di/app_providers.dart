@@ -1458,7 +1458,10 @@ final captureDeviceRegistrationServiceProvider =
   final database = ref.watch(appDatabaseProvider);
   var disposed = false;
   final service = CaptureDeviceRegistrationService(
-    settingsRepository: DriftUserSettingsRepository(database),
+    settingsRepository: DriftUserSettingsRepository(
+      database,
+      outboxQueue: ref.watch(planningOutboxQueueProvider),
+    ),
     client: ref.watch(captureBackendClientProvider),
     isCurrentScope: () =>
         !disposed && identical(ref.read(appDatabaseProvider), database),

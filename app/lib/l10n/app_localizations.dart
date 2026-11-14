@@ -2953,6 +2953,24 @@ abstract class AppL10n {
   /// **'نسخ البريد'**
   String get setCopyEmail;
 
+  /// No description provided for @copyAppDiagnostics.
+  ///
+  /// In ar, this message translates to:
+  /// **'نسخ سجل التشخيص'**
+  String get copyAppDiagnostics;
+
+  /// No description provided for @copyAppDiagnosticsDescription.
+  ///
+  /// In ar, this message translates to:
+  /// **'أحداث تقنية بدون رسائلك أو تفاصيلك المالية. راجع السجل قبل مشاركته.'**
+  String get copyAppDiagnosticsDescription;
+
+  /// No description provided for @appDiagnosticsCopied.
+  ///
+  /// In ar, this message translates to:
+  /// **'تم نسخ سجل التشخيص.'**
+  String get appDiagnosticsCopied;
+
   /// No description provided for @setEraseAllQ.
   ///
   /// In ar, this message translates to:
@@ -10816,7 +10834,7 @@ abstract class AppL10n {
   /// No description provided for @consentStatusTurningOffBody.
   ///
   /// In ar, this message translates to:
-  /// **'تم إيقاف المزامنة والتحليل بالفعل. نُنهي الإجراء الآن.'**
+  /// **'المزامنة والتحليل متوقفان على هذا الجهاز. ننتظر تأكيد الإيقاف من الخادم عند توفر الاتصال. يمكنك الضغط على «تحقّق مجددًا» لإعادة المحاولة الآن.'**
   String get consentStatusTurningOffBody;
 
   /// No description provided for @consentTurnOn.

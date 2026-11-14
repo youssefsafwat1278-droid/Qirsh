@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../session/app_session.dart';
 import '../startup/automatic_session_recovery.dart';
 import 'modal_route_observer.dart';
+import '../observability/flutter_diagnostics.dart';
 import '../theme/widgets/navy_sheet_theme.dart';
 import '../../features/accounts/account_detail_screen.dart';
 import '../../features/accounts/accounts_screen.dart';
@@ -71,7 +72,7 @@ final appRouter = GoRouter(
   ]),
   // Hides the native glass tab bar while a bottom sheet/dialog is open (it is
   // a platform view that Flutter modals can't cover). See ModalRouteObserver.
-  observers: [modalRouteObserver],
+  observers: [modalRouteObserver, DiagnosticNavigationObserver()],
   redirect: (context, state) {
     final session = AppSession.instance;
     if (AutomaticSessionRecovery.recoveryTimedOut.value) {
@@ -95,7 +96,8 @@ final appRouter = GoRouter(
     if (state.uri.path == '/onboarding/language') {
       if (!session.hasSeenWelcomeManifesto) return '/welcome';
       return status == SessionStatus.authenticated
-          ? '/' : onboardingEntryPathForSession(session);
+          ? '/'
+          : onboardingEntryPathForSession(session);
     }
     final inWelcome = state.matchedLocation == '/welcome';
     final inOnboarding = state.matchedLocation.startsWith('/onboarding');

@@ -35,6 +35,7 @@ import '../../core/exporting/managed_export_store.dart';
 import '../../core/router/modal_route_observer.dart';
 import 'app_boot_loader.dart';
 import '../planning_sync/services/startup_sync_reconcile_service.dart';
+import '../settings/consent_status.dart';
 import '../../core/session/app_session.dart';
 import '../../core/session/rebootstrap_service.dart';
 import '../../core/di/rebootstrap_providers.dart';
@@ -477,6 +478,12 @@ class _AppShellState extends ConsumerState<AppShell> {
     // again — re-check before running any Supabase-primary-dependent work.
     if (!await _revalidateAuthSession()) return;
     if (!work.current) return;
+    // Returning after restoring connectivity should not wait for an old OFF
+    // retry timer. This is the same pending revoke only, never a data sync.
+    if (!mounted) return;
+    unawaited(Future<void>.sync(() => ref
+        .read(captureDeviceRegistrationServiceProvider)
+        .retryPendingRevocationNow()).catchError((Object _) {}));
     // B2-C — coalesce the NON-CRITICAL, idempotent refreshes so rapid repeated
     // resumes don't re-run them each time. Safety-critical work below (reconcile,
     // capture import of NEW shared input, the SyncGate-coalesced sync) always
@@ -1094,9 +1101,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
     if (!originalCurrent()) return;
     if (settings.cloudProcessingEnabled &&
-        !await registration.serverConsentMatches(settings)) {
+        !await registration.deviceConsentMatches(settings)) {
       if (originalCurrent()) await registration.retry();
-      if (!originalCurrent() || !await registration.serverConsentMatches(settings)) {
+      if (!originalCurrent() || !await registration.deviceConsentMatches(settings)) {
         return;
       }
     }
@@ -1162,6 +1169,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     try {
       final parents = await planning.syncParents(reconciler: reconciler);
       cancelled = parents.cancelled;
+      if (!cancelled && originalCurrent()) {
+        ref.invalidate(consentLiveFactsProvider);
+      }
     } catch (error) {
       health.recordFailure(SyncDomain.planning, error);
       if (kDebugMode) {

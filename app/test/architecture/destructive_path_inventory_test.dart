@@ -118,6 +118,12 @@ void main() {
   /// GROUP F — files, never the database.
   ///   database_lease (2)           .lease + intent files of ENDED instances
   ///
+  /// Diagnostics classifier: the fixed SQL-pattern string contains one DELETE
+  /// token sequence, but never executes it. The interceptor delegates the
+  /// caller's unchanged statement/arguments exactly once to the same executor,
+  /// inside the original transaction. Failure is rethrown; it cannot start,
+  /// expand, retry or partially commit a deletion. SQL/values are not retained.
+  ///
   /// GROUP G — WP-3a per-UID replica directories (whole replica, by design).
   ///   replica_store (3)            `remove(uid)`: the ONE user-initiated
   ///                                "Remove data from this device" for a single
@@ -161,6 +167,8 @@ void main() {
     'lib/core/backup/restore_backup_usecase.dart': 7,
     // B
     'lib/data/db/app_database.dart': 4,
+    // Fixed classification regex only; audited above. No new destructive action.
+    'lib/core/observability/database_diagnostics.dart': 1,
     // C
     'lib/features/capture/services/local_notification_service.dart': 2,
     'lib/data/repositories/drift_suspected_duplicate_repository.dart': 1,

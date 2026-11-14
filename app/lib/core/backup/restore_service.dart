@@ -1,3 +1,4 @@
+import '../observability/app_diagnostics.dart';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
@@ -50,35 +51,37 @@ class RestoreService {
     void Function(String point)? onFaultPoint,
     Future<void> Function(Future<void> Function() run)? maintenanceParticipant,
   }) async {
-    Future<RestoreResult> body() => _execute(
-          plan: plan,
-          leaseManager: leaseManager,
-          ownershipGuard: ownershipGuard,
-          admissionToken: admissionToken,
-          preparedUserId: preparedUserId,
-          currentUserId: currentUserId,
-          afterRestore: afterRestore,
-          drainTimeout: drainTimeout,
-          exclusiveTimeout: exclusiveTimeout,
-          planningCoordinator: planningCoordinator,
-          planningRepairDecision: planningRepairDecision,
-          onFaultPoint: onFaultPoint,
-        );
-    final participant = maintenanceParticipant;
-    if (participant == null) return body();
-    var entered = false;
-    late RestoreResult result;
-    try {
-      await participant(() async {
-        entered = true;
-        result = await body();
-      });
-    } on StaleOwnershipException {
-      if (entered) rethrow;
-      return RestoreResult(RestoreOutcome.ownershipChanged,
-          operationId: plan.operationId);
-    }
-    return result;
+    return AppDiagnostics.run(AppOperation.restore, () async {
+      Future<RestoreResult> body() => _execute(
+            plan: plan,
+            leaseManager: leaseManager,
+            ownershipGuard: ownershipGuard,
+            admissionToken: admissionToken,
+            preparedUserId: preparedUserId,
+            currentUserId: currentUserId,
+            afterRestore: afterRestore,
+            drainTimeout: drainTimeout,
+            exclusiveTimeout: exclusiveTimeout,
+            planningCoordinator: planningCoordinator,
+            planningRepairDecision: planningRepairDecision,
+            onFaultPoint: onFaultPoint,
+          );
+      final participant = maintenanceParticipant;
+      if (participant == null) return body();
+      var entered = false;
+      late RestoreResult result;
+      try {
+        await participant(() async {
+          entered = true;
+          result = await body();
+        });
+      } on StaleOwnershipException {
+        if (entered) rethrow;
+        return RestoreResult(RestoreOutcome.ownershipChanged,
+            operationId: plan.operationId);
+      }
+      return result;
+    });
   }
 
   Future<RestoreResult> _execute({
@@ -149,12 +152,10 @@ class RestoreService {
       // ambiguous and must fail closed after the commit.
       try {
         if (!await admissionIsCurrent()) {
-          return committedPending(
-              warning: backupStateOwnershipConflictWarning);
+          return committedPending(warning: backupStateOwnershipConflictWarning);
         }
       } catch (_) {
-        return committedPending(
-            warning: backupStateOwnershipConflictWarning);
+        return committedPending(warning: backupStateOwnershipConflictWarning);
       }
 
       return RestoreResult(
@@ -178,17 +179,14 @@ class RestoreService {
       // Without the hash comparison, a fresh B preparation of A's operation id
       // would be "current" for B and could publish A's key material for B.
       if (existing.ownerGenerationHash != genHash) {
-        return committedPending(
-            warning: backupStateOwnershipConflictWarning);
+        return committedPending(warning: backupStateOwnershipConflictWarning);
       }
       try {
         if (!await admissionIsCurrent()) {
-          return committedPending(
-              warning: backupStateOwnershipConflictWarning);
+          return committedPending(warning: backupStateOwnershipConflictWarning);
         }
       } catch (_) {
-        return committedPending(
-            warning: backupStateOwnershipConflictWarning);
+        return committedPending(warning: backupStateOwnershipConflictWarning);
       }
       if (existing.state == RestoreJournalState.acknowledged) {
         return RestoreResult(

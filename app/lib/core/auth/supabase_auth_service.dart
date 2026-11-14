@@ -1,3 +1,4 @@
+import '../observability/app_diagnostics.dart';
 import 'dart:convert';
 import 'dart:math';
 
@@ -186,27 +187,36 @@ class SupabaseAuthService implements AuthService {
   Future<AuthIdentity> signUpWithGoogle() => _exchangeGoogle(create: true);
 
   Future<AuthIdentity> _exchangeGoogle({required bool create}) async {
-    final tokens = await _googleTokens();
-    final response = await _accountControl(() async {
-      if (create) {
-        final permit = await _client.functions.invoke('google-enrollment', body: {
-          'id_token': tokens.idToken,
-          'nonce': tokens.nonce == null ? null : appleHashedNonce(tokens.nonce!),
-        });
-        final result = permit.data;
-        if (permit.status != 200 || result is! Map || result['allowed'] != true) {
-          throw const AuthException('google_enrollment_unavailable');
+    return AppDiagnostics.run(AppOperation.authentication, () async {
+      final tokens = await _googleTokens();
+      final response = await _accountControl(() async {
+        if (create) {
+          final permit =
+              await _client.functions.invoke('google-enrollment', body: {
+            'id_token': tokens.idToken,
+            'nonce':
+                tokens.nonce == null ? null : appleHashedNonce(tokens.nonce!),
+          });
+          final result = permit.data;
+          if (permit.status != 200 ||
+              result is! Map ||
+              result['allowed'] != true) {
+            throw const AuthException('google_enrollment_unavailable');
+          }
         }
-      }
-      return _client.auth.signInWithIdToken(
-        provider: supabase.OAuthProvider.google,
-        idToken: tokens.idToken,
-        accessToken: tokens.accessToken,
-        nonce: tokens.nonce,
-      );
+        return _client.auth.signInWithIdToken(
+          provider: supabase.OAuthProvider.google,
+          idToken: tokens.idToken,
+          accessToken: tokens.accessToken,
+          nonce: tokens.nonce,
+        );
+      });
+      return AuthIdentity(
+          isCurrent: _responseCurrent(response),
+          method: 'google',
+          email: response.user?.email ?? tokens.email,
+          userId: response.user?.id);
     });
-    return AuthIdentity(isCurrent: _responseCurrent(response), method: 'google',
-      email: response.user?.email ?? tokens.email, userId: response.user?.id);
   }
 
   Future<({String idToken, String? accessToken, String? email, String? nonce})>
@@ -311,60 +321,63 @@ class SupabaseAuthService implements AuthService {
 
   @override
   Future<AuthIdentity> signInWithApple() async {
-    final attempt = ++_appleAttemptSeq;
-    // Per-attempt, function-scoped: nothing to clear on a terminal outcome
-    // because nothing outlives this frame. Never logged, never persisted.
-    final rawNonce = generateAppleRawNonce();
+    return AppDiagnostics.run(AppOperation.authentication, () async {
+      final attempt = ++_appleAttemptSeq;
+      // Per-attempt, function-scoped: nothing to clear on a terminal outcome
+      // because nothing outlives this frame. Never logged, never persisted.
+      final rawNonce = generateAppleRawNonce();
 
-    final AuthorizationCredentialAppleID credential;
-    try {
-      credential = await SignInWithApple.getAppleIDCredential(
-        scopes: const [
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-        // Apple receives the HASH; the raw value is proved at exchange time.
-        nonce: appleHashedNonce(rawNonce),
-      );
-    } on SignInWithAppleAuthorizationException catch (e) {
-      // A cancelled attempt must end as a cancellation, not an opaque error —
-      // and it establishes no session, leaving this attempt's nonce unused.
-      if (e.code == AuthorizationErrorCode.canceled) {
+      final AuthorizationCredentialAppleID credential;
+      try {
+        credential = await SignInWithApple.getAppleIDCredential(
+          scopes: const [
+            AppleIDAuthorizationScopes.email,
+            AppleIDAuthorizationScopes.fullName,
+          ],
+          // Apple receives the HASH; the raw value is proved at exchange time.
+          nonce: appleHashedNonce(rawNonce),
+        );
+      } on SignInWithAppleAuthorizationException catch (e) {
+        // A cancelled attempt must end as a cancellation, not an opaque error —
+        // and it establishes no session, leaving this attempt's nonce unused.
+        if (e.code == AuthorizationErrorCode.canceled) {
+          throw const AuthCancelledException('تم إلغاء تسجيل الدخول بـ Apple.');
+        }
+        throw const AuthException('تعذّر تسجيل الدخول بـ Apple.');
+      }
+
+      if (attempt != _appleAttemptSeq) {
+        // Superseded while the system sheet was open.
         throw const AuthCancelledException('تم إلغاء تسجيل الدخول بـ Apple.');
       }
-      throw const AuthException('تعذّر تسجيل الدخول بـ Apple.');
-    }
 
-    if (attempt != _appleAttemptSeq) {
-      // Superseded while the system sheet was open.
-      throw const AuthCancelledException('تم إلغاء تسجيل الدخول بـ Apple.');
-    }
+      final identityToken = credential.identityToken;
+      if (identityToken == null || identityToken.isEmpty) {
+        throw const AuthException('لم نستطع قراءة رمز دخول Apple.');
+      }
 
-    final identityToken = credential.identityToken;
-    if (identityToken == null || identityToken.isEmpty) {
-      throw const AuthException('لم نستطع قراءة رمز دخول Apple.');
-    }
+      final response =
+          await _accountControl(() => _client.auth.signInWithIdToken(
+                provider: supabase.OAuthProvider.apple,
+                idToken: identityToken,
+                // The RAW nonce for THIS attempt. The backend re-hashes it and compares
+                // against the token's `nonce` claim, so a token minted for a different
+                // attempt (or with no nonce at all) cannot be exchanged here.
+                nonce: rawNonce,
+              ));
 
-    final response = await _accountControl(() => _client.auth.signInWithIdToken(
-          provider: supabase.OAuthProvider.apple,
-          idToken: identityToken,
-          // The RAW nonce for THIS attempt. The backend re-hashes it and compares
-          // against the token's `nonce` claim, so a token minted for a different
-          // attempt (or with no nonce at all) cannot be exchanged here.
-          nonce: rawNonce,
-        ));
+      if (attempt != _appleAttemptSeq) {
+        throw const AuthCancelledException('تم إلغاء تسجيل الدخول بـ Apple.');
+      }
 
-    if (attempt != _appleAttemptSeq) {
-      throw const AuthCancelledException('تم إلغاء تسجيل الدخول بـ Apple.');
-    }
-
-    final email = response.user?.email ?? credential.email;
-    return AuthIdentity(
-      isCurrent: _responseCurrent(response),
-      method: 'apple',
-      email: email,
-      userId: response.user?.id,
-    );
+      final email = response.user?.email ?? credential.email;
+      return AuthIdentity(
+        isCurrent: _responseCurrent(response),
+        method: 'apple',
+        email: email,
+        userId: response.user?.id,
+      );
+    });
   }
 
   @override
@@ -384,20 +397,22 @@ class SupabaseAuthService implements AuthService {
     required String email,
     required String code,
   }) async {
-    final token = code.replaceAll(RegExp(r'\s'), '');
-    final response = await _accountControl(() => _client.auth.verifyOTP(
-          email: email,
-          token: token,
-          type: supabase.OtpType.email,
-        ));
-    final user = response.user;
-    if (user == null) return null;
-    return AuthIdentity(
-      isCurrent: _responseCurrent(response),
-      method: 'email',
-      email: user.email ?? email,
-      userId: user.id,
-    );
+    return AppDiagnostics.run(AppOperation.authentication, () async {
+      final token = code.replaceAll(RegExp(r'\s'), '');
+      final response = await _accountControl(() => _client.auth.verifyOTP(
+            email: email,
+            token: token,
+            type: supabase.OtpType.email,
+          ));
+      final user = response.user;
+      if (user == null) return null;
+      return AuthIdentity(
+        isCurrent: _responseCurrent(response),
+        method: 'email',
+        email: user.email ?? email,
+        userId: user.id,
+      );
+    });
   }
 }
 

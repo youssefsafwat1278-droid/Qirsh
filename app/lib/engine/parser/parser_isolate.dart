@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:isolate';
+import '../../core/observability/app_diagnostics.dart';
 
 import 'bank_profile.dart';
 import 'catalog_rule_matcher.dart';
@@ -18,6 +19,7 @@ class ParserIsolate {
     List<CatalogParserRule> catalogRules = const [],
     String defaultCurrency = 'SAR',
   }) async {
+    final trace = AppDiagnostics.begin(AppOperation.parsing);
     final receivePort = ReceivePort();
     Isolate? isolate;
     try {
@@ -33,14 +35,23 @@ class ParserIsolate {
         ),
       );
       final message = await receivePort.first.timeout(timeout);
-      if (message is ParseResult) return message;
+      if (message is ParseResult) {
+        trace.finish();
+        return message;
+      }
+      trace.finish(
+          state: AppEventState.blocked, reason: AppEventReason.parseNoMatch);
       return null;
     } on TimeoutException {
+      trace.finish(state: AppEventState.failed, reason: AppEventReason.timeout);
       isolate?.kill(priority: Isolate.immediate);
       return null;
     } catch (_) {
+      trace.finish(
+          state: AppEventState.failed, reason: AppEventReason.exception);
       return null;
     } finally {
+      trace.finish(state: AppEventState.cancelled);
       receivePort.close();
     }
   }

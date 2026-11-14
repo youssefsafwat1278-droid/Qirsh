@@ -11,6 +11,7 @@ import '../../domain/entities/engagement_entities.dart';
 import '../../domain/entities/supporting_entities.dart';
 import '../../domain/repositories/user_settings_repository.dart';
 import '../../features/planning_sync/services/planning_outbox_queue.dart';
+import '../../core/observability/app_diagnostics.dart';
 import '../db/app_database.dart';
 import '../db/sql_value_codec.dart';
 import 'drift_repository_support.dart';
@@ -169,6 +170,7 @@ class DriftUserSettingsRepository
     await beforeConsentChoice(capability, choices);
     final saved = await _saveConsentChoice(capability, choices);
     afterConsentChoice(capability, choices);
+    _recordConsentCommit(saved);
     return saved;
   }
 
@@ -249,6 +251,7 @@ class DriftUserSettingsRepository
         choices.applyTo(previous),
         checkpoint: capability.requireCurrent,
         exactVersion: exactVersion,
+        explicitConsent: choices.cloud != null || choices.ai != null,
       );
       capability.requireCurrent();
       // The FINAL synchronous authorization point: nothing is awaited between
@@ -347,13 +350,27 @@ class DriftUserSettingsRepository
     final saved = await _saveConsentChoice(capability, choices,
         token: _ReservedCommit(version, operationId, proof));
     afterConsentChoice(capability, choices);
+    _recordConsentCommit(saved);
     return saved;
+  }
+
+  void _recordConsentCommit(UserSettingsEntity saved) {
+    AppDiagnostics.record(
+        AppOperation.cloudConsent,
+        saved.cloudProcessingEnabled
+            ? AppEventState.enabled
+            : AppEventState.disabled,
+        revision: saved.consentVersion);
+    AppDiagnostics.record(AppOperation.aiConsent,
+        saved.aiConsentGranted ? AppEventState.enabled : AppEventState.disabled,
+        revision: saved.consentVersion);
   }
 
   Future<UserSettingsEntity> _saveWithinTransaction(
     UserSettingsEntity settings, {
     void Function()? checkpoint,
     int? exactVersion,
+    bool explicitConsent = false,
   }) async {
     {
       // Cloud/AI consent persists exactly as the user chose (MALI-001) — the
@@ -474,12 +491,19 @@ class DriftUserSettingsRepository
         aiConsentAt: aiChanged ? changedAtValue : previousSettings.aiConsentAt,
       );
       // S2: أدرج التفضيلات السحابية للمزامنة في الخلفية (الأعمدة السحابية فقط).
-      await _outboxQueue?.enqueueSettings(
+      final queued = await _outboxQueue?.enqueueSettings(
         PlanningSyncOperation.update,
         saved,
-        consentChanged: consentChanged,
+        // Retrying the same explicit choice must resend its consent fields,
+        // even when its local value/version were already saved successfully.
+        consentChanged: consentChanged || explicitConsent,
         previous: previousSettings,
       );
+      AppDiagnostics.record(AppOperation.settingsQueue,
+          queued == true ? AppEventState.pending : AppEventState.blocked,
+          reason: queued == true ? AppEventReason.none
+              : _outboxQueue == null ? AppEventReason.unavailable : AppEventReason.ownerMissing,
+          revision: saved.consentVersion);
       checkpoint?.call(); // after the atomic local outbox enqueue
       return saved;
     }

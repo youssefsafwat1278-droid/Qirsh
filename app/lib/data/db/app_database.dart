@@ -6,6 +6,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../../core/utils/id_generator.dart';
+import '../../core/observability/database_diagnostics.dart';
 import 'creation_policy.dart';
 import 'database_key_store.dart';
 import 'existing_only_sqlite3.dart';
@@ -213,7 +214,7 @@ class AppDatabase extends GeneratedDatabase {
     required this.isEncrypted,
     this.isReadOnly = false,
     this.initialLanguage = 'en',
-  }) : super.connect(connection);
+  }) : super.connect(connection.interceptWith(DatabaseDiagnostics()));
 
   final DatabaseKeyStore keyStore;
   final bool isEncrypted;

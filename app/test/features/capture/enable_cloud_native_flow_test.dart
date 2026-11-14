@@ -16,6 +16,7 @@ import 'package:money_companion/domain/entities/supporting_entities.dart';
 import 'package:money_companion/features/capture/services/capture_backend_client.dart';
 import 'package:money_companion/features/capture/services/capture_device_registration_service.dart';
 import 'package:money_companion/features/capture/services/native_capture_bridge.dart';
+import 'package:money_companion/features/planning_sync/services/planning_outbox_queue.dart';
 
 import '../../core/session/f2_fixture.dart';
 import '../../harness/consent_session_support.dart';
@@ -29,9 +30,9 @@ import '../../harness/paused_egress_support.dart';
 // Dart ordering only, not native execution). No test touches a network.
 
 class _Settings extends DriftUserSettingsRepository {
-  _Settings(AppDatabase db)
+  _Settings(AppDatabase db, {PlanningOutboxQueue? outboxQueue})
       : database = db,
-        super(db);
+        super(db, outboxQueue: outboxQueue);
   final AppDatabase database;
   Completer<void>? reached;
   Completer<void>? _release;
@@ -196,6 +197,24 @@ void main() {
     messenger.setMockMethodCallHandler(channel, null);
     ConsentAuthority.egressFrozen = false;
     CloudEgressGate.instance = previousGate;
+  });
+
+  test('native reserved enable queues the exact committed account consent',
+      () async {
+    final db = f.host.current!.database;
+    final queue = HookedOutbox(db, 'uid-x');
+    final settings = _Settings(db, outboxQueue: queue);
+    expect(await enable(service(settings)), isNull);
+    final saved = await settings.getSettings();
+    expect(queue.enqueues, 1);
+    final pending = await queue.pendingItems(entityType: 'settings');
+    expect(pending, hasLength(1));
+    expect(pending.single.ownerUid, 'uid-x');
+    expect(pending.single.payloadJson['cloud_processing_enabled'], isTrue);
+    expect(pending.single.payloadJson['ai_consent_granted'], isTrue);
+    expect(pending.single.payloadJson['consent_version'], saved.consentVersion);
+    expect(pending.single.payloadJson['consent_only'], isTrue);
+    expect(await pendingPresent(), isFalse);
   });
 
   group('same-owner return after a native lifetime ends', () {

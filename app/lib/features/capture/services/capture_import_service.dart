@@ -1,3 +1,4 @@
+import '../../../core/observability/app_diagnostics.dart';
 import '../../../domain/entities/transaction_entity.dart';
 import 'budget_alert_commits.dart';
 import 'package:flutter/foundation.dart';
@@ -251,135 +252,137 @@ class CaptureImportService {
   }
 
   Future<CaptureImportReport> _runOnce() async {
-    _token = await _guard.capture();
-    final owner = await _owner();
-    if (owner == null || !await _stillOwner(owner)) {
-      return const CaptureImportReport(guardFailed: true);
-    }
-
-    final fetch = await _server.fetchResults();
-    final results = Map<String, ProcessedCaptureDto>.of(fetch.results);
-    var serverStatus = fetch.status;
-
-    final imported = <CaptureImportItem>[];
-    var foreign = 0;
-    var awaiting = 0;
-    final items = <SharedCapturedMessage>[];
-    final List<SharedCapturedMessage> queued;
-    try {
-      queued = await _queue.peek();
-    } on NativeCaptureReadException {
-      // An unreadable queue is an error, not an empty one: no import, no
-      // removal, no ACK. The next run retries.
-      return const CaptureImportReport(readFailed: true);
-    }
-    for (final m in queued) {
-      final id = m.id?.trim();
-      if (id == null || id.isEmpty) continue;
-      // Triple equality: an item stamped to anyone else (or unstamped) waits.
-      if (m.ownerUid != owner) {
-        foreign++;
-        continue;
-      }
-      items.add(m);
-    }
-    items.sort((a, b) {
-      final x = a.receivedAt, y = b.receivedAt;
-      if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
-      return x.compareTo(y);
-    });
-
-    final handled = <String>{};
-    final acks = <String>{};
-    var guardFailed = false;
-    _uploadRateLimited = false;
-    for (final item in items) {
-      if (_barrier) break;
-      final id = item.id!.trim();
-      // The item could not be finished on this pass: count it. True when its
-      // bounded retries are spent and it was parked in Smart Inbox instead.
-      Future<bool> deferred(CaptureFailureKind kind) async {
-        if (!await _parkAfterBoundedRetries(owner, item, id, kind)) {
-          return false;
-        }
-        handled.add(id);
-        if (results.containsKey(id)) acks.add(id);
-        imported.add(CaptureImportItem(
-            id: id, path: CaptureImportPath.server, message: item));
-        return true;
+    return AppDiagnostics.run(AppOperation.capture, () async {
+      _token = await _guard.capture();
+      final owner = await _owner();
+      if (owner == null || !await _stillOwner(owner)) {
+        return const CaptureImportReport(guardFailed: true);
       }
 
+      final fetch = await _server.fetchResults();
+      final results = Map<String, ProcessedCaptureDto>.of(fetch.results);
+      var serverStatus = fetch.status;
+
+      final imported = <CaptureImportItem>[];
+      var foreign = 0;
+      var awaiting = 0;
+      final items = <SharedCapturedMessage>[];
+      final List<SharedCapturedMessage> queued;
       try {
-        if (!await _stillOwner(owner)) throw const StaleOwnershipException();
-        // Backing off after an earlier failed pass: nothing is re-sent or
-        // re-parsed until the wait elapses. A result that committed meanwhile
-        // (receipt) is still consumed below.
-        if (!(await _retryLedger?.isDue(id) ?? true) &&
-            !await _receipts.hasReceiptOrTransaction(id)) {
-          awaiting++;
+        queued = await _queue.peek();
+      } on NativeCaptureReadException {
+        // An unreadable queue is an error, not an empty one: no import, no
+        // removal, no ACK. The next run retries.
+        return const CaptureImportReport(readFailed: true);
+      }
+      for (final m in queued) {
+        final id = m.id?.trim();
+        if (id == null || id.isEmpty) continue;
+        // Triple equality: an item stamped to anyone else (or unstamped) waits.
+        if (m.ownerUid != owner) {
+          foreign++;
           continue;
         }
-        final done = await _handleItem(
-          owner: owner,
-          item: item,
-          id: id,
-          results: results,
-          fetchStatus: serverStatus,
-          acks: acks,
-          onRefetch: (f) => serverStatus = f.status,
-        );
-        if (done == null) {
-          if (!await deferred(CaptureFailureKind.temporary)) awaiting++;
-        } else {
+        items.add(m);
+      }
+      items.sort((a, b) {
+        final x = a.receivedAt, y = b.receivedAt;
+        if (x == null || y == null) return x == null ? (y == null ? 0 : 1) : -1;
+        return x.compareTo(y);
+      });
+
+      final handled = <String>{};
+      final acks = <String>{};
+      var guardFailed = false;
+      _uploadRateLimited = false;
+      for (final item in items) {
+        if (_barrier) break;
+        final id = item.id!.trim();
+        // The item could not be finished on this pass: count it. True when its
+        // bounded retries are spent and it was parked in Smart Inbox instead.
+        Future<bool> deferred(CaptureFailureKind kind) async {
+          if (!await _parkAfterBoundedRetries(owner, item, id, kind)) {
+            return false;
+          }
           handled.add(id);
-          imported.add(done);
-          await _retryLedger?.clear(id);
+          if (results.containsKey(id)) acks.add(id);
+          imported.add(CaptureImportItem(
+              id: id, path: CaptureImportPath.server, message: item));
+          return true;
         }
-      } on StaleOwnershipException {
-        guardFailed = true;
-        break;
-      } catch (e) {
-        // The item stays in the queue; its retries are bounded by the ledger.
-        if (kDebugMode) {
-          debugPrint('[CaptureImport] item failed: ${e.runtimeType}');
-        }
+
         try {
-          if (!await deferred(CaptureRetryLedger.classify(e))) awaiting++;
+          if (!await _stillOwner(owner)) throw const StaleOwnershipException();
+          // Backing off after an earlier failed pass: nothing is re-sent or
+          // re-parsed until the wait elapses. A result that committed meanwhile
+          // (receipt) is still consumed below.
+          if (!(await _retryLedger?.isDue(id) ?? true) &&
+              !await _receipts.hasReceiptOrTransaction(id)) {
+            awaiting++;
+            continue;
+          }
+          final done = await _handleItem(
+            owner: owner,
+            item: item,
+            id: id,
+            results: results,
+            fetchStatus: serverStatus,
+            acks: acks,
+            onRefetch: (f) => serverStatus = f.status,
+          );
+          if (done == null) {
+            if (!await deferred(CaptureFailureKind.temporary)) awaiting++;
+          } else {
+            handled.add(id);
+            imported.add(done);
+            await _retryLedger?.clear(id);
+          }
         } on StaleOwnershipException {
           guardFailed = true;
           break;
-        } catch (_) {
-          awaiting++;
+        } catch (e) {
+          // The item stays in the queue; its retries are bounded by the ledger.
+          if (kDebugMode) {
+            debugPrint('[CaptureImport] item failed: ${e.runtimeType}');
+          }
+          try {
+            if (!await deferred(CaptureRetryLedger.classify(e))) awaiting++;
+          } on StaleOwnershipException {
+            guardFailed = true;
+            break;
+          } catch (_) {
+            awaiting++;
+          }
         }
       }
-    }
 
-    // Server results with no device copy are never imported (the device copy is
-    // the ownership proof, Q6); one whose receipt exists only needs its ACK.
-    for (final id in results.keys) {
-      if (handled.contains(id) || _barrier) continue;
-      if (await _receipts.hasReceiptOrTransaction(id)) acks.add(id);
-    }
+      // Server results with no device copy are never imported (the device copy is
+      // the ownership proof, Q6); one whose receipt exists only needs its ACK.
+      for (final id in results.keys) {
+        if (handled.contains(id) || _barrier) continue;
+        if (await _receipts.hasReceiptOrTransaction(id)) acks.add(id);
+      }
 
-    if (acks.isNotEmpty) {
-      if (_barrier) {
-        _deferredServerAcks.addAll(acks);
-      } else if (await _stillOwner(owner)) {
-        try {
-          await _server.acknowledge(acks.toList());
-        } catch (_) {
-          // The local results are durable; the receipts make the next ACK a no-op.
+      if (acks.isNotEmpty) {
+        if (_barrier) {
+          _deferredServerAcks.addAll(acks);
+        } else if (await _stillOwner(owner)) {
+          try {
+            await _server.acknowledge(acks.toList());
+          } catch (_) {
+            // The local results are durable; the receipts make the next ACK a no-op.
+          }
         }
       }
-    }
 
-    return CaptureImportReport(
-      imported: imported,
-      skippedForeignOwner: foreign,
-      skippedAwaiting: awaiting,
-      guardFailed: guardFailed,
-      barrierHeld: _barrier,
-    );
+      return CaptureImportReport(
+        imported: imported,
+        skippedForeignOwner: foreign,
+        skippedAwaiting: awaiting,
+        guardFailed: guardFailed,
+        barrierHeld: _barrier,
+      );
+    });
   }
 
   /// A 429 was seen on this run: no further upload is attempted on it.

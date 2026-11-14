@@ -1354,6 +1354,60 @@ void main() {
 
     void elapse(Duration d) => clock = clock.add(d);
 
+    test('explicit Retry confirms a pending OFF without waiting for its backoff',
+        () async {
+      final s = await offWithMissedRevoke();
+      final before = await repo.getSettings();
+      await s.retry();
+      expect(calls, ['revoke']);
+      expect(await s.pendingRevocationGeneration('uid-a'), isNull);
+      expect((await s.serverRevocation())!.status, ServerRevocation.confirmed);
+      expect((await repo.getSettings()).consentVersion, before.consentVersion);
+      expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+      expect(commits, 1, reason: 'a server retry never writes another choice');
+    });
+
+    test('foreground recovery retries only the pending revoke immediately',
+        () async {
+      final s = await offWithMissedRevoke();
+      await s.retryPendingRevocationNow();
+      expect(calls, ['revoke']);
+      expect(await s.pendingRevocationGeneration('uid-a'), isNull);
+      await s.retryPendingRevocationNow();
+      expect(calls, ['revoke'], reason: 'a confirmed OFF is never sent again');
+    });
+
+    for (final blocked in ['signed out', 'other owner', 'locally ON']) {
+      test('foreground retry stays silent when $blocked', () async {
+        final s = await offWithMissedRevoke();
+        switch (blocked) {
+          case 'signed out':
+            session = null;
+          case 'other owner':
+            session = (uid: 'uid-b', jwt: 'jwt-b');
+            replicaOwner = 'uid-b';
+            egress.owner = 'uid-b';
+          case 'locally ON':
+            await commitOn();
+        }
+        await s.retryPendingRevocationNow();
+        expect(calls, isEmpty);
+        expect(await s.pendingRevocationGeneration('uid-a'), isNotNull);
+      });
+    }
+
+    test('a failed foreground retry keeps the normal automatic backoff',
+        () async {
+      final s = await offWithMissedRevoke();
+      consent.setError = const CaptureBackendException('offline');
+      await s.retryPendingRevocationNow();
+      expect(calls, ['revoke']);
+      await s.syncBackendState();
+      expect(calls, ['revoke'], reason: 'the automatic retry still waits');
+      expect(await s.pendingRevocationGeneration('uid-a'), isNotNull);
+      expect((await repo.getSettings()).cloudProcessingEnabled, isFalse);
+    });
+
     test('stays pending; not resent before its backoff; then once, only the '
         'revoke, and silence after the server confirmed', () async {
       final s = await offWithMissedRevoke();

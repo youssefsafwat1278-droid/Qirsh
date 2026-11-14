@@ -1,3 +1,4 @@
+import '../observability/app_diagnostics.dart';
 import 'dart:convert';
 import 'dart:math';
 
@@ -262,118 +263,121 @@ class EncryptedBackupService implements BackupService {
 
   @override
   Future<void> backupNow() async {
-    final userId = _userId();
-    // Audit H-23: THE critical gate. Without it a background backup for the
-    // newly signed-in account encrypted that account's data with the previous
-    // account's content key and uploaded it under the new account's path.
-    if (!await _ownedByCurrentAccount(userId)) return;
-    final enabled = await _storage.read(key: _enabledKey) == '1';
-    if (!enabled) return;
+    return AppDiagnostics.run(AppOperation.backup, () async {
+      final userId = _userId();
+      // Audit H-23: THE critical gate. Without it a background backup for the
+      // newly signed-in account encrypted that account's data with the previous
+      // account's content key and uploaded it under the new account's path.
+      if (!await _ownedByCurrentAccount(userId)) return;
+      final enabled = await _storage.read(key: _enabledKey) == '1';
+      if (!enabled) return;
 
-    final saltRaw = await _storage.read(key: _saltKey);
-    final keyRaw = await _storage.read(key: _localKeyKey);
-    final slotsRaw = await _storage.read(key: _keySlotsKey);
-    final recoveryRaw = await _storage.read(key: _recoveryKey);
-    if (keyRaw == null ||
-        ((slotsRaw == null || slotsRaw.isEmpty) && saltRaw == null)) {
-      throw const BackupException('النسخ الاحتياطي يحتاج تفعيل جديد.',
-          code: BackupError.needsReenable);
-    }
+      final saltRaw = await _storage.read(key: _saltKey);
+      final keyRaw = await _storage.read(key: _localKeyKey);
+      final slotsRaw = await _storage.read(key: _keySlotsKey);
+      final recoveryRaw = await _storage.read(key: _recoveryKey);
+      if (keyRaw == null ||
+          ((slotsRaw == null || slotsRaw.isEmpty) && saltRaw == null)) {
+        throw const BackupException('النسخ الاحتياطي يحتاج تفعيل جديد.',
+            code: BackupError.needsReenable);
+      }
 
-    final keyBytes = base64Decode(keyRaw);
+      final keyBytes = base64Decode(keyRaw);
 
-    // MALI-076n — current installs write the v3 authenticated envelope, reusing
-    // the stored content key + slots (no passphrase needed for a background
-    // backup). Pre-v3 installs keep their existing format until re-enable.
-    final isV3 = await _storage.read(key: _envelopeVersionKey) == '3';
-    if (isV3 && slotsRaw != null && slotsRaw.isNotEmpty) {
-      // MALI-030 (B2-B closure) — stream the snapshot straight to capped plaintext
-      // bytes (no full object graph / whole JSON String), then AEAD-seal them.
-      final plaintext =
-          await BackupSnapshotBuilder(_database).buildEncryptedPlaintext(
-        maxBytes: BackupEnvelopeLimits.maxPlaintextBytes,
-      );
-      final v3Blob = await _crypto.encryptEnvelopeV3WithContentKeyFromPlaintext(
-        plaintext: plaintext,
-        schemaVersion: BackupSnapshotBuilder.currentSchemaVersion,
-        contentKey: keyBytes,
-        keySlots: _decodeKeySlots(slotsRaw),
-      );
-      final v3Bytes = v3Blob.toBytes();
-      // MALI-076n §5 — publish as a NEW generation: a unique per-generation
-      // object path, size-verified upload, compare-and-set pointer commit, then
-      // retire the previous object ONLY after the new pointer commits. An
-      // interrupted upload can only orphan a new object; the last valid backup is
-      // never replaced.
-      await _publisher.publish(
-        blob: v3Bytes,
-        envelopeVersion: v3Blob.version,
-        generationId: IdGenerator.uuidV4(),
-        operationId: IdGenerator.uuidV4(),
-      );
-      await _storage.write(
-          key: _lastKey, value: DateTime.now().toUtc().toIso8601String());
-      return;
-    }
+      // MALI-076n — current installs write the v3 authenticated envelope, reusing
+      // the stored content key + slots (no passphrase needed for a background
+      // backup). Pre-v3 installs keep their existing format until re-enable.
+      final isV3 = await _storage.read(key: _envelopeVersionKey) == '3';
+      if (isV3 && slotsRaw != null && slotsRaw.isNotEmpty) {
+        // MALI-030 (B2-B closure) — stream the snapshot straight to capped plaintext
+        // bytes (no full object graph / whole JSON String), then AEAD-seal them.
+        final plaintext =
+            await BackupSnapshotBuilder(_database).buildEncryptedPlaintext(
+          maxBytes: BackupEnvelopeLimits.maxPlaintextBytes,
+        );
+        final v3Blob =
+            await _crypto.encryptEnvelopeV3WithContentKeyFromPlaintext(
+          plaintext: plaintext,
+          schemaVersion: BackupSnapshotBuilder.currentSchemaVersion,
+          contentKey: keyBytes,
+          keySlots: _decodeKeySlots(slotsRaw),
+        );
+        final v3Bytes = v3Blob.toBytes();
+        // MALI-076n §5 — publish as a NEW generation: a unique per-generation
+        // object path, size-verified upload, compare-and-set pointer commit, then
+        // retire the previous object ONLY after the new pointer commits. An
+        // interrupted upload can only orphan a new object; the last valid backup is
+        // never replaced.
+        await _publisher.publish(
+          blob: v3Bytes,
+          envelopeVersion: v3Blob.version,
+          generationId: IdGenerator.uuidV4(),
+          operationId: IdGenerator.uuidV4(),
+        );
+        await _storage.write(
+            key: _lastKey, value: DateTime.now().toUtc().toIso8601String());
+        return;
+      }
 
-    // Legacy (pre-v3) installs only: build the object snapshot lazily here — the
-    // common v3 path above never constructs it (it streams straight to plaintext).
-    final snapshot = await BackupSnapshotBuilder(_database).build();
-    final shouldUpgradeLegacyBackup =
-        (slotsRaw == null || slotsRaw.isEmpty) && recoveryRaw != null;
-    final blob = shouldUpgradeLegacyBackup
-        ? await _crypto.encryptJsonWithRawKey(
-            json: snapshot,
-            keyBytes: keyBytes,
-            keySlots: [
-              await _crypto.createKeySlot(
-                type: 'recovery',
-                secret: recoveryRaw,
-                keyBytes: keyBytes,
+      // Legacy (pre-v3) installs only: build the object snapshot lazily here — the
+      // common v3 path above never constructs it (it streams straight to plaintext).
+      final snapshot = await BackupSnapshotBuilder(_database).build();
+      final shouldUpgradeLegacyBackup =
+          (slotsRaw == null || slotsRaw.isEmpty) && recoveryRaw != null;
+      final blob = shouldUpgradeLegacyBackup
+          ? await _crypto.encryptJsonWithRawKey(
+              json: snapshot,
+              keyBytes: keyBytes,
+              keySlots: [
+                await _crypto.createKeySlot(
+                  type: 'recovery',
+                  secret: recoveryRaw,
+                  keyBytes: keyBytes,
+                ),
+              ],
+              salt: base64Decode(saltRaw!),
+            )
+          : slotsRaw == null || slotsRaw.isEmpty
+              ? await _crypto.encryptJsonWithKey(
+                  json: snapshot,
+                  key: SecretKey(keyBytes),
+                  salt: base64Decode(saltRaw!),
+                )
+              : await _crypto.encryptJsonWithRawKey(
+                  json: snapshot,
+                  keyBytes: keyBytes,
+                  keySlots: _decodeKeySlots(slotsRaw),
+                );
+      if (shouldUpgradeLegacyBackup) {
+        await _storage.write(
+          key: _keySlotsKey,
+          value: _encodeKeySlots(blob.keySlots),
+        );
+      }
+      final bytes = blob.toBytes();
+      final path = '$userId/backup.enc';
+      try {
+        await _client.storage.from(_bucket).uploadBinary(
+              path,
+              bytes,
+              fileOptions: const supabase.FileOptions(
+                upsert: true,
+                contentType: 'application/octet-stream',
               ),
-            ],
-            salt: base64Decode(saltRaw!),
-          )
-        : slotsRaw == null || slotsRaw.isEmpty
-            ? await _crypto.encryptJsonWithKey(
-                json: snapshot,
-                key: SecretKey(keyBytes),
-                salt: base64Decode(saltRaw!),
-              )
-            : await _crypto.encryptJsonWithRawKey(
-                json: snapshot,
-                keyBytes: keyBytes,
-                keySlots: _decodeKeySlots(slotsRaw),
-              );
-    if (shouldUpgradeLegacyBackup) {
-      await _storage.write(
-        key: _keySlotsKey,
-        value: _encodeKeySlots(blob.keySlots),
-      );
-    }
-    final bytes = blob.toBytes();
-    final path = '$userId/backup.enc';
-    try {
-      await _client.storage.from(_bucket).uploadBinary(
-            path,
-            bytes,
-            fileOptions: const supabase.FileOptions(
-              upsert: true,
-              contentType: 'application/octet-stream',
-            ),
-          );
-      final now = DateTime.now().toUtc();
-      await _client.from('backups').upsert(uploadMetadata(
-            userId: userId,
-            path: path,
-            blobVersion: blob.version,
-            sizeBytes: bytes.length,
-            updatedAtIso: now.toIso8601String(),
-          ));
-      await _storage.write(key: _lastKey, value: now.toIso8601String());
-    } on supabase.StorageException catch (error) {
-      throw backupStorageException(error);
-    }
+            );
+        final now = DateTime.now().toUtc();
+        await _client.from('backups').upsert(uploadMetadata(
+              userId: userId,
+              path: path,
+              blobVersion: blob.version,
+              sizeBytes: bytes.length,
+              updatedAtIso: now.toIso8601String(),
+            ));
+        await _storage.write(key: _lastKey, value: now.toIso8601String());
+      } on supabase.StorageException catch (error) {
+        throw backupStorageException(error);
+      }
+    });
   }
 
   /// MALI-076n §3 — DISABLE stops future uploads ONLY. It clears local backup
@@ -419,85 +423,12 @@ class EncryptedBackupService implements BackupService {
 
   @override
   Future<RestorePlan> prepareRestore({required String passphrase}) async {
-    // Bind the entire prepare/commit lifecycle to both authorities at its start:
-    // the authenticated user and the admission generation. Capturing only after
-    // download/decryption would allow an A operation to be relabelled as B.
-    final userId = _userId();
-    final admissionToken = await _ownershipGuard.capture();
-    if (!await _restoreAdmissionIsCurrent(
-      preparedUserId: userId,
-      admissionToken: admissionToken,
-    )) {
-      throw const BackupException(
-        'تغيّر الحساب أثناء تجهيز الاستعادة. أعد المحاولة.',
-        code: BackupError.accountChangedDuringRestore,
-      );
-    }
-    // MALI-076n §7 — prefer the committed generation, integrity-verified (size +
-    // encrypted-blob hash) BEFORE any decryption. A legacy backup with no
-    // generation pointer falls back to the fixed object path (integrity still
-    // enforced by the v3/legacy envelope authentication below).
-    // Discovery (`hasRemoteBackup`) reports a backup when EITHER the pointer
-    // or the legacy object exists. Restore used to accept only the pointer
-    // once one existed, so an install with both — a pre-generation backup plus
-    // a pointer whose object is gone — was offered a restore that could never
-    // run, with no way back. The two must agree on what "restorable" means, so
-    // a failed generation download falls through to the legacy object rather
-    // than ending the attempt.
-    final generation = await _remoteStore.readCurrentGeneration();
-    Uint8List? bytes;
-    if (generation != null) {
-      try {
-        bytes = await _publisher.downloadVerified(generation);
-      } catch (error) {
-        // Deliberately broad: a missing object, a size mismatch and a hash
-        // mismatch are all "this generation is not usable", and the legacy
-        // object is authenticated by its own envelope below either way.
-        if (kDebugMode) {
-          debugPrint('[Backup] generation unusable (${error.runtimeType}); '
-              'trying the legacy object');
-        }
-      }
-    }
-    bytes ??=
-        await _client.storage.from(_bucket).download('$userId/backup.enc');
-    try {
-      // MALI-076n §9 — structurally validate + limit BEFORE any KDF, then
-      // decrypt/authenticate. NOTHING is mutated in preparation.
-      final blob = EncryptedBackupBlob.fromBytesChecked(bytes);
-      List<int>? keyBytes;
-      Map<String, dynamic> snapshot;
-      if (blob.version >= 3) {
-        keyBytes =
-            await _crypto.unwrapContentKeyV3(blob: blob, secret: passphrase);
-        snapshot =
-            await _crypto.decryptPayloadV3(blob: blob, contentKey: keyBytes);
-      } else if (blob.keySlots.isEmpty) {
-        snapshot = await _crypto.decryptJson(
-            blob: blob, passphrase: passphrase.trim());
-      } else {
-        try {
-          keyBytes = await _crypto.unwrapKeyFromSlots(
-              keySlots: blob.keySlots, secret: passphrase);
-          snapshot = await _crypto.decryptJsonWithRawKey(
-              blob: blob, keyBytes: keyBytes);
-        } on SecretBoxAuthenticationError {
-          final legacyKey = await _crypto.deriveKey(
-              passphrase: passphrase.trim(), salt: blob.salt);
-          keyBytes = await legacyKey.extractBytes();
-          snapshot = await _crypto.decryptJsonWithRawKey(
-              blob: blob, keyBytes: keyBytes);
-        }
-      }
-      final plan = RestorePreparation.build(
-        snapshot: snapshot,
-        envelopeVersion: blob.version,
-        sourceBytes: bytes,
-        operationId:
-            generation?.operationId ?? RestorePreparation.fingerprint(bytes),
-      );
-      // Revalidate the start-of-prepare binding after the asynchronous download,
-      // KDF and decryption, before retaining any commit capability.
+    return AppDiagnostics.run(AppOperation.restore, () async {
+      // Bind the entire prepare/commit lifecycle to both authorities at its start:
+      // the authenticated user and the admission generation. Capturing only after
+      // download/decryption would allow an A operation to be relabelled as B.
+      final userId = _userId();
+      final admissionToken = await _ownershipGuard.capture();
       if (!await _restoreAdmissionIsCurrent(
         preparedUserId: userId,
         admissionToken: admissionToken,
@@ -507,27 +438,102 @@ class EncryptedBackupService implements BackupService {
           code: BackupError.accountChangedDuringRestore,
         );
       }
-      // Stash sensitive decrypt outputs in memory only. The authoritative user id
-      // is retained alongside the admission token and never resolved dynamically
-      // during commit or key-state publication.
-      _prepared[plan.operationId] = _PreparedRestore(
-        plan,
-        keyBytes,
-        blob,
-        passphrase,
-        admissionToken,
-        userId,
-      );
-      return plan;
-    } on BackupEnvelopeException catch (e) {
-      throw _envelopeException(e.kind);
-    } on SecretBoxAuthenticationError {
-      throw const BackupException('كلمة مرور النسخة الاحتياطية غير صحيحة.',
-          code: BackupError.wrongPassphrase);
-    } on FormatException {
-      throw const BackupException('ملف النسخة الاحتياطية غير صالح.',
-          code: BackupError.invalidBackupFile);
-    }
+      // MALI-076n §7 — prefer the committed generation, integrity-verified (size +
+      // encrypted-blob hash) BEFORE any decryption. A legacy backup with no
+      // generation pointer falls back to the fixed object path (integrity still
+      // enforced by the v3/legacy envelope authentication below).
+      // Discovery (`hasRemoteBackup`) reports a backup when EITHER the pointer
+      // or the legacy object exists. Restore used to accept only the pointer
+      // once one existed, so an install with both — a pre-generation backup plus
+      // a pointer whose object is gone — was offered a restore that could never
+      // run, with no way back. The two must agree on what "restorable" means, so
+      // a failed generation download falls through to the legacy object rather
+      // than ending the attempt.
+      final generation = await _remoteStore.readCurrentGeneration();
+      Uint8List? bytes;
+      if (generation != null) {
+        try {
+          bytes = await _publisher.downloadVerified(generation);
+        } catch (error) {
+          // Deliberately broad: a missing object, a size mismatch and a hash
+          // mismatch are all "this generation is not usable", and the legacy
+          // object is authenticated by its own envelope below either way.
+          if (kDebugMode) {
+            debugPrint('[Backup] generation unusable (${error.runtimeType}); '
+                'trying the legacy object');
+          }
+        }
+      }
+      bytes ??=
+          await _client.storage.from(_bucket).download('$userId/backup.enc');
+      try {
+        // MALI-076n §9 — structurally validate + limit BEFORE any KDF, then
+        // decrypt/authenticate. NOTHING is mutated in preparation.
+        final blob = EncryptedBackupBlob.fromBytesChecked(bytes);
+        List<int>? keyBytes;
+        Map<String, dynamic> snapshot;
+        if (blob.version >= 3) {
+          keyBytes =
+              await _crypto.unwrapContentKeyV3(blob: blob, secret: passphrase);
+          snapshot =
+              await _crypto.decryptPayloadV3(blob: blob, contentKey: keyBytes);
+        } else if (blob.keySlots.isEmpty) {
+          snapshot = await _crypto.decryptJson(
+              blob: blob, passphrase: passphrase.trim());
+        } else {
+          try {
+            keyBytes = await _crypto.unwrapKeyFromSlots(
+                keySlots: blob.keySlots, secret: passphrase);
+            snapshot = await _crypto.decryptJsonWithRawKey(
+                blob: blob, keyBytes: keyBytes);
+          } on SecretBoxAuthenticationError {
+            final legacyKey = await _crypto.deriveKey(
+                passphrase: passphrase.trim(), salt: blob.salt);
+            keyBytes = await legacyKey.extractBytes();
+            snapshot = await _crypto.decryptJsonWithRawKey(
+                blob: blob, keyBytes: keyBytes);
+          }
+        }
+        final plan = RestorePreparation.build(
+          snapshot: snapshot,
+          envelopeVersion: blob.version,
+          sourceBytes: bytes,
+          operationId:
+              generation?.operationId ?? RestorePreparation.fingerprint(bytes),
+        );
+        // Revalidate the start-of-prepare binding after the asynchronous download,
+        // KDF and decryption, before retaining any commit capability.
+        if (!await _restoreAdmissionIsCurrent(
+          preparedUserId: userId,
+          admissionToken: admissionToken,
+        )) {
+          throw const BackupException(
+            'تغيّر الحساب أثناء تجهيز الاستعادة. أعد المحاولة.',
+            code: BackupError.accountChangedDuringRestore,
+          );
+        }
+        // Stash sensitive decrypt outputs in memory only. The authoritative user id
+        // is retained alongside the admission token and never resolved dynamically
+        // during commit or key-state publication.
+        _prepared[plan.operationId] = _PreparedRestore(
+          plan,
+          keyBytes,
+          blob,
+          passphrase,
+          admissionToken,
+          userId,
+        );
+        return plan;
+      } on BackupEnvelopeException catch (e) {
+        throw _envelopeException(e.kind);
+      } on SecretBoxAuthenticationError {
+        throw const BackupException('كلمة مرور النسخة الاحتياطية غير صحيحة.',
+            code: BackupError.wrongPassphrase);
+      } on FormatException {
+        throw const BackupException('ملف النسخة الاحتياطية غير صالح.',
+            code: BackupError.invalidBackupFile);
+      }
+    });
   }
 
   @override

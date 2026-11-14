@@ -1,3 +1,4 @@
+import '../observability/app_diagnostics.dart';
 import 'package:drift/native.dart';
 import '../security/lock_prompt_language.dart';
 import '../theme/theme_mode_controller.dart';
@@ -1131,7 +1132,10 @@ class BootstrapRunner {
       CloudEgressGate.instance.advanceEpoch(
           EpochCause.scopeInit, _host?.initializingAuthority?.causeAuthority);
       final captureRegistration = CaptureDeviceRegistrationService(
-        settingsRepository: DriftUserSettingsRepository(database),
+        settingsRepository: DriftUserSettingsRepository(
+          database,
+          outboxQueue: buildPlanningOutboxQueue(database),
+        ),
         isIos: debugCaptureIsIos,
         isCurrentScope: () =>
             identical(_host?.current?.database, database) &&
@@ -1926,24 +1930,26 @@ class BootstrapRunner {
   }
 
   Future<T> _step<T>(String name, Future<T> Function() run) async {
-    _lastStep = name;
-    final start = DateTime.now();
-    if (kDebugMode) debugPrint('[Bootstrap] $name start');
-    try {
-      final result = await run();
-      if (kDebugMode) {
-        final ms = DateTime.now().difference(start).inMilliseconds;
-        debugPrint('[Bootstrap] $name ok (${ms}ms)');
+    return AppDiagnostics.run(AppOperation.startup, () async {
+      _lastStep = name;
+      final start = DateTime.now();
+      if (kDebugMode) debugPrint('[Bootstrap] $name start');
+      try {
+        final result = await run();
+        if (kDebugMode) {
+          final ms = DateTime.now().difference(start).inMilliseconds;
+          debugPrint('[Bootstrap] $name ok (${ms}ms)');
+        }
+        return result;
+      } catch (error) {
+        if (kDebugMode) {
+          final ms = DateTime.now().difference(start).inMilliseconds;
+          debugPrint('[Bootstrap] $name failed after ${ms}ms: '
+              '${error.runtimeType}');
+        }
+        rethrow;
       }
-      return result;
-    } catch (error) {
-      if (kDebugMode) {
-        final ms = DateTime.now().difference(start).inMilliseconds;
-        debugPrint('[Bootstrap] $name failed after ${ms}ms: '
-            '${error.runtimeType}');
-      }
-      rethrow;
-    }
+    });
   }
 }
 

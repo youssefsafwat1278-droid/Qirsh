@@ -14,6 +14,7 @@ import '../session/unsynced_inventory.dart'
     show countUnprovenFinancialRows, countUnresolvedConflicts;
 import '../di/app_providers.dart' show appDatabaseProvider;
 import 'outbox_failure.dart';
+import '../observability/app_diagnostics.dart';
 
 /// Every independently-synced data domain.
 enum SyncDomain {
@@ -440,6 +441,7 @@ class SyncHealth {
           _recordSuccess(domain, direction, save: save);
         }
       }
+
       if (binding != null) {
         await _recordBound(binding, domain, () => record(save: false));
       } else if (identical(_notes[domain], ownNotes)) {
@@ -465,7 +467,18 @@ class SyncHealth {
   void recordFailure(SyncDomain d, Object error) =>
       _recordFailure(d, SyncErrorClass.classify(error));
 
+  static AppOperation _diagnosticDomain(SyncDomain domain) => switch (domain) {
+        SyncDomain.ledger => AppOperation.syncLedger,
+        SyncDomain.planning => AppOperation.syncPlanning,
+        SyncDomain.accounts => AppOperation.syncAccounts,
+        SyncDomain.children => AppOperation.syncChildren,
+        SyncDomain.senderMappings => AppOperation.syncMappings,
+        SyncDomain.smartInbox => AppOperation.syncInbox,
+        SyncDomain.engagement => AppOperation.syncEngagement,
+      };
+
   void _recordSuccess(SyncDomain d, SyncDirection dir, {bool save = true}) {
+    AppDiagnostics.record(_diagnosticDomain(d), AppEventState.succeeded);
     final s = of(d);
     final now = _clock();
     final clearState = s.lastErrorClass?.isBlockedState ?? false;
@@ -480,6 +493,14 @@ class SyncHealth {
   }
 
   void _recordFailure(SyncDomain d, SyncErrorClass c, {bool save = true}) {
+    AppDiagnostics.record(_diagnosticDomain(d), AppEventState.failed,
+        reason: c == SyncErrorClass.offline
+            ? AppEventReason.offline
+            : c == SyncErrorClass.conflict
+                ? AppEventReason.conflict
+                : c == SyncErrorClass.auth
+                    ? AppEventReason.authMissing
+                    : AppEventReason.server);
     final s = of(d);
     _state[d] = SyncDomainHealth(
       lastPushSuccessAt: s.lastPushSuccessAt,
@@ -496,6 +517,10 @@ class SyncHealth {
   void _recordBlocked(SyncDomain d, SyncErrorClass c, {bool save = true}) {
     final s = of(d);
     if (s.lastErrorClass == c) return;
+    AppDiagnostics.record(_diagnosticDomain(d), AppEventState.blocked,
+        reason: c == SyncErrorClass.consentBlocked
+            ? AppEventReason.consentOff
+            : AppEventReason.capability);
     _state[d] = SyncDomainHealth(
       lastPushSuccessAt: s.lastPushSuccessAt,
       lastPullSuccessAt: s.lastPullSuccessAt,

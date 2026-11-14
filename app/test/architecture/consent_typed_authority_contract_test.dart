@@ -95,6 +95,19 @@ void main() {
     saveTx = _body(repository, 'Future<UserSettingsEntity> _saveWithinTransaction(');
   });
 
+  test('both foreground service owners provide a durable settings queue', () {
+    final providers = File('lib/core/di/app_providers.dart').readAsStringSync();
+    final bootstrap = File('lib/core/startup/bootstrap_runner.dart').readAsStringSync();
+    expect(providers, contains('''final service = CaptureDeviceRegistrationService(
+    settingsRepository: DriftUserSettingsRepository(
+      database,
+      outboxQueue: ref.watch(planningOutboxQueueProvider),'''));
+    expect(bootstrap, contains('''final captureRegistration = CaptureDeviceRegistrationService(
+        settingsRepository: DriftUserSettingsRepository(
+          database,
+          outboxQueue: buildPlanningOutboxQueue(database),'''));
+  });
+
   test('no capability is derived from status, local-work authority or the '
       'active database', () {
     expect(capture, isNot(contains('captureLocalWorkAuthority')));
