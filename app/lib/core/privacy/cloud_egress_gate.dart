@@ -2209,54 +2209,26 @@ class CloudEgressGate {
   /// throw) denies every session-only refresh.
   Future<bool> Function(String owner)? nativeVerifiedOff;
 
-  /// Owner decision (2026-10-29): the session-only token refresh — the
-  /// AuthCoordinator's `grant_type=refresh_token` exchange, which carries no
-  /// financial data, SMS or sync payload — is allowed while Cloud is OFF.
-  /// Cloud ON is exactly [permits]. Otherwise every process denial
-  /// (unresolved, lifecycle fence, freeze, local read, hold, terminal) still
-  /// denies, the pending layers must confirm no pending enable through the
-  /// strict secure read, the merged view [permits] reads (native included)
-  /// must be certain and absent or OFF, native must positively report OFF
-  /// ([nativeVerifiedOff]), and the Dart egress layers must be
-  /// verified OFF ([dartLayersVerifiedOff], confirmed absence included). Only the
-  /// coordinator's routine op consults it; every other egress keeps [permits].
+  /// Owner decisions (2026-10-29, L2 2026-11-14): the session-only token
+  /// refresh — the AuthCoordinator's `grant_type=refresh_token` exchange,
+  /// which carries no financial data, SMS or sync payload — is allowed in
+  /// every Cloud consent state: ON, OFF, and the states between them
+  /// (DISABLING, pending enable, freeze, an unreadable or disagreeing record).
+  /// Denying it there signed the user out about every hour whenever a Cloud
+  /// OFF could not be committed. Every ordinary egress keeps [permits], so
+  /// nothing else leaves the device. The process denials that are not Cloud
+  /// consent still deny: unresolved, lifecycle fence, local read, transition
+  /// hold and terminal. Only the coordinator's routine op consults it.
   Future<bool> permitsSessionRefresh({String? owner}) async {
-    if (await permits(owner: owner)) return true;
     bool closed() =>
         !_resolved ||
         _lifecycleDenied ||
-        ConsentAuthority.egressFrozen ||
         _localReadDenies ||
         _holds.isNotEmpty ||
         _terminalDenied;
     if (closed()) return false;
-    final o = await _owner(owner);
-    final strict = strictSecureSlot;
-    if (strict == null || _enablePendingOwners.contains(o)) return false;
-    try {
-      final pending = await store
-          .readPendingVia(strict(CloudEgressStore.kPendingSecureKey));
-      if (pending.blocks(o)) return false;
-    } catch (_) {
-      return false;
-    }
-    // Astra (Cloud OFF delta): native uncertainty, mismatch and a winning
-    // DISABLING still deny, exactly as they do for [permits].
-    final v = await view(owner: o);
-    final merged = v.record;
-    if (v.uncertain || (merged != null && merged.state != EgressState.off)) {
-      return false;
-    }
-    // The restrictive getter can answer OFF over an unreadable layer, a
-    // pending or a disagreement: native must also positively report OFF.
-    final native = nativeVerifiedOff;
-    try {
-      if (native == null || !await native(o)) return false;
-    } catch (_) {
-      return false;
-    }
-    if (!await dartLayersVerifiedOff(o, allowAbsent: true)) return false;
-    return !closed() && !_enablePendingOwners.contains(o);
+    await _owner(owner);
+    return !closed();
   }
 
   /// Both Dart egress layers of [owner], the secure one read through
@@ -2651,11 +2623,9 @@ class CloudEgressGate {
               deny = await _decide(owner, zoneGrant, AdmissionRequest('POST', uri));
             }
           case RefreshOpKind.asr:
-            if (!_localReadDenies) {
-              deny = 'not_local_read';
-            } else if (await _pendingDenies(owner)) {
-              deny = 'pending_enable';
-            }
+            // L2 (2026-11-14): a pending enable does not stop the
+            // session-only exchange; it carries the refresh token only.
+            if (!_localReadDenies) deny = 'not_local_read';
         }
       }
       // Synchronously after the last await.
@@ -2704,7 +2674,7 @@ class CloudEgressGate {
     }
     if (_terminalDenied) return 'terminal';
     if (_lifecycleDenied) return 'lifecycle_fence';
-    if (ConsentAuthority.egressFrozen) return 'frozen';
+    // L2 (2026-11-14): the Cloud freeze does not stop the token exchange.
     if (kind == RefreshOpKind.asr) {
       return _localReadDenies ? null : 'not_local_read';
     }

@@ -497,19 +497,32 @@ void main() {
       expectReleased();
     }
 
-    test('native ON while Dart is OFF disagrees: denied, nothing minted',
-        () => expectDenied(() => native.kind = RecoveryEvidenceKind.liveOn));
-    // Astra (Cloud OFF review) B1: native `none` alone is not proof of OFF.
-    test('native none without a record (unreadable, disagreeing, pending, '
-        'absent) denies', () => expectDenied(() => native.state = null));
+    // L2 (2026-11-14): the Cloud state no longer stops the session-only
+    // recovery; it recovers the session alone and leaves Cloud untouched.
+    Future<void> expectSessionOnly(void Function() arrange) async {
+      await seed();
+      cloudOff();
+      arrange();
+      expect(await asr.run(), AsrOutcome.recovered);
+      expect(store.committed!.admission, AdmissionDisposition.ordinary);
+      expect(script.sentTokens, ['refresh-1']);
+      expect(capture.calls, isEmpty);
+      expect(native.mints, 0);
+      expectReleased();
+    }
+
+    test('L2: native ON while Dart is OFF recovers the session only',
+        () => expectSessionOnly(() => native.kind = RecoveryEvidenceKind.liveOn));
+    test('L2: native none without a record recovers the session only',
+        () => expectSessionOnly(() => native.state = null));
+    test('L2: a stale native ON that is not liveOn recovers the session only',
+        () => expectSessionOnly(() => native.state = 'ON'));
+    test('L2: a native DISABLING record recovers the session only',
+        () => expectSessionOnly(() => native.state = 'DISABLING'));
+    test('L2: Dart neither ON nor verified OFF recovers the session only',
+        () => expectSessionOnly(() => capture.dartOff = false));
     test('native none for an unproven owner or barrier denies',
         () => expectDenied(() => native.ownerProven = false));
-    test('a stale native ON that is not liveOn denies',
-        () => expectDenied(() => native.state = 'ON'));
-    test('a native DISABLING record denies',
-        () => expectDenied(() => native.state = 'DISABLING'));
-    test('Dart neither ON nor verified OFF (disabling/uncertain): denied',
-        () => expectDenied(() => capture.dartOff = false));
     test('every other P_elig denial still applies',
         () => expectDenied(() => host.eligibility = 'pending'));
     test('process denial (frozen, hold, terminal…) still applies',
@@ -518,17 +531,13 @@ void main() {
         () => expectDenied(coord.blockAutoAdmission));
     // Beta 1 diagnostic: the failed check, as constants only.
     test('the diagnostic names a native denial', () async {
-      await expectDenied(() => native.state = null);
+      await expectDenied(() => native.ownerProven = false);
       expect(AutomaticSessionRecovery.diagnostic.value,
-          'native_evidence:none/-/owner');
+          allOf(startsWith('native_evidence:'), endsWith('/no_owner')));
     });
     test('the diagnostic names an eligibility denial', () async {
       await expectDenied(() => host.eligibility = 'pending');
       expect(AutomaticSessionRecovery.diagnostic.value, 'elig:pending');
-    });
-    test('the diagnostic names the Dart layer state', () async {
-      await expectDenied(() => capture.dartOff = false);
-      expect(AutomaticSessionRecovery.diagnostic.value, startsWith('cloud:'));
     });
 
     test('a native write since inspection denies at P_admit', () async {
@@ -583,8 +592,6 @@ void main() {
         () => expectSkipped(() => host.owner = null, AsrOutcome.skipped));
     test('E3–E11 denial',
         () => expectSkipped(() => host.eligibility = 'x', AsrOutcome.skipped));
-    test('Cloud OFF in Dart (E2)',
-        () => expectSkipped(() => capture.dartOn = false, AsrOutcome.skipped));
     test('consent not accepted (E4)',
         () => expectSkipped(() => capture.consent = false, AsrOutcome.skipped));
     test(

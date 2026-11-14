@@ -613,6 +613,29 @@ void main() {
   /// A session-only recovery left Cloud exactly OFF: no Cloud transition in
   /// Dart or native, no ordinary request, and the gate still denies ordinary
   /// egress while it allows the session refresh.
+  /// L2 (2026-11-14): a session-only recovery over a Cloud state that is not
+  /// verified OFF recovers the session and never moves Cloud toward ON: no
+  /// enable, no mint, no successor; the only native write is the restrictive
+  /// owner publication, which leaves native OFF with the Cloud mirror off.
+  void expectNativeCloudRestrictive(int nativeFrom) {
+    final methods = sim.calls.skip(nativeFrom).map((c) => c.method).toSet();
+    for (final m in [
+      'mintExpiryEvidenceForLiveOn',
+      'beginCloudEgressEnable',
+      'writeCloudEgressEnableOn',
+      'finishCloudEgressEnable',
+    ]) {
+      expect(methods.contains(m), isFalse, reason: m);
+    }
+    expect(
+        sim.calls.skip(nativeFrom).where((c) =>
+            c.method == 'publishRestrictiveCaptureOwner' &&
+            (c.arguments as Map)['successorEvidenceId'] != null),
+        isEmpty);
+    expect(sim.egress?.state, 'OFF');
+    expect(sim.mirror?['cloud'], isFalse);
+  }
+
   Future<void> expectCloudStillOff(BootstrapRunner r, int nativeFrom,
       {bool dartAbsent = false}) async {
     final scope = r.accountScope.current!;
@@ -761,18 +784,20 @@ void main() {
     await expectCloudStillOff(r, nativeFrom, dartAbsent: true);
   });
 
-  test('Cloud never enabled: absent Dart records do not authorize recovery '
-      'over native ON', () async {
+  test('L2: Cloud never enabled in Dart over native ON recovers the session '
+      'only, Cloud only restricted', () async {
     await accountWithCloudOffThenKill(neverEnabled: true);
     sim.seedLiveOn(transitionGeneration: 1, reservedVersion: 1);
     await commitExpiredRecord();
     await bootProcess();
+    final nativeFrom = sim.calls.length;
     await resume();
-    expect(AutomaticSessionRecovery.active!.lastStop, 'native_evidence',
+    expect(AutomaticSessionRecovery.active!.lastStop, 'recovered',
         reason: diag());
-    expect(script.sends, 0);
-    expect(session.asrLocalReadOwner, _uid);
-    expect(requests, isEmpty);
+    expect(script.sends, 1);
+    expect(session.status, SessionStatus.authenticated);
+    expect(requests, isEmpty, reason: 'only the token exchange');
+    expectNativeCloudRestrictive(nativeFrom);
   });
 
   test('Cloud OFF cold start recovers through the real gzip HTTPS transport',
@@ -886,8 +911,8 @@ void main() {
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   test(
-      'Cloud OFF normal mode: a native-only pending enable stops the routine '
-      'refresh (the restrictive getter still reads OFF)', () async {
+      'L2: Cloud OFF normal mode: a native-only pending enable does not stop '
+      'the routine refresh; nothing else leaves the device', () async {
     await accountWithCloudOffThenKill();
     await commitExpiredRecord();
     await bootProcess();
@@ -898,26 +923,30 @@ void main() {
     expect(AutomaticSessionRecovery.active!.lastStop, 'recovered',
         reason: diag());
     sim.pending = {'ownerUid': _uid, 'operationId': 'native-only'};
-    expect(await CloudEgressGate.instance.permitsSessionRefresh(), isFalse);
-    // The routine op was due at 35 s; nothing is sent past it.
-    await Future<void>.delayed(const Duration(seconds: 45));
-    expect(script.sends, 1, reason: 'no routine exchange');
-    expect(requests, isEmpty);
+    expect(await CloudEgressGate.instance.permitsSessionRefresh(), isTrue);
+    expect(await CloudEgressGate.instance.permits(), isFalse);
+    // The routine op is due at 35 s.
+    await until(() => script.sends == 2,
+        timeout: const Duration(seconds: 60), what: 'routine refresh');
+    expect(session.status, SessionStatus.authenticated);
+    expect(requests, isEmpty, reason: 'only the token exchange');
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   test(
-      'Cloud OFF with native ON (layers disagree): no session-only recovery, '
-      'nothing sent', () async {
+      'L2: Cloud OFF with native ON (layers disagree) recovers the session '
+      'only, Cloud only restricted', () async {
     await accountWithCloudOffThenKill();
     sim.seedLiveOn(transitionGeneration: 1, reservedVersion: 1);
     await commitExpiredRecord();
     await bootProcess();
+    final nativeFrom = sim.calls.length;
     await resume();
-    expect(AutomaticSessionRecovery.active!.lastStop, 'native_evidence',
+    expect(AutomaticSessionRecovery.active!.lastStop, 'recovered',
         reason: diag());
-    expect(script.sends, 0);
-    expect(session.asrLocalReadOwner, _uid);
-    expect(sim.of('mintExpiryEvidenceForLiveOn'), isEmpty);
+    expect(script.sends, 1);
+    expect(session.status, SessionStatus.authenticated);
+    expect(requests, isEmpty, reason: 'only the token exchange');
+    expectNativeCloudRestrictive(nativeFrom);
   });
 
   test('PROBE latency', () async {
@@ -997,17 +1026,19 @@ void main() {
 
   // Astra (Cloud OFF review) B1: native absence is not proof of OFF.
   test(
-      'Cloud OFF with no native record (never enabled natively): fails '
-      'closed, nothing sent', () async {
+      'L2: Cloud OFF with no native record recovers the session only, '
+      'Cloud only restricted', () async {
     await accountWithCloudOffThenKill();
     sim.egress = null;
     await commitExpiredRecord();
     await bootProcess();
+    final nativeFrom = sim.calls.length;
     await resume();
-    expect(AutomaticSessionRecovery.active!.lastStop, 'native_evidence',
+    expect(AutomaticSessionRecovery.active!.lastStop, 'recovered',
         reason: diag());
-    expect(script.sends, 0);
-    expect(session.asrLocalReadOwner, _uid);
+    expect(script.sends, 1);
+    expect(session.status, SessionStatus.authenticated);
+    expectNativeCloudRestrictive(nativeFrom);
   });
 
   /// Cold start and a first recovery whose new token expires [expiresIn]

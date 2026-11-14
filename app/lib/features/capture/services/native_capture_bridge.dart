@@ -433,6 +433,12 @@ class RecoveryEvidenceSnapshot {
       kind != RecoveryEvidenceKind.liveOn &&
       state == 'OFF';
 
+  /// Session-only recovery (L2, 2026-11-14): native confirmed the active
+  /// owner and that no removal barrier is present (native reports the owner
+  /// generation and epoch only after both held), whatever the Cloud state.
+  bool get ownerVerified =>
+      mutationCounter != null && ownerGeneration != null && ownerEpoch != null;
+
   static int? _int(Map<Object?, Object?> raw, String key) {
     final v = raw[key];
     return v is int && v >= 0 ? v : null;

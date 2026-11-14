@@ -385,9 +385,12 @@ class AutomaticSessionRecovery {
       _detail = denial;
       return _stop('elig', AsrOutcome.skipped);
     }
-    // Owner decision (2026-10-29): with Cloud OFF the session alone is
-    // recovered (no Cloud consent is needed: nothing but the token exchange
-    // leaves the device). Anything between ON and OFF denies.
+    // Owner decisions (2026-10-29, L2 2026-11-14): unless Cloud is verified
+    // ON the session alone is recovered (no Cloud consent is needed: nothing
+    // but the token exchange leaves the device). That includes the states
+    // between ON and OFF (DISABLING, pending enable, an unreadable record),
+    // which otherwise signed the user out once the session expired. Cloud
+    // capture stays exactly as restrictive as the gate already keeps it.
     final bool sessionOnly;
     if (await capture.dartEgressOn(owner)) {
       if (!await capture.consentAccepted(owner)) {
@@ -395,11 +398,8 @@ class AutomaticSessionRecovery {
         return _stop('cloud', AsrOutcome.skipped);
       }
       sessionOnly = false;
-    } else if (await capture.dartEgressOff(owner)) {
-      sessionOnly = true;
     } else {
-      _detail = await gate.describeDartLayers(owner);
-      return _stop('cloud', AsrOutcome.skipped);
+      sessionOnly = true;
     }
     if (host.processDenial(owner, adopting: false) != null ||
         !_recordEligible(coordinator.store.committed, owner) ||
@@ -474,18 +474,16 @@ class AutomaticSessionRecovery {
     }
   }
 
-  /// Session-only E2 native: positive proof of OFF from one snapshot. Native
-  /// reports a record only after the active owner, the removal barrier, both
-  /// pending layers and both egress layers were read and agree; `none`
-  /// without a record (unreadable, disagreeing, pending, barrier, owner
-  /// mismatch, or absence it cannot tell apart from them) denies, as do ON and
-  /// DISABLING. Expiry evidence is OFF too, and is never consumed here. The
+  /// Session-only E2 native (L2, 2026-11-14): native must confirm the active
+  /// owner and that no removal barrier is present; the Cloud state itself
+  /// (OFF, ON, DISABLING, pending, disagreeing layers) no longer denies the
+  /// session-only exchange. Expiry evidence is never consumed here. The
   /// counter is confirmed before admit, send, install and publication, so any
   /// native write meanwhile stops the op.
   Future<AsrEvidence?> _sessionOnlyEvidence(String owner) async {
     final snap = await native.inspect(owner);
     final counter = snap?.mutationCounter;
-    if (snap == null || counter == null || !snap.verifiedOff) {
+    if (snap == null || counter == null || !snap.ownerVerified) {
       _detail = snap == null
           ? 'unavailable'
           : '${snap.kind.name}/${snap.state ?? '-'}/'

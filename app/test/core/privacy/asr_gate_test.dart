@@ -324,90 +324,59 @@ void main() {
         }
       });
 
-      test('DISABLING and an uncertain store deny', () async {
-        expect(await routine(withLayers(layers(EgressState.disabling))),
-            'routine_not_permitted');
-        final corrupt = withLayers('not-json');
-        expect(await corrupt.gate.permitsSessionRefresh(), isFalse);
-        expect(await routine(corrupt), 'routine_not_permitted');
-      });
-
-      // Astra (Cloud OFF delta): the native view still denies.
+      // L2 (2026-11-14): no Cloud consent state stops the session-only
+      // exchange; ordinary egress stays denied in every one of them.
       test(
-          'with matching Dart OFF layers, an unavailable native read or a '
-          'newer native DISABLING denies before any connection', () async {
-        final unavailable = withLayers(layers(EgressState.off),
+          'L2: DISABLING, ON, an uncertain store, a native DISABLING or '
+          'unavailable read, pending, partial or mixed layers all admit the '
+          'refresh; ordinary egress stays denied', () async {
+        Future<void> admits(TestEgress e) async {
+          expect(await e.gate.permitsSessionRefresh(), isTrue);
+          expect(await routine(e), isNull);
+          expect(await denial(() => e.gate.admit()), isNotNull);
+        }
+
+        await admits(withLayers(layers(EgressState.disabling)));
+        await admits(withLayers('not-json'));
+        await admits(withLayers(layers(EgressState.off),
             native: NativeEgressSlot(
                 read: (_) async =>
                     throw const FormatException('native_egress_uncertain:io'),
-                write: (_) async {}));
-        expect(await unavailable.gate.permitsSessionRefresh(), isFalse);
-        expect(await routine(unavailable), 'routine_not_permitted');
-        final disabling = withLayers(layers(EgressState.off),
+                write: (_) async {})));
+        await admits(withLayers(layers(EgressState.off),
             native: NativeEgressSlot(
                 read: (o) async => CloudEgressRecord(
                     state: EgressState.disabling,
                     ownerUid: o,
                     transitionGeneration: 3,
                     reservedVersion: 1),
-                write: (_) async {}));
-        expect(await disabling.gate.permitsSessionRefresh(), isFalse);
-        expect(await routine(disabling), 'routine_not_permitted');
-        final nativeOff = withLayers(layers(EgressState.off),
-            native: NativeEgressSlot(
-                read: (o) async => CloudEgressRecord(
-                    state: EgressState.off,
-                    ownerUid: o,
-                    transitionGeneration: 2,
-                    reservedVersion: 1),
-                write: (_) async {}));
-        expect(await nativeOff.gate.permitsSessionRefresh(), isTrue);
-        expect(await routine(nativeOff), isNull);
-      });
-
-      test(
-          'native that does not positively report OFF denies, whatever the '
-          'merged view says', () async {
-        final notOff = withLayers(layers(EgressState.off))..nativeOff = false;
-        expect(await notOff.gate.permitsSessionRefresh(), isFalse);
-        expect(await routine(notOff), 'routine_not_permitted');
-        final unwired = withLayers(layers(EgressState.off));
-        unwired.gate.nativeVerifiedOff = null;
-        expect(await unwired.gate.permitsSessionRefresh(), isFalse);
-        final throws = withLayers(null);
-        throws.gate.nativeVerifiedOff = (_) async => throw StateError('io');
-        expect(await throws.gate.permitsSessionRefresh(), isFalse);
-      });
-
-      // Astra (Cloud OFF review) B2: only an OS-confirmed not-found is absence.
-      test('a secure read that fails but reads as absent through the plugin '
-          'denies', () async {
-        final e = withLayers(null);
-        e.gate.strictSecureSlot = (key) => key == CloudEgressStore.kSecureKey
-            ? (MemorySlot()..failReads = true)
-            : e.pendingSecure;
-        expect(await e.gate.permitsSessionRefresh(), isFalse);
-        expect(await routine(e), 'routine_not_permitted');
-        final p = withLayers(layers(EgressState.off));
-        p.gate.strictSecureSlot = (key) => key == CloudEgressStore.kSecureKey
-            ? p.secure
-            : (MemorySlot()..failReads = true);
-        expect(await p.gate.permitsSessionRefresh(), isFalse);
-        final none = withLayers(layers(EgressState.off));
-        none.gate.strictSecureSlot = null;
-        expect(await none.gate.permitsSessionRefresh(), isFalse);
-      });
-
-      test('a secure-only pending record, partial or disagreeing layers deny',
-          () async {
+                write: (_) async {})));
+        await admits(withLayers(layers(EgressState.off))..nativeOff = false);
         final pending = withLayers(layers(EgressState.off));
         pending.pendingSecure.value = 'not-a-pending-record';
-        expect(await pending.gate.permitsSessionRefresh(), isFalse);
+        await admits(pending);
+        await admits(withLayers(null)..secure.value = layers(EgressState.off));
+        await admits(withLayers(layers(EgressState.off))
+          ..file.value = layers(EgressState.on));
+        final frozenEnable = withLayers(layers(EgressState.off));
+        frozenEnable.gate.freezeEnable('uid-a');
+        await admits(frozenEnable);
+        ConsentAuthority.egressFrozen = true;
+        try {
+          await admits(withLayers(layers(EgressState.disabling)));
+        } finally {
+          ConsentAuthority.egressFrozen = false;
+        }
+      });
+
+      test('dartLayersVerifiedOff still tells absence, partial and mixed apart',
+          () async {
         final partial = withLayers(null)..secure.value = layers(EgressState.off);
-        expect(await partial.gate.permitsSessionRefresh(), isFalse);
+        expect(
+            await partial.gate.dartLayersVerifiedOff('uid-a', allowAbsent: true),
+            isFalse);
         final mixed = withLayers(layers(EgressState.off))
           ..file.value = layers(EgressState.on);
-        expect(await mixed.gate.permitsSessionRefresh(), isFalse);
         expect(await mixed.gate.dartLayersVerifiedOff('uid-a', allowAbsent: true),
             isFalse);
         final absent = withLayers(null);
@@ -419,7 +388,8 @@ void main() {
             isTrue);
       });
 
-      test('every process denial still applies', () async {
+      test('every process denial that is not Cloud consent still applies',
+          () async {
         Future<void> denied(void Function(TestEgress e) arrange,
             [void Function()? undo]) async {
           final e = withLayers(layers(EgressState.off));
@@ -430,11 +400,9 @@ void main() {
         }
 
         await denied((_) => localRead = true, () => localRead = false);
-        await denied((_) => ConsentAuthority.egressFrozen = true,
-            () => ConsentAuthority.egressFrozen = false);
         await denied((e) => e.gate.terminalDeny());
         await denied((e) => e.gate.beginTransitionHold());
-        await denied((e) => e.gate.freezeEnable('uid-a'));
+        await denied((e) => e.gate.denyForLifecycleLoss());
         final unresolved = TestEgress(resolved: false).install();
         expect(await unresolved.gate.permitsSessionRefresh(), isFalse);
       });
