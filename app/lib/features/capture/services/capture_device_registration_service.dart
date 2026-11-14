@@ -1020,6 +1020,25 @@ class CaptureDeviceRegistrationService {
     // P6: OFF (a committed persistent gate) still publishes LOCALLY with a
     // restrictive mirror; DISABLING / frozen / uncertain authority fails closed.
     if (!current() || !_isIos()) return false;
+    // P3 (10b): arm the sign-out unlink from the SAVED Cloud-ON ack of this
+    // account first, whatever the gate says now: a link from an earlier
+    // process must still be undone at sign-out even when this launch's link
+    // check is blocked (frozen/uncertain) or has not finished.
+    final signedIn = _readSession();
+    if (signedIn != null) {
+      final seq = _unlinkTargetSeq;
+      try {
+        final saved = await _readAckAny();
+        if (saved != null &&
+            saved.uid == signedIn.uid &&
+            saved.snapshot.cloud) {
+          await _armUnlink(saved.uid, seq);
+        }
+      } catch (_) {
+        // Best effort: an unreadable ack arms nothing.
+      }
+      if (!current()) return false;
+    }
     final gateState = await _gateState(current: current);
     if (!current()) return false;
     if (gateState == _Gate.blocked) {

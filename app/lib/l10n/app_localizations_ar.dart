@@ -7196,6 +7196,9 @@ class AppL10nAr extends AppL10n {
   String get authCodeVerifyFailed => 'تعذّر تأكيد الكود. راجعه وحاول تاني.';
 
   @override
+  String get authCodeExpired => 'انتهت صلاحية هذا الرمز. اطلب رمزًا جديدًا.';
+
+  @override
   String get authResendCode => 'إرسال الكود مرة تانية';
 
   @override

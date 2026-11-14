@@ -2438,7 +2438,10 @@ class CloudEgressGate {
         !deleting) {
       return revoke &&
               grant!.owner == owner &&
-              grant.generation == rec.transitionGeneration
+              grant.generation == rec.transitionGeneration &&
+              // The grant-level admit in [runRevoke] carries no request;
+              // every HTTP request under the grant must be the revoke POST.
+              (request == null || isRevokeRetryRequest(request, _supabaseUrl()))
           ? null
           : 'disabling';
     }
@@ -2892,13 +2895,30 @@ class CloudEgressGate {
   /// `set-device-consent` (the v2 `action: 'revoke'` route) on the configured
   /// host. Anything else under that grant is denied.
   /// P3: the one request [EgressGrant.deviceUnlink] admits.
-  static bool isDeviceUnlinkRequest(AdmissionRequest request, String baseUrl) {
+  static bool isDeviceUnlinkRequest(AdmissionRequest request, String baseUrl) =>
+      _isExactFunctionPost(request, baseUrl, 'unlink-capture-device');
+
+  /// The exact `POST <base>/functions/v1/<fn>`: same scheme, host and port as
+  /// the configured base, no query, no extra path; denied when no base is set.
+  static bool _isExactFunctionPost(
+      AdmissionRequest request, String baseUrl, String fn) {
     final base = Uri.tryParse(baseUrl);
-    if (request.method != 'POST' || request.url.scheme != 'https') return false;
-    if (base != null && base.host.isNotEmpty && request.url.host != base.host) {
+    final url = request.url;
+    if (base == null || base.host.isEmpty) return false;
+    if (request.method != 'POST' || url.scheme != 'https') return false;
+    if (base.scheme != 'https' ||
+        url.host != base.host ||
+        url.port != base.port ||
+        url.userInfo.isNotEmpty ||
+        url.hasQuery ||
+        url.hasFragment) {
       return false;
     }
-    return request.url.path.endsWith('/functions/v1/unlink-capture-device');
+    var prefix = base.path;
+    while (prefix.endsWith('/')) {
+      prefix = prefix.substring(0, prefix.length - 1);
+    }
+    return url.path == '$prefix/functions/v1/$fn';
   }
 
   /// P3: runs [body] (the sign-out unlink) under [EgressGrant.deviceUnlink]
@@ -2907,14 +2927,8 @@ class CloudEgressGate {
       runZoned(body,
           zoneValues: {_grantKey: EgressGrant.deviceUnlink(owner: owner)});
 
-  static bool isRevokeRetryRequest(AdmissionRequest request, String baseUrl) {
-    final base = Uri.tryParse(baseUrl);
-    if (request.method != 'POST' || request.url.scheme != 'https') return false;
-    if (base != null && base.host.isNotEmpty && request.url.host != base.host) {
-      return false;
-    }
-    return request.url.path.endsWith('/functions/v1/set-device-consent');
-  }
+  static bool isRevokeRetryRequest(AdmissionRequest request, String baseUrl) =>
+      _isExactFunctionPost(request, baseUrl, 'set-device-consent');
 
   /// Runs [body] under [EgressGrant.revokeRetry] for [owner] at [generation]:
   /// admitted only while that owner's record is still OFF at that generation
@@ -3441,6 +3455,7 @@ class GatedHttpClient extends http.BaseClient {
     // H2.1: a granted request must not follow redirects (a 3xx could leave the
     // allowlisted endpoint or host). Set before the request is finalized.
     if (ticket.grant?.control != null ||
+        ticket.grant?.kind == EgressGrantKind.revoke ||
         ticket.grant?.kind == EgressGrantKind.revokeRetry ||
         ticket.grant?.kind == EgressGrantKind.deviceUnlink) {
       request.followRedirects = false;

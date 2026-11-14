@@ -72,7 +72,14 @@ class PrivacyRedactor {
   static final RegExp _bearer =
       RegExp(r'(?:[Bb]earer|[Tt]oken|[Aa]pikey|[Aa]uthorization)\s*[:=]?\s*\S+');
   static final RegExp _amount = RegExp(r'\d[\d,]*\.\d{1,3}');
+  // A database error's bound parameters (`parameters: <merchant>, <amount>`)
+  // are user data of any shape: dropped to the end of the line.
+  static final RegExp _sqlParams = RegExp(r'parameters:[^\n]*');
+  // A comma-grouped integer (`1,250`) is an amount.
+  static final RegExp _groupedInt = RegExp(r'\d{1,3}(?:,\d{3})+');
   static final RegExp _digitRun = RegExp(r'\d[\d\s-]{4,}\d');
+  // A bare integer of 4+ digits (minor-unit amounts such as `12550`).
+  static final RegExp _longInt = RegExp(r'(?<![\w.])\d{4,}(?![\w.])');
   static final RegExp _opaqueId = RegExp(r'[A-Za-z0-9_-]{24,}');
 
   /// Strips every recognised sensitive class from an arbitrary string. Used for
@@ -86,8 +93,11 @@ class PrivacyRedactor {
     out = out.replaceAll(_email, '[email]');
     out = out.replaceAll(_jwt, '[token]');
     out = out.replaceAll(_bearer, '[token]');
+    out = out.replaceAll(_sqlParams, 'parameters: [redacted]');
     out = out.replaceAll(_amount, '[amount]');
+    out = out.replaceAll(_groupedInt, '[amount]');
     out = out.replaceAll(_digitRun, '[num]');
+    out = out.replaceAll(_longInt, '[num]');
     out = out.replaceAll(_opaqueId, '[id]');
     return out;
   }

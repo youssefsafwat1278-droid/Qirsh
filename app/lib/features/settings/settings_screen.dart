@@ -1192,6 +1192,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       pickedPath: picked.path,
       documents: await getApplicationDocumentsDirectory(),
       previousPath: settings.avatarPath,
+      ownerUid: AppSession.instance.captureConsentCapability()?.uid,
     );
     await ref.read(userSettingsRepositoryProvider).saveSettings(
           settings.copyWith(avatarPath: destination),

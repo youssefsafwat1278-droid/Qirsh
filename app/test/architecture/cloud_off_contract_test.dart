@@ -617,13 +617,19 @@ void main() {
         "if (await _pendingDenies(owner)) return 'pending_enable';",
         'isRevokeRetryRequest(request, _supabaseUrl())',
       ]);
-      final scope =
-          body(gate, 'static bool isRevokeRetryRequest(AdmissionRequest');
+      // The route is matched exactly (adversarial 39c): scheme, host, port,
+      // no userinfo/query, the full path, and denied with no base configured.
+      expect(gate,
+          contains("_isExactFunctionPost(request, baseUrl, 'set-device-consent')"));
+      final scope = body(gate, 'static bool _isExactFunctionPost(');
       for (final t in const [
+        'base.host.isEmpty) return false',
         "request.method != 'POST'",
-        "request.url.scheme != 'https'",
-        'request.url.host != base.host',
-        "'/functions/v1/set-device-consent'",
+        "url.scheme != 'https'",
+        'url.host != base.host',
+        'url.port != base.port',
+        'url.hasQuery',
+        "url.path == '\$prefix/functions/v1/\$fn'",
       ]) {
         expect(scope, contains(t), reason: t);
       }

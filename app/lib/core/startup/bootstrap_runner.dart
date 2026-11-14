@@ -1424,8 +1424,15 @@ class BootstrapRunner {
       // P4: an account transition / sign-out advances the epoch first, so every
       // in-flight async mutation of the previous owner is stale from here on.
       CloudEgressGate.instance.advanceEpoch(EpochCause.scopeSwap);
-      final cleared =
-          await captureQueue.clearCaptureOwner(clearHint: clearHint);
+      // A native clear failure (Keychain locked) must not skip the
+      // notification clear below: the outgoing account's notifications
+      // carry a merchant and an amount.
+      bool cleared;
+      try {
+        cleared = await captureQueue.clearCaptureOwner(clearHint: clearHint);
+      } catch (_) {
+        cleared = false;
+      }
       final filesCleared = await PendingNotificationActions.clear();
       // MALI-019 §10 — clear the previous user's pending OS reminders too, and
       // (audit P2, 2026-11-14) the ones already delivered: a capture or bill

@@ -68,7 +68,7 @@ class _CloudResumeBannerState extends ConsumerState<CloudResumeBanner> {
   /// the user already made, through the same explicit enable route as the
   /// banner's button (nothing leaves the device until native ON is
   /// confirmed). The reminder exists only for app-made pauses, never for the
-  /// user's own OFF. One attempt per account per process; on failure the
+  /// user's own OFF. One attempt per pause; on failure the
   /// banner stays so the user can resume with one tap.
   static final Set<String> _autoAttempted = {};
 
@@ -130,7 +130,15 @@ class _CloudResumeBannerState extends ConsumerState<CloudResumeBanner> {
 
   @override
   Widget build(BuildContext context) {
-    final uid = ref.watch(cloudResumeReminderProvider).valueOrNull;
+    final reminder = ref.watch(cloudResumeReminderProvider);
+    final uid = reminder.valueOrNull;
+    // Settled with no reminder: the last pause is over, so a LATER app-made
+    // pause in this process may auto-resume again. While a reminder is shown
+    // its attempt stays recorded, so a failed resume is never retried in a
+    // loop.
+    if (reminder.hasValue && !reminder.isLoading && uid == null) {
+      _autoAttempted.clear();
+    }
     if (uid == null || uid == _dismissedUid) return const SizedBox.shrink();
     if (widget.autoResume && !_autoAttempted.contains(uid)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

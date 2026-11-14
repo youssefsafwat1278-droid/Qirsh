@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../data/db/replica_store.dart';
 import '../security/secure_storage_options.dart';
 import 'account_scope.dart';
 import 'admission_authority.dart';
 import 'app_session.dart';
+import '../../features/settings/profile_image_store.dart';
 
 /// WP-3b — the Dart side of the manifest §4.4 "Remove data from this device"
 /// barrier.
@@ -91,6 +94,10 @@ final class PreparedRemovalReservation {
 }
 
 class RemoveDataFlow {
+  /// Where profile photos live (overridable in tests).
+  static Future<Directory> Function() documentsDirectory =
+      getApplicationDocumentsDirectory;
+
   RemoveDataFlow({
     required ReplicaStore store,
     required AccountScopeControl scope,
@@ -505,6 +512,14 @@ class RemoveDataFlow {
       // Step 3.
       await _store.remove(uid);
       await _storage.delete(key: '$kConsentAskedKeyPrefix$uid');
+      // The account's profile photo lives outside its database folder.
+      try {
+        await deleteProfileImagesOf(
+            documents: await documentsDirectory(), uid: uid);
+      } catch (_) {
+        // Best effort: a photo that cannot be found or deleted never blocks
+        // the removal of the account's data.
+      }
       await _step('afterReplicaRemoved');
       // Step 4, best effort.
       final cleanup = _serverCleanup;

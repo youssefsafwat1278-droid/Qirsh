@@ -12043,6 +12043,12 @@ abstract class AppL10n {
   /// **'تعذّر تأكيد الكود. راجعه وحاول تاني.'**
   String get authCodeVerifyFailed;
 
+  /// No description provided for @authCodeExpired.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت صلاحية هذا الرمز. اطلب رمزًا جديدًا.'**
+  String get authCodeExpired;
+
   /// No description provided for @authResendCode.
   ///
   /// In ar, this message translates to:

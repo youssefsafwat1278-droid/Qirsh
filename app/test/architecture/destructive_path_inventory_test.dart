@@ -146,6 +146,15 @@ void main() {
   ///                                replica after the 14-day retention, and the
   ///                                swap superseding an older `.old`; plus the
   ///                                `.rb`/`.old` tombstones of `remove(uid)`.
+  ///
+  /// GROUP I — per-account profile photo (adversarial 32b, 2026-11-14).
+  ///   profile_image_store (1)      `deleteProfileImagesOf(uid)` deletes ONE
+  ///                                directory `profile/<sha256 key of uid>/`
+  ///                                holding only that account's avatar copy.
+  ///                                Reached only from RemoveDataFlow AFTER the
+  ///                                uid's replica removal succeeded; best
+  ///                                effort (a failure leaves only a photo, no
+  ///                                ledger data); never touches another uid.
   const inventory = <String, int>{
     // A
     'lib/core/privacy/data_wipe_service.dart': 2,
@@ -179,6 +188,8 @@ void main() {
     'lib/data/db/replica_store.dart': 7,
     // H
     'lib/core/session/replica_recovery.dart': 1,
+    // I
+    'lib/features/settings/profile_image_store.dart': 1,
   };
 
   /// Statements that can destroy more than one row, or a file.

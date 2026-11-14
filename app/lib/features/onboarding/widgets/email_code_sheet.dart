@@ -43,6 +43,12 @@ class _EmailCodeSheetState extends State<EmailCodeSheet> {
   final _code = TextEditingController();
   final _form = GlobalKey<FormState>();
   Timer? _timer;
+  // The server's code lifetime (GoTrue default 3600 s). After it, a rejected
+  // code is reported as expired so the user requests a new one instead of
+  // re-checking a dead code.
+  static const _codeLifetime = Duration(minutes: 60);
+  Timer? _expiryTimer;
+  bool _codeExpired = false;
   int _resendSeconds = 0;
   bool _sent = false;
   bool _confirmingCurrent = false;
@@ -52,6 +58,7 @@ class _EmailCodeSheetState extends State<EmailCodeSheet> {
   @override
   void dispose() {
     _timer?.cancel();
+    _expiryTimer?.cancel();
     _email.dispose();
     _code.dispose();
     super.dispose();
@@ -76,7 +83,10 @@ class _EmailCodeSheetState extends State<EmailCodeSheet> {
         _confirmingCurrent = false;
         _code.clear();
         _resendSeconds = 60;
+        _codeExpired = false;
       });
+      _expiryTimer?.cancel();
+      _expiryTimer = Timer(_codeLifetime, () => _codeExpired = true);
       _timer?.cancel();
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
         if (!mounted) {
@@ -115,7 +125,9 @@ class _EmailCodeSheetState extends State<EmailCodeSheet> {
             _code.clear();
           });
         case EmailCodeResult.invalid:
-          setState(() => _error = context.l10n.authCodeVerifyFailed);
+          setState(() => _error = _codeExpired
+              ? context.l10n.authCodeExpired
+              : context.l10n.authCodeVerifyFailed);
       }
     } catch (error) {
       if (mounted) {

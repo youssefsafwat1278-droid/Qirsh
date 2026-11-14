@@ -3728,6 +3728,7 @@
   "authInvalidEmail": "Enter a valid email address.",
   "authCodeSendFailed": "Could not send the code. Check your connection and try again after a minute.",
   "authCodeVerifyFailed": "Could not verify the code. Check it and try again.",
+  "authCodeExpired": "This code has expired. Request a new code.",
   "authResendCode": "Resend code",
   "authChangeEmail": "Use a different email",
   "authConfirmBothEmails": "New email confirmed. Enter the code sent to your current email to finish.",

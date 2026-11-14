@@ -7193,6 +7193,9 @@ class AppL10nEn extends AppL10n {
       'Could not verify the code. Check it and try again.';
 
   @override
+  String get authCodeExpired => 'This code has expired. Request a new code.';
+
+  @override
   String get authResendCode => 'Resend code';
 
   @override

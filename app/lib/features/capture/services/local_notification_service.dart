@@ -1005,7 +1005,7 @@ class LocalNotificationService {
       // A show/schedule failure must never crash the caller (many call sites
       // are unawaited fire-and-forget) — record it and stop here instead of
       // rethrowing. See docs/NOTIFICATION_PIPELINE_AUDIT.md.
-      debugPrint('[Notif] show/schedule failed: $error');
+      debugPrint('[Notif] show/schedule failed: ${error.runtimeType}');
       await _recordFailed(logId, notificationType, error, stackTrace);
       return false;
     }
