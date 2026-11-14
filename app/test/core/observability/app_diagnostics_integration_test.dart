@@ -8,7 +8,6 @@ import 'package:http/testing.dart';
 import 'package:money_companion/core/observability/app_diagnostics.dart';
 import 'package:money_companion/core/observability/flutter_diagnostics.dart';
 import 'package:money_companion/core/privacy/cloud_egress_gate.dart';
-import 'package:money_companion/core/sync/sync_diagnostics_report.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
 
@@ -47,7 +46,7 @@ void main() {
     expect(AppDiagnostics.counts[AppOperation.transactionWrite], 2);
     expect(AppDiagnostics.counts[AppOperation.databaseRead], greaterThan(0));
     expect(AppDiagnostics.counts[AppOperation.databaseRollback], 1);
-    final report = const SyncDiagnosticsReport([]).toRedactedText();
+    final report = AppDiagnostics.exportText();
     for (final secret in [
       'private-id',
       'rollback-id',

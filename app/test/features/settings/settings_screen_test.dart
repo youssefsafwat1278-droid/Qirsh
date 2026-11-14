@@ -110,8 +110,7 @@ void main() {
     // behind a long-press on the version string.
     expect(find.text('Developer'), findsNothing);
     final l10n = AppL10n.of(tester.element(find.byType(SettingsScreen)));
-    expect(find.byKey(const ValueKey('copy-app-diagnostics')), findsOneWidget);
-    expect(find.text(l10n.copyAppDiagnostics), findsOneWidget);
+    expect(find.byKey(const ValueKey('copy-app-diagnostics')), findsNothing);
     await tester.ensureVisible(find.text(l10n.setContactUs));
     await tester.pumpAndSettle();
     await tester.tap(find.text(l10n.setContactUs));

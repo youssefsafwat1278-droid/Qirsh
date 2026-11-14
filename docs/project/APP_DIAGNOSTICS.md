@@ -36,16 +36,12 @@ distinction. The observer never changes retries, permissions, consent or results
   Counters reset per engine/process; persisted timeline events survive restarts.
 - The foreground engine owns its journal. The single headless capture-drain
   host writes a separate `app_background_diagnostics_v1.json`, with a bounded
-  best-effort flush before returning to native. The support export reads that
+  best-effort flush before returning to native. Internal diagnostics can read that
   file without changing it, so the engines never overwrite each other's file.
   The same size and retention limits apply independently to each file. Pure
   native work that runs without Dart retains its existing native diagnostics.
 - Nothing in this module uploads logs, initializes an SDK, or changes Cloud-off
   behavior. Existing Sentry remains behind its existing consent and egress gates.
-- The regular Settings support group has a localized **Copy diagnostic log**
-  action in release and development builds. This copies the bounded journal and
-  counts only. Developer-only Sync Diagnostics additionally shows recent app
-  events and includes them in its existing **Copy diagnostics (redacted)** export.
 - Persistence failures, malformed files and unknown serialized fields are
   ignored safely. No raw exception message is used as a fallback.
 
@@ -84,6 +80,5 @@ distinguishes stopped local processing from unconfirmed server state.
 `app_diagnostics_test.dart` exercises correlation, concurrent operations, error
 identity, privacy, retention, bounded storage, restart, corrupt files and storage
 failures. `app_diagnostics_integration_test.dart` drives the actual AppDatabase
-interceptor, SQL rollback, gated HTTP denial/response, providers, navigation and
-support export. The ordinary Flutter suite checks that instrumentation preserves
+interceptor, SQL rollback, gated HTTP denial/response, providers and navigation. The ordinary Flutter suite checks that instrumentation preserves
 the existing lifecycle, consent, sync, parser, notification, backup and UI behavior.

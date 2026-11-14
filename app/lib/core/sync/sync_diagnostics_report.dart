@@ -16,7 +16,6 @@ import '../../features/capture/services/native_capture_bridge.dart'
         CaptureRemovalBarrier,
         SharedCapturedMessage;
 import 'sync_health.dart';
-import '../observability/app_diagnostics.dart';
 import 'sync_pull_proof.dart' show readSeqCursors;
 
 /// WP-8 / CAP-8 — the Sync Health v2 diagnostics, built to be CONTENT-FREE BY
@@ -101,7 +100,6 @@ class SyncDiagnosticsReport {
         b.writeln('${e.key}: ${e.value}');
       }
     }
-    b.write(AppDiagnostics.exportText());
     return b.toString();
   }
 }
@@ -227,7 +225,6 @@ Future<int> _count(AppDatabase db, String sql, [List<Variable> v = const []]) as
 
 Future<SyncDiagnosticsReport> collectSyncDiagnostics(
     SyncDiagnosticsSources s) async {
-  await AppDiagnostics.refreshBackground();
   final now = (s.now ?? DateTime.now)();
   final sections = <DiagnosticSection>[];
   void section(String title, void Function(DiagnosticRows r) fill) {
@@ -437,13 +434,5 @@ Future<SyncDiagnosticsReport> collectSyncDiagnostics(
     r.add('alerts recorded', alerts.values.fold<int>(0, (a, b) => a + b));
   });
 
-  final recent = AppDiagnostics.events.reversed.take(12).toList();
-  if (recent.isNotEmpty) {
-    sections.add(DiagnosticSection('Recent application events (local)', {
-      for (var i = 0; i < recent.length; i++)
-        '${i + 1}. ${recent[i].operation.name}':
-            '${recent[i].state.name} / ${recent[i].reason.name}',
-    }));
-  }
   return SyncDiagnosticsReport(sections);
 }

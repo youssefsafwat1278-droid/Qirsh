@@ -2953,24 +2953,6 @@ abstract class AppL10n {
   /// **'نسخ البريد'**
   String get setCopyEmail;
 
-  /// No description provided for @copyAppDiagnostics.
-  ///
-  /// In ar, this message translates to:
-  /// **'نسخ سجل التشخيص'**
-  String get copyAppDiagnostics;
-
-  /// No description provided for @copyAppDiagnosticsDescription.
-  ///
-  /// In ar, this message translates to:
-  /// **'أحداث تقنية بدون رسائلك أو تفاصيلك المالية. راجع السجل قبل مشاركته.'**
-  String get copyAppDiagnosticsDescription;
-
-  /// No description provided for @appDiagnosticsCopied.
-  ///
-  /// In ar, this message translates to:
-  /// **'تم نسخ سجل التشخيص.'**
-  String get appDiagnosticsCopied;
-
   /// No description provided for @setEraseAllQ.
   ///
   /// In ar, this message translates to:

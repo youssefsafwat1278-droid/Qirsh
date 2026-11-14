@@ -1606,16 +1606,6 @@ class AppL10nEn extends AppL10n {
   String get setCopyEmail => 'Copy email';
 
   @override
-  String get copyAppDiagnostics => 'Copy diagnostic log';
-
-  @override
-  String get copyAppDiagnosticsDescription =>
-      'Technical events without your messages or financial details. Review before sharing.';
-
-  @override
-  String get appDiagnosticsCopied => 'Diagnostic log copied.';
-
-  @override
   String get setEraseAllQ => 'Erase all data?';
 
   @override

@@ -1572,16 +1572,6 @@ class AppL10nAr extends AppL10n {
   String get setCopyEmail => 'نسخ البريد';
 
   @override
-  String get copyAppDiagnostics => 'نسخ سجل التشخيص';
-
-  @override
-  String get copyAppDiagnosticsDescription =>
-      'أحداث تقنية بدون رسائلك أو تفاصيلك المالية. راجع السجل قبل مشاركته.';
-
-  @override
-  String get appDiagnosticsCopied => 'تم نسخ سجل التشخيص.';
-
-  @override
   String get setEraseAllQ => 'مسح جميع البيانات؟';
 
   @override

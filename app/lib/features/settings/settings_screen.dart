@@ -20,7 +20,6 @@ import '../../core/auth/auth_coordinator.dart';
 import '../../core/auth/auth_service.dart';
 import '../../core/auth/auth_methods_config.dart';
 import '../../core/backend/supabase_config.dart';
-import '../../core/observability/diagnostic_export.dart';
 import '../../core/di/app_providers.dart';
 import '../planning_sync/planning_conflicts_sheet.dart';
 import 'sign_out_sheet.dart';
@@ -518,25 +517,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               icon: AppLucideIcons.messageSquare,
               title: l10n.setContactUs,
               onTap: () => _showContactSupport(context),
-            ),
-            _NavTile(
-              key: const ValueKey('copy-app-diagnostics'),
-              icon: AppLucideIcons.copy,
-              title: l10n.copyAppDiagnostics,
-              subtitle: l10n.copyAppDiagnosticsDescription,
-              showChevron: false,
-              onTap: () async {
-                try {
-                  await copyAppDiagnostics();
-                  if (context.mounted) {
-                    AppToast.show(context, l10n.appDiagnosticsCopied);
-                  }
-                } catch (_) {
-                  if (context.mounted) {
-                    AppToast.showError(context, l10n.txnError);
-                  }
-                }
-              },
             ),
             _NavTile(
               icon: AppLucideIcons.info,
