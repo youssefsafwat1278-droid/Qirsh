@@ -67,6 +67,7 @@
   "authAppleCta": "Continue with Apple",
   "authGoogleCta": "Continue with Google",
   "authSignInError": "Couldn't sign in. Please try again.",
+  "authPreviousAccountCleanupPending": "We're still clearing the previous account's data from this device. Try again in a moment, or sign in with that account.",
   "authBackupFoundTitle": "We found a backup for your account",
   "authBackupFoundBody": "Want to restore your data from the latest backup, or start fresh?",
   "authBackupStartFresh": "Start fresh",

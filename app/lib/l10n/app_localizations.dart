@@ -397,6 +397,12 @@ abstract class AppL10n {
   /// **'تعذّر تسجيل الدخول. جرب تاني.'**
   String get authSignInError;
 
+  /// No description provided for @authPreviousAccountCleanupPending.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما زلنا نمسح بيانات الحساب السابق من هذا الجهاز. حاول مرة أخرى بعد قليل، أو سجّل الدخول بذلك الحساب.'**
+  String get authPreviousAccountCleanupPending;
+
   /// No description provided for @authBackupFoundTitle.
   ///
   /// In ar, this message translates to:

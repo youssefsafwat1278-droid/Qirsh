@@ -175,6 +175,10 @@ class AppL10nAr extends AppL10n {
   String get authSignInError => 'تعذّر تسجيل الدخول. جرب تاني.';
 
   @override
+  String get authPreviousAccountCleanupPending =>
+      'ما زلنا نمسح بيانات الحساب السابق من هذا الجهاز. حاول مرة أخرى بعد قليل، أو سجّل الدخول بذلك الحساب.';
+
+  @override
   String get authBackupFoundTitle => 'لقينا نسخة احتياطية لحسابك';
 
   @override

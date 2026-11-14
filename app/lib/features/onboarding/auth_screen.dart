@@ -167,11 +167,19 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
           final needsGoogleSignup = provider == 'google' &&
               error is supabase.AuthApiException &&
               error.message == 'Use Create an account to register with Google.';
+          // L5: the previous account's cleanup did not finish. Its data
+          // stays locked; a retry re-runs the cleanup, and that account can
+          // always sign back in.
+          final message = needsGoogleSignup
+              ? context.l10n.authGoogleSignupRequired
+              : error is LocalDataOwnershipException
+                  ? context.l10n.authPreviousAccountCleanupPending
+                  : context.l10n.authSignInError;
           AppToast.showError(
             context,
             needsGoogleSignup
-                ? context.l10n.authGoogleSignupRequired
-                : '${context.l10n.authSignInError} (E: ${signInFailureCode(error)})',
+                ? message
+                : '$message (E: ${signInFailureCode(error)})',
           );
         }
       }

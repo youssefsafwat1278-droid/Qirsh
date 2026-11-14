@@ -67,6 +67,7 @@
   "authAppleCta": "المتابعة بحساب Apple",
   "authGoogleCta": "المتابعة بحساب Google",
   "authSignInError": "تعذّر تسجيل الدخول. جرب تاني.",
+  "authPreviousAccountCleanupPending": "ما زلنا نمسح بيانات الحساب السابق من هذا الجهاز. حاول مرة أخرى بعد قليل، أو سجّل الدخول بذلك الحساب.",
   "authBackupFoundTitle": "لقينا نسخة احتياطية لحسابك",
   "authBackupFoundBody": "تحب نرجّع بياناتك من آخر نسخة، ولا تبدأ من جديد؟",
   "authBackupStartFresh": "ابدأ من جديد",

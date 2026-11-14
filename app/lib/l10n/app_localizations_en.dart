@@ -178,6 +178,10 @@ class AppL10nEn extends AppL10n {
   String get authSignInError => 'Couldn\'t sign in. Please try again.';
 
   @override
+  String get authPreviousAccountCleanupPending =>
+      'We\'re still clearing the previous account\'s data from this device. Try again in a moment, or sign in with that account.';
+
+  @override
   String get authBackupFoundTitle => 'We found a backup for your account';
 
   @override
