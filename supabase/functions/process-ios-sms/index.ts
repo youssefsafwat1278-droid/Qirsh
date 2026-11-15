@@ -49,7 +49,8 @@ const defaultDependencies: ProcessIosSmsDependencies = {
   verifyDevice,
 };
 
-type Rpc = (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
+type Rpc = (fn: string, args: Record<string, unknown>) =>
+  Promise<{ data: unknown; error: { code?: string } | null }>;
 type Json = Record<string, unknown>;
 type PushInfo = { notification_log_id: string; apns_token: string; apns_environment: 'sandbox' | 'production' };
 
@@ -280,12 +281,34 @@ export async function handleProcessIosSms(
         });
         const data = dispatch.data as Json | null;
         if (!dispatch.error && data?.allowed === true) return true;
-        dispatchDenied = String(data?.reason ?? 'dispatch_failed');
+        dispatchDenied = dispatch.error?.code === '55P03'
+          ? 'account_busy'
+          : String(data?.reason ?? 'dispatch_failed');
         return false;
       },
     });
     if (dispatchDenied && dispatchDenied !== 'analysis_exhausted') {
       console.log(JSON.stringify({ event: 'capture_ai_not_dispatched', reason: dispatchDenied }));
+      if (dispatchDenied === 'account_busy') {
+        // Postgres rolled back dispatch before AI started. Release the claim
+        // as retryable so replay can recheck consent and authorize a new try.
+        const released = await finalize({
+          state: 'retryable',
+          status: 'rejected',
+          parsed: null,
+          notification: null,
+          sanitized: null,
+          failureReason: 'account_busy',
+          possibleDuplicate: false,
+        });
+        const saved = released.data as Json | null;
+        if (saved?.reason === 'owner_changed') return refusal('capture_owner_mismatch', cid);
+        if (saved?.reason === 'consent_revoked') return refusal('consent_required', cid);
+        if (saved?.reason === 'expired') return json({ error: 'capture_expired', state: 'expired', correlation_id: cid }, 409);
+        // On another busy response or a stale lease, the next claimant can
+        // recover the existing lease. No analysis or push has been handed off.
+        return pending(responseV2, saved?.written === true ? 'retryable' : 'in_progress', cid);
+      }
       if (dispatchDenied === 'lease_lost') return pending(responseV2, 'in_progress', cid);
       if (dispatchDenied === 'expired') return json({ error: 'capture_expired', state: 'expired', correlation_id: cid }, 409);
       return refusal(dispatchDenied === 'owner_changed' ? 'capture_owner_mismatch' : 'consent_required', cid);

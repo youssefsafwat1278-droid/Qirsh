@@ -933,7 +933,7 @@ void _notificationMoreControls() {
           respond((r)async {
             final busy=!busyThenSuccess||requests.length==1;
             return http.Response(jsonEncode(busy?{'code':'55P03','message':'busy','details':null,'hint':null}:null),
-              busy?400:200,headers:{'content-type':'application/json'},request:r);
+              busy?500:200,headers:{'content-type':'application/json'},request:r);
           });
           await _notificationSync(db,client).debugSyncBatch(a.uid);
           final after=await _notificationRows(db);

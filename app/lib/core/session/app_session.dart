@@ -26,6 +26,7 @@ import '../startup/asr_storage_reads.dart';
 import '../startup/automatic_session_recovery.dart';
 import '../tracking/user_activity_service.dart';
 import '../security/secure_storage_options.dart';
+import '../sync/account_fence_retry.dart';
 import '../sync/sync_wakeup.dart' show AuthSessionValid;
 import 'account_scope.dart';
 import 'auth_stream_boundary.dart';
@@ -3609,14 +3610,25 @@ class AppSession extends ValueNotifier<SessionStatus> {
   /// Idempotently records a locally completed setup on the authenticated
   /// profile. Failure never revokes local completion; cold start/resume retries
   /// it, preserving offline-first access while making the next device correct.
-  Future<bool> syncRemoteOnboardingCompletion() async {
-    if (!_onboardingDone || isGuest || !SupabaseConfig.isConfigured) {
+  Future<bool> syncRemoteOnboardingCompletion({
+    supabase.SupabaseClient? client,
+  }) async {
+    if (!_onboardingDone ||
+        isGuest ||
+        (client == null && !SupabaseConfig.isConfigured)) {
       return false;
     }
     try {
-      final client = supabase.Supabase.instance.client;
-      if (client.auth.currentSession == null) return false;
-      await client.rpc('mark_onboarding_completed');
+      final sdk = client ?? supabase.Supabase.instance.client;
+      final session = sdk.auth.currentSession;
+      if (session == null) return false;
+      await AccountFenceRetry().runMutation(
+        isCurrent: () async =>
+            _onboardingDone &&
+            !isGuest &&
+            sdk.auth.currentSession?.accessToken == session.accessToken,
+        send: () async => sdk.rpc('mark_onboarding_completed'),
+      );
       return true;
     } catch (error) {
       if (kDebugMode) {

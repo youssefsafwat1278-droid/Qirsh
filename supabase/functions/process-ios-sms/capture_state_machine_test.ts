@@ -295,6 +295,26 @@ Deno.test('T-S4/A9: revoke between claim and AI dispatch -> AI never called, ret
   ]);
 });
 
+Deno.test('account_busy before AI dispatch returns retryable and the same capture can recover', async () => {
+  const fake = fakeCapture({ device: linkedA });
+  const original = fake.client.rpc;
+  let busy = true;
+  fake.client.rpc = (name, args) => name === 'capture_ai_dispatch' && busy
+    ? Promise.resolve({ data: null, error: { code: '55P03', message: 'account_busy' } }) as never
+    : original(name, args);
+  const body = v2({ payloadId: 'busy-ai', sanitizedText: UNRESOLVED, allowAi: true });
+
+  const result = await post(fake, body, () => aiResponse(GOOD_AI));
+  assertEquals([result.status, result.json.state, result.calls], [202, 'retryable', 0]);
+  assertEquals(fake.state.rows.get('busy-ai')!.state, 'retryable');
+  assertEquals(fake.state.logs.length, 0);
+
+  busy = false;
+  fake.state.rows.get('busy-ai')!.next_attempt_at = Date.now() - 1;
+  const retried = await post(fake, body, () => aiResponse(GOOD_AI));
+  assertEquals([retried.status, retried.json.state, retried.calls], [200, 'processed', 1]);
+});
+
 Deno.test('A10: revoke after AI dispatch -> output fenced: nothing stored, no notification, no APNs', async () => {
   const fake = fakeCapture({ device: { ...linkedA, apns_token: 'tok' } });
   const r = await post(fake, v2({ payloadId: 'p', sanitizedText: UNRESOLVED, allowAi: true }), () => {

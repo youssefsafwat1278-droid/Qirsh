@@ -34,6 +34,13 @@ class AccountFenceRetry {
   final Future<void> Function(Duration) delay;
   static const _key = #accountFenceMutationBudget;
 
+  /// Retry a standalone RPC whose 55P03 response means it rolled back.
+  /// Recheck the original authority before each attempt, just like an outbox.
+  Future<T> runMutation<T>({
+    required Future<bool> Function() isCurrent,
+    required Future<T> Function() send,
+  }) => _FenceBudget(this, isCurrent).mutate(send);
+
   Future<T> runItem<T>({required Future<bool> Function() isCurrent,
       required Future<T> Function() body}) =>
       runZoned(() async => await body(), zoneValues: {

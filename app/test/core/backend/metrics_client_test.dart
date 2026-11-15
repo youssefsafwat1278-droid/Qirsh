@@ -27,6 +27,35 @@ String _fakeNotYetExpiredAccessToken() {
 }
 
 void main() {
+  test('app-open metric retries a rejected account-lock write', () async {
+    final writes = <String>[];
+    final client = SupabaseClient(
+      'https://example.supabase.co',
+      'public-anon-key',
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/rest/v1/rpc/record_metric');
+        writes.add(request.body);
+        return Response(
+          writes.length == 1 ? '{"code":"55P03","message":"account_busy"}' : 'null',
+          writes.length == 1 ? 500 : 200,
+          headers: const {'content-type': 'application/json'},
+          request: request,
+        );
+      }),
+    );
+    addTearDown(client.dispose);
+    await client.auth.recoverSession(jsonEncode({
+      'access_token': _fakeNotYetExpiredAccessToken(),
+      'token_type': 'bearer',
+      'user': {'id': 'qa-user'},
+    }));
+
+    await MetricsClient(client: client).logEvent('app_open');
+
+    expect(writes, hasLength(2));
+    expect(writes.last, writes.first);
+  });
+
   test(
       'logEvent never throws when the metrics insert is rejected '
       '(stale-session RLS failure) — must not be able to block app bootstrap',

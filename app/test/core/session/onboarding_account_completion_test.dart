@@ -85,6 +85,30 @@ void main() {
   Future<bool> verify() =>
       f.session.reconcileAccountOnboarding(sdk, requireRemoteResult: true);
 
+  test('a busy account lock does not defer onboarding completion until resume',
+      () async {
+    expect(await verify(), isTrue);
+    var writes = 0;
+    final writer = SupabaseClient(
+      'https://example.supabase.co',
+      'synthetic-anon',
+      authOptions: const AuthClientOptions(autoRefreshToken: false),
+      httpClient: MockClient((request) async {
+        expect(request.url.path, '/rest/v1/rpc/mark_onboarding_completed');
+        final busy = ++writes == 1;
+        return http.Response(busy ? '{"code":"55P03","message":"account_busy"}' : 'null',
+            busy ? 500 : 200,
+            headers: {'content-type': 'application/json'}, request: request);
+      }),
+    );
+    addTearDown(writer.dispose);
+    await F2Fixture.recoverSession_(writer, 'returning-owner');
+
+    expect(await f.session.syncRemoteOnboardingCompletion(client: writer), isTrue);
+    expect(writes, 2);
+    expect(f.session.hasCompletedOnboarding, isTrue);
+  });
+
   test('verified returning account skips setup after reinstall and reopening',
       () async {
     expect(presentation.requiresSetup, isTrue);
