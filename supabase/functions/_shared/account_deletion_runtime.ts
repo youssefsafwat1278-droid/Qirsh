@@ -6,13 +6,19 @@ import { buildAccountDeletionCoordinator } from './account_deletion_adapter.ts';
 import { createChallengePort, resolveDeletionCollaborators } from './account_deletion_wiring.ts';
 import { createAlternateDeletionProof } from './account_deletion_alternate_proof.ts';
 import { verifyGoogleProof } from './google_identity_proof.ts';
+import { retryWorkerClaim } from './worker_claim_retry.ts';
 
-export async function buildDeletionRuntime() {
+export async function buildDeletionRuntime({ retryScheduledClaim = false } = {}) {
   const url = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
   const db = createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } });
-  const rpc = { rpc: (fn: string, args: Record<string, unknown>) => db.rpc(fn, args) as never };
+  const rpc = {
+    rpc: (fn: string, args: Record<string, unknown>) =>
+      retryScheduledClaim && fn === 'account_deletion_claim_lease'
+        ? retryWorkerClaim(() => db.rpc(fn, args))
+        : db.rpc(fn, args),
+  };
   const getUser = async (jwt: string) => {
     const { data, error } = await db.auth.getUser(jwt);
     return error || !data?.user ? null : { id: data.user.id };

@@ -9,7 +9,7 @@ let runtime: ReturnType<typeof buildDeletionRuntime> | null = null;
 
 const handle = createWorkerHandler({
   coordinator: async () => {
-    runtime ??= buildDeletionRuntime().catch((e) => {
+    runtime ??= buildDeletionRuntime({ retryScheduledClaim: true }).catch((e) => {
       runtime = null;
       throw e;
     });

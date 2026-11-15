@@ -5,6 +5,7 @@
 // docs/NOTIFICATION_PIPELINE_AUDIT.md Phase 1, item 8 — retries are durable
 // rows processed here, never a sleep loop inside process-ios-sms.
 import { corsHeaders, json, serviceClient, timingSafeEqual } from '../_shared/capture_auth.ts';
+import { retryWorkerClaim } from '../_shared/worker_claim_retry.ts';
 import { processOne } from './process_one.ts';
 
 export { processOne };
@@ -34,9 +35,9 @@ Deno.serve(async (req) => {
   // dispatch invocations can never claim, and therefore never send an APNs
   // push for, the same row — see claim_notification_retries() in
   // 0052_notification_logs.sql.
-  const due = await supabase.rpc('claim_notification_retries', {
+  const due = await retryWorkerClaim(() => supabase.rpc('claim_notification_retries', {
     p_limit: BATCH_SIZE,
-  });
+  }));
 
   if (due.error) {
     console.error(JSON.stringify({ event: 'notification_retry_dispatch_failed', error: due.error.message }));
