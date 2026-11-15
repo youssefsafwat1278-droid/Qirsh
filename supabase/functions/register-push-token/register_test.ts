@@ -5,7 +5,11 @@ type Device = { apns_token: string | null; apns_environment: string | null };
 
 // In-memory capture_devices row with real compare-and-swap semantics for
 // `.update(...).eq('apns_token', x)` / `.is('apns_token', null)`.
-function fake(device: Device, opts: { rateLimited?: boolean; beforeUpdate?: (d: Device) => void } = {}) {
+function fake(device: Device, opts: {
+  rateLimited?: boolean;
+  beforeUpdate?: (d: Device) => void;
+  busyWrites?: number;
+} = {}) {
   const state = { device, updates: 0, rateBumps: 0 };
   const client = {
     rpc: () => {
@@ -26,6 +30,10 @@ function fake(device: Device, opts: { rateLimited?: boolean; beforeUpdate?: (d: 
         maybeSingle: () => Promise.resolve({ data: { ...state.device }, error: null }),
         then: (resolve: (v: unknown) => unknown) => {
           if (patch == null) return Promise.resolve({ data: [{ ...state.device }], error: null }).then(resolve);
+          if ((opts.busyWrites ?? 0) > 0) {
+            opts.busyWrites!--;
+            return Promise.resolve({ data: null, error: { code: '55P03' } }).then(resolve);
+          }
           opts.beforeUpdate?.(state.device);
           opts.beforeUpdate = undefined;
           const ok = conds.every(([c, v]) => c === 'install_id_hash' || (state.device as Record<string, unknown>)[c] === v);
@@ -76,6 +84,22 @@ Deno.test('rotation swaps old -> new only against the token that was read', asyn
   const r = await call(f);
   assertEquals(r.status, 200);
   assertEquals(f.state.device, { apns_token: 'new', apns_environment: 'sandbox' });
+});
+
+Deno.test('registration recovers after a rolled-back account_busy write', async () => {
+  const f = fake({ apns_token: 'old', apns_environment: 'production' }, { busyWrites: 1 });
+  const r = await call(f);
+  assertEquals([r.status, r.json], [200, { ok: true }]);
+  assertEquals(f.state.device.apns_token, 'new');
+  assertEquals([f.state.updates, f.state.rateBumps], [1, 1]);
+});
+
+Deno.test('continued account_busy tells the caller to retry and preserves the token', async () => {
+  const f = fake({ apns_token: 'old', apns_environment: 'production' }, { busyWrites: 2 });
+  const r = await call(f);
+  assertEquals([r.status, r.json.error], [503, 'token_update_busy']);
+  assertEquals(f.state.device.apns_token, 'old');
+  assertEquals([f.state.updates, f.state.rateBumps], [0, 1]);
 });
 
 Deno.test('a concurrent change between read and write loses the CAS, re-reads and retries once', async () => {

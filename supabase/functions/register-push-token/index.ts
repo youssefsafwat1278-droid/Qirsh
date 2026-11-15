@@ -87,6 +87,16 @@ export async function handleRegisterPushToken(
       .eq('install_id_hash', auth.installIdHash);
     const { data, error } = await (expected == null ? update.is('apns_token', null) : update.eq('apns_token', expected))
       .select('install_id_hash');
+    if (error?.code === '55P03') {
+      if (attempt === 1) return json({ error: 'token_update_busy' }, 503);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      // This attempt rolled back. Revalidate the credential before making a
+      // new read and CAS, and keep the rate-limit charge for this request.
+      const retryAuth = await dependencies.verifyDevice(supabase, installId, deviceSecret);
+      if (!retryAuth.ok) return json({ error: retryAuth.error }, retryAuth.status);
+      if (retryAuth.userId !== auth.userId) return json({ error: 'capture_owner_mismatch' }, 409);
+      continue;
+    }
     if (error) return json({ error: 'token_update_failed' }, 500);
     if (data && data.length > 0) return json({ ok: true });
   }
