@@ -345,13 +345,19 @@ export async function handleProcessIosSms(
       }
     }
 
+    // The app files this capture under the user's own merchant rule
+    // (learnedRuleCategoryFor), so the alert says the same. Display only: the
+    // stored parse is unchanged and the device still applies the rule itself.
+    const shown = status !== 'rejected' && ownerUid
+      ? await withUserMerchantRule(supabase, ownerUid, parsed)
+      : parsed;
     const notification: NotificationPayload = aiPrimary && status === 'rejected'
       ? { title: '', body: '', type: 'received' }
-      : buildNotification(status, parsed, sender, receivedAt, tzOffsetMinutes, locale);
+      : buildNotification(status, shown, sender, receivedAt, tzOffsetMinutes, locale);
     notification.pushLanguage = locale.toLowerCase().startsWith('ar') ? 'ar' : 'en';
     if (body.localNotification === true && !background) notification.localDelivery = true;
     if (body.notificationDetails === true && status === 'processed') {
-      notification.pushAlert = transactionPushAlert(parsed, locale, { receivedAt, tzOffsetMinutes });
+      notification.pushAlert = transactionPushAlert(shown, locale, { receivedAt, tzOffsetMinutes });
     }
     // Each primary analysis already made its bounded provider attempts. A
     // model answer the validator rejected is terminal and preserved for
@@ -538,6 +544,40 @@ export function duplicateFingerprintBase(
   ];
   const owner = ownerUid.trim().toLowerCase();
   return (owner ? [`owner:${owner}`, ...fields] : fields).join('|');
+}
+
+/// The device's merchant key (AppDatabase.normalizeMerchant), which is also
+/// the shape user_merchant_rules.merchant_key is constrained to.
+export function merchantRuleKey(raw: string): string {
+  return raw.toUpperCase().replace(/[0-9]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/// `parsed` with the category of the owner's synced merchant rule, if any.
+/// Only Cloud users sync rules, so for everyone else this is a no-op. Any read
+/// failure keeps the server's own reading: a wrong label beats a lost alert.
+async function withUserMerchantRule(
+  supabase: ReturnType<typeof serviceClient>,
+  ownerUid: string,
+  parsed: ParsedCapture,
+): Promise<ParsedCapture> {
+  const key = parsed.merchant ? merchantRuleKey(parsed.merchant) : '';
+  if (!key) return parsed;
+  try {
+    const { data, error } = await supabase
+      .from('user_merchant_rules')
+      .select('category_key')
+      .eq('user_id', ownerUid)
+      .eq('merchant_key', key)
+      .is('deleted_at', null)
+      .maybeSingle();
+    const category = !error && typeof data?.category_key === 'string' ? data.category_key : null;
+    if (!category) return parsed;
+    // The app names the cash category "سحب نقدي"; the title says so too.
+    const type = category === 'cash' && parsed.direction !== 'credit' ? 'withdrawal' : parsed.type;
+    return { ...parsed, category, type };
+  } catch {
+    return parsed;
+  }
 }
 
 async function detectDuplicate(
@@ -780,7 +820,7 @@ function categoryLabelAr(key: string | undefined): string | null {
     case 'transfers':
       return 'تحويل 💸';
     case 'cash':
-      return 'كاش 💵';
+      return 'سحب نقدي 💵';
     case 'travel':
       return 'سفر ✈️';
     case 'gifts':

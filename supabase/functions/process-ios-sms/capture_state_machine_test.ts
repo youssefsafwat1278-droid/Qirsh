@@ -1,5 +1,5 @@
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { handleProcessIosSms } from './index.ts';
+import { handleProcessIosSms, merchantRuleKey } from './index.ts';
 import { CAPTURE_RETENTION_MS, fakeCapture } from './capture_rpc_fake.ts';
 
 // Handler-level pins for the P1 leased state machine (manifest §4.1, §4.6, §4.8).
@@ -763,4 +763,65 @@ Deno.test('H1: owner-bound requests (new protocol) do not depend on the ownerles
   const moved = fakeCapture({ device: { user_id: B, consent_owner_uid: B, version: 1 } });
   const mismatch = await post(moved, v2({ payloadId: 'p', sanitizedText: RESOLVED }));
   assertEquals([mismatch.status, mismatch.json.error], [409, 'capture_owner_mismatch']); // unchanged
+});
+
+// A physical iPhone: the user filed «CIB-EL KORBA» under cash, the app filed the
+// next capture there, but the alert still said «عملية شراء 🛒» — the server
+// built it from its own reading and never saw the rule.
+Deno.test('the alert follows the owner\'s synced merchant rule; the stored parse does not change', async () => {
+  const fake = fakeCapture({
+    device: { ...linkedA, apns_token: 'tok' },
+    merchantRules: [{ user_id: A, merchant_key: 'CARREFOUR', category_key: 'cash', deleted_at: null }],
+  });
+  await withApns(ok200, async (sent) => {
+    await post(fake, v2({ payloadId: 'p', sanitizedText: RESOLVED, locale: 'ar_EG', notificationDetails: true }));
+    const row = fake.state.rows.get('p')!;
+    const stored = row.notification as Record<string, string>;
+    assertEquals(stored.title, 'تم رصد سحب نقدي 🏧');
+    assert(stored.body.includes('التصنيف: سحب نقدي'), stored.body);
+    assert(!stored.body.includes('مصروف'), stored.body);
+    const alert = (sent[0].body.aps as { alert: Record<string, string> }).alert;
+    assert(alert.title.includes('سحب نقدي'), alert.title);
+    const parsed = row.parsed as Record<string, unknown>;
+    assertEquals(parsed.type, 'payment');
+    assert(parsed.category !== 'cash');
+  });
+});
+
+Deno.test('a non-cash rule changes only the category line', async () => {
+  const fake = fakeCapture({
+    device: { ...linkedA, apns_token: 'tok' },
+    merchantRules: [{ user_id: A, merchant_key: 'CARREFOUR', category_key: 'restaurants' }],
+  });
+  await withApns(ok200, async () => {
+    await post(fake, v2({ payloadId: 'p', sanitizedText: RESOLVED, locale: 'ar_EG' }));
+    const stored = fake.state.rows.get('p')!.notification as Record<string, string>;
+    assertEquals(stored.title, 'تم رصد عملية شراء 🛒');
+    assert(stored.body.includes('التصنيف: مطاعم'), stored.body);
+  });
+});
+
+Deno.test('another user\'s rule, a deleted rule, or a failed read leaves the alert as parsed', async () => {
+  const cases = [
+    { merchantRules: [{ user_id: B, merchant_key: 'CARREFOUR', category_key: 'cash' }] },
+    { merchantRules: [{ user_id: A, merchant_key: 'CARREFOUR', category_key: 'cash', deleted_at: '2026-11-16T00:00:00Z' }] },
+    { merchantRulesError: true },
+  ];
+  for (const c of cases) {
+    const fake = fakeCapture({ device: { ...linkedA, apns_token: 'tok' }, ...c });
+    await withApns(ok200, async (sent) => {
+      const r = await post(fake, v2({ payloadId: 'p', sanitizedText: RESOLVED, locale: 'ar_EG' }));
+      assertEquals(r.json.pushSent, true);
+      assertEquals(sent.length, 1);
+      const stored = fake.state.rows.get('p')!.notification as Record<string, string>;
+      assertEquals(stored.title, 'تم رصد عملية شراء 🛒');
+      assert(!stored.body.includes('سحب نقدي'), stored.body);
+    });
+  }
+});
+
+Deno.test('merchantRuleKey matches the device key (AppDatabase.normalizeMerchant)', () => {
+  assertEquals(merchantRuleKey('  cib-el  korba br iii 12 '), 'CIB-EL KORBA BR III');
+  assertEquals(merchantRuleKey('BM NOZHA AUTO BR 3'), 'BM NOZHA AUTO BR');
+  assertEquals(merchantRuleKey('123'), '');
 });

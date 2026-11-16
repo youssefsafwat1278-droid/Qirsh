@@ -28,6 +28,10 @@ export type FakeDevice = {
 export function fakeCapture(opts: {
   device?: Partial<FakeDevice>;
   duplicateOf?: string;
+  /// user_merchant_rules rows: { user_id, merchant_key, category_key, deleted_at? }.
+  merchantRules?: Row[];
+  /// Makes the user_merchant_rules read fail.
+  merchantRulesError?: boolean;
   onBeforeDispatch?: (state: ReturnType<typeof fakeCapture>['state']) => void;
   onDispatch?: (state: ReturnType<typeof fakeCapture>['state']) => void;
   onFinalize?: (state: ReturnType<typeof fakeCapture>['state']) => void;
@@ -273,6 +277,13 @@ export function fakeCapture(opts: {
         }
         return { data: opts.duplicateOf ? [{ payload_id: opts.duplicateOf, fingerprint: 'x' }] : [], error: null };
       }
+      if (table === 'user_merchant_rules') {
+        if (opts.merchantRulesError) return { data: null, error: { message: 'boom' } };
+        const hit = (opts.merchantRules ?? []).find((r) =>
+          filters.every(([c, v]) => (c === 'deleted_at' ? (r.deleted_at ?? null) === v : r[c] === v))
+        );
+        return { data: hit ? { category_key: hit.category_key } : null, error: null };
+      }
       return { data: null, error: null };
     };
     const b: Record<string, unknown> = {
@@ -296,6 +307,7 @@ export function fakeCapture(opts: {
         return b;
       },
       eq: (c: string, v: unknown) => (filters.push([c, v]), b),
+      is: (c: string, v: unknown) => (filters.push([c, v]), b),
       in: () => b,
       maybeSingle: () => Promise.resolve(result()),
       single: () => Promise.resolve(result()),
