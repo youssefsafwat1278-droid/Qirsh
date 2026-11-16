@@ -1,6 +1,6 @@
 import { buildApnsCollapseId } from './apns_collapse_id.ts';
 
-type ApnsEnvironment = 'sandbox' | 'production';
+export type ApnsEnvironment = 'sandbox' | 'production';
 
 type ApnsMessage = {
   token: string;
@@ -22,14 +22,44 @@ type ApnsMessage = {
   notificationLogId?: string;
 };
 
-type ApnsResult =
+export type ApnsResult =
   | { ok: true; apnsId: string | null }
   | { ok: false; reason: string; httpStatus: number | null; errorCode: string };
 
 const encoder = new TextEncoder();
 let cachedJwt: { token: string; expiresAt: number } | null = null;
 
-export async function sendCapturePush(message: ApnsMessage): Promise<ApnsResult> {
+export function sendCapturePush(message: ApnsMessage): Promise<ApnsResult> {
+  return sendApnsAlert({
+    token: message.token,
+    environment: message.environment,
+    collapseKey: message.payloadId,
+    title: message.title,
+    body: message.body,
+    data: {
+      payloadId: message.payloadId,
+      transactionId: message.transactionId ?? '',
+      smartInboxItemId: message.smartInboxItemId ?? '',
+      notificationLogId: message.notificationLogId ?? '',
+      notificationType: message.notificationType,
+      source: 'ios_shortcut',
+    },
+  });
+}
+
+/// One APNs alert. `data` is the custom payload placed beside `aps`; capture
+/// pushes and admin broadcasts differ only there. Fails closed with
+/// `apns_not_configured` when any credential is missing (nothing is sent).
+export async function sendApnsAlert(message: {
+  token: string;
+  environment: ApnsEnvironment;
+  /// Hashed into apns-collapse-id: a resend with the same key replaces the banner.
+  collapseKey: string;
+  /// Empty omits the alert title.
+  title: string;
+  body: string;
+  data: Record<string, string>;
+}): Promise<ApnsResult> {
   const keyId = Deno.env.get('APNS_KEY_ID') ?? '';
   const teamId = Deno.env.get('APNS_TEAM_ID') ?? '';
   const bundleId = Deno.env.get('APNS_BUNDLE_ID') ?? '';
@@ -45,7 +75,7 @@ export async function sendCapturePush(message: ApnsMessage): Promise<ApnsResult>
 
   try {
     const jwt = await apnsJwt({ keyId, teamId, privateKey });
-    const collapseId = await buildApnsCollapseId(message.payloadId);
+    const collapseId = await buildApnsCollapseId(message.collapseKey);
     const host = message.environment === 'sandbox'
       ? 'https://api.sandbox.push.apple.com'
       : 'https://api.push.apple.com';
@@ -70,12 +100,7 @@ export async function sendCapturePush(message: ApnsMessage): Promise<ApnsResult>
             : { body: message.body },
           sound: 'default',
         },
-        payloadId: message.payloadId,
-        transactionId: message.transactionId ?? '',
-        smartInboxItemId: message.smartInboxItemId ?? '',
-        notificationLogId: message.notificationLogId ?? '',
-        notificationType: message.notificationType,
-        source: 'ios_shortcut',
+        ...message.data,
       }),
     });
     if (!response.ok) {

@@ -2020,6 +2020,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   Future<String> _routeForCaptureNotification(
     CaptureNotificationRoute route,
   ) async {
+    if (route.source == kBroadcastSource) return broadcastRouteFor(route.route);
     final section = notificationSectionRoute(route.notificationType);
     if (section != null) return section;
     final payloadId = route.payloadId ?? route.smartInboxItemId;

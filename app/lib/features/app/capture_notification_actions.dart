@@ -6,6 +6,28 @@ const kActionEnableSmartAnalysis = 'qirsh.enable_smart_analysis';
 
 const _smartInboxMarkerPrefix = 'smart_inbox:';
 
+/// `source` / `notificationType` of an admin broadcast push
+/// (supabase/functions/send-push-broadcast).
+const kBroadcastSource = 'qirsh_broadcast';
+
+/// In-app routes a broadcast may open. Must equal the CHECK on
+/// push_broadcasts.deep_link and admin/lib/push-broadcast.mjs (contract-tested).
+const kBroadcastRoutes = <String>{
+  '/announcements',
+  '/budgets',
+  '/goals',
+  '/subscriptions',
+  '/reports',
+  '/achievements',
+  '/settings',
+  '/privacy',
+};
+
+/// Where a tapped broadcast opens: its deep link when allowlisted, otherwise
+/// the announcements page, where the broadcast is also stored.
+String broadcastRouteFor(String? route) =>
+    route != null && kBroadcastRoutes.contains(route) ? route : '/announcements';
+
 /// Both APNs worker names and local NotificationType names share destinations.
 String? notificationSectionRoute(String? type) => switch (type) {
       'budget_alert' ||
