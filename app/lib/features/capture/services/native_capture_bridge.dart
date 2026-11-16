@@ -1175,6 +1175,7 @@ class CaptureNotificationRoute {
     this.receivedAt,
     this.notificationLogId,
     this.action,
+    this.route,
   });
 
   final String? payloadId;
@@ -1187,6 +1188,9 @@ class CaptureNotificationRoute {
 
   /// Notification action button identifier; null for a plain banner tap.
   final String? action;
+
+  /// In-app route carried by an admin broadcast push; null otherwise.
+  final String? route;
 }
 
 /// One notification lifecycle event recorded natively (iOS Shortcut local
@@ -2993,6 +2997,7 @@ class NativeCaptureBridge {
             notificationLogId:
                 _emptyToNull(_asString(item['notificationLogId'])),
             action: _emptyToNull(_asString(item['action'])),
+            route: _emptyToNull(_asString(item['route'])),
           ),
     ];
   }

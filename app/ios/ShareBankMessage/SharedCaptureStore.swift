@@ -235,6 +235,8 @@ enum SharedCaptureStore {
     let notificationLogId: String?
     /// Banner action button tapped (nil for a plain banner tap).
     let action: String?
+    /// In-app route of an admin broadcast push (source "qirsh_broadcast").
+    var route: String? = nil
   }
 
   /// One notification lifecycle event, queued here until the host Flutter
@@ -815,11 +817,13 @@ enum SharedCaptureStore {
       source: clean(userInfo["source"] as? String),
       receivedAt: isoFormatter.string(from: Date()),
       notificationLogId: clean(userInfo["notificationLogId"] as? String),
-      action: clean(action)
+      action: clean(action),
+      route: clean(userInfo["route"] as? String)
     )
     guard payload.payloadId != nil ||
       payload.transactionId != nil ||
-      payload.smartInboxItemId != nil else {
+      payload.smartInboxItemId != nil ||
+      payload.source == "qirsh_broadcast" else {
       return
     }
     // MALI-068n: read-modify-write under the shared cross-process lock so a

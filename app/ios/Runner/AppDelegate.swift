@@ -1237,7 +1237,10 @@ enum ApnsEnvironment {
     withCompletionHandler completionHandler: @escaping () -> Void
   ) {
     let userInfo = response.notification.request.content.userInfo
+    // Admin broadcasts (source "qirsh_broadcast") take the same queue: Flutter
+    // routes them to their allowlisted deep link or the announcements page.
     if userInfo["source"] as? String == "ios_shortcut" ||
+      userInfo["source"] as? String == "qirsh_broadcast" ||
       userInfo["payloadId"] as? String != nil {
       let actionId = response.actionIdentifier
       SharedCaptureStore.enqueueNotificationRoute(
