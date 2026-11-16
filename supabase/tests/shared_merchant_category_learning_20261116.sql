@@ -53,7 +53,9 @@ INSERT INTO _r SELECT 'five users, repeats from one user counted once',
   FROM public.merchant_category_contributions WHERE merchant_key = 'PROOF CAFE';
 
 -- a user changing their mind moves their single vote, never adds one
-SELECT pg_temp.contribute(6, 'PROOF CAFE', 'cafes');
+-- (user 6 never picks cafes: a sixth cafes vote would auto-approve once
+-- 20261116170000 is applied)
+SELECT pg_temp.contribute(6, 'PROOF CAFE', 'groceries');
 SELECT pg_temp.contribute(6, 'PROOF CAFE', 'restaurants');
 INSERT INTO _r SELECT 'changed vote replaces, not adds',
   (SELECT count(*) FROM public.merchant_category_contributions WHERE merchant_key = 'PROOF CAFE') = 6

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Users } from "lucide-react";
 import { DataTable, TBody, TD, THead, TR } from "@/components/ui/table";
-import { EmptyState } from "@/components/ui/primitives";
+import { EmptyState, StatusBadge } from "@/components/ui/primitives";
 
 export type CandidateRow = {
   merchant_key: string;
@@ -14,9 +14,17 @@ export type CandidateRow = {
 
 type Category = { key: string; name_ar: string };
 
-async function review(body: Record<string, unknown>) {
+export type PublishedRow = {
+  merchant_key: string;
+  category_key: string;
+  published_category_key: string;
+  auto_approved: boolean;
+  user_count_at_review: number;
+};
+
+async function review(body: Record<string, unknown>, method: "POST" | "DELETE" = "POST") {
   const res = await fetch("/api/merchant-category-candidates", {
-    method: "POST",
+    method,
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -118,6 +126,66 @@ export function CandidatesManager({
                     رفض
                   </button>
                 </div>
+              </TD>
+            </TR>
+          ))}
+        </TBody>
+      </DataTable>
+    </div>
+  );
+}
+
+/** Published mappings (manual and auto). Revoke removes the mapping from
+ * every device and the pair never auto-approves again. */
+export function PublishedManager({ published }: { published: PublishedRow[] }) {
+  const [rows, setRows] = useState(published);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const id = (r: PublishedRow) => `${r.merchant_key}|${r.category_key}`;
+
+  async function revoke(r: PublishedRow) {
+    setBusy(id(r));
+    setMessage(null);
+    try {
+      await review({ merchant_key: r.merchant_key, category_key: r.category_key }, "DELETE");
+      setRows((all) => all.filter((x) => id(x) !== id(r)));
+      setMessage("تم الإلغاء وإزالته من الكتالوج.");
+    } catch (e) {
+      setMessage(`فشلت العملية: ${(e as Error).message}`);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-3">
+      <h2 className="text-sm font-semibold">المنشور</h2>
+      {message && <p className="text-tiny text-ink-600">{message}</p>}
+      <DataTable>
+        <THead columns={["المتجر", "التصنيف المنشور", "مستخدمون عند الاعتماد", "الاعتماد", "إجراء"]} />
+        <TBody>
+          {rows.map((r) => (
+            <TR key={id(r)}>
+              <TD className="font-mono">{r.merchant_key}</TD>
+              <TD>{r.published_category_key}</TD>
+              <TD>{r.user_count_at_review}</TD>
+              <TD>
+                {r.auto_approved ? (
+                  <StatusBadge label="معتمد تلقائيًا" tone="info" />
+                ) : (
+                  <StatusBadge label="اعتماد يدوي" />
+                )}
+              </TD>
+              <TD>
+                <button
+                  type="button"
+                  disabled={busy === id(r)}
+                  onClick={() => revoke(r)}
+                  className="rounded-field border px-3 py-1 text-tiny disabled:opacity-50"
+                >
+                  إلغاء
+                </button>
               </TD>
             </TR>
           ))}

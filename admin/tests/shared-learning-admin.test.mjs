@@ -3,15 +3,19 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { mapReviewError, validateReviewPayload } from "../lib/shared-learning-validation.mjs";
+import {
+  mapReviewError,
+  validateReviewPayload,
+  validateRevokePayload,
+} from "../lib/shared-learning-validation.mjs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const route = read("app/api/merchant-category-candidates/route.ts");
 const page = read("app/(admin)/merchants/shared-learning/page.tsx");
 
 test("every handler requires an admin before any RPC, and passes the verified id", () => {
-  const handlers = [...route.matchAll(/export async function (GET|POST)[\s\S]*?(?=export async function|$)/g)];
-  assert.equal(handlers.length, 2);
+  const handlers = [...route.matchAll(/export async function (GET|POST|DELETE)[\s\S]*?(?=export async function|$)/g)];
+  assert.equal(handlers.length, 3);
   for (const [body, name] of handlers) {
     const guard = body.indexOf("requireAdmin()");
     const rpc = body.indexOf(".rpc(");
@@ -71,4 +75,35 @@ test("RPC errors map to HTTP: non-admin is 403, non-candidate 409", () => {
   assert.equal(mapReviewError("P0409").status, 409);
   assert.equal(mapReviewError("P0422").status, 400);
   assert.equal(mapReviewError("XX000").status, 500);
+});
+
+const manager = read("app/(admin)/merchants/shared-learning/candidates-manager.tsx");
+
+test("auto-approved mappings are badged and revocable through the admin-checked RPC", () => {
+  assert.match(page, /rpc\("admin_list_merchant_category_published", \{ p_actor: admin\.id \}\)/);
+  assert.match(page, /<PublishedManager published=\{publishedRows\} \/>/);
+  assert.match(manager, /r\.auto_approved \? \(\s*<StatusBadge label="معتمد تلقائيًا"/);
+  assert.match(manager, /review\(\{ merchant_key: r\.merchant_key, category_key: r\.category_key \}, "DELETE"\)/);
+  const del = route.slice(route.indexOf("export async function DELETE"));
+  assert.ok(del.indexOf("requireAdmin()") < del.indexOf(".rpc("), "DELETE: requireAdmin precedes the RPC");
+  assert.match(del, /rpc\("admin_revoke_merchant_category_mapping"/);
+  assert.match(del, /p_actor: admin\.id/);
+});
+
+test("the page states the auto rule: 6+ users and at least 75%", () => {
+  assert.match(page, /6 مستخدمين أو أكثر/);
+  assert.match(page, /75% على الأقل/);
+  assert.match(page, /معتمد تلقائيًا/);
+});
+
+test("revoke validation passes only the pair; a non-admin revoke maps to 403", () => {
+  assert.deepEqual(
+    validateRevokePayload({ merchant_key: "HALA BOUTIQUE", category_key: "shopping", p_actor: "spoof" }).value,
+    { merchant_key: "HALA BOUTIQUE", category_key: "shopping" },
+  );
+  for (const body of [null, { merchant_key: "AB", category_key: "shopping" }, { merchant_key: "HALA", category_key: "transfers" }]) {
+    assert.equal(validateRevokePayload(body).ok, false, JSON.stringify(body));
+  }
+  assert.equal(mapReviewError("P0403").status, 403);
+  assert.equal(mapReviewError("P0409").status, 409);
 });
