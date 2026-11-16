@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -4295,19 +4294,22 @@ class AppL10nAr extends AppL10n {
 
   @override
   String cfAccentColourName(String colour) {
-    String _temp0 = intl.Intl.selectLogic(colour, {
-      'amber': 'كهرماني',
-      'red': 'أحمر',
-      'pink': 'وردي',
-      'purple': 'بنفسجي',
-      'blue': 'أزرق',
-      'cyan': 'سماوي',
-      'emerald': 'زمردي',
-      'lime': 'أخضر ليموني',
-      'orange': 'برتقالي',
-      'teal': 'فيروزي',
-      'other': 'لون مميّز',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      colour,
+      {
+        'amber': 'كهرماني',
+        'red': 'أحمر',
+        'pink': 'وردي',
+        'purple': 'بنفسجي',
+        'blue': 'أزرق',
+        'cyan': 'سماوي',
+        'emerald': 'زمردي',
+        'lime': 'أخضر ليموني',
+        'orange': 'برتقالي',
+        'teal': 'فيروزي',
+        'other': 'لون مميّز',
+      },
+    );
     return '$_temp0';
   }
 
@@ -6997,41 +6999,47 @@ class AppL10nAr extends AppL10n {
 
   @override
   String setCategoryIconName(String icon) {
-    String _temp0 = intl.Intl.selectLogic(icon, {
-      'restaurants': 'مطاعم',
-      'groceries': 'بقالة',
-      'shopping': 'تسوق',
-      'transport': 'مواصلات',
-      'bills': 'فواتير',
-      'cards': 'بطاقات',
-      'cash': 'نقود',
-      'cafes': 'مقاهٍ',
-      'gifts': 'هدايا',
-      'home': 'منزل',
-      'travel': 'سفر',
-      'health': 'صحة',
-      'education': 'تعليم',
-      'transfers': 'تحويلات',
-      'other': 'أيقونة أخرى',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      icon,
+      {
+        'restaurants': 'مطاعم',
+        'groceries': 'بقالة',
+        'shopping': 'تسوق',
+        'transport': 'مواصلات',
+        'bills': 'فواتير',
+        'cards': 'بطاقات',
+        'cash': 'نقود',
+        'cafes': 'مقاهٍ',
+        'gifts': 'هدايا',
+        'home': 'منزل',
+        'travel': 'سفر',
+        'health': 'صحة',
+        'education': 'تعليم',
+        'transfers': 'تحويلات',
+        'other': 'أيقونة أخرى',
+      },
+    );
     return '$_temp0';
   }
 
   @override
   String setCategoryColourName(String colour) {
-    String _temp0 = intl.Intl.selectLogic(colour, {
-      'grey': 'رمادي',
-      'coral': 'مرجاني',
-      'green': 'أخضر',
-      'blue': 'أزرق',
-      'purple': 'بنفسجي',
-      'brightGreen': 'أخضر زاهٍ',
-      'teal': 'أخضر مزرق',
-      'pink': 'وردي',
-      'blueGrey': 'رمادي مزرق',
-      'orange': 'برتقالي',
-      'other': 'لون مخصص',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      colour,
+      {
+        'grey': 'رمادي',
+        'coral': 'مرجاني',
+        'green': 'أخضر',
+        'blue': 'أزرق',
+        'purple': 'بنفسجي',
+        'brightGreen': 'أخضر زاهٍ',
+        'teal': 'أخضر مزرق',
+        'pink': 'وردي',
+        'blueGrey': 'رمادي مزرق',
+        'orange': 'برتقالي',
+        'other': 'لون مخصص',
+      },
+    );
     return '$_temp0';
   }
 
