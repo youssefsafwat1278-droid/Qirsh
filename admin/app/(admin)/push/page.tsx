@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw, Send, Users } from "lucide-react";
+import { FlaskConical, RefreshCw, Send, Users } from "lucide-react";
 import {
   Banner,
   Card,
@@ -21,6 +21,7 @@ import {
   BROADCAST_DEEP_LINKS,
   TITLE_MAX,
   broadcastErrorMessage,
+  parseTestTarget,
   validateBroadcastDraft,
 } from "@/lib/push-broadcast.mjs";
 import { fmtDate } from "@/lib/utils";
@@ -34,6 +35,7 @@ type HistoryRow = {
   deep_link: string | null;
   recipient_devices: number;
   recipient_users: number;
+  is_test?: boolean;
   pending: number;
   sent: number;
   failed: number;
@@ -55,6 +57,7 @@ export default function PushBroadcastsPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [confirm, setConfirm] = useState<ConfirmSpec | null>(null);
+  const [testTarget, setTestTarget] = useState("");
   // One id per composed message: a double submit or a retried request replays
   // the same create instead of making a second broadcast.
   const [operationId, setOperationId] = useState(() => crypto.randomUUID());
@@ -136,6 +139,31 @@ export default function PushBroadcastsPage() {
     await loadHistory().catch(() => undefined);
   }
 
+  // A test goes to one account's devices only, with no in-app announcement.
+  // Its own operation id each time: every click is a new test.
+  async function sendTest() {
+    const check = validateBroadcastDraft(draft);
+    if (!check.ok) return setError(broadcastErrorMessage("validation_failed"));
+    if (!parseTestTarget(testTarget)) return setError(broadcastErrorMessage("test_target_invalid"));
+    setBusy(true);
+    setError("");
+    setNotice("");
+    const res = await fetch("/api/push-broadcasts/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...draft, target: testTarget, operation_id: crypto.randomUUID() }),
+    });
+    const json = await res.json().catch(() => ({}));
+    setBusy(false);
+    if (!res.ok) return setError(broadcastErrorMessage(json.error));
+    if (json.error) setError(broadcastErrorMessage(json.error));
+    else {
+      const s = json.send as { sent?: number; failed?: number } | null;
+      setNotice(`أُرسلت التجربة إلى ${json.created?.devices ?? 0} جهاز — وصل ${s?.sent ?? 0}، فشل ${s?.failed ?? 0}.`);
+    }
+    await loadHistory().catch(() => undefined);
+  }
+
   async function retry(id: string) {
     setBusy(true);
     setError("");
@@ -212,6 +240,22 @@ export default function PushBroadcastsPage() {
             hint="صفحات داخل التطبيق فقط. بدون وجهة يفتح التطبيق وتظهر الرسالة كإعلان."
           />
 
+          <div className="flex flex-col gap-2.5 rounded-lg border border-divider p-4 md:flex-row md:items-end">
+            <div className="flex-1">
+              <TextField
+                label="تجربة على حساب واحد"
+                dir="ltr"
+                placeholder="email@example.com أو User ID"
+                value={testTarget}
+                onChange={(e) => setTestTarget(e.target.value)}
+                hint="يصل الإشعار لأجهزة هذا الحساب فقط، ولا يُنشأ إعلان داخل التطبيق."
+              />
+            </div>
+            <Button variant="secondary" icon={FlaskConical} onClick={() => void sendTest()} disabled={busy}>
+              إرسال تجربة
+            </Button>
+          </div>
+
           {dryRun && (
             <div className="grid gap-4 md:grid-cols-2">
               <StatCard icon={Send} label="جهاز سيصله الإشعار" value={dryRun.devices} />
@@ -245,7 +289,10 @@ export default function PushBroadcastsPage() {
             <Card key={b.id}>
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-ink">{b.title_ar}</p>
+                  <p className="font-medium text-ink">
+                    {b.title_ar}
+                    {b.is_test && <span className="ms-2"><StatusBadge label="تجربة" tone="warning" dot={false} /></span>}
+                  </p>
                   <p className="mt-1 text-micro text-ink-faint">
                     {fmtDate(b.created_at)} — {b.recipient_devices} جهاز / {b.recipient_users} مستخدم
                     {b.deep_link ? ` — ${b.deep_link}` : ""}

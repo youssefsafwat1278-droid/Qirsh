@@ -64,6 +64,20 @@ export function parseTypedConfirmation(typed) {
   return Number(t);
 }
 
+/**
+ * The account a test is sent to: an email or a user id. Returns the trimmed
+ * value, or null when it is neither (the RPC resolves it and is the authority).
+ * @param {unknown} target
+ * @returns {string | null}
+ */
+export function parseTestTarget(target) {
+  if (typeof target !== "string") return null;
+  const t = target.trim();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t)) return t;
+  if (t.length <= 254 && /^[^\s@]+@[^\s@]+$/.test(t)) return t;
+  return null;
+}
+
 /** Arabic text for the error codes the routes and RPCs return. */
 export function broadcastErrorMessage(code) {
   switch (code) {
@@ -77,6 +91,10 @@ export function broadcastErrorMessage(code) {
       return "الوجهة المختارة غير مسموح بها.";
     case "validation_failed":
       return "العنوان والنص مطلوبان باللغتين وضمن الطول المسموح.";
+    case "test_target_invalid":
+      return "اكتب إيميل الحساب أو معرّف المستخدم (User ID).";
+    case "test_target_not_found":
+      return "لا يوجد حساب بهذا الإيميل أو المعرّف.";
     case "send_unavailable":
       return "تم إنشاء الرسالة لكن تعذّر تشغيل الإرسال الآن. استخدم «إعادة المحاولة» من السجل.";
     default:

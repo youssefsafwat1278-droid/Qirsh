@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   BROADCAST_DEEP_LINKS,
+  parseTestTarget,
   parseTypedConfirmation,
   validateBroadcastDraft,
 } from "../lib/push-broadcast.mjs";
@@ -14,6 +15,7 @@ const ROUTES = [
   "app/api/push-broadcasts/route.ts",
   "app/api/push-broadcasts/dry-run/route.ts",
   "app/api/push-broadcasts/send/route.ts",
+  "app/api/push-broadcasts/test/route.ts",
 ];
 
 test("every push-broadcast handler requires an admin and maps auth errors", () => {
@@ -88,4 +90,15 @@ test("the deep-link allowlist is identical in the admin, the database and the ap
   const set = dart.match(/const kBroadcastRoutes = <String>\{([^}]*)\}/);
   assert.ok(set, "kBroadcastRoutes defined in the app");
   assert.deepEqual([...set[1].matchAll(/'([^']+)'/g)].map((m) => m[1]).sort(), admin);
+});
+
+test("a test send targets one account by email or user id only", () => {
+  assert.equal(parseTestTarget("  me@example.com "), "me@example.com");
+  assert.equal(parseTestTarget("11111111-2222-3333-4444-555555555555"), "11111111-2222-3333-4444-555555555555");
+  for (const bad of ["", "%", "everyone", "a b@c", null, 12, "x".repeat(250) + "@a.co"]) {
+    assert.equal(parseTestTarget(bad), null, String(bad));
+  }
+  const route = read("app/api/push-broadcasts/test/route.ts");
+  assert.match(route, /admin_create_push_broadcast_test/);
+  assert.doesNotMatch(route, /admin_create_push_broadcast"/);
 });
