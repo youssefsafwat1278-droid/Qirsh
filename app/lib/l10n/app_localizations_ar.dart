@@ -5815,6 +5815,16 @@ class AppL10nAr extends AppL10n {
   String get ccPastManualKept => 'التصنيفات التي اخترتها بنفسك تبقى كما هي.';
 
   @override
+  String get ccScopeThis => 'هذه العملية';
+
+  @override
+  String get ccScopeMerchant => 'هذا المتجر';
+
+  @override
+  String get ccThisOnlyHint =>
+      'يتغيّر تصنيف هذه العملية وحدها، ولا يُحفظ شيء للمرات القادمة.';
+
+  @override
   String get commonClose => 'إغلاق';
 
   @override

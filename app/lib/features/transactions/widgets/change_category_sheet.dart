@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/widgets/navy_sheet_theme.dart';
+import '../../../core/theme/widgets/segmented_control.dart';
 import '../../../core/theme/widgets/app_toast.dart';
 import '../../../domain/entities/budget_entity.dart';
 import '../../../domain/entities/transaction_entity.dart';
@@ -15,6 +16,7 @@ import '../../common/app_category_chip.dart';
 import '../../common/app_button.dart';
 import '../../common/category_catalog.dart';
 import '../../dashboard/dashboard_providers.dart';
+import '../../settings/widgets/settings_v2.dart';
 import '../transactions_providers.dart';
 import '../../../core/utils/l10n_ext.dart';
 
@@ -113,6 +115,12 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
     return AppSheetScaffold(
       title: context.l10n.ccTitle,
       scrollable: true,
+      // v2 QStickyDock: the one primary, full width, pinned under the content.
+      bottomAction: AppPrimaryButton(
+        label: context.l10n.ccSave,
+        onTap: _saving ? null : _save,
+        loading: _saving,
+      ),
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
       body: Column(
         mainAxisSize: MainAxisSize.min,
@@ -140,76 +148,68 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
             ],
           ),
           if (hasMerchant) ...[
-            const SizedBox(height: AppSpacing.s5),
+            const SizedBox(height: AppSpacing.s6),
             Text(context.l10n.ccScope,
-                style: AppTypography.caption(c.textLight)),
+                style: AppTypography.caption(c.textMuted)),
             const SizedBox(height: AppSpacing.s2),
-            Material(
-              color: c.surface2.withValues(alpha: 0.5),
-              clipBehavior: Clip.antiAlias,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-                side: BorderSide(color: c.border),
-              ),
-              child: Column(
-                children: [
-                  RadioListTile<CategoryCorrectionScope>(
+            SegmentedControl<CategoryCorrectionScope>(
+              value: _scope,
+              onChanged: (v) {
+                if (v == _scope) return;
+                setState(() {
+                  _scope = v;
+                  if (v == CategoryCorrectionScope.thisTransactionOnly) {
+                    _alsoUpdatePast = false;
+                  }
+                });
+              },
+              options: [
+                SegmentOption(
                     value: CategoryCorrectionScope.thisTransactionOnly,
-                    groupValue: _scope,
-                    onChanged: (v) => setState(() {
-                      _scope = v!;
-                      _alsoUpdatePast = false;
-                    }),
-                    title: Text(context.l10n.ccThisOnly,
-                        style: AppTypography.body(c.textMain)),
-                    activeColor: c.primary,
-                  ),
-                  Divider(height: 1, color: c.border),
-                  RadioListTile<CategoryCorrectionScope>(
+                    label: context.l10n.ccScopeThis),
+                SegmentOption(
                     value: CategoryCorrectionScope.allMerchantTransactions,
-                    groupValue: _scope,
-                    onChanged: (v) => setState(() => _scope = v!),
-                    title: Text(context.l10n.ccAllMerchant,
-                        style: AppTypography.body(c.textMain)),
-                    subtitle: Text(context.l10n.ccRememberHint,
-                        style: AppTypography.caption(c.textLight)),
-                    activeColor: c.primary,
-                  ),
-                  if (_scope ==
-                      CategoryCorrectionScope.allMerchantTransactions) ...[
-                    Divider(height: 1, color: c.border),
-                    CheckboxListTile(
-                      value: _alsoUpdatePast,
-                      onChanged: (v) {
-                        setState(() => _alsoUpdatePast = v ?? false);
-                        _refreshPastCount();
-                      },
-                      title: Text(context.l10n.ccAlsoUpdatePast,
-                          style: AppTypography.body(c.textMain)),
-                      subtitle: _alsoUpdatePast
-                          ? Text(
-                              _pastCount == null
-                                  ? context.l10n.ccPastManualKept
-                                  : '${context.l10n.ccPastCount(_pastCount!)} '
-                                      '${context.l10n.ccPastManualKept}',
-                              key: const ValueKey('cc-past-count'),
-                              style: AppTypography.caption(c.textLight),
-                            )
-                          : null,
-                      activeColor: c.primary,
-                      controlAffinity: ListTileControlAffinity.leading,
-                    ),
-                  ],
-                ],
+                    label: context.l10n.ccScopeMerchant),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.s2),
+            Padding(
+              padding: const EdgeInsetsDirectional.symmetric(horizontal: 4),
+              child: Text(
+                _scope == CategoryCorrectionScope.thisTransactionOnly
+                    ? context.l10n.ccThisOnlyHint
+                    : context.l10n.ccRememberHint,
+                style: AppTypography.caption(c.textMuted),
               ),
             ),
+            if (_scope == CategoryCorrectionScope.allMerchantTransactions) ...[
+              const SizedBox(height: AppSpacing.s4),
+              // The v2 switch row on the segmented control's own well, so the
+              // section reads as one piece; a floating card's drop shadow is
+              // clipped by the sheet's scroll view.
+              Material(
+                color: c.surfaceMuted,
+                clipBehavior: Clip.antiAlias,
+                borderRadius: BorderRadius.circular(AppRadius.card),
+                child: SettingsV2SwitchRow(
+                  key: const ValueKey('cc-past-count'),
+                  title: context.l10n.ccAlsoUpdatePast,
+                  subtitle: _alsoUpdatePast
+                      ? _pastCount == null
+                          ? context.l10n.ccPastManualKept
+                          : '${context.l10n.ccPastCount(_pastCount!)} '
+                              '${context.l10n.ccPastManualKept}'
+                      : null,
+                  value: _alsoUpdatePast,
+                  onChanged: (v) {
+                    setState(() => _alsoUpdatePast = v);
+                    _refreshPastCount();
+                  },
+                ),
+              ),
+            ],
           ],
-          const SizedBox(height: AppSpacing.s5),
-          AppButton(
-            label: context.l10n.ccSave,
-            onPressed: _saving ? null : _save,
-            isPrimary: true,
-          ),
+          const SizedBox(height: AppSpacing.s2),
         ],
       ),
     );

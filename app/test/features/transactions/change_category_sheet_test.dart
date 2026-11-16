@@ -68,8 +68,13 @@ void main() {
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
-    expect(find.text('هذه العملية فقط'), findsOneWidget);
-    expect(find.text('تذكّر التصنيف لهذا المتجر'), findsOneWidget);
+    expect(find.text('هذه العملية'), findsOneWidget);
+    expect(find.text('هذا المتجر'), findsOneWidget);
+    // The merchant scope reveals the past-transactions switch row, which must
+    // also sit on its own Material surface.
+    await tester.tap(find.text('هذا المتجر'));
+    await tester.pumpAndSettle();
+    expect(find.text('حدّث العمليات السابقة أيضًا'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

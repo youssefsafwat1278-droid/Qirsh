@@ -3082,6 +3082,9 @@
     }
   },
   "ccPastManualKept": "التصنيفات التي اخترتها بنفسك تبقى كما هي.",
+  "ccScopeThis": "هذه العملية",
+  "ccScopeMerchant": "هذا المتجر",
+  "ccThisOnlyHint": "يتغيّر تصنيف هذه العملية وحدها، ولا يُحفظ شيء للمرات القادمة.",
   "commonClose": "إغلاق",
   "commonHide": "إخفاء",
   "commonSkip": "تخطّى",

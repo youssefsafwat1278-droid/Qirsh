@@ -9775,6 +9775,24 @@ abstract class AppL10n {
   /// **'التصنيفات التي اخترتها بنفسك تبقى كما هي.'**
   String get ccPastManualKept;
 
+  /// No description provided for @ccScopeThis.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه العملية'**
+  String get ccScopeThis;
+
+  /// No description provided for @ccScopeMerchant.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذا المتجر'**
+  String get ccScopeMerchant;
+
+  /// No description provided for @ccThisOnlyHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتغيّر تصنيف هذه العملية وحدها، ولا يُحفظ شيء للمرات القادمة.'**
+  String get ccThisOnlyHint;
+
   /// No description provided for @commonClose.
   ///
   /// In ar, this message translates to:

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/di/app_providers.dart';
 import 'package:money_companion/core/theme/app_theme.dart';
+import 'package:money_companion/core/theme/widgets/segmented_control.dart';
 import 'package:money_companion/domain/entities/category_entity.dart';
 import 'package:money_companion/domain/entities/transaction_entity.dart';
 import 'package:money_companion/domain/finance/money.dart';
@@ -74,7 +75,7 @@ Future<AppL10n> _open(WidgetTester tester, _FailingTransactions transactions,
   )));
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
-  return AppL10n.of(tester.element(find.byType(AppButton)));
+  return AppL10n.of(tester.element(find.byType(AppPrimaryButton)));
 }
 
 void main() {
@@ -85,12 +86,12 @@ void main() {
         final merchants = _NoMerchantWrites();
         final l10n = await _open(tester, transactions, merchants, language, dark);
         await tester.tap(find.text('QA travel'));
-        await tester.tap(find.text(l10n.ccAllMerchant));
+        await tester.tap(find.text(l10n.ccScopeMerchant));
         await tester.pumpAndSettle();
         await tester.tap(find.text(l10n.ccSave));
         await tester.pump();
         expect(transactions.requests, [(transactionId: 'category-failure-tx', categoryKey: 'qa-travel')]);
-        expect(tester.widget<AppButton>(find.byType(AppButton)).onPressed, isNull);
+        expect(tester.widget<AppPrimaryButton>(find.byType(AppPrimaryButton)).onTap, isNull);
         transactions.pending!.completeError(StateError('private_repository_detail'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 500));
@@ -98,10 +99,10 @@ void main() {
         expect(find.text(l10n.ccTitle), findsOneWidget);
         expect(find.text(l10n.ctsCategoryUpdateFailed), findsOneWidget);
         expect(find.textContaining('private_repository_detail'), findsNothing);
-        expect(tester.widget<AppButton>(find.byType(AppButton)).onPressed, isNotNull);
-        final scope = tester.widget<RadioListTile<CategoryCorrectionScope>>(
-          find.widgetWithText(RadioListTile<CategoryCorrectionScope>, l10n.ccAllMerchant));
-        expect(scope.groupValue, CategoryCorrectionScope.allMerchantTransactions);
+        expect(tester.widget<AppPrimaryButton>(find.byType(AppPrimaryButton)).onTap, isNotNull);
+        final scope = tester.widget<SegmentedControl<CategoryCorrectionScope>>(
+          find.byType(SegmentedControl<CategoryCorrectionScope>));
+        expect(scope.value, CategoryCorrectionScope.allMerchantTransactions);
         expect(merchants.calls, 0);
         // The next real tap retries the same selected category; no failed
         // correction reaches the subsequent merchant-learning boundary.
@@ -125,7 +126,7 @@ void main() {
     final l10n = await _open(tester, transactions, merchants, 'en', false);
     await tester.tap(find.text(l10n.ccSave));
     await tester.pump();
-    Navigator.of(tester.element(find.byType(AppButton))).pop();
+    Navigator.of(tester.element(find.byType(AppPrimaryButton))).pop();
     await tester.pumpAndSettle();
     transactions.pending!.completeError(StateError('late_failure'));
     await tester.pump();
