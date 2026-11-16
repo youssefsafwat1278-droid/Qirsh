@@ -114,3 +114,41 @@ test('the auto-approval migration ships a rollback and leaves 20261116150000 alo
   assert.match(read(`supabase/rollback/${autoName}_rollback.sql`), /DROP TRIGGER IF EXISTS trg_merchant_category_contributions_auto_approve/);
   assert.doesNotMatch(sql, /auto_approv/);
 });
+
+// ── 20261116190000: shared-mapping marker ───────────────────────────────────
+const markerName = '20261116190000_shared_mapping_marker';
+const markerSql = stripComments(read(`supabase/migrations/${markerName}.sql`));
+const markerPublish = markerSql.slice(markerSql.indexOf('FUNCTION public.merchant_category_publish('));
+const markerPublishBody = markerPublish.slice(0, markerPublish.indexOf('$$;', markerPublish.indexOf('$$') + 2));
+
+test('shared mappings are published with the reserved priority 1000', () => {
+  assert.match(markerSql, /merchant_category_shared_priority\(\)\s+RETURNS INTEGER LANGUAGE sql IMMUTABLE AS \$\$ SELECT 1000 \$\$/);
+  // both the insert and the update path set the marker
+  assert.equal((markerPublishBody.match(/public\.merchant_category_shared_priority\(\)/g) ?? []).length, 2);
+  assert.match(markerPublishBody, /priority = public\.merchant_category_shared_priority\(\)/);
+  assert.match(markerSql, /REVOKE ALL ON FUNCTION public\.merchant_category_publish\(TEXT, TEXT\)\s+FROM PUBLIC, anon, authenticated, service_role/);
+});
+
+test('the marker backfill touches only approved shared-learning mappings', () => {
+  const backfill = markerSql.slice(markerSql.indexOf('UPDATE public.merchant_keywords k'));
+  assert.match(backfill, /r\.decision = 'approved'/);
+  assert.match(backfill, /upper\(k\.keyword\) = r\.merchant_key/);
+  assert.match(backfill, /k\.category_key = r\.published_category_key/);
+});
+
+test('no other writer uses the reserved priority', () => {
+  const enrich = read('supabase/functions/enrich-merchant/index.ts');
+  assert.match(enrich, /priority: 0,/);
+  assert.doesNotMatch(enrich, /priority: 1000/);
+});
+
+test('the device reads the same reserved priority', () => {
+  const dart = read('app/lib/domain/services/learned_rule_precedence.dart');
+  assert.match(dart, /sharedLearningKeywordPriority = 1000;/);
+});
+
+test('the marker migration ships a rollback and leaves 20261116170000 alone', () => {
+  assert.match(read(`supabase/rollback/${markerName}_rollback.sql`),
+    /DROP FUNCTION IF EXISTS public\.merchant_category_shared_priority\(\)/);
+  assert.doesNotMatch(autoSql, /shared_priority/);
+});

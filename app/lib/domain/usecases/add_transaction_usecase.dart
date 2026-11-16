@@ -600,8 +600,8 @@ class AddTransactionUseCase {
         parseConfidencePermille: d.parseConfidencePermille,
         confidenceMinPermille: d.confidenceMinPermille,
         proofVerdict: evaluation.proof?.verdict,
-        amountMatch: cmp(
-            evaluation.proof?.amountCanonical, evaluation.parsedAmountCanonical),
+        amountMatch: cmp(evaluation.proof?.amountCanonical,
+            evaluation.parsedAmountCanonical),
         directionMatch:
             cmp(evaluation.proof?.direction, evaluation.parsedDirection),
         currencyMatch: cmp(evaluation.proof?.currency, null),
@@ -876,7 +876,8 @@ class AddTransactionUseCase {
             (_aiClient is PrimaryAiParserClient &&
                 aiFirstAttempt.sanitizedSms != null));
     final aiSaysNotTransaction = aiPrimary &&
-        aiFirstAttempt.response == null && aiFirstAttempt.failureReason == null;
+        aiFirstAttempt.response == null &&
+        aiFirstAttempt.failureReason == null;
     // An AI "not a transaction" verdict is NOT an intentional drop: a model can
     // misread a real bank message, so it becomes a review item (Smart Inbox)
     // unless the DETERMINISTIC OTP/promo filter also rejects the text.
@@ -884,8 +885,8 @@ class AddTransactionUseCase {
         ((transactionShaped || aiSaysNotTransaction) &&
             ParserEngine.isIgnoredMessage(rawMessage,
                 senderId: senderId, bankProfiles: bankProfiles));
-    final droppedByParser =
-        !intentionallyIgnored && (aiPrimary || isLikelyBank || transactionShaped);
+    final droppedByParser = !intentionallyIgnored &&
+        (aiPrimary || isLikelyBank || transactionShaped);
 
     BankDiscoveryResult? discovery;
     if (!onDeviceOnly) {
@@ -1077,27 +1078,34 @@ class AddTransactionUseCase {
     );
     var effectiveParsed = parsed;
     final hasAiCategory = aiCategoryKey != null;
-    // A user-confirmed merchant rule outranks the AI's category (see
-    // learnedRuleCategoryFor). Without an AI category the categorizer above
-    // already ranks the rule first.
+    // A user-confirmed merchant rule, then a shared-learning mapping for this
+    // exact merchant, outrank the AI's category (see learnedRuleCategoryFor).
+    // Without an AI category the categorizer above already ranks them.
     final learnedOverAi = hasAiCategory
         ? await learnedRuleCategoryFor(
-            _merchantCategoryRepository, effectiveParsed.rawMerchant)
+            _merchantCategoryRepository,
+            effectiveParsed.rawMerchant,
+            loadRemoteKeywords: () async => remoteKeywords,
+          )
         : null;
     final hasSpecificAiCategory = hasAiCategory &&
         aiCategoryKey != Categories.other.key &&
         Categories.byKey(aiCategoryKey) != Categories.other;
     var effectiveCategory = learnedOverAi != null
-        ? CategoryResult(learnedOverAi, CategorySource.userMap, 1.0)
+        ? learnedOverAi.userConfirmed
+            ? CategoryResult(
+                learnedOverAi.categoryKey, CategorySource.userMap, 1.0)
+            : CategoryResult(
+                learnedOverAi.categoryKey, CategorySource.keyword, 0.85)
         : hasAiCategory
-        ? CategoryResult(
-            Categories.byKey(aiCategoryKey).key,
-            hasSpecificAiCategory
-                ? CategorySource.keyword
-                : CategorySource.fallback,
-            hasSpecificAiCategory ? 0.85 : 0.3,
-          )
-        : categorizer.categorize(effectiveParsed);
+            ? CategoryResult(
+                Categories.byKey(aiCategoryKey).key,
+                hasSpecificAiCategory
+                    ? CategorySource.keyword
+                    : CategorySource.fallback,
+                hasSpecificAiCategory ? 0.85 : 0.3,
+              )
+            : categorizer.categorize(effectiveParsed);
 
     // Transfer accounting — mirrors mainstream finance apps:
     //   • internal / own-account move → neutral transfer (excluded from totals)
@@ -1164,8 +1172,7 @@ class AddTransactionUseCase {
     // validator rejection: no transaction.
     if (aiValidated &&
         DirectionSignal.contradicts(rawMessage, effectiveParsed.type)) {
-      AiSenderFailureTracker.instance
-          .recordFailure(aiFirstAttempt.senderId);
+      AiSenderFailureTracker.instance.recordFailure(aiFirstAttempt.senderId);
       return AddTransactionResult.notTransaction(reportedParse,
           droppedByParser: droppedByParser,
           aiFailureReason: 'ai_response_rejected_by_grounding');
@@ -1332,8 +1339,7 @@ class AddTransactionUseCase {
     // authority. Legacy (v29) is unchanged (non-exact already reviews).
     final requiresReview = resolveAiCaptureIngress(
           hasExactText: !legacyLossyReview,
-          canonicalMode:
-              _coordinator.state() == PlanningCutoverState.canonical,
+          canonicalMode: _coordinator.state() == PlanningCutoverState.canonical,
         ) ==
         AiCaptureIngress.legacyPendingReview;
 
@@ -1627,8 +1633,7 @@ class AddTransactionUseCase {
       // decision itself is unchanged.
       status: CaptureCommitDecision.fee(
         hasExactText: !feeAmount.legacyLossy,
-        canonicalMode:
-            _coordinator.state() == PlanningCutoverState.canonical,
+        canonicalMode: _coordinator.state() == PlanningCutoverState.canonical,
         // The fee follows the primary: a Proof-withheld primary must never
         // leave a confirmed fee row behind it.
         primaryWithheldByProof: primaryWithheldByProof,
