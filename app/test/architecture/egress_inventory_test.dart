@@ -32,6 +32,10 @@ void main() {
         'EgressClass.financialSync — learned merchant→category rules, '
             'injected mayEgress (default deny) plus the merchant_rules_sync '
             'capability',
+    'features/settings/profile_photo_sync_service.dart':
+        'EgressClass.profileAndSettings — the profile photo to the private '
+            'profile-photos bucket, injected mayEgress (default deny), HTTPS '
+            'only, plus the profile_photo_backup capability',
     'features/planning_sync/services/accounts_push_service.dart':
         'EgressClass.financialSync — money',
     'features/capture/services/ledger_push_service.dart':

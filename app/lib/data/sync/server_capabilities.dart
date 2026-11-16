@@ -45,6 +45,10 @@ const String kCapReplicaEpoch = 'replica_epoch';
 /// [kCapSyncSeq]; false/absent keeps the user's learned rules device-local.
 const String kCapMerchantRulesSync = 'merchant_rules_sync';
 
+/// 20261116210000: the server has the private `profile-photos` bucket. A kill
+/// switch like [kCapSyncSeq]; false/absent keeps the profile photo on-device.
+const String kCapProfilePhotoBackup = 'profile_photo_backup';
+
 class ServerCapabilitiesService {
   ServerCapabilitiesService({
     required Future<String?> Function() getAuthUserId,
@@ -92,6 +96,8 @@ class ServerCapabilitiesService {
   final Map<String, DateTime> _revisionCasAt = {};
   final Map<String, ServerCapabilityState> _merchantRules = {};
   final Map<String, DateTime> _merchantRulesAt = {};
+  final Map<String, ServerCapabilityState> _profilePhoto = {};
+  final Map<String, DateTime> _profilePhotoAt = {};
 
   String _key(String uid) => '${_getServerUrl()}|$uid';
 
@@ -170,6 +176,11 @@ class ServerCapabilitiesService {
   Future<ServerCapabilityState> merchantRulesSync({String? uid}) =>
       _killSwitch(kCapMerchantRulesSync, _merchantRules, _merchantRulesAt, uid);
 
+  /// Whether the server advertises `profile_photo_backup` (same rules as
+  /// [syncSeq]). Until verified, the photo is neither uploaded nor downloaded.
+  Future<ServerCapabilityState> profilePhotoBackup({String? uid}) =>
+      _killSwitch(kCapProfilePhotoBackup, _profilePhoto, _profilePhotoAt, uid);
+
   /// WP-8 (diagnostics): the last cached answer for a kill-switch capability
   /// with no network and no TTL check; [ServerCapabilityState.unknown] when
   /// nothing was probed. [capKey] is one of [kCapSyncSeq], [kCapReplicaEpoch],
@@ -181,6 +192,7 @@ class ServerCapabilitiesService {
       kCapRevisionCas => _revisionCas,
       kCapCaptureContractV2 => _captureV2,
       kCapMerchantRulesSync => _merchantRules,
+      kCapProfilePhotoBackup => _profilePhoto,
       _ => null,
     };
     return cache?[_key(uid)] ?? ServerCapabilityState.unknown;

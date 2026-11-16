@@ -141,6 +141,7 @@ import '../../features/capture/services/smart_inbox_sync_service.dart';
 import '../../features/planning_sync/services/accounts_pull_service.dart';
 import '../../features/planning_sync/services/accounts_push_service.dart';
 import '../../features/planning_sync/services/merchant_rule_sync_service.dart';
+import '../../features/settings/profile_photo_sync_service.dart';
 import '../../features/planning_sync/services/planning_outbox_queue.dart';
 import '../../features/planning_sync/services/planning_child_sync_service.dart';
 import '../../features/planning_sync/services/planning_pull_service.dart';
@@ -910,6 +911,7 @@ final planningSyncEngineProvider = writerProvider<PlanningSyncEngine>((ref) {
     conflictResolver: ref.watch(conflictResolverProvider),
     health: ref.watch(syncHealthProvider),
     merchantRuleSync: ref.watch(merchantRuleSyncServiceProvider),
+    profilePhotoSync: ref.watch(profilePhotoSyncServiceProvider),
   );
 });
 
@@ -1135,6 +1137,23 @@ final merchantRuleSyncServiceProvider =
         .seedFromLearnedMap({key: category}),
     onRuleRemoved: (key) =>
         ref.read(merchantIntelligenceProvider).forgetUserCorrection(key),
+    health: ref.watch(syncHealthProvider),
+  );
+});
+
+/// The profile photo ↔ `profile-photos/<uid>/avatar` (private Storage).
+/// Cloud consent (profileAndSettings, fresh per run), HTTPS, AND the
+/// `profile_photo_backup` capability.
+final profilePhotoSyncServiceProvider =
+    writerProvider<ProfilePhotoSyncService>((ref) {
+  final capabilities = ref.watch(serverCapabilitiesServiceProvider);
+  return ProfilePhotoSyncService(
+    db: ref.watch(appDatabaseProvider),
+    getAuthUserId: _currentSupabaseUserId,
+    mayEgress: _consentGate(ref, EgressClass.profileAndSettings),
+    serverReady: () async =>
+        await capabilities.profilePhotoBackup() ==
+        ServerCapabilityState.verified,
     health: ref.watch(syncHealthProvider),
   );
 });

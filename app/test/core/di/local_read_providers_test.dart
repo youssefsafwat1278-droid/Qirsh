@@ -71,6 +71,7 @@ void main() {
       'ledgerPushService': ledgerPushServiceProvider,
       'ledgerSyncEngine': ledgerSyncEngineProvider,
       'planningSyncEngine': planningSyncEngineProvider,
+      'profilePhotoSyncService': profilePhotoSyncServiceProvider,
       'captureSyncService': captureSyncServiceProvider,
       'captureImportService': captureImportServiceProvider,
       'dataPortabilityService': dataPortabilityServiceProvider,

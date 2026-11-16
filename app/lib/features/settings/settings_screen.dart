@@ -1209,6 +1209,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     await ref.read(userSettingsRepositoryProvider).saveSettings(
           settings.copyWith(avatarPath: destination),
         );
+    // Cloud Sync copy of the new photo now rather than at the next cycle. The
+    // service applies every gate itself (consent, owner, HTTPS, capability)
+    // and never throws for a refusal; a failure is retried by the next cycle.
+    unawaited(ref
+        .read(profilePhotoSyncServiceProvider)
+        .sync()
+        .then<void>((_) {}, onError: (Object _) {}));
     _refreshSettingsDependents(ref);
     if (!context.mounted) return;
     AppToast.show(context, context.l10n.setPhotoUpdated);
