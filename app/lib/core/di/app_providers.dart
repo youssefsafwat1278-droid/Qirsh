@@ -1977,7 +1977,7 @@ final confirmTransactionUseCaseProvider =
 /// consent (aiProcessing), all read fresh at offer time and again before each
 /// send.
 final sharedCategoryLearningClientProvider =
-    Provider<SharedCategoryLearningClient?>((ref) {
+    writerProvider<SharedCategoryLearningClient?>((ref) {
   if (!SupabaseConfig.isConfigured) return null;
   final db = ref.watch(appDatabaseProvider);
   final preference = ref.watch(sharedLearningPreferenceProvider);
