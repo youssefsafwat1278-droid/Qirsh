@@ -16,6 +16,7 @@ import '../../../domain/finance/money_input.dart';
 import '../../../domain/finance/money_format.dart';
 import '../../../domain/errors/repo_exceptions.dart';
 import '../../../domain/usecases/add_transaction_usecase.dart';
+import '../../../domain/usecases/correct_category_usecase.dart';
 import '../../common/app_sheet_scaffold.dart';
 import '../../common/app_category_chip.dart';
 import '../../common/app_button.dart';
@@ -73,6 +74,10 @@ class _ConfirmSheetState extends ConsumerState<_ConfirmSheet> {
   String? _selectedCategoryKey;
   final _priceController = TextEditingController();
   bool _confirming = false;
+
+  /// "Remember for this merchant" — off by default (OD-13): picking a chip
+  /// here is a one-off unless the user explicitly asks for a rule.
+  bool _rememberForMerchant = false;
 
   @override
   void dispose() {
@@ -300,12 +305,14 @@ class _ConfirmSheetState extends ConsumerState<_ConfirmSheet> {
                         setState(() {
                           _selectedCategoryKey = cat.key;
                         });
-                        // Update transaction category quietly
+                        // Update transaction category quietly — through the
+                        // same use case as the details screen, as a one-off.
                         ref
-                            .read(transactionRepositoryProvider)
-                            .updateCategory(
+                            .read(correctCategoryUseCaseProvider)(
                               transactionId: tx.id,
                               categoryKey: cat.key,
+                              scope:
+                                  CategoryCorrectionScope.thisTransactionOnly,
                             )
                             .then((_) {
                           ref.invalidate(transactionByIdProvider(tx.id));
@@ -324,6 +331,21 @@ class _ConfirmSheetState extends ConsumerState<_ConfirmSheet> {
               ],
             ),
           ),
+
+          if (tx.rawMerchant != null && _selectedCategoryKey != null)
+            CheckboxListTile(
+              key: const ValueKey('confirm-remember-merchant'),
+              value: _rememberForMerchant,
+              onChanged: (v) =>
+                  setState(() => _rememberForMerchant = v ?? false),
+              title: Text(context.l10n.ccAllMerchant,
+                  style: AppTypography.body(c.textMain)),
+              subtitle: Text(context.l10n.ccRememberHint,
+                  style: AppTypography.caption(c.textLight)),
+              activeColor: c.primary,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
 
           const SizedBox(height: AppSpacing.s4),
 
@@ -447,6 +469,18 @@ class _ConfirmSheetState extends ConsumerState<_ConfirmSheet> {
                         } on Exception {
                           return;
                         }
+                      }
+                      // Teach only on an explicit "remember".
+                      final pickedKey = _selectedCategoryKey;
+                      if (_rememberForMerchant &&
+                          pickedKey != null &&
+                          tx.rawMerchant != null) {
+                        await ref.read(correctCategoryUseCaseProvider)(
+                          transactionId: tx.id,
+                          categoryKey: pickedKey,
+                          scope:
+                              CategoryCorrectionScope.allMerchantTransactions,
+                        );
                       }
                       if (tx.status == TransactionStatus.pending) {
                         await ref.read(confirmTransactionUseCaseProvider)(
