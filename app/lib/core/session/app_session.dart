@@ -3460,12 +3460,29 @@ class AppSession extends ValueNotifier<SessionStatus> {
   /// on this installation. Local consent is granted only by the disclosure.
   Future<bool?> readAccountCloudPreference(
       supabase.SupabaseClient client, AdmissionAuthority authority) async {
+    switch (await readAccountCloudChoice(client, authority)) {
+      case AccountCloudChoice.on:
+        return true;
+      case AccountCloudChoice.off:
+        return false;
+      case AccountCloudChoice.none:
+      case AccountCloudChoice.unknown:
+        return null;
+    }
+  }
+
+  /// F2: the same read, telling an account that never chose ([none]) apart
+  /// from a read that could not be answered ([unknown]: no live session, a
+  /// stale authority, offline, a timeout or an error). Only [on] and [off]
+  /// are the account's choice.
+  Future<AccountCloudChoice> readAccountCloudChoice(
+      supabase.SupabaseClient client, AdmissionAuthority authority) async {
     final session = client.auth.currentSession;
     if (session == null ||
         session.isExpired ||
         session.user.id != authority.uid ||
         !authority.isCurrent) {
-      return null;
+      return AccountCloudChoice.unknown;
     }
     try {
       final row = await CloudEgressGate.instance.runAccountControl(
@@ -3483,13 +3500,16 @@ class AppSession extends ValueNotifier<SessionStatus> {
       );
       if (!authority.isCurrent ||
           client.auth.currentSession?.user.id != authority.uid) {
-        return null;
+        return AccountCloudChoice.unknown;
       }
       final version = row?['consent_version'];
       final enabled = row?['cloud_processing_enabled'];
-      return version is int && version > 0 && enabled is bool ? enabled : null;
+      if (version is int && version > 0 && enabled is bool) {
+        return enabled ? AccountCloudChoice.on : AccountCloudChoice.off;
+      }
+      return AccountCloudChoice.none;
     } catch (_) {
-      return null;
+      return AccountCloudChoice.unknown;
     }
   }
 
@@ -5344,4 +5364,19 @@ class AppSession extends ValueNotifier<SessionStatus> {
       throw SecureStorageWipeIncompleteException(wipe.failed.length);
     }
   }
+}
+
+/// F2: what the server says about the account's Cloud choice.
+enum AccountCloudChoice {
+  /// The account chose Cloud ON.
+  on,
+
+  /// The account chose Cloud OFF.
+  off,
+
+  /// The account never recorded a choice.
+  none,
+
+  /// The read could not be answered (offline, timeout, no live session).
+  unknown,
 }

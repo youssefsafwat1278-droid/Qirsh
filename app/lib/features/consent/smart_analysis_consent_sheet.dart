@@ -63,59 +63,91 @@ Future<bool> showSmartAnalysisConsentSheet(
   return granted ?? false;
 }
 
+/// What one [maybeReaskConsent] call did.
+enum ReaskOutcome {
+  /// Nothing to ask: consent already chosen, already asked on this install, or
+  /// the account chose Cloud OFF.
+  notNeeded,
+
+  /// The sheet was shown (answered or dismissed).
+  shown,
+
+  /// F2: the account's server choice could not be read; nothing was shown or
+  /// recorded, so the caller may ask again later.
+  unknownPreference,
+
+  /// The lifecycle that started the call ended (logout, account switch,
+  /// unmounted); nothing was shown.
+  stale,
+}
+
 /// §4.6 "a new device re-asks": an onboarded account admitted into a replica whose
 /// cloud AND AI consent are both still unset (a new device, or after Remove data)
 /// is asked once, through the same sheet, before anything can egress. Unset means
 /// denied until answered, so nothing is sent while the question is open. A button
 /// press (grant or "Not now") records that it was asked; a swipe-dismiss does not,
-/// so the question comes back next launch. [seen]/[markSeen] default to the
-/// per-uid marker kept by [AppSession].
-Future<void> maybeReaskConsent(
+/// so the question comes back (F1: on the next resume, not only the next
+/// launch). [seen]/[markSeen] default to the per-uid marker kept by
+/// [AppSession]; [readChoice] defaults to the account's server choice.
+Future<ReaskOutcome> maybeReaskConsent(
   BuildContext context,
   WidgetRef ref, {
   Future<bool> Function()? seen,
   Future<void> Function()? markSeen,
+  Future<AccountCloudChoice> Function()? readChoice,
 }) async {
   final work = ref.read(consentLocalWorkProvider)();
-  if (work == null) return;
+  if (work == null) return ReaskOutcome.stale;
   final repository = ref.read(userSettingsRepositoryProvider);
   try {
     final settings = await work.run(repository.getSettings);
-    if (!work.current ||
-        settings.cloudConsentState != ConsentState.unset ||
+    if (!work.current) return ReaskOutcome.stale;
+    if (settings.cloudConsentState != ConsentState.unset ||
         settings.aiConsentState != ConsentState.unset) {
-      return;
+      return ReaskOutcome.notNeeded;
     }
-    if (await (seen ?? AppSession.instance.consentPromptSeen)()) return;
+    if (await (seen ?? AppSession.instance.consentPromptSeen)()) {
+      return ReaskOutcome.notNeeded;
+    }
   } on StaleAdmissionException {
-    return;
+    return ReaskOutcome.stale;
   }
-  if (!context.mounted || !work.current) return;
-  bool? previousChoice;
-  final client = ref.read(authClientProvider);
-  if (client != null) {
-    previousChoice = await AppSession.instance.readAccountCloudPreference(
-      client,
-      AdmissionAuthority(work.capability.uid, () => work.current,
-          epoch: work.capability.epoch),
-    );
+  if (!context.mounted || !work.current) return ReaskOutcome.stale;
+  var choice = AccountCloudChoice.none;
+  if (readChoice != null) {
+    choice = await readChoice();
+  } else {
+    final client = ref.read(authClientProvider);
+    if (client != null) {
+      choice = await AppSession.instance.readAccountCloudChoice(
+        client,
+        AdmissionAuthority(work.capability.uid, () => work.current,
+            epoch: work.capability.epoch),
+      );
+    }
   }
-  if (!context.mounted || !work.current || previousChoice == false) return;
+  if (!context.mounted || !work.current) return ReaskOutcome.stale;
+  if (choice == AccountCloudChoice.off) return ReaskOutcome.notNeeded;
+  // F2: an unanswered read is not "never chose": showing the generic sheet
+  // would let its "Not now" hide the restore offer for good on this install.
+  if (choice == AccountCloudChoice.unknown) {
+    return ReaskOutcome.unknownPreference;
+  }
   try {
     final latest = await work.run(repository.getSettings);
-    if (!context.mounted || !work.current ||
-        latest.cloudConsentState != ConsentState.unset ||
+    if (!context.mounted || !work.current) return ReaskOutcome.stale;
+    if (latest.cloudConsentState != ConsentState.unset ||
         latest.aiConsentState != ConsentState.unset) {
-      return;
+      return ReaskOutcome.notNeeded;
     }
   } on StaleAdmissionException {
-    return;
+    return ReaskOutcome.stale;
   }
   await showSmartAnalysisConsentSheet(
     context,
     ref,
     work: work,
-    restoreCloud: previousChoice == true,
+    restoreCloud: choice == AccountCloudChoice.on,
     onAnswered: () {
       // markConsentPromptSeen binds to the epoch at ITS call: only the scope
       // that was asked may mark it.
@@ -124,6 +156,7 @@ Future<void> maybeReaskConsent(
       }
     },
   );
+  return ReaskOutcome.shown;
 }
 
 /// The consent-only capability of the lifecycle a consent action started in, and

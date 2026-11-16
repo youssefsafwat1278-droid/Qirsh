@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/core/session/app_session.dart';
 import 'package:money_companion/domain/entities/supporting_entities.dart';
 import 'package:money_companion/features/consent/smart_analysis_consent_sheet.dart';
 
@@ -10,9 +11,12 @@ import 'consent_test_harness.dart';
 // (consent unset) is asked through the sheet before any egress.
 
 class _Host extends ConsumerStatefulWidget {
-  const _Host({required this.seen, required this.markSeen});
+  const _Host(
+      {required this.seen, required this.markSeen, this.readChoice, this.onOutcome});
   final Future<bool> Function() seen;
   final Future<void> Function() markSeen;
+  final Future<AccountCloudChoice> Function()? readChoice;
+  final void Function(ReaskOutcome)? onOutcome;
 
   @override
   ConsumerState<_Host> createState() => _HostState();
@@ -27,7 +31,8 @@ class _HostState extends ConsumerState<_Host> {
           ref,
           seen: widget.seen,
           markSeen: widget.markSeen,
-        ));
+          readChoice: widget.readChoice,
+        ).then((o) => widget.onOutcome?.call(o)));
   }
 
   @override
@@ -40,8 +45,13 @@ void main() {
   var asked = false;
   var markCalls = 0;
 
+  ReaskOutcome? outcome;
+
   Future<void> pump(WidgetTester tester,
-      {bool seen = false, String locale = 'en'}) async {
+      {bool seen = false,
+      String locale = 'en',
+      Future<AccountCloudChoice> Function()? readChoice}) async {
+    outcome = null;
     await tester.binding.setSurfaceSize(const Size(800, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     markCalls = 0;
@@ -54,6 +64,8 @@ void main() {
           markCalls++;
           asked = true;
         },
+        readChoice: readChoice,
+        onOutcome: (o) => outcome = o,
       ),
       locale: locale,
     ));
@@ -115,5 +127,50 @@ void main() {
         repo.settings.copyWith(cloudConsentState: ConsentState.declined);
     await pump(tester);
     expect(find.text('Smart Analysis & Cloud Sync'), findsNothing);
+  });
+
+  group('F2: the account\'s server choice', () {
+    testWidgets('unknown (offline / timeout): no sheet, nothing recorded, '
+        'reported for a retry', (tester) async {
+      await pump(tester, readChoice: () async => AccountCloudChoice.unknown);
+      expect(find.text('Smart Analysis & Cloud Sync'), findsNothing);
+      expect(find.text('Restore your cloud data'), findsNothing);
+      expect(markCalls, 0, reason: '"Not now" can no longer be recorded '
+          'against an unanswered read');
+      expect(repo.saveCalls, 0);
+      expect(outcome, ReaskOutcome.unknownPreference);
+    });
+
+    testWidgets('ON: the restore wording is offered', (tester) async {
+      await pump(tester, readChoice: () async => AccountCloudChoice.on);
+      expect(find.text('Restore your cloud data'), findsOneWidget);
+      expect(outcome, isNull, reason: 'still open');
+    });
+
+    testWidgets('OFF: no sheet and no recorded answer', (tester) async {
+      await pump(tester, readChoice: () async => AccountCloudChoice.off);
+      expect(find.text('Smart Analysis & Cloud Sync'), findsNothing);
+      expect(find.text('Restore your cloud data'), findsNothing);
+      expect(markCalls, 0);
+      expect(outcome, ReaskOutcome.notNeeded);
+    });
+
+    testWidgets('never chose: the generic sheet', (tester) async {
+      await pump(tester, readChoice: () async => AccountCloudChoice.none);
+      expect(find.text('Smart Analysis & Cloud Sync'), findsOneWidget);
+      expect(find.text('Restore your cloud data'), findsNothing);
+    });
+
+    testWidgets('an explicit choice made while the read was pending wins: no '
+        'sheet', (tester) async {
+      await pump(tester, readChoice: () async {
+        repo.settings =
+            repo.settings.copyWith(cloudConsentState: ConsentState.declined);
+        return AccountCloudChoice.on;
+      });
+      expect(find.text('Restore your cloud data'), findsNothing);
+      expect(outcome, ReaskOutcome.notNeeded);
+      expect(repo.saveCalls, 0, reason: 'the explicit choice is not touched');
+    });
   });
 }

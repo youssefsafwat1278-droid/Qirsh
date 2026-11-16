@@ -2237,6 +2237,24 @@ class RunnerTests: XCTestCase {
       state: "ON", ownerUid: ownerA, transitionGeneration: 9, reservedVersion: 10))
   }
 
+  // F5 (2026-11-16): reinstall residue. Only the Keychain survives an
+  // uninstall (assumption, to be confirmed on a device): the active owner and
+  // a legacy ON record without lifetime fields, as a single copy. The App Group
+  // egress file and the consent mirror are gone. egressDenied alone does not
+  // deny that single legacy copy, so the missing mirror is what keeps the
+  // capture on the device: it waits, and is never admitted for upload.
+  func testReinstallResidueLegacyKeychainOnAloneNeverUploads() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    let (id, _) = try stampedAllowedItem()
+    try? FileManager.default.removeItem(at: egressFileURL)
+    appGroupDefaults.removeObject(forKey: "capture_consent_mirror_v1")
+    let legacyOn = try egressJSON([(ownerA, "ON", 3)])
+    SharedCaptureStore.egressKeychainReadOverride = { (errSecSuccess, legacyOn) }
+    XCTAssertEqual(SharedCaptureStore.authorizeUpload(payloadID: id), .waiting)
+    XCTAssertEqual(SharedCaptureStore.admitUpload(payloadID: id), .waiting)
+  }
+
   // D4 (native part): mixed-store records. A valid DISABLING/OFF in EITHER store
   // wins over ON or absence in the other.
   func testMixedStoreDisablingRecordWinsInEitherStore() throws {

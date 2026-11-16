@@ -23,6 +23,7 @@ void main() {
   late List<http.Request> profileRequests;
   late List<http.Request> cloudRequests;
   late List<Map<String, Object?>> cloudRows;
+  var cloudFails = false;
   late TestEgress egress;
 
   setUp(() async {
@@ -32,6 +33,7 @@ void main() {
     profileRequests = [];
     cloudRequests = [];
     cloudRows = [];
+    cloudFails = false;
     respond = (request) async => http.Response(
           jsonEncode([
             {'onboarding_completed_at': '2026-10-01T00:00:00Z'}
@@ -52,6 +54,7 @@ void main() {
         }
         if (request.url.path.endsWith('/user_settings')) {
           cloudRequests.add(request);
+          if (cloudFails) return http.Response('{"message":"down"}', 503);
           return http.Response(jsonEncode(cloudRows), 200,
               headers: {'content-type': 'application/json'}, request: request);
         }
@@ -174,6 +177,34 @@ void main() {
     expect(await f.session.readAccountCloudPreference(
         sdk, AdmissionAuthority('different-owner', () => true)), isNull);
     expect(cloudRequests, hasLength(3));
+  });
+
+  test('F2: the choice read tells "never chose" apart from "could not read"',
+      () async {
+    expect(await verify(), isTrue);
+    final authority = AdmissionAuthority('returning-owner', () => true);
+    cloudRows = [{'cloud_processing_enabled': true, 'consent_version': 7}];
+    expect(await f.session.readAccountCloudChoice(sdk, authority),
+        AccountCloudChoice.on);
+    cloudRows = [{'cloud_processing_enabled': false, 'consent_version': 8}];
+    expect(await f.session.readAccountCloudChoice(sdk, authority),
+        AccountCloudChoice.off);
+    cloudRows = [];
+    expect(await f.session.readAccountCloudChoice(sdk, authority),
+        AccountCloudChoice.none);
+    cloudRows = [{'cloud_processing_enabled': true, 'consent_version': 0}];
+    expect(await f.session.readAccountCloudChoice(sdk, authority),
+        AccountCloudChoice.none);
+    cloudFails = true;
+    expect(await f.session.readAccountCloudChoice(sdk, authority),
+        AccountCloudChoice.unknown,
+        reason: 'a failed read is not OFF and not "never chose"');
+    expect(await f.session.readAccountCloudPreference(sdk, authority), isNull);
+    expect(
+        await f.session.readAccountCloudChoice(
+            sdk, AdmissionAuthority('different-owner', () => true)),
+        AccountCloudChoice.unknown);
+    expect(await egress.gate.permits(), isFalse);
   });
 
   test('account consent confirmation reads only flags and version while OFF',

@@ -54,6 +54,7 @@ import '../budgets/budgets_providers.dart';
 import '../budgets/budgets_screen.dart';
 import '../capture/capture_runtime.dart';
 import '../common/top_banner.dart';
+import '../consent/consent_reask_trigger.dart';
 import '../consent/smart_analysis_consent_sheet.dart';
 import '../transactions/manual_transaction_sheet.dart';
 import '../../core/privacy/consent_authority.dart';
@@ -232,7 +233,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && AppSession.instance.status == SessionStatus.authenticated) {
-        _scheduleConsentReask();
+        _consentReask.start();
       }
     });
     _lifecycleListener = AppLifecycleListener(onResume: _onResume);
@@ -362,31 +363,19 @@ class _AppShellState extends ConsumerState<AppShell> {
     });
   }
 
-  VoidCallback? _reaskGateListener;
-
-  /// §4.6 "a new device re-asks": asks the consent question once the root restore
-  /// loader is gone, so the sheet is never opened behind it.
-  void _scheduleConsentReask() {
-    if (!mounted) return;
-    if (!appDataRestoring.value) {
-      unawaited(maybeReaskConsent(context, ref));
-      return;
-    }
-    void onChange() {
-      if (appDataRestoring.value) return;
-      appDataRestoring.removeListener(onChange);
-      _reaskGateListener = null;
-      if (mounted) unawaited(maybeReaskConsent(context, ref));
-    }
-
-    _reaskGateListener = onChange;
-    appDataRestoring.addListener(onChange);
-  }
+  /// §4.6 "a new device re-asks": asks the consent question once the root
+  /// restore loader is gone, so the sheet is never opened behind it. F1: a
+  /// dismissed sheet comes back on resume, not only on the next launch.
+  late final ConsentReaskTrigger _consentReask = ConsentReaskTrigger(
+    restoring: appDataRestoring,
+    ask: () async => mounted
+        ? await maybeReaskConsent(context, ref)
+        : ReaskOutcome.stale,
+  );
 
   @override
   void dispose() {
-    final reask = _reaskGateListener;
-    if (reask != null) appDataRestoring.removeListener(reask);
+    _consentReask.dispose();
     AppSession.instance.removeListener(_handleSessionStatusChange);
     AppSession.instance.configureSignOutFlush(null);
     _restoreGateTimeout?.cancel();
@@ -454,6 +443,13 @@ class _AppShellState extends ConsumerState<AppShell> {
     if (now == SessionStatus.authenticated && mounted) {
       _scheduleAdaptivePoll();
     }
+    // F1: the consent question follows the admitted account; an answer or a
+    // sheet of the previous lifecycle never carries over.
+    if (now == SessionStatus.authenticated && !wasAuthenticated && mounted) {
+      _consentReask.onAuthenticated();
+    } else if (now != SessionStatus.authenticated) {
+      _consentReask.onSignedOut();
+    }
     if (wasAuthenticated && now != SessionStatus.authenticated) {
       if (!mounted) return;
       _invalidateFinancialProviders();
@@ -478,6 +474,9 @@ class _AppShellState extends ConsumerState<AppShell> {
     // again — re-check before running any Supabase-primary-dependent work.
     if (!await _revalidateAuthSession()) return;
     if (!work.current) return;
+    // F1: a restore offer that was dismissed (or left by backgrounding) is
+    // offered again now; an answered one is not (see maybeReaskConsent).
+    if (mounted) _consentReask.onResume();
     // Returning after restoring connectivity should not wait for an old OFF
     // retry timer. This is the same pending revoke only, never a data sync.
     if (!mounted) return;
