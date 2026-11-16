@@ -23,7 +23,7 @@ import {
   broadcastErrorMessage,
   validateBroadcastDraft,
 } from "@/lib/push-broadcast.mjs";
-import { fmtDate } from "@/lib/utils";
+import { fmtDate, fmtDateTime } from "@/lib/utils";
 
 type Draft = { title_ar: string; title_en: string; body_ar: string; body_en: string; deep_link: string };
 type DryRun = { devices: number; users: number };
@@ -40,6 +40,8 @@ type HistoryRow = {
   skipped: number;
   retryable: number;
   top_error: string | null;
+  /** When the scheduled retry (every 10 min, 72 h window) next looks at it; null = none pending. */
+  next_auto_retry_at?: string | null;
 };
 
 const emptyDraft: Draft = { title_ar: "", title_en: "", body_ar: "", body_en: "", deep_link: "" };
@@ -256,6 +258,13 @@ export default function PushBroadcastsPage() {
                     <StatusBadge label={`فشل ${b.failed}`} tone={b.failed ? "danger" : "neutral"} />
                     <StatusBadge label={`تم تخطيه ${b.skipped}`} tone="neutral" />
                     {b.top_error && <StatusBadge label={b.top_error} tone="warning" dot={false} />}
+                    {b.retryable > 0 && b.next_auto_retry_at && (
+                      <StatusBadge
+                        label={`إعادة تلقائية بعد ${fmtDateTime(b.next_auto_retry_at)}`}
+                        tone="info"
+                        dot={false}
+                      />
+                    )}
                   </div>
                 </div>
                 {b.retryable > 0 && (
