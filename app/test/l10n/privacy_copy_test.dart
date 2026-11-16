@@ -72,24 +72,30 @@ void main() {
     expect(en['privAiAnalysisBody'], isNot(contains('EVERY')));
   });
 
-  test('the shared-learning disclosure says what is sent and what is not', () {
+  test('the shared-learning switch says what is sent and what is not', () {
+    expect(
+        en['privSharedLearningTitle'], 'Help improve categories for everyone');
     final s = en['privSharedLearningBody'] as String;
     for (final part in [
-      'Cloud Sync and Smart Analysis both on',
+      'Off by default',
       'Remember for this merchant',
-      'merchant’s name and the category you chose',
-      'no amounts, dates, messages or transfers to people',
-      'an admin may add it',
+      'only that merchant’s name and the category you chose',
+      'Amounts, dates, messages, transfers and names of people are never sent',
+      'pooled with other users',
+      'only after an admin reviews them',
+      'Needs Cloud Sync and Smart Analysis on',
     ]) {
       expect(s, contains(part));
     }
     final a = ar['privSharedLearningBody'] as String;
     for (final part in [
-      'المزامنة السحابية والتحليل الذكي معًا',
+      'متوقف افتراضيًا',
       ar['ccAllMerchant'] as String,
-      'اسم المتجر والتصنيف الذي اخترته',
-      'دون مبالغ أو تواريخ أو رسائل أو تحويلات لأشخاص',
-      'قد يضيفه مشرف',
+      'اسم المتجر والتصنيف الذي اخترته فقط',
+      'المبالغ أو التواريخ أو الرسائل أو التحويلات أو أسماء الأشخاص',
+      'مع اختيارات المستخدمين الآخرين',
+      'إلا بعد مراجعة مشرف',
+      'المزامنة السحابية والتحليل الذكي',
     ]) {
       expect(a, contains(part));
     }

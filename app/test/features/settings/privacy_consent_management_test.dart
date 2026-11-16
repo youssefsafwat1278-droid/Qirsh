@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/privacy/cloud_egress_gate.dart';
 import 'package:money_companion/core/privacy/diagnostics_consent_gate.dart';
+import 'package:money_companion/core/privacy/shared_learning_preference.dart';
 import 'package:money_companion/core/session/admission_authority.dart';
 import 'package:money_companion/domain/entities/supporting_entities.dart';
 import 'package:money_companion/features/capture/services/capture_device_registration_service.dart';
@@ -71,6 +72,9 @@ void main() {
   // stops being current, while a NEW valid one becomes available.
   var generation = 0;
   var uid = 'uid-fake';
+  // Shared learning opt-in store and the signed-in account it belongs to.
+  var learningPrefs = <String, String>{};
+  String? learningAccount = 'acct-a';
 
   setUp(() {
     repo = FakeSettingsRepository();
@@ -79,6 +83,8 @@ void main() {
     current = true;
     generation = 0;
     uid = 'uid-fake';
+    learningPrefs = <String, String>{};
+    learningAccount = 'acct-a';
     DiagnosticsConsentGate.resetForTest();
   });
   tearDown(DiagnosticsConsentGate.resetForTest);
@@ -96,6 +102,9 @@ void main() {
             }),
         consentLiveFactsProvider.overrideWith((_) async => facts),
         merchantOffersEnabledProvider.overrideWithValue(false),
+        sharedLearningPreferenceProvider
+            .overrideWithValue(SharedLearningPreference.memory(learningPrefs)),
+        sharedLearningAccountProvider.overrideWithValue(() => learningAccount),
       ],
       home: const PrivacyScreen(),
       locale: locale,
@@ -109,15 +118,70 @@ void main() {
   Finder status(String text) =>
       find.descendant(of: find.byKey(const Key('consentStatus')), matching: find.text(text));
 
-  group('shared learning disclosure', () {
+  group('Help improve categories for everyone', () {
+    Finder learningSwitch() => find.descendant(
+        of: find.byKey(const Key('sharedLearningSwitch')),
+        matching: find.byType(SwitchListTile));
+    SwitchListTile tile(WidgetTester t) =>
+        t.widget<SwitchListTile>(learningSwitch());
+
     for (final locale in ['en', 'ar']) {
-      testWidgets('the Privacy screen discloses it ($locale)', (tester) async {
+      testWidgets('explained, and OFF by default ($locale)', (tester) async {
         set(ConsentState.accepted, ConsentState.accepted);
         await pump(tester, locale: locale);
         final l10n = lookupAppL10n(Locale(locale));
+        expect(find.text(l10n.privSharedLearningTitle), findsOneWidget);
         expect(find.text(l10n.privSharedLearningBody), findsOneWidget);
+        expect(tile(tester).value, isFalse);
+        expect(tile(tester).onChanged, isNotNull);
       });
     }
+
+    for (final (cloud, ai) in [
+      (ConsentState.declined, ConsentState.accepted),
+      (ConsentState.accepted, ConsentState.declined),
+      (ConsentState.declined, ConsentState.declined),
+    ]) {
+      testWidgets('disabled with a hint when Cloud=$cloud AI=$ai',
+          (tester) async {
+        learningPrefs[SharedLearningPreference.keyFor('acct-a')] = 'on';
+        set(cloud, ai);
+        await pump(tester);
+        expect(tile(tester).onChanged, isNull);
+        expect(tile(tester).value, isFalse,
+            reason: 'never shown ON while it cannot send');
+        expect(
+            find.text('${_en.privSharedLearningBody}\n'
+                '${_en.privSharedLearningNeedsConsent}'),
+            findsOneWidget);
+      });
+    }
+
+    testWidgets('turning it on is stored for this account only',
+        (tester) async {
+      set(ConsentState.accepted, ConsentState.accepted);
+      await pump(tester);
+      await tester.tap(learningSwitch());
+      await tester.pumpAndSettle();
+      expect(tile(tester).value, isTrue);
+      expect(learningPrefs.keys, [SharedLearningPreference.keyFor('acct-a')]);
+      expect(learningPrefs.keys.single, isNot(contains('acct-a')),
+          reason: 'the key is an opaque hash of the account id');
+
+      await tester.tap(learningSwitch());
+      await tester.pumpAndSettle();
+      expect(tile(tester).value, isFalse);
+      expect(learningPrefs, isEmpty);
+    });
+
+    testWidgets('another account on the same device starts OFF',
+        (tester) async {
+      learningPrefs[SharedLearningPreference.keyFor('acct-a')] = 'on';
+      learningAccount = 'acct-b';
+      set(ConsentState.accepted, ConsentState.accepted);
+      await pump(tester);
+      expect(tile(tester).value, isFalse);
+    });
   });
 
   group('honest status', () {
@@ -125,8 +189,14 @@ void main() {
       set(ConsentState.accepted, ConsentState.accepted);
       await pump(tester);
       expect(status(_en.consentStatusActive), findsOneWidget);
-      expect(find.byType(SwitchListTile), findsNothing,
+      // The only switch is the separate shared-learning opt-in.
+      expect(find.byType(SwitchListTile), findsOneWidget,
           reason: 'no daily cloud/AI switches');
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('sharedLearningSwitch')),
+              matching: find.byType(SwitchListTile)),
+          findsOneWidget);
     });
 
     testWidgets('partial', (tester) async {

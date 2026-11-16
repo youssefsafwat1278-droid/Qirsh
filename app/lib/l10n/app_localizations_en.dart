@@ -2924,8 +2924,15 @@ class AppL10nEn extends AppL10n {
       'With Cloud Sync on, captured bank messages — including bank SMS read automatically on Android — with card, account and phone numbers and codes removed and recognised names, e-mails and reference numbers masked, may be analysed by Google Gemini to read the amount, merchant and bank. The text still contains amounts, merchants, dates and balances. Withdrawing consent limits reading to Qirsh\'s on-device rules.';
 
   @override
+  String get privSharedLearningTitle => 'Help improve categories for everyone';
+
+  @override
   String get privSharedLearningBody =>
-      'Shared improvement: with Cloud Sync and Smart Analysis both on, choosing “Remember for this merchant” also sends that merchant’s name and the category you chose to Qirsh servers — no amounts, dates, messages or transfers to people. When several users choose the same, an admin may add it to the categories all Qirsh users receive.';
+      'Off by default. When on, each time you choose “Remember for this merchant”, Qirsh sends only that merchant’s name and the category you chose. Amounts, dates, messages, transfers and names of people are never sent. Choices are pooled with other users’ and added to the categories everyone receives only after an admin reviews them. Needs Cloud Sync and Smart Analysis on.';
+
+  @override
+  String get privSharedLearningNeedsConsent =>
+      'Turn on Cloud Sync and Smart Analysis to use this.';
 
   @override
   String get privDeleteAccountBody =>

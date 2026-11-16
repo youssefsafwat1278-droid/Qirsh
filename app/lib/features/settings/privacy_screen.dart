@@ -15,6 +15,7 @@ import '../../domain/entities/supporting_entities.dart';
 import '../../core/config/legal_urls.dart';
 import '../../core/privacy/consent_authority.dart';
 import '../../core/privacy/diagnostics_consent_gate.dart';
+import '../../core/privacy/shared_learning_preference.dart';
 import '../../domain/errors/repo_exceptions.dart';
 import '../capture/services/capture_device_registration_service.dart';
 import '../consent/smart_analysis_consent_sheet.dart';
@@ -143,6 +144,9 @@ class PrivacyScreen extends ConsumerWidget {
                         onChanged: (value) =>
                             _setMerchantPersonalization(ref, value),
                       ),
+                    // Shared category learning: a separate opt-in, OFF by
+                    // default, usable only with Cloud AND AI on.
+                    _SharedLearningSwitch(settings: settings),
                   ],
                 ),
                 orElse: () => const SizedBox.shrink(),
@@ -559,10 +563,6 @@ class _ConsentManagementCardState
               const SizedBox(height: AppSpacing.s1),
               Text(l10n.privAiAnalysisBody,
                   style: AppTypography.caption(c.textSecondary)),
-              const SizedBox(height: AppSpacing.s1),
-              Text(l10n.privSharedLearningBody,
-                  key: const Key('privSharedLearningBody'),
-                  style: AppTypography.caption(c.textSecondary)),
               if (canTurnOn || canTurnOff || canRefresh) ...[
                 const SizedBox(height: AppSpacing.s2),
                 Wrap(
@@ -659,6 +659,46 @@ class _PendingDeletionCard extends StatelessWidget {
 /// Revocable data-processing consent switch (MALI-001) — same card language
 /// as [_PrivacyCard], with an honest subtitle describing what leaves the
 /// device and what stops when the switch is off.
+/// "Help improve categories for everyone". Disabled, with a hint, while Cloud
+/// or AI is off; turning it OFF also drops anything not yet sent.
+class _SharedLearningSwitch extends ConsumerWidget {
+  const _SharedLearningSwitch({required this.settings});
+
+  final UserSettingsEntity settings;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final uid = ref.watch(sharedLearningAccountProvider)();
+    final consented =
+        settings.cloudProcessingEnabled && settings.aiConsentGranted;
+    final enabled = consented && uid != null && uid.isNotEmpty;
+    final on = ref.watch(sharedLearningOptInProvider).valueOrNull ?? false;
+    return KeyedSubtree(
+      key: const Key('sharedLearningSwitch'),
+      child: _ConsentSwitchCard(
+        icon: AppLucideIcons.tag,
+        title: l10n.privSharedLearningTitle,
+        subtitle: enabled
+            ? l10n.privSharedLearningBody
+            : '${l10n.privSharedLearningBody}\n${l10n.privSharedLearningNeedsConsent}',
+        value: enabled && on,
+        onChanged: enabled
+            ? (value) async {
+                await ref
+                    .read(sharedLearningPreferenceProvider)
+                    .set(uid, value);
+                if (!value) {
+                  ref.read(sharedCategoryLearningClientProvider)?.dropQueued();
+                }
+                ref.invalidate(sharedLearningOptInProvider);
+              }
+            : null,
+      ),
+    );
+  }
+}
+
 class _ConsentSwitchCard extends StatelessWidget {
   const _ConsentSwitchCard({
     required this.icon,
@@ -672,7 +712,7 @@ class _ConsentSwitchCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) {
