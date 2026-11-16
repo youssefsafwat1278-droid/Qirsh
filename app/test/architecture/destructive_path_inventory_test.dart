@@ -103,6 +103,9 @@ void main() {
   ///                                accountless card that is then deleted
   ///                                (a parked row is never in flight)
   ///   planning_child_sync (1)      parked child rows for one table
+  ///   merchant_rule_sync (1)       its own parked rows (table_name=
+  ///                                'user_merchant_rules') by server id, once
+  ///                                the rule applies or is superseded
   ///   ledger_sync_service (1)      B12: quarantined pull rows (parked_child_rows,
   ///                                table_name='transactions') cleared by server id
   ///                                once the row applies cleanly or is retried OK
@@ -187,6 +190,7 @@ void main() {
     'lib/core/sync/outbox_receipt.dart': 1,
     'lib/features/planning_sync/services/planning_outbox_queue.dart': 3,
     'lib/features/planning_sync/services/planning_child_sync_service.dart': 1,
+    'lib/features/planning_sync/services/merchant_rule_sync_service.dart': 1,
     'lib/features/capture/services/ledger_sync_service.dart': 1,
     'lib/features/planning_sync/services/planning_pull_service.dart': 1,
     'lib/features/planning_sync/services/planning_server_currency_repair.dart': 1,

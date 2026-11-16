@@ -2,14 +2,25 @@ import 'package:drift/drift.dart';
 
 import '../../core/utils/id_generator.dart';
 import '../../domain/repositories/merchant_category_repository.dart';
+import '../../features/planning_sync/services/planning_outbox_queue.dart';
 import '../db/app_database.dart';
 import '../db/database_seed.dart';
 import '../db/sql_value_codec.dart';
 
 class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
-  DriftMerchantCategoryRepository(this._db);
+  /// [outboxQueue] records cloud-sync intent for USER-CONFIRMED rules only
+  /// (seed/catalog rows never). Null = no sync (capture-side readers, the pull
+  /// itself, tests).
+  DriftMerchantCategoryRepository(this._db, {PlanningOutboxQueue? outboxQueue})
+      : _outboxQueue = outboxQueue;
 
   final AppDatabase _db;
+  final PlanningOutboxQueue? _outboxQueue;
+
+  /// The server accepts 1..120 characters (20261116180000); a merchant whose
+  /// normalised key is empty or longer stays device-local.
+  static bool isSyncableMerchantKey(String key) =>
+      key.isNotEmpty && key.length <= 120;
 
   @override
   Future<bool> hasCategoryForMerchant(String rawMerchant) async {
@@ -33,7 +44,18 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
     required String categoryKey,
     required bool isUserConfirmed,
     double confidence = 1,
-  }) async {
+  }) =>
+      _db.transaction(() async {
+        await _confirm(rawMerchant, categoryKey, isUserConfirmed, confidence);
+        final key = AppDatabase.normalizeMerchant(rawMerchant);
+        if (isUserConfirmed && isSyncableMerchantKey(key)) {
+          await _outboxQueue?.enqueueMerchantRule(PlanningSyncOperation.update,
+              merchantKey: key, categoryKey: categoryKey);
+        }
+      });
+
+  Future<void> _confirm(String rawMerchant, String categoryKey,
+      bool isUserConfirmed, double confidence) async {
     final merchantId = await _resolveOrCreateMerchantId(rawMerchant);
     final categoryId = await _categoryIdByKey(categoryKey);
     if (categoryId == null) {
@@ -109,7 +131,9 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
           AND merchant_category_map.is_user_confirmed = 1
         LIMIT 1;
       ''',
-      variables: [Variable.withString(AppDatabase.normalizeMerchant(rawMerchant))],
+      variables: [
+        Variable.withString(AppDatabase.normalizeMerchant(rawMerchant))
+      ],
     ).getSingleOrNull();
     return row?.read<String>('category_key');
   }
@@ -136,8 +160,18 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
   }
 
   @override
-  Future<void> forgetUserConfirmedRule(String rawMerchant) async {
-    final normalized = AppDatabase.normalizeMerchant(rawMerchant);
+  Future<void> forgetUserConfirmedRule(String rawMerchant) =>
+      _db.transaction(() async {
+        final normalized = AppDatabase.normalizeMerchant(rawMerchant);
+        final forgotten = await userConfirmedCategoryFor(rawMerchant);
+        await _forget(normalized);
+        if (forgotten != null && isSyncableMerchantKey(normalized)) {
+          await _outboxQueue?.enqueueMerchantRule(PlanningSyncOperation.delete,
+              merchantKey: normalized, categoryKey: forgotten);
+        }
+      });
+
+  Future<void> _forget(String normalized) async {
     final merchant = await _db.customSelect(
       'SELECT id FROM merchants WHERE normalized_name = ? LIMIT 1;',
       variables: [Variable.withString(normalized)],

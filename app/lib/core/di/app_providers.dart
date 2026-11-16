@@ -140,6 +140,7 @@ import '../../features/capture/services/ledger_sync_service.dart';
 import '../../features/capture/services/smart_inbox_sync_service.dart';
 import '../../features/planning_sync/services/accounts_pull_service.dart';
 import '../../features/planning_sync/services/accounts_push_service.dart';
+import '../../features/planning_sync/services/merchant_rule_sync_service.dart';
 import '../../features/planning_sync/services/planning_outbox_queue.dart';
 import '../../features/planning_sync/services/planning_child_sync_service.dart';
 import '../../features/planning_sync/services/planning_pull_service.dart';
@@ -690,6 +691,7 @@ bool _planningEntitySyncEnabled(String entityType) {
     PlanningOutboxQueue.billPaymentsEntityType,
     PlanningOutboxQueue.goalContributionsEntityType,
     PlanningOutboxQueue.planLinksEntityType,
+    PlanningOutboxQueue.merchantRulesEntityType,
   }.contains(entityType);
 }
 
@@ -907,6 +909,7 @@ final planningSyncEngineProvider = writerProvider<PlanningSyncEngine>((ref) {
         ref.watch(planningStartupRegistrationServiceProvider),
     conflictResolver: ref.watch(conflictResolverProvider),
     health: ref.watch(syncHealthProvider),
+    merchantRuleSync: ref.watch(merchantRuleSyncServiceProvider),
   );
 });
 
@@ -1110,7 +1113,30 @@ final planRepositoryProvider = writerProvider<PlanRepository>((ref) {
 
 final merchantCategoryRepositoryProvider =
     writerProvider<MerchantCategoryRepository>((ref) {
-  return DriftMerchantCategoryRepository(ref.watch(appDatabaseProvider));
+  return DriftMerchantCategoryRepository(ref.watch(appDatabaseProvider),
+      outboxQueue: ref.watch(planningOutboxQueueProvider));
+});
+
+/// The user's learned category rules ↔ `user_merchant_rules`. Cloud consent
+/// (financialSync, fresh per run) AND the `merchant_rules_sync` capability.
+final merchantRuleSyncServiceProvider =
+    writerProvider<MerchantRuleSyncService>((ref) {
+  final capabilities = ref.watch(serverCapabilitiesServiceProvider);
+  return MerchantRuleSyncService(
+    db: ref.watch(appDatabaseProvider),
+    queue: ref.watch(planningOutboxQueueProvider),
+    getAuthUserId: _currentSupabaseUserId,
+    mayEgress: _consentGate(ref, EgressClass.financialSync),
+    serverReady: () async =>
+        await capabilities.merchantRulesSync() ==
+        ServerCapabilityState.verified,
+    onRuleApplied: (key, category) => ref
+        .read(merchantIntelligenceProvider)
+        .seedFromLearnedMap({key: category}),
+    onRuleRemoved: (key) =>
+        ref.read(merchantIntelligenceProvider).forgetUserCorrection(key),
+    health: ref.watch(syncHealthProvider),
+  );
 });
 
 final budgetRepositoryProvider = writerProvider<BudgetRepository>((ref) {

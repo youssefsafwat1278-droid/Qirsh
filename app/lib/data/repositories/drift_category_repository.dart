@@ -7,6 +7,7 @@ import '../../features/capture/services/ledger_outbox_queue.dart';
 import '../../features/planning_sync/services/planning_outbox_queue.dart';
 import '../db/app_database.dart';
 import '../db/sql_value_codec.dart';
+import 'drift_merchant_category_repository.dart';
 import 'drift_repository_support.dart';
 
 class DriftCategoryRepository implements CategoryRepository {
@@ -138,6 +139,23 @@ class DriftCategoryRepository implements CategoryRepository {
           Variable.withString(id),
         ],
       );
+      // The user's own rules for this category go with it: tombstone them in
+      // the cloud too, or a restore would bring back rules for a category that
+      // no longer exists.
+      final ruleKeys = await _db.customSelect(
+        'SELECT merchants.normalized_name AS k FROM merchant_category_map m '
+        'INNER JOIN merchants ON merchants.id = m.merchant_id '
+        'WHERE m.category_id = ? AND m.is_user_confirmed = 1;',
+        variables: [Variable.withString(id)],
+      ).get();
+      for (final r in ruleKeys) {
+        final key = r.read<String>('k');
+        if (!DriftMerchantCategoryRepository.isSyncableMerchantKey(key)) {
+          continue;
+        }
+        await _outboxQueue?.enqueueMerchantRule(PlanningSyncOperation.delete,
+            merchantKey: key, categoryKey: category.key);
+      }
       await _db.customUpdate(
         'DELETE FROM merchant_category_map WHERE category_id = ?;',
         variables: [Variable.withString(id)],

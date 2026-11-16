@@ -890,6 +890,9 @@ class _AppShellState extends ConsumerState<AppShell> {
       await ref.read(planningChildSyncServiceProvider).sync();
     });
     await attempt(() async {
+      await ref.read(merchantRuleSyncServiceProvider).push();
+    });
+    await attempt(() async {
       await ref.read(smartInboxSyncServiceProvider).push();
     });
     await attempt(() async {
