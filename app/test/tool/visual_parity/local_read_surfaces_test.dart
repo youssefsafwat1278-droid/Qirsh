@@ -92,15 +92,15 @@ void main() {
         final attemptsBefore = visualParityLocalReadEvents()['${key}CorrectionAttempt'] ?? 0;
         final closedBefore = visualParityLocalReadEvents()['${key}Closed'] ?? 0;
         await open(tester, key, language);
-        final context = tester.element(find.byType(AppButton));
+        final context = tester.element(find.byType(AppPrimaryButton));
         final l10n = AppL10n.of(context);
         final catalog = CategoryCatalog(await ProviderScope.containerOf(context)
             .read(categoryRepositoryProvider).getAll(), languageCode: language);
         final chosen = catalog.byKey('groceries')!;
         await tester.ensureVisible(find.widgetWithText(AppCategoryChip, chosen.name));
         await tester.tap(find.widgetWithText(AppCategoryChip, chosen.name));
-        await tester.ensureVisible(find.text(l10n.ccAllMerchant));
-        await tester.tap(find.text(l10n.ccAllMerchant));
+        await tester.ensureVisible(find.text(l10n.ccScopeMerchant));
+        await tester.tap(find.text(l10n.ccScopeMerchant));
         await tester.pumpAndSettle();
         await tester.ensureVisible(find.text(l10n.ccSave));
         await tester.tap(find.text(l10n.ccSave));
@@ -108,7 +108,7 @@ void main() {
         await tester.pump(const Duration(milliseconds: 500));
         expect(visualParityLocalReadEvents()['${key}CorrectionAttempt'], attemptsBefore + 1);
         expect(find.text(l10n.ccTitle), findsOneWidget);
-        expect(tester.widget<AppButton>(find.byType(AppButton)).onPressed,
+        expect(tester.widget<AppPrimaryButton>(find.byType(AppPrimaryButton)).onTap,
             key == 'changeCategorySaving' ? isNull : isNotNull);
         expect(find.text(l10n.ctsCategoryUpdateFailed),
             key == 'changeCategoryError' ? findsOneWidget : findsNothing);
