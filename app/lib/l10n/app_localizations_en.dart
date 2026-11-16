@@ -1,6 +1,5 @@
 // ignore: unused_import
 import 'package:intl/intl.dart' as intl;
-
 import 'app_localizations.dart';
 
 // ignore_for_file: type=lint
@@ -2925,6 +2924,10 @@ class AppL10nEn extends AppL10n {
       'With Cloud Sync on, captured bank messages — including bank SMS read automatically on Android — with card, account and phone numbers and codes removed and recognised names, e-mails and reference numbers masked, may be analysed by Google Gemini to read the amount, merchant and bank. The text still contains amounts, merchants, dates and balances. Withdrawing consent limits reading to Qirsh\'s on-device rules.';
 
   @override
+  String get privSharedLearningBody =>
+      'Shared improvement: with Cloud Sync and Smart Analysis both on, choosing “Remember for this merchant” also sends that merchant’s name and the category you chose to Qirsh servers — no amounts, dates, messages or transfers to people. When several users choose the same, an admin may add it to the categories all Qirsh users receive.';
+
+  @override
   String get privDeleteAccountBody =>
       'Your account and all your data (transactions, goals, budgets, backups) will be scheduled for permanent deletion after 30 days. You can undo the deletion from this same screen at any point before then, by signing in again. You will be signed out on this device now.';
 
@@ -4266,19 +4269,22 @@ class AppL10nEn extends AppL10n {
 
   @override
   String cfAccentColourName(String colour) {
-    String _temp0 = intl.Intl.selectLogic(colour, {
-      'amber': 'Amber',
-      'red': 'Red',
-      'pink': 'Pink',
-      'purple': 'Purple',
-      'blue': 'Blue',
-      'cyan': 'Cyan',
-      'emerald': 'Emerald',
-      'lime': 'Lime',
-      'orange': 'Orange',
-      'teal': 'Teal',
-      'other': 'Accent colour',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      colour,
+      {
+        'amber': 'Amber',
+        'red': 'Red',
+        'pink': 'Pink',
+        'purple': 'Purple',
+        'blue': 'Blue',
+        'cyan': 'Cyan',
+        'emerald': 'Emerald',
+        'lime': 'Lime',
+        'orange': 'Orange',
+        'teal': 'Teal',
+        'other': 'Accent colour',
+      },
+    );
     return '$_temp0';
   }
 
@@ -6990,41 +6996,47 @@ class AppL10nEn extends AppL10n {
 
   @override
   String setCategoryIconName(String icon) {
-    String _temp0 = intl.Intl.selectLogic(icon, {
-      'restaurants': 'Restaurants',
-      'groceries': 'Groceries',
-      'shopping': 'Shopping',
-      'transport': 'Transport',
-      'bills': 'Bills',
-      'cards': 'Cards',
-      'cash': 'Cash',
-      'cafes': 'Cafés',
-      'gifts': 'Gifts',
-      'home': 'Home',
-      'travel': 'Travel',
-      'health': 'Health',
-      'education': 'Education',
-      'transfers': 'Transfers',
-      'other': 'Other icon',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      icon,
+      {
+        'restaurants': 'Restaurants',
+        'groceries': 'Groceries',
+        'shopping': 'Shopping',
+        'transport': 'Transport',
+        'bills': 'Bills',
+        'cards': 'Cards',
+        'cash': 'Cash',
+        'cafes': 'Cafés',
+        'gifts': 'Gifts',
+        'home': 'Home',
+        'travel': 'Travel',
+        'health': 'Health',
+        'education': 'Education',
+        'transfers': 'Transfers',
+        'other': 'Other icon',
+      },
+    );
     return '$_temp0';
   }
 
   @override
   String setCategoryColourName(String colour) {
-    String _temp0 = intl.Intl.selectLogic(colour, {
-      'grey': 'Grey',
-      'coral': 'Coral',
-      'green': 'Green',
-      'blue': 'Blue',
-      'purple': 'Purple',
-      'brightGreen': 'Bright green',
-      'teal': 'Teal',
-      'pink': 'Pink',
-      'blueGrey': 'Blue grey',
-      'orange': 'Orange',
-      'other': 'Custom colour',
-    });
+    String _temp0 = intl.Intl.selectLogic(
+      colour,
+      {
+        'grey': 'Grey',
+        'coral': 'Coral',
+        'green': 'Green',
+        'blue': 'Blue',
+        'purple': 'Purple',
+        'brightGreen': 'Bright green',
+        'teal': 'Teal',
+        'pink': 'Pink',
+        'blueGrey': 'Blue grey',
+        'orange': 'Orange',
+        'other': 'Custom colour',
+      },
+    );
     return '$_temp0';
   }
 

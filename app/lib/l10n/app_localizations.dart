@@ -63,7 +63,7 @@ import 'app_localizations_en.dart';
 /// property.
 abstract class AppL10n {
   AppL10n(String locale)
-    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -85,16 +85,16 @@ abstract class AppL10n {
   /// of delegates is preferred or required.
   static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
       <LocalizationsDelegate<dynamic>>[
-        delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-      ];
+    delegate,
+    GlobalMaterialLocalizations.delegate,
+    GlobalCupertinoLocalizations.delegate,
+    GlobalWidgetsLocalizations.delegate,
+  ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('ar'),
-    Locale('en'),
+    Locale('en')
   ];
 
   /// No description provided for @shortcutAddReady.
@@ -5016,6 +5016,12 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'عند تشغيله مع المزامنة السحابية، قد تُحلَّل رسائل البنك الملتقطة — ومنها رسائل SMS البنكية التي تُقرأ تلقائيًا على أندرويد — بعد حذف أرقام البطاقات والحسابات والهواتف والرموز وإخفاء ما يُتعرَّف عليه من أسماء وعناوين بريد إلكتروني وأرقام مرجعية، بواسطة Google Gemini لقراءة المبلغ والتاجر والبنك. يبقى في النص المبالغ والتجار والتواريخ والأرصدة. سحب الموافقة يقصر القراءة على قواعد قِرش داخل جهازك.'**
   String get privAiAnalysisBody;
+
+  /// No description provided for @privSharedLearningBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحسين مشترك: عند تشغيل المزامنة السحابية والتحليل الذكي معًا، يؤدي اختيار «تذكّر التصنيف لهذا المتجر» أيضًا إلى إرسال اسم المتجر والتصنيف الذي اخترته إلى خوادم قِرش، دون مبالغ أو تواريخ أو رسائل أو تحويلات لأشخاص. وعندما يختار عدد من المستخدمين التصنيف نفسه، قد يضيفه مشرف إلى التصنيفات التي يتلقاها جميع مستخدمي قِرش.'**
+  String get privSharedLearningBody;
 
   /// No description provided for @privDeleteAccountBody.
   ///
@@ -12538,9 +12544,8 @@ AppL10n lookupAppL10n(Locale locale) {
   }
 
   throw FlutterError(
-    'AppL10n.delegate failed to load unsupported locale "$locale". This is likely '
-    'an issue with the localizations generation tool. Please file an issue '
-    'on GitHub with a reproducible sample app and the gen-l10n configuration '
-    'that was used.',
-  );
+      'AppL10n.delegate failed to load unsupported locale "$locale". This is likely '
+      'an issue with the localizations generation tool. Please file an issue '
+      'on GitHub with a reproducible sample app and the gen-l10n configuration '
+      'that was used.');
 }

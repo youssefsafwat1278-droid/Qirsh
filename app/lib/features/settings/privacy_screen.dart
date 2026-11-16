@@ -559,6 +559,10 @@ class _ConsentManagementCardState
               const SizedBox(height: AppSpacing.s1),
               Text(l10n.privAiAnalysisBody,
                   style: AppTypography.caption(c.textSecondary)),
+              const SizedBox(height: AppSpacing.s1),
+              Text(l10n.privSharedLearningBody,
+                  key: const Key('privSharedLearningBody'),
+                  style: AppTypography.caption(c.textSecondary)),
               if (canTurnOn || canTurnOff || canRefresh) ...[
                 const SizedBox(height: AppSpacing.s2),
                 Wrap(
