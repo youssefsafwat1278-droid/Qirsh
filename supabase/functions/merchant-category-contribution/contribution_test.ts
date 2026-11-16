@@ -120,3 +120,48 @@ Deno.test('a database validation refusal maps to invalid_payload', async () => {
   assertEquals(res.status, 400);
   assert((await res.json()).error === 'invalid_payload');
 });
+
+const withdrawBody = { merchant_key: 'HALA BOUTIQUE', action: 'withdraw' };
+
+Deno.test("withdraw removes this user's vote via the withdraw rpc", async () => {
+  const h = harness();
+  const res = await handleContribution(post(withdrawBody), h.deps);
+  assertEquals(res.status, 200);
+  assertEquals(h.calls, [{
+    fn: 'withdraw_merchant_category_contribution',
+    args: { p_user_id: userIdentity.userId, p_merchant_key: 'HALA BOUTIQUE' },
+  }]);
+  assertEquals(h.identityBody(), {});
+});
+
+Deno.test('withdraw is allowed after consent was withdrawn', async () => {
+  for (const consent of [{ aiConsent: false }, { cloudConsent: false }]) {
+    const h = harness(consent);
+    assertEquals((await handleContribution(post(withdrawBody), h.deps)).status, 200);
+    assertEquals(h.calls.length, 1);
+  }
+});
+
+Deno.test('withdraw still needs a signed-in user', async () => {
+  const h = harness(null);
+  assertEquals((await handleContribution(post(withdrawBody), h.deps)).status, 401);
+  const d = harness({ kind: 'device', userId: null });
+  assertEquals((await handleContribution(post(withdrawBody), d.deps)).status, 401);
+  assertEquals(h.calls.length + d.calls.length, 0);
+});
+
+Deno.test('withdraw refuses other actions, extra keys and bad merchant keys', async () => {
+  for (
+    const body of [
+      { merchant_key: 'HALA BOUTIQUE', action: 'delete_all' },
+      { ...withdrawBody, category_key: 'shopping' },
+      { merchant_key: 'CAFE 12', action: 'withdraw' },
+      { merchant_key: 'hala boutique', action: 'withdraw' },
+      { action: 'withdraw' },
+    ]
+  ) {
+    const h = harness();
+    assertEquals((await handleContribution(post(body), h.deps)).status, 400, JSON.stringify(body));
+    assertEquals(h.calls.length, 0);
+  }
+});

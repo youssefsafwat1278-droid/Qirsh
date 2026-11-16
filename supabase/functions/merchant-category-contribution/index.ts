@@ -9,6 +9,11 @@
 //
 // The merchant-feedback route stays retired; this is the verified-identity +
 // consent flow its retirement note asked for.
+//
+// Withdrawal: EXACTLY {merchant_key, action: 'withdraw'} removes this user's
+// vote for that merchant (the device sends it when a learned rule is
+// deleted). It needs the user JWT but no consent: taking data back is always
+// allowed, including after consent was withdrawn.
 import { bumpCaptureEndpointRateLimit, corsHeaders, serviceClient } from '../_shared/capture_auth.ts';
 import { redactPii } from '../_shared/sms_redaction.ts';
 import {
@@ -22,6 +27,7 @@ import {
 const MAX_BODY_BYTES = 512;
 const DAILY_LIMIT_PER_USER = 100;
 const ALLOWED_KEYS = ['category_key', 'merchant_key'];
+const WITHDRAW_KEYS = ['action', 'merchant_key'];
 const EXCLUDED_CATEGORIES = new Set(['transfers', 'income', 'cash', 'other', 'all_expenses']);
 
 /// Mirrors the device's TransactionDedup.normalizeMerchant output plus the
@@ -61,7 +67,9 @@ export async function handleContribution(req: Request, deps: Deps = defaultDeps)
   if (!bodyRes.ok) return apiError(bodyRes.code, { correlationId: cid });
   const body = bodyRes.body;
   const keys = Object.keys(body).sort();
-  if (keys.length !== ALLOWED_KEYS.length || keys.some((k, i) => k !== ALLOWED_KEYS[i])) {
+  const exactly = (want: string[]) => keys.length === want.length && keys.every((k, i) => k === want[i]);
+  if (exactly(WITHDRAW_KEYS)) return withdraw(req, body, deps, cid);
+  if (!exactly(ALLOWED_KEYS)) {
     return apiError('invalid_payload', { correlationId: cid });
   }
   const merchantKey = body.merchant_key;
@@ -103,6 +111,46 @@ export async function handleContribution(req: Request, deps: Deps = defaultDeps)
     return apiError(code === 'P0422' ? 'invalid_payload' : 'internal_error', { correlationId: cid });
   }
   return new Response(JSON.stringify({ accepted: true }), {
+    status: 200,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+async function withdraw(
+  req: Request,
+  body: Record<string, unknown>,
+  deps: Deps,
+  cid: string,
+): Promise<Response> {
+  const merchantKey = body.merchant_key;
+  if (body.action !== 'withdraw' || typeof merchantKey !== 'string') {
+    return apiError('invalid_payload', { correlationId: cid });
+  }
+  const supabase = deps.createServiceClient();
+  const identity = await deps.resolveIdentity(req, supabase, {}, cid);
+  if (!identity.ok) return identity.response;
+  if (identity.identity.kind !== 'user' || !identity.identity.userId) {
+    return apiError('authentication_required', { correlationId: cid });
+  }
+  if (!merchantKeyOk(merchantKey)) return apiError('invalid_payload', { correlationId: cid });
+
+  const limited = await deps.bumpRateLimit(
+    supabase,
+    identity.identity.ownerKey,
+    'merchant-category-contribution',
+    DAILY_LIMIT_PER_USER,
+  );
+  if (limited) return apiError('rate_limited', { correlationId: cid, retryable: true });
+
+  const { data, error } = await supabase.rpc('withdraw_merchant_category_contribution', {
+    p_user_id: identity.identity.userId,
+    p_merchant_key: merchantKey,
+  });
+  if (error) {
+    const code = (error as { code?: string }).code;
+    return apiError(code === 'P0422' ? 'invalid_payload' : 'internal_error', { correlationId: cid });
+  }
+  return new Response(JSON.stringify({ withdrawn: data === true }), {
     status: 200,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });

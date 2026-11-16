@@ -133,8 +133,9 @@ Two things are not consent-gated:
   pooled: a merchant→category pair is added to the categories everyone
   receives only when at least 6 users agree and they are a clear majority
   (75%), or after an admin reviews it, and an admin can remove it at any time.
-  Turning the switch off stops future contributions; deleting your account
-  deletes the contributions you made.
+  Turning the switch off stops future contributions; deleting a learned rule
+  while the switch is on withdraws that rule's contribution; deleting your
+  account deletes all the contributions you made.
 - **Across devices, the more restrictive setting wins.** Turning consent OFF on
   one device propagates as a revocation. Turning it ON does **not** silently
   grant consent on your other devices — you grant it on each device yourself.
@@ -181,7 +182,7 @@ account and we will action the deletion.
 | Daily request counters | **No fixed expiry** — removed when you delete your account |
 | Device identifiers used for capture | **No fixed expiry** — removed when you delete your account |
 | Merchant names added to the shared merchant catalogue | **No fixed expiry** — a business name and category, not linked to you or your account |
-| Your shared-learning contributions (merchant name, category, one-way code) | **No fixed expiry** — deleted when you delete your account. A pair already added to the shared catalogue stays there as a business name and category, not linked to you |
+| Your shared-learning contributions (merchant name, category, one-way code) | **No fixed expiry** — withdrawn when you delete that learned rule, and all deleted when you delete your account. A pair already added to the shared catalogue stays there as a business name and category, not linked to you |
 | Learned merchant rules in the cloud | **No fixed expiry** — a rule you delete is kept as a deletion marker so your other devices drop it too; all of it is removed when you delete your account |
 | Encrypted backups | Until replaced or deleted by you |
 | Text sent to Google's Gemini API | Per Google's terms — see section 7 |

@@ -70,6 +70,22 @@ class SharedCategoryLearningClient {
     await flush();
   }
 
+  /// Takes back this account's vote for [rawMerchant] — called when the user
+  /// deletes a learned rule. Sent only under the same conditions as [offer]
+  /// (so nothing about the merchant leaves a device that would not have shared
+  /// it), drops any queued offer for it, and is best effort: a failure leaves
+  /// one stale vote, which an admin can still review before it is published.
+  Future<void> withdraw(String rawMerchant) async {
+    final key = sharedMerchantKeyFor(rawMerchant);
+    if (key == null) return;
+    _queue.removeWhere((c) => c.$2.merchantKey == key);
+    final uid = _accountUid();
+    if (uid == null || uid.isEmpty || !await _allowedFor(uid)) return;
+    try {
+      await _send({'merchant_key': key, 'action': 'withdraw'});
+    } catch (_) {}
+  }
+
   Future<void> flush() async {
     if (_flushing) return;
     _flushing = true;

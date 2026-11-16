@@ -61,6 +61,13 @@ SharedCategoryContribution? sharedContributionFor(
     return null;
   }
 
+  final key = sharedMerchantKeyFor(raw);
+  return key == null ? null : SharedCategoryContribution(key, categoryKey);
+}
+
+/// The shared-catalog key for [raw], or null when that merchant text could
+/// carry an identifier and must never leave the device.
+String? sharedMerchantKeyFor(String raw) {
   final key = TransactionDedup.normalizeMerchant(raw);
   if (key.length < 3 ||
       key.length > 64 ||
@@ -71,5 +78,5 @@ SharedCategoryContribution? sharedContributionFor(
       SmsSanitizer.containsIdentifier(key)) {
     return null;
   }
-  return SharedCategoryContribution(key, categoryKey);
+  return key;
 }

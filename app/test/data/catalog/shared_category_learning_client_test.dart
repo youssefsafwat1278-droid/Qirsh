@@ -349,6 +349,71 @@ void main() {
     });
   });
 
+  group('withdraw (a learned rule was deleted)', () {
+    test('sends only the merchant key and the withdraw action', () async {
+      final h = _Harness(optedIn: true);
+      await h.client.withdraw('HALA BOUTIQUE 123');
+      expect(h.sent, [
+        {'merchant_key': 'HALA BOUTIQUE', 'action': 'withdraw'}
+      ]);
+    });
+
+    test('drops a still-queued offer for the same merchant', () async {
+      final gate = Completer<void>();
+      final h = _Harness(optedIn: true);
+      final sent = <Map<String, String>>[];
+      final client = SharedCategoryLearningClient(
+        accountUid: () => h.uid,
+        optedIn: h.preference.isOn,
+        mayEgress: () async => true,
+        send: (body) async {
+          sent.add(body);
+          if (sent.length == 1) await gate.future;
+        },
+      );
+      final first = client.offer(_tx(), 'shopping');
+      await Future<void>.delayed(Duration.zero);
+      await client.offer(_tx(merchant: 'OTHER SHOP'), 'shopping');
+      await client.offer(_tx(merchant: 'NEW CAFE'), 'cafes');
+      await client.withdraw('NEW CAFE');
+      gate.complete();
+      await first;
+      expect(sent.map((b) => b['merchant_key']),
+          ['HALA BOUTIQUE', 'NEW CAFE', 'OTHER SHOP']);
+      expect(sent[1], {'merchant_key': 'NEW CAFE', 'action': 'withdraw'});
+    });
+
+    test('nothing leaves the device when sharing would not', () async {
+      for (final h in [
+        _Harness(optedIn: false),
+        _Harness(cloud: false, optedIn: true),
+        _Harness(ai: false, optedIn: true),
+        _Harness(optedIn: true)..uid = null,
+      ]) {
+        await h.client.withdraw('HALA BOUTIQUE');
+        expect(h.sent, isEmpty);
+      }
+    });
+
+    test('merchant text that could identify someone is never sent', () async {
+      final h = _Harness(optedIn: true);
+      for (final raw in ['AB', 'name@mail.com', '0551234567', '12345']) {
+        await h.client.withdraw(raw);
+      }
+      expect(h.sent, isEmpty);
+    });
+
+    test('a send failure is swallowed', () async {
+      final client = SharedCategoryLearningClient(
+        accountUid: () => 'uid-a',
+        optedIn: (_) async => true,
+        mayEgress: () async => true,
+        send: (_) async => throw Exception('offline'),
+      );
+      await client.withdraw('HALA BOUTIQUE');
+    });
+  });
+
   test('an approved shared mapping ranks below the user\'s confirmed rule', () {
     // Shared mappings reach the device as catalog keywords (merchant_keywords);
     // they never enter the user's rule map.

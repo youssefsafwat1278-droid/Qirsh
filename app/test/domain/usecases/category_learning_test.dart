@@ -296,6 +296,39 @@ void main() {
     expect(await categoryKeyOf((await capture(7)).id), 'restaurants');
   });
 
+  test('deleting a rule withdraws its shared vote; undo does not re-share',
+      () async {
+    final withdrawn = <String>[];
+    final withSharing = LearnedRulesUseCase(
+      merchantCategoryRepository: merchants,
+      merchantIntelligence: model,
+      withdrawSharedRule: (raw) async => withdrawn.add(raw),
+    );
+    final a = await capture(1);
+    await correctCategory(
+      transactionId: a.id,
+      categoryKey: 'restaurants',
+      scope: CategoryCorrectionScope.allMerchantTransactions,
+    );
+    final rule = (await withSharing.list()).single;
+    await withSharing.delete(rule);
+    await Future<void>.delayed(Duration.zero);
+    expect(withdrawn, [rule.rawMerchant]);
+    await withSharing.restore(rule);
+    await Future<void>.delayed(Duration.zero);
+    expect(withdrawn, hasLength(1));
+
+    // A failing withdrawal never fails the local delete.
+    final failing = LearnedRulesUseCase(
+      merchantCategoryRepository: merchants,
+      merchantIntelligence: model,
+      withdrawSharedRule: (_) async => throw Exception('offline'),
+    );
+    await failing.delete(rule);
+    await Future<void>.delayed(Duration.zero);
+    expect(await failing.list(), isEmpty);
+  });
+
   test('deleting a rule on a catalog merchant restores the catalog mapping',
       () async {
     final a = await capture(1, m: 'STARBUCKS');

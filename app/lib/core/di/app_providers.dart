@@ -2056,6 +2056,8 @@ final learnedRulesUseCaseProvider = writerProvider<LearnedRulesUseCase>((ref) {
   return LearnedRulesUseCase(
     merchantCategoryRepository: ref.watch(merchantCategoryRepositoryProvider),
     merchantIntelligence: ref.watch(merchantIntelligenceProvider),
+    withdrawSharedRule:
+        ref.watch(sharedCategoryLearningClientProvider)?.withdraw,
   );
 });
 
