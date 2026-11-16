@@ -88,6 +88,7 @@ app start.
 |---|---|---|
 | Financial sync | Accounts, transactions, budgets, goals, plans | Multi-device sync |
 | Learned merchant rules | Each "Remember for this merchant" rule: the merchant name and the category you chose | Restore your rules on a new device or after reinstalling |
+| Profile photo | The profile picture you chose in Qirsh, stored privately so only your account can read it | Restore your photo on a new device or after reinstalling |
 | Encrypted backup | An encrypted archive of your data | Restore after device loss |
 | Message reading (Smart Analysis) | Sanitized bank-message text (see section 8) | Read the amount, merchant, date and type |
 | Bank identification | For a bank sender we do not recognise: the sender's name (letters, such as a bank's name; never a phone number) and the sanitized text | Identify which bank sent it |
@@ -160,7 +161,7 @@ can be downloaded again by signing in.
 
 ### Delete your account entirely
 Settings → Privacy & data → Delete my account and all my data. Your account and
-your cloud data (transactions, goals, budgets, backups, and the capture and AI
+your cloud data (transactions, goals, budgets, backups, your profile photo, and the capture and AI
 records described in section 6) are scheduled for permanent deletion after 30
 days. You can undo it before then by signing in again.
 
@@ -184,6 +185,7 @@ account and we will action the deletion.
 | Merchant names added to the shared merchant catalogue | **No fixed expiry** — a business name and category, not linked to you or your account |
 | Your shared-learning contributions (merchant name, category, one-way code) | **No fixed expiry** — withdrawn when you delete that learned rule, and all deleted when you delete your account. A pair already added to the shared catalogue stays there as a business name and category, not linked to you |
 | Learned merchant rules in the cloud | **No fixed expiry** — a rule you delete is kept as a deletion marker so your other devices drop it too; all of it is removed when you delete your account |
+| Profile photo in the cloud | **No fixed expiry** — one copy, replaced when you choose a new photo; deleted when you delete your account |
 | Encrypted backups | Until replaced or deleted by you |
 | Text sent to Google's Gemini API | Per Google's terms — see section 7 |
 | Crash reports (if enabled) | Per the diagnostics provider's retention |
@@ -289,6 +291,8 @@ browse your Messages history.
 
 - **Photos and camera** — only if you choose a profile picture. Qirsh opens the
   picker when you tap to set one; it cannot browse your library otherwise.
+  The picture you choose is kept on your device and, with Smart Analysis &
+  Cloud Sync on, backed up to your account (section 3).
 - **Files** — only when you pick a backup file to restore.
 
 Qirsh does not request location, contacts, or the microphone.
@@ -373,6 +377,11 @@ updated" date above always reflects the current version.
     4. Do NOT publish before the app release that contains (a) the AES-256-GCM
        encrypted Android capture queue and (b) cold-start background processing
        (WorkManager / BGTaskScheduler). Sections 1, 2, 6 and 8 describe them.
+    4a. Do NOT publish the "Profile photo" rows (sections 3, 5, 6, 8) before
+       migration 20261116210000 (private profile-photos bucket) AND the
+       deletion worker that sweeps it (_shared/storage_erasure.ts, used by
+       purge-scheduled-deletions and delete-account-immediate) are deployed,
+       and an app release that uploads the photo ships.
     5. Set "Last updated" to the publication date.
     6. Host at the URL configured in `app/lib/core/config/legal_urls.dart`.
        That host must resolve — the in-app Privacy screen links to it, and both
