@@ -70,6 +70,10 @@ void main() {
   ///   local_notification_service   one pending transaction, rejected by action
   ///   drift_suspected_duplicate    one duplicate candidate, by id
   ///   drift_category_repository    merchant map rows for one deleted category
+  ///   drift_merchant_category_repo the ONE user-confirmed rule row of one
+  ///                                merchant (Settings → Learned rules delete;
+  ///                                undo re-inserts it). Never a seed row,
+  ///                                never a transaction.
   ///
   /// GROUP D — server-replaceable CATALOG caches. Re-synced on next launch;
   /// hold no money and nothing the user authored.
@@ -173,6 +177,7 @@ void main() {
     'lib/features/capture/services/local_notification_service.dart': 2,
     'lib/data/repositories/drift_suspected_duplicate_repository.dart': 1,
     'lib/data/repositories/drift_category_repository.dart': 1,
+    'lib/data/repositories/drift_merchant_category_repository.dart': 1,
     // D
     'lib/data/catalog/catalog_daos.dart': 5,
     // E
