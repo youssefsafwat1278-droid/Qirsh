@@ -7633,4 +7633,18 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get ccIncludeImportedConfirmYes => 'نعم، غيّرها';
+
+  @override
+  String ccPastExclTypeLocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عملية سحب نقدي أو تحويل — غيّر نوعها أولًا',
+      many: '$count عملية سحب نقدي أو تحويل — غيّر نوعها أولًا',
+      few: '$count عمليات سحب نقدي أو تحويل — غيّر نوعها أولًا',
+      two: 'عمليتا سحب نقدي أو تحويل — غيّر نوعهما أولًا',
+      one: 'عملية سحب نقدي أو تحويل — غيّر نوعها أولًا',
+    );
+    return '$_temp0';
+  }
 }

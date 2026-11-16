@@ -314,6 +314,9 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
       if (imported > 0) l.ccPastExclImported(imported),
       if (plan.excludedCount(PastUpdateExclusion.manual) > 0)
         l.ccPastExclManual(plan.excludedCount(PastUpdateExclusion.manual)),
+      if (plan.excludedCount(PastUpdateExclusion.typeLocked) > 0)
+        l.ccPastExclTypeLocked(
+            plan.excludedCount(PastUpdateExclusion.typeLocked)),
     ];
     return [
       if (lines.isNotEmpty) ...[

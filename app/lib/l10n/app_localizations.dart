@@ -12642,6 +12642,12 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'نعم، غيّرها'**
   String get ccIncludeImportedConfirmYes;
+
+  /// No description provided for @ccPastExclTypeLocked.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عملية سحب نقدي أو تحويل — غيّر نوعها أولًا} =2{عمليتا سحب نقدي أو تحويل — غيّر نوعهما أولًا} few{{count} عمليات سحب نقدي أو تحويل — غيّر نوعها أولًا} many{{count} عملية سحب نقدي أو تحويل — غيّر نوعها أولًا} other{{count} عملية سحب نقدي أو تحويل — غيّر نوعها أولًا}}'**
+  String ccPastExclTypeLocked(int count);
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {

@@ -7604,4 +7604,15 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get ccIncludeImportedConfirmYes => 'Yes, change them';
+
+  @override
+  String ccPastExclTypeLocked(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count cash withdrawals or transfers — change their type first',
+      one: '1 cash withdrawal or transfer — change its type first',
+    );
+    return '$_temp0';
+  }
 }

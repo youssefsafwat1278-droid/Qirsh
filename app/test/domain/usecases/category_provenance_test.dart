@@ -134,6 +134,7 @@ void main() {
     CategoryProvenance? provenance = CategoryProvenance.auto,
     String category = 'groceries',
     bool imported = false,
+    TransactionTypeEntity type = TransactionTypeEntity.payment,
     DrifTxRepo? repo,
   }) {
     seq++;
@@ -142,7 +143,7 @@ void main() {
         id: 'tx-$seq',
         amountMoney: Money(1000 + seq, 'SAR'),
         currency: 'SAR',
-        type: TransactionTypeEntity.payment,
+        type: type,
         source: source,
         occurredAt: at.add(Duration(minutes: seq)),
         rawMessage: 'synthetic $seq',
@@ -432,6 +433,38 @@ void main() {
       expect((await preview(edited)).eligible.map((e) => e.id),
           isNot(contains(aliased.id)));
     });
+  });
+
+  test('a cash withdrawal of the same merchant is reported, never promised',
+      () async {
+    // Regression: an AI capture read a prepaid top-up (WE-FBB-Pre) as a cash
+    // withdrawal. Its type forces the "cash" category, so the bulk write
+    // could never change it, yet the preview counted it and every repeat
+    // offered it again.
+    final withdrawal = await add(type: TransactionTypeEntity.withdrawal);
+    final payment = await add();
+    final edited = await add();
+    expect(await keyOf(withdrawal.id), 'cash');
+
+    final plan = await preview(
+        edited,
+        const PastUpdateOverrides(
+            includeUnknown: true,
+            includeChosenByYou: true,
+            includeImported: true));
+    expect(plan.eligible.map((e) => e.id), [payment.id],
+        reason: 'no opt-in can make a type-locked row eligible');
+    expect(plan.excluded[PastUpdateExclusion.typeLocked]!.map((e) => e.id),
+        [withdrawal.id]);
+
+    await rememberAndUpdatePast(edited);
+    expect(await keyOf(payment.id), 'restaurants');
+    expect(await keyOf(withdrawal.id), 'cash');
+
+    final again = await preview(edited);
+    expect(again.eligible, isEmpty,
+        reason: 'a repeat promises nothing: the withdrawal is not offered');
+    expect(again.excludedCount(PastUpdateExclusion.typeLocked), 1);
   });
 
   test('repeating the same bulk update has no side effects', () async {

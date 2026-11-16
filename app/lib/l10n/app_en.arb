@@ -3887,6 +3887,14 @@
       }
     }
   },
+  "ccPastExclTypeLocked": "{count, plural, =1{1 cash withdrawal or transfer — change its type first} other{{count} cash withdrawals or transfers — change their type first}}",
+  "@ccPastExclTypeLocked": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "ccIncludeImported": "Also update transactions from imported files",
   "ccIncludeImportedConfirmTitle": "Change imported transactions?",
   "ccIncludeImportedConfirmBody": "{count, plural, =1{1 transaction from an imported file will change.} other{{count} transactions from an imported file will change.}}",

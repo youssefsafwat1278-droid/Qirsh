@@ -200,6 +200,23 @@ void main() {
     expect(merchants.rules, [('QA merchant', 'travel')]);
   });
 
+  testWidgets('a cash withdrawal is listed as type-locked, not counted',
+      (tester) async {
+    final txs = _Transactions()
+      ..past.add(_tx('wd-1').copyWith(type: TransactionTypeEntity.withdrawal));
+    final l10n = await _open(tester, txs, _Merchants());
+
+    await tester.tap(find.text('Travel'));
+    await tester.tap(find.text(l10n.ccScopeMerchant));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10n.ccAlsoUpdatePast));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.ccPastCount(2)), findsOneWidget,
+        reason: 'only the two payments of the merchant can change');
+    expect(find.textContaining(l10n.ccPastExclTypeLocked(1)), findsOneWidget);
+  });
+
   testWidgets(
       'imported rows need their own switch, behind a confirmation that names them',
       (tester) async {

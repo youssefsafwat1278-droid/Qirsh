@@ -35,7 +35,22 @@ enum PastUpdateExclusion {
   /// Changed only with [PastUpdateOverrides.includeImported] — never by
   /// [PastUpdateOverrides.includeUnknown].
   imported,
+
+  /// Its type fixes the category (a cash withdrawal is always "cash", a
+  /// transfer "transfers", income "income"), so a write could not change it.
+  /// Counting it as eligible would promise a change that never happens and
+  /// keep reappearing on every repeat. Never re-categorised in bulk: change
+  /// the transaction's type first.
+  typeLocked,
 }
+
+/// Types whose category the repository forces regardless of the requested
+/// key (see `DriftTransactionRepository._categoryKeyForType`).
+const kCategoryLockedTransactionTypes = {
+  TransactionTypeEntity.withdrawal,
+  TransactionTypeEntity.transfer,
+  TransactionTypeEntity.income,
+};
 
 /// Explicit, separate opt-ins, all off by default. Ignored and manual rows
 /// have no override at all.
@@ -94,6 +109,8 @@ PastCategoryUpdatePlan planPastCategoryUpdate(
   for (final t in candidates) {
     if (t.categoryId == categoryId) {
       already++;
+    } else if (kCategoryLockedTransactionTypes.contains(t.type)) {
+      exclude(PastUpdateExclusion.typeLocked, t);
     } else if (t.status == TransactionStatus.ignored) {
       exclude(PastUpdateExclusion.ignored, t);
     } else if (t.source == TransactionSourceEntity.unknown) {
