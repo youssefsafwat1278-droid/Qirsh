@@ -184,11 +184,11 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
             ),
             if (_scope == CategoryCorrectionScope.allMerchantTransactions) ...[
               const SizedBox(height: AppSpacing.s4),
-              // The v2 switch row on the segmented control's own well, so the
-              // section reads as one piece; a floating card's drop shadow is
-              // clipped by the sheet's scroll view.
+              // The v2 switch row on a raised fill (the switch's off track is
+              // the segmented well's colour); a floating card's drop shadow
+              // would be clipped by the sheet's scroll view.
               Material(
-                color: c.surfaceMuted,
+                color: c.surfaceElevated,
                 clipBehavior: Clip.antiAlias,
                 borderRadius: BorderRadius.circular(AppRadius.card),
                 child: SettingsV2SwitchRow(
