@@ -82,7 +82,9 @@ void main() {
       'only that merchant’s name and the category you chose',
       'Amounts, dates, messages, transfers and names of people are never sent',
       'pooled with other users',
-      'only after an admin reviews them',
+      'at least 6 users agree on it and they are a clear majority (75%)',
+      'or after an admin reviews it',
+      'an admin can remove it',
       'Needs Cloud Sync and Smart Analysis on',
     ]) {
       expect(s, contains(part));
@@ -94,7 +96,8 @@ void main() {
       'اسم المتجر والتصنيف الذي اخترته فقط',
       'المبالغ أو التواريخ أو الرسائل أو التحويلات أو أسماء الأشخاص',
       'مع اختيارات المستخدمين الآخرين',
-      'إلا بعد مراجعة مشرف',
+      'يتفق عليه 6 مستخدمين على الأقل ويكونون أغلبية واضحة (75%)',
+      'أو بعد مراجعة مشرف',
       'المزامنة السحابية والتحليل الذكي',
     ]) {
       expect(a, contains(part));
