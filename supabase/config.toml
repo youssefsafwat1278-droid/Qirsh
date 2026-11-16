@@ -492,8 +492,9 @@ verify_jwt = false
 # admin_users, re-checked by the claim RPC), and the pg_cron retry dispatcher
 # (run_push_broadcast_retry_dispatch), presenting PUSH_BROADCAST_WORKER_SECRET
 # as a raw bearer. verify_jwt MUST be false or the gateway rejects that raw
-# secret before the handler runs. bearerSecretAuthorized fails CLOSED when the
-# secret is unset, so an unconfigured deployment only has the admin path.
+# secret before the handler runs. The worker path fails CLOSED when the secret
+# is unset or weak (< 32 chars or < 10 distinct), and only a JWT-shaped bearer is
+# ever passed to auth.getUser. Rollback: docs/PUSH_BROADCAST_AUTO_RETRY_ROLLBACK_RUNBOOK.md
 verify_jwt = false
 
 [functions.google-enrollment]

@@ -179,7 +179,15 @@ SELECT pg_temp.ok('due work but no worker secret: no HTTP dispatch',
 SELECT vault.create_secret('http://proof.invalid', 'project_url')
  WHERE NOT EXISTS (SELECT 1 FROM vault.decrypted_secrets WHERE name = 'project_url');
 SELECT vault.create_secret('proof-worker-secret', 'push_broadcast_worker_secret');
-SELECT pg_temp.ok('due work and a worker secret: exactly one POST to send-push-broadcast',
+SELECT pg_temp.ok('a 19-char worker secret is treated as unset: no HTTP dispatch',
+  (SELECT pg_temp.http_calls() FROM (SELECT public.run_push_broadcast_retry_dispatch()) s) = 0);
+DELETE FROM vault.secrets WHERE name = 'push_broadcast_worker_secret';
+SELECT vault.create_secret(repeat('ab', 20), 'push_broadcast_worker_secret');
+SELECT pg_temp.ok('a long but low-variety worker secret is treated as unset: no HTTP dispatch',
+  (SELECT pg_temp.http_calls() FROM (SELECT public.run_push_broadcast_retry_dispatch()) s) = 0);
+DELETE FROM vault.secrets WHERE name = 'push_broadcast_worker_secret';
+SELECT vault.create_secret(md5(random()::text) || md5(random()::text), 'push_broadcast_worker_secret');
+SELECT pg_temp.ok('due work and a strong worker secret: exactly one POST to send-push-broadcast',
   (SELECT pg_temp.http_calls() FROM (SELECT public.run_push_broadcast_retry_dispatch()) s) = 1);
 SELECT pg_temp.ok('the dispatch does not claim rows itself (the function does)',
   (pg_temp.row_of('ar-2')).status = 'failed');

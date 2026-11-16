@@ -30,8 +30,10 @@
 -- lose a row to another run while it is still about to send it.
 --
 -- OWNER ACTION (deliberately NOT performed by this migration):
---   supabase secrets set PUSH_BROADCAST_WORKER_SECRET=<random>
+--   supabase secrets set PUSH_BROADCAST_WORKER_SECRET=<openssl rand -hex 32>
 --   and store the SAME value in Vault as 'push_broadcast_worker_secret'
+--   (>= 32 chars, >= 10 distinct; a weaker value is treated as unset on both
+--   sides). Rollback: docs/PUSH_BROADCAST_AUTO_RETRY_ROLLBACK_RUNBOOK.md
 --   ('project_url' is already in Vault for the other workers). Until then the
 --   dispatcher logs a skip and does nothing; the manual button is unaffected.
 
@@ -306,6 +308,13 @@ begin
   -- Fail closed. A missing secret must not fall back to any other credential.
   if project_url is null or worker_secret is null then
     raise log 'push_broadcast_retry_dispatch skipped: worker secret not configured';
+    return;
+  end if;
+  -- Same strength rule as the Edge Function (usableWorkerSecret): at least 32
+  -- characters and 10 distinct ones. A weak value is never sent anywhere.
+  if length(worker_secret) < 32
+     or (select count(distinct c) from regexp_split_to_table(worker_secret, '') as c) < 10 then
+    raise log 'push_broadcast_retry_dispatch skipped: worker secret too weak';
     return;
   end if;
 

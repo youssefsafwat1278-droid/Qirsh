@@ -3,8 +3,10 @@ import { sendApnsAlert } from '../_shared/apns.ts';
 import {
   broadcastMessagesEnabled,
   handleSendPushBroadcast,
+  looksLikeJwt,
   pickBroadcastLanguage,
   type SendPushBroadcastDependencies,
+  usableWorkerSecret,
 } from './send.ts';
 
 const BROADCAST_ID = '6f1c1d1e-0000-4000-8000-000000000001';
@@ -174,7 +176,12 @@ function deps(
   };
 }
 
-const WORKER_SECRET = 'worker-secret-for-tests';
+// Test-only value, shaped like `openssl rand -hex 32`.
+const WORKER_SECRET = '3f9a1c7e5b2d8046af13ce97b5d20e8c41f6a9d3b7c05e2819f4ad6c3b8e7051';
+
+const b64url = (v: unknown) => btoa(JSON.stringify(v)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+// Structurally a JWT (the stubbed authenticateAdmin decides whether it is valid).
+const ADMIN_JWT = `${b64url({ alg: 'HS256', typ: 'JWT' })}.${b64url({ sub: 'admin' })}.c2lnbmF0dXJl`;
 
 const scheduledRequest = (secret = WORKER_SECRET) =>
   new Request('http://local/send-push-broadcast', {
@@ -189,7 +196,7 @@ const fail = (reason: string, httpStatus: number, errorCode: string) => () =>
 const request = (broadcastId = BROADCAST_ID) =>
   new Request('http://local/send-push-broadcast', {
     method: 'POST',
-    headers: { authorization: 'Bearer admin-jwt', 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${ADMIN_JWT}`, 'content-type': 'application/json' },
     body: JSON.stringify({ broadcast_id: broadcastId }),
   });
 
@@ -467,4 +474,99 @@ Deno.test('no new batch is claimed once the claim budget is spent', async () => 
   const res = await (await handleSendPushBroadcast(request(), d)).json();
   assertEquals(res.claimed, 200);
   assertEquals(store.deliveries.filter((x) => x.status === 'pending').length, 50);
+});
+
+// ─── Hardening: secret strength and no forwarding of near-miss secrets ─────
+
+const spyAdmin = () => {
+  const seen: string[] = [];
+  return {
+    seen,
+    authenticateAdmin: (_: unknown, token: string) => {
+      seen.push(token);
+      return Promise.resolve({ ok: false as const, status: 401, error: 'unauthenticated' });
+    },
+  };
+};
+
+Deno.test('worker secret strength: missing, short and weak secrets are treated as unset', () => {
+  assertEquals(usableWorkerSecret(''), '');
+  assertEquals(usableWorkerSecret(WORKER_SECRET.slice(0, 31)), '');
+  assertEquals(usableWorkerSecret('a'.repeat(64)), '');
+  assertEquals(usableWorkerSecret('ab'.repeat(32)), '');
+  assertEquals(usableWorkerSecret(WORKER_SECRET.slice(0, 32)), WORKER_SECRET.slice(0, 32));
+  assertEquals(usableWorkerSecret(WORKER_SECRET), WORKER_SECRET);
+});
+
+for (
+  const [label, configured] of [
+    ['missing', ''],
+    ['31 characters', WORKER_SECRET.slice(0, 31)],
+    ['weak (one repeated character)', 'x'.repeat(48)],
+  ] as const
+) {
+  Deno.test(`a ${label} configured secret never opens the scheduled path, even when presented exactly`, async () => {
+    const store = fakeStore([device('a')]);
+    const sent: Sent[] = [];
+    const spy = spyAdmin();
+    const res = await handleSendPushBroadcast(
+      scheduledRequest(configured),
+      deps(store.client, accept(sent), true, {
+        workerSecret: () => configured,
+        authenticateAdmin: spy.authenticateAdmin,
+      }),
+    );
+    assertEquals(res.status, 401);
+    assertEquals([sent.length, store.calls.length, spy.seen.length], [0, 0, 0]);
+  });
+}
+
+Deno.test('the exact strong secret opens the scheduled path without any login check', async () => {
+  const store = fakeStore([device('a')]);
+  const spy = spyAdmin();
+  const res = await handleSendPushBroadcast(
+    scheduledRequest(),
+    deps(store.client, accept([]), true, { authenticateAdmin: spy.authenticateAdmin }),
+  );
+  assertEquals(res.status, 200);
+  assertEquals(spy.seen.length, 0);
+});
+
+Deno.test('near-miss secrets get 401 and never reach the login check', async () => {
+  const flipped = WORKER_SECRET.slice(0, -1) + (WORKER_SECRET.endsWith('0') ? '1' : '0');
+  for (
+    const presented of [
+      flipped,
+      WORKER_SECRET.slice(0, -1),
+      WORKER_SECRET + 'a',
+      WORKER_SECRET.toUpperCase(),
+      ` ${WORKER_SECRET}`,
+      'nope',
+      'a.b',
+      'a.b.c.d',
+      `${b64url({ typ: 'JWT' })}.e30.sig`, // header without alg
+      'bm90anNvbg.e30.sig', // header is not JSON
+    ]
+  ) {
+    const store = fakeStore([device('a')]);
+    const spy = spyAdmin();
+    const res = await handleSendPushBroadcast(
+      scheduledRequest(presented),
+      deps(store.client, accept([]), true, { authenticateAdmin: spy.authenticateAdmin }),
+    );
+    assertEquals(res.status, 401, presented.length.toString());
+    assertEquals([spy.seen.length, store.calls.length], [0, 0]);
+  }
+});
+
+Deno.test('a JWT-shaped token is forwarded to the login check', async () => {
+  const store = fakeStore([device('a')]);
+  const spy = spyAdmin();
+  const res = await handleSendPushBroadcast(
+    request(),
+    deps(store.client, accept([]), true, { authenticateAdmin: spy.authenticateAdmin }),
+  );
+  assertEquals(res.status, 401);
+  assertEquals(spy.seen, [ADMIN_JWT]);
+  assert(looksLikeJwt(ADMIN_JWT));
 });

@@ -53,7 +53,8 @@ export type SendPushBroadcastDependencies = {
   authenticateAdmin: (supabase: SupabaseClientLike, token: string) => Promise<AdminAuth>;
   sendAlert: typeof sendApnsAlert;
   newRunId: () => string;
-  /// PUSH_BROADCAST_WORKER_SECRET; empty disables the scheduled path.
+  /// PUSH_BROADCAST_WORKER_SECRET; empty or weak (usableWorkerSecret)
+  /// disables the scheduled path.
   workerSecret: () => string;
   /// False while any APNs credential is missing.
   apnsConfigured: () => boolean;
@@ -108,6 +109,51 @@ export function broadcastMessagesEnabled(notificationsJson: string | null | unde
   }
 }
 
+/// Minimum strength of PUSH_BROADCAST_WORKER_SECRET. Generate it with
+/// `openssl rand -hex 32` (64 chars). A value shorter than 32 characters or
+/// with fewer than 10 distinct characters (e.g. "aaaa…", "abababab…") is
+/// treated as UNSET: the scheduled path is disabled and fails closed.
+export const WORKER_SECRET_MIN_LENGTH = 32;
+export const WORKER_SECRET_MIN_DISTINCT = 10;
+
+let warnedWeakSecret = false;
+
+/// The configured worker secret if it is strong enough, otherwise ''.
+/// Never logs the value.
+export function usableWorkerSecret(secret: string): string {
+  if (!secret) return '';
+  const strong = secret.length >= WORKER_SECRET_MIN_LENGTH &&
+    new Set(secret).size >= WORKER_SECRET_MIN_DISTINCT;
+  if (strong) return secret;
+  if (!warnedWeakSecret) {
+    warnedWeakSecret = true;
+    console.warn(
+      'send-push-broadcast: PUSH_BROADCAST_WORKER_SECRET is too weak ' +
+        `(needs >= ${WORKER_SECRET_MIN_LENGTH} chars and >= ${WORKER_SECRET_MIN_DISTINCT} distinct); ` +
+        'scheduled retries are disabled',
+    );
+  }
+  return '';
+}
+
+const BASE64URL_RE = /^[A-Za-z0-9_-]+$/;
+
+/// True only for a structurally valid JWT: three non-empty base64url
+/// segments whose header decodes to a JSON object naming an `alg`. Signature
+/// and claims are verified by GoTrue, not here.
+export function looksLikeJwt(token: string): boolean {
+  const parts = token.split('.');
+  if (parts.length !== 3 || parts.some((p) => !p || !BASE64URL_RE.test(p))) return false;
+  try {
+    const b64 = parts[0].replace(/-/g, '+').replace(/_/g, '/');
+    const header = JSON.parse(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)));
+    return !!header && typeof header === 'object' && typeof header.alg === 'string' &&
+      header.alg.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function authenticateAdmin(supabase: SupabaseClientLike, token: string): Promise<AdminAuth> {
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) return { ok: false, status: 401, error: 'unauthenticated' };
@@ -141,11 +187,13 @@ export async function handleSendPushBroadcast(
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
   const authHeader = req.headers.get('authorization') ?? '';
-  if (bearerSecretAuthorized(authHeader, deps.workerSecret())) {
+  if (bearerSecretAuthorized(authHeader, usableWorkerSecret(deps.workerSecret()))) {
     return await runScheduled(deps);
   }
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  if (!token) return json({ error: 'unauthenticated' }, 401);
+  // Only something shaped like a JWT may reach the login check. A wrong or
+  // near-miss worker secret (or any other junk) ends here, never at GoTrue.
+  if (!token || !looksLikeJwt(token)) return json({ error: 'unauthenticated' }, 401);
 
   const supabase = deps.createServiceClient();
   const auth = await deps.authenticateAdmin(supabase, token);
