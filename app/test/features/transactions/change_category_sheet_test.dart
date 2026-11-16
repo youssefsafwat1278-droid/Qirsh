@@ -69,7 +69,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('هذه العملية فقط'), findsOneWidget);
-    expect(find.text('كل عمليات هذا المتجر'), findsOneWidget);
+    expect(find.text('تذكّر التصنيف لهذا المتجر'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

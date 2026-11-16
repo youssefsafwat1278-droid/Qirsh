@@ -9670,7 +9670,7 @@ abstract class AppL10n {
   /// No description provided for @ccAllMerchant.
   ///
   /// In ar, this message translates to:
-  /// **'كل عمليات هذا المتجر'**
+  /// **'تذكّر التصنيف لهذا المتجر'**
   String get ccAllMerchant;
 
   /// No description provided for @ccSave.
@@ -9678,6 +9678,30 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'حفظ التعديل'**
   String get ccSave;
+
+  /// No description provided for @ccRememberHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستأخذ العمليات القادمة من هذا المتجر هذا التصنيف.'**
+  String get ccRememberHint;
+
+  /// No description provided for @ccAlsoUpdatePast.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّث العمليات السابقة أيضًا'**
+  String get ccAlsoUpdatePast;
+
+  /// No description provided for @ccPastCount.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =0{لا توجد عمليات سابقة تحتاج إلى تحديث.} =1{ستتغير عملية سابقة واحدة.} =2{ستتغير عمليتان سابقتان.} few{ستتغير {count} عمليات سابقة.} many{ستتغير {count} عملية سابقة.} other{ستتغير {count} عملية سابقة.}}'**
+  String ccPastCount(int count);
+
+  /// No description provided for @ccPastManualKept.
+  ///
+  /// In ar, this message translates to:
+  /// **'التصنيفات التي اخترتها بنفسك تبقى كما هي.'**
+  String get ccPastManualKept;
 
   /// No description provided for @commonClose.
   ///

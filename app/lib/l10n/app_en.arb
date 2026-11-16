@@ -2931,8 +2931,19 @@
   "ccTitle": "Change the category",
   "ccScope": "Apply to",
   "ccThisOnly": "This transaction only",
-  "ccAllMerchant": "Every transaction from this merchant",
+  "ccAllMerchant": "Remember for this merchant",
   "ccSave": "Save the change",
+  "ccRememberHint": "Future transactions from this merchant will get this category.",
+  "ccAlsoUpdatePast": "Also update past transactions",
+  "ccPastCount": "{count, plural, =0{No past transactions need updating.} =1{1 past transaction will change.} other{{count} past transactions will change.}}",
+  "@ccPastCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccPastManualKept": "Categories you set by hand stay as they are.",
   "commonClose": "Close",
   "commonHide": "Hide",
   "commonSkip": "Skip",

@@ -5745,10 +5745,35 @@ class AppL10nAr extends AppL10n {
   String get ccThisOnly => 'هذه العملية فقط';
 
   @override
-  String get ccAllMerchant => 'كل عمليات هذا المتجر';
+  String get ccAllMerchant => 'تذكّر التصنيف لهذا المتجر';
 
   @override
   String get ccSave => 'حفظ التعديل';
+
+  @override
+  String get ccRememberHint =>
+      'ستأخذ العمليات القادمة من هذا المتجر هذا التصنيف.';
+
+  @override
+  String get ccAlsoUpdatePast => 'حدّث العمليات السابقة أيضًا';
+
+  @override
+  String ccPastCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ستتغير $count عملية سابقة.',
+      many: 'ستتغير $count عملية سابقة.',
+      few: 'ستتغير $count عمليات سابقة.',
+      two: 'ستتغير عمليتان سابقتان.',
+      one: 'ستتغير عملية سابقة واحدة.',
+      zero: 'لا توجد عمليات سابقة تحتاج إلى تحديث.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccPastManualKept => 'التصنيفات التي اخترتها بنفسك تبقى كما هي.';
 
   @override
   String get commonClose => 'إغلاق';

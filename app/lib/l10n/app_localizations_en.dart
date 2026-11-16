@@ -5740,10 +5740,32 @@ class AppL10nEn extends AppL10n {
   String get ccThisOnly => 'This transaction only';
 
   @override
-  String get ccAllMerchant => 'Every transaction from this merchant';
+  String get ccAllMerchant => 'Remember for this merchant';
 
   @override
   String get ccSave => 'Save the change';
+
+  @override
+  String get ccRememberHint =>
+      'Future transactions from this merchant will get this category.';
+
+  @override
+  String get ccAlsoUpdatePast => 'Also update past transactions';
+
+  @override
+  String ccPastCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count past transactions will change.',
+      one: '1 past transaction will change.',
+      zero: 'No past transactions need updating.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccPastManualKept => 'Categories you set by hand stay as they are.';
 
   @override
   String get commonClose => 'Close';

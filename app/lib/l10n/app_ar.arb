@@ -3057,8 +3057,19 @@
   "ccTitle": "غيّر التصنيف",
   "ccScope": "نطاق التعديل",
   "ccThisOnly": "هذه العملية فقط",
-  "ccAllMerchant": "كل عمليات هذا المتجر",
+  "ccAllMerchant": "تذكّر التصنيف لهذا المتجر",
   "ccSave": "حفظ التعديل",
+  "ccRememberHint": "ستأخذ العمليات القادمة من هذا المتجر هذا التصنيف.",
+  "ccAlsoUpdatePast": "حدّث العمليات السابقة أيضًا",
+  "ccPastCount": "{count, plural, =0{لا توجد عمليات سابقة تحتاج إلى تحديث.} =1{ستتغير عملية سابقة واحدة.} =2{ستتغير عمليتان سابقتان.} few{ستتغير {count} عمليات سابقة.} many{ستتغير {count} عملية سابقة.} other{ستتغير {count} عملية سابقة.}}",
+  "@ccPastCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccPastManualKept": "التصنيفات التي اخترتها بنفسك تبقى كما هي.",
   "commonClose": "إغلاق",
   "commonHide": "إخفاء",
   "commonSkip": "تخطّى",

@@ -48,6 +48,35 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
   CategoryCorrectionScope _scope = CategoryCorrectionScope.thisTransactionOnly;
   bool _saving = false;
 
+  /// "Also update past transactions" — only offered with "remember".
+  bool _alsoUpdatePast = false;
+
+  /// How many past transactions that would change; null while counting.
+  int? _pastCount;
+  int _countRequest = 0;
+
+  bool get _updatesPast =>
+      _scope == CategoryCorrectionScope.allMerchantTransactions &&
+      _alsoUpdatePast;
+
+  /// The count is shown BEFORE applying, and follows the selected category.
+  Future<void> _refreshPastCount() async {
+    final request = ++_countRequest;
+    setState(() => _pastCount = null);
+    final key = _selectedKey;
+    if (!_updatesPast || key == null) return;
+    try {
+      final count = await ref
+          .read(correctCategoryUseCaseProvider)
+          .countPastToUpdate(transaction: widget.transaction, categoryKey: key);
+      if (mounted && request == _countRequest) {
+        setState(() => _pastCount = count);
+      }
+    } catch (_) {
+      // The count is advisory; saving still works and reports its own errors.
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +91,7 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
         transactionId: widget.transaction.id,
         categoryKey: _selectedKey!,
         scope: _scope,
+        alsoUpdatePast: _updatesPast,
       );
       refreshTransactions(ref);
       ref.invalidate(dashboardDataProvider);
@@ -102,13 +132,17 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
                   icon: cat.icon,
                   color: _selectedKey == cat.key ? c.primary : c.textLight,
                   selected: _selectedKey == cat.key,
-                  onTap: () => setState(() => _selectedKey = cat.key),
+                  onTap: () {
+                    setState(() => _selectedKey = cat.key);
+                    if (_updatesPast) _refreshPastCount();
+                  },
                 ),
             ],
           ),
           if (hasMerchant) ...[
             const SizedBox(height: AppSpacing.s5),
-            Text(context.l10n.ccScope, style: AppTypography.caption(c.textLight)),
+            Text(context.l10n.ccScope,
+                style: AppTypography.caption(c.textLight)),
             const SizedBox(height: AppSpacing.s2),
             Material(
               color: c.surface2.withValues(alpha: 0.5),
@@ -122,7 +156,10 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
                   RadioListTile<CategoryCorrectionScope>(
                     value: CategoryCorrectionScope.thisTransactionOnly,
                     groupValue: _scope,
-                    onChanged: (v) => setState(() => _scope = v!),
+                    onChanged: (v) => setState(() {
+                      _scope = v!;
+                      _alsoUpdatePast = false;
+                    }),
                     title: Text(context.l10n.ccThisOnly,
                         style: AppTypography.body(c.textMain)),
                     activeColor: c.primary,
@@ -134,8 +171,35 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
                     onChanged: (v) => setState(() => _scope = v!),
                     title: Text(context.l10n.ccAllMerchant,
                         style: AppTypography.body(c.textMain)),
+                    subtitle: Text(context.l10n.ccRememberHint,
+                        style: AppTypography.caption(c.textLight)),
                     activeColor: c.primary,
                   ),
+                  if (_scope ==
+                      CategoryCorrectionScope.allMerchantTransactions) ...[
+                    Divider(height: 1, color: c.border),
+                    CheckboxListTile(
+                      value: _alsoUpdatePast,
+                      onChanged: (v) {
+                        setState(() => _alsoUpdatePast = v ?? false);
+                        _refreshPastCount();
+                      },
+                      title: Text(context.l10n.ccAlsoUpdatePast,
+                          style: AppTypography.body(c.textMain)),
+                      subtitle: _alsoUpdatePast
+                          ? Text(
+                              _pastCount == null
+                                  ? context.l10n.ccPastManualKept
+                                  : '${context.l10n.ccPastCount(_pastCount!)} '
+                                      '${context.l10n.ccPastManualKept}',
+                              key: const ValueKey('cc-past-count'),
+                              style: AppTypography.caption(c.textLight),
+                            )
+                          : null,
+                      activeColor: c.primary,
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+                  ],
                 ],
               ),
             ),
