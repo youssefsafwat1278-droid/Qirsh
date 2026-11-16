@@ -977,6 +977,8 @@ class BootstrapRunner {
       }),
     );
     AutomaticSessionRecovery.active = asr;
+    // A server-confirmed dead credential (any op kind) asks for sign-in.
+    coord.onCredentialDead = AutomaticSessionRecovery.noteCredentialDead;
     egressGate.asrQuiesced = () async {
       await asr.quiesced();
       // Phase 4c B8: refuses promptly when a transport closure is unconfirmed.

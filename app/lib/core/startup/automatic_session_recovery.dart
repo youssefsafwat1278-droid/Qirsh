@@ -197,6 +197,21 @@ class AsrAdoptionContext {
 
 enum AsrAdoptResult { notWithdrawn, published, failedAfterWithdrawal }
 
+/// Why the last recovery attempt failed, for the local read screen only
+/// (presentation; it grants nothing).
+enum AsrFailure {
+  /// Nothing reached the server, or a reply was lost while the token still
+  /// has attempts left: the data on the phone is safe, trying again may work.
+  offline,
+
+  /// The server refused the credential, or its three attempts are used up:
+  /// only an explicit sign-in continues.
+  rejected,
+
+  /// Anything else (the generic screen).
+  other,
+}
+
 /// What ASR needs from the session (AppSession in production).
 abstract class AsrSessionHost {
   /// E9: the app is in the foreground (`resumed`).
@@ -277,11 +292,51 @@ class AutomaticSessionRecovery {
   static final ValueNotifier<String?> diagnostic = ValueNotifier<String?>(null);
   String? _detail;
 
+  /// The class of the last failed attempt (null: none since the last
+  /// recovery or explicit attempt). Presentation only.
+  static final ValueNotifier<AsrFailure?> lastFailure =
+      ValueNotifier<AsrFailure?>(null);
+
+  /// Wired to [AuthCoordinator.onCredentialDead]: the server confirmed the
+  /// refresh credential dead, whatever op kind saw it.
+  static void noteCredentialDead() => lastFailure.value = AsrFailure.rejected;
+
+  /// Classifies a refresh op that did not commit.
+  AsrFailure _classify(RefreshOutcome out) {
+    switch (out.kind) {
+      case RefreshOutcomeKind.notSent:
+        return AsrFailure.offline;
+      case RefreshOutcomeKind.possiblySent:
+        // Each possibly-sent request uses one of the token's three attempts.
+        final used = coordinator.store.committed?.tokenDispatches?.count ?? 0;
+        return used < 3 ? AsrFailure.offline : AsrFailure.rejected;
+      case RefreshOutcomeKind.dead:
+      case RefreshOutcomeKind.exhausted:
+        return AsrFailure.rejected;
+      case RefreshOutcomeKind.committed:
+      case RefreshOutcomeKind.denied:
+      case RefreshOutcomeKind.stale:
+        return AsrFailure.other;
+    }
+  }
+
+  /// A record that only an explicit sign-in can continue: the credential is
+  /// dead or its attempts are used up.
+  static bool _credentialRejected(SessionRecord? c, String owner) {
+    if (c == null || c.isTombstone || c.owner != owner) return false;
+    final op = c.refreshOp;
+    return c.credential == CredentialState.dead ||
+        op?.state == RefreshOpState.exhausted ||
+        (op?.state == RefreshOpState.dispatchMarked &&
+            (c.tokenDispatches?.count ?? 0) >= 3);
+  }
+
   bool get running => _running != null;
 
   /// §11.3: an explicit attempt clears continuation; cleanup ownership stays.
   void yieldToExplicitAttempt() {
     recoveryTimedOut.value = false;
+    lastFailure.value = null;
     _retry?.cancel();
     _retry = null;
     _authority?.mayContinue = false;
@@ -324,6 +379,7 @@ class AutomaticSessionRecovery {
 
   AsrOutcome _stop(String why, [AsrOutcome o = AsrOutcome.stayedLocalRead]) {
     lastStop = why;
+    if (o == AsrOutcome.recovered) lastFailure.value = null;
     if (why != 'background') {
       diagnostic.value = _detail == null ? why : '$why:$_detail';
       AuthDiagnostics.add('asr_stop ${diagnostic.value}');
@@ -372,6 +428,9 @@ class AutomaticSessionRecovery {
     final c0 = coordinator.store.committed;
     if (!_recordEligible(c0, owner) || coordinator.committedBarred) {
       _detail = _recordDetail(c0, owner, coordinator.committedBarred);
+      if (_credentialRejected(c0, owner)) {
+        lastFailure.value = AsrFailure.rejected;
+      }
       return _stop('record', AsrOutcome.skipped);
     }
     final lifecycle = c0!.lifecycle;
@@ -531,6 +590,7 @@ class AutomaticSessionRecovery {
         acceptPredicate: () => authority.mayContinue && host.resumed,
       ));
       if (out.kind != RefreshOutcomeKind.committed || out.receipt == null) {
+        lastFailure.value = _classify(out);
         return _stop('refresh:${out.reason}');
       }
       if (out.noInstall) return _stop('custody_only');
@@ -538,6 +598,8 @@ class AutomaticSessionRecovery {
     }
     final r = receipt!;
     accepted = true;
+    // Past the exchange: any later stop is not a connection problem.
+    lastFailure.value = AsrFailure.other;
 
     // ── P_install (§9.6; foreground only) ─────────────────────────────────
     if (!liveSync() || !await native.confirm(evidence.counter)) {

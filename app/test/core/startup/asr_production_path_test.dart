@@ -215,6 +215,7 @@ void main() {
     sim.releaseParked();
     AutomaticSessionRecovery.active?.dispose();
     AutomaticSessionRecovery.active = null;
+    AutomaticSessionRecovery.lastFailure.value = null;
     // Every test starts in the background: recovery runs only on its resume.
     binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     for (final r in runners) {
@@ -1215,6 +1216,20 @@ void main() {
     expect(await gate.permits(), isFalse);
     expect(requests, isEmpty);
   }
+
+  test('offline at resume: the local read screen is told "offline"; a '
+      'server-confirmed dead credential is wired to "rejected"', () async {
+    await coldLocalRead();
+    expect(AuthCoordinator.active!.onCredentialDead,
+        AutomaticSessionRecovery.noteCredentialDead,
+        reason: 'bootstrap wires the dead-credential callback');
+    script.offline = true;
+    await resume();
+    expect(AutomaticSessionRecovery.active!.lastStop, startsWith('refresh:'),
+        reason: diag());
+    expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.offline);
+    expect(script.sends, 0);
+  });
 
   test('foreground loss before acceptance cancels the exchange (decision a): '
       'nothing installed, local read and evidence kept; a later resume '

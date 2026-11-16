@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/auth/auth_coordinator.dart';
+import 'package:money_companion/core/auth/refresh_transport.dart';
 import 'package:money_companion/core/auth/session_files.dart';
 import 'package:money_companion/core/auth/session_record.dart';
 import 'package:money_companion/core/auth/session_store.dart';
@@ -22,6 +23,8 @@ import '../auth/store_fakes.dart';
 /// gate, with fakes for the SDK, transport, native evidence, capture lane and
 /// session host. Every identifier here is synthetic.
 const _uid = 'uid-a';
+
+const _deadline = Duration(seconds: 5);
 
 int _now() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
@@ -314,6 +317,7 @@ void main() {
   tearDown(() async {
     asr.dispose();
     AutomaticSessionRecovery.recoveryTimedOut.value = false;
+    AutomaticSessionRecovery.lastFailure.value = null;
     coord.dispose();
     await dir.delete(recursive: true);
   });
@@ -709,6 +713,133 @@ void main() {
     } finally {
       AutomaticSessionRecovery.restoringSession.removeListener(observe);
     }
+  });
+
+  group('failure class for the local read screen', () {
+    int dispatches() => store.committed!.tokenDispatches?.count ?? 0;
+    void loseReplies() {
+      script
+        ..holdResponse = (Completer<void>()..complete())
+        ..result = () => throw const SocketException('synthetic lost reply');
+    }
+
+    test('a failure before the connection opens never counts toward the '
+        'token attempts, however often', () async {
+      await seed();
+      script.openError = const SocketException('synthetic offline');
+      for (var i = 0; i < 5; i++) {
+        expect(await asr.run(), AsrOutcome.stayedLocalRead);
+        expect(asr.lastStop, 'refresh:connect');
+        expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.offline);
+        expect(dispatches(), 0);
+        expect(store.committed!.refreshOp!.state, RefreshOpState.retryable);
+      }
+      expect(script.sentTokens, isEmpty);
+      script.openError = null;
+      expect(await asr.run(), AsrOutcome.recovered,
+          reason: 'five offline failures leave every attempt available');
+      expect(AutomaticSessionRecovery.lastFailure.value, isNull);
+    });
+
+    test('a lost reply after the request was sent counts, and stays offline '
+        'while attempts remain', () async {
+      await seed();
+      loseReplies();
+      for (var i = 1; i <= 2; i++) {
+        expect(await asr.run(), AsrOutcome.stayedLocalRead);
+        expect(asr.lastStop, 'refresh:transport');
+        expect(dispatches(), i);
+        expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.offline);
+      }
+    });
+
+    test('three lost replies in a row ask to sign in again', () async {
+      await seed();
+      loseReplies();
+      await asr.run();
+      await asr.run();
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.offline);
+      expect(await asr.run(), AsrOutcome.stayedLocalRead);
+      expect(dispatches(), 3);
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.rejected);
+      // A later attempt (e.g. after a restart) sends nothing and still says so.
+      AutomaticSessionRecovery.lastFailure.value = null;
+      expect(await asr.run(), AsrOutcome.skipped);
+      expect(asr.lastStop, 'record');
+      expect(script.sentTokens, hasLength(3));
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.rejected);
+    });
+
+    test('backgrounded while waiting for the reply: offline, one attempt used',
+        () async {
+      await seed();
+      script.holdResponse = Completer<void>();
+      final run = asr.run();
+      await pumpEventQueue();
+      expect(script.sentTokens, ['refresh-1']);
+      host.isResumed = false;
+      asr.onBackground();
+      expect(await run, AsrOutcome.stayedLocalRead);
+      expect(dispatches(), 1);
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.offline);
+    });
+
+    test('the connection drops while waiting for the reply: offline',
+        () async {
+      await seed();
+      final hold = script.holdResponse = Completer<void>();
+      script.result = () => throw const SocketException('synthetic drop');
+      final run = asr.run();
+      await pumpEventQueue();
+      expect(script.sentTokens, ['refresh-1']);
+      hold.complete();
+      expect(await run, AsrOutcome.stayedLocalRead);
+      expect(asr.lastStop, 'refresh:transport');
+      expect(dispatches(), 1);
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.offline);
+    });
+
+    test('a credential the server confirms dead asks to sign in again',
+        () async {
+      await seed();
+      script.result = () => const RefreshHttpResult(
+          statusCode: 400,
+          json: {'error_code': 'refresh_token_already_used'},
+          isRedirect: false);
+      expect(await asr.run(), AsrOutcome.stayedLocalRead);
+      expect(store.committed!.credential, CredentialState.dead);
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.rejected);
+      AutomaticSessionRecovery.lastFailure.value = null;
+      expect(await asr.run(), AsrOutcome.skipped);
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.rejected,
+          reason: 'a dead record (e.g. after a restart) still asks to sign in');
+    });
+
+    test('onCredentialDead from any op kind marks the failure rejected',
+        () async {
+      await seed();
+      coord.onCredentialDead = AutomaticSessionRecovery.noteCredentialDead;
+      host.owner = null; // a routine refresh in normal mode
+      script.result = () => const RefreshHttpResult(
+          statusCode: 401,
+          json: {'error_code': 'refresh_token_not_found'},
+          isRedirect: false);
+      final out = await coord.runRefresh(
+          const RefreshOpSpec(kind: RefreshOpKind.routine, deadline: _deadline));
+      expect(out.kind, RefreshOutcomeKind.dead);
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.rejected);
+    });
+
+    test('a stop after the exchange is not called offline; an explicit '
+        'attempt clears the class', () async {
+      await seed();
+      AutomaticSessionRecovery.lastFailure.value = AsrFailure.offline;
+      capture.refusePrepare = true;
+      expect(await asr.run(), AsrOutcome.signInRequired);
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.other);
+      asr.yieldToExplicitAttempt();
+      expect(AutomaticSessionRecovery.lastFailure.value, isNull);
+    });
   });
 
   group('cancellation before acceptance (decision a, §11.3)', () {
