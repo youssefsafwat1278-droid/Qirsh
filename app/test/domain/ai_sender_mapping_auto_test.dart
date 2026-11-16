@@ -88,6 +88,10 @@ class _StoringTransactionRepo implements TransactionRepository {
 
 class _StubMerchantRepo implements MerchantCategoryRepository {
   @override
+  Future<String?> userConfirmedCategoryFor(String rawMerchant) async =>
+      null;
+
+  @override
   Future<bool> hasCategoryForMerchant(String rawMerchant) async => false;
   @override
   Future<Map<String, String>> getLearnedCategoryMap() async => {};

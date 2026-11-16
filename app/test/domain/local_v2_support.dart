@@ -86,6 +86,10 @@ class StoringTransactionRepo implements TransactionRepository {
 /// Every merchant is NEW to the user.
 class NewMerchantRepo implements MerchantCategoryRepository {
   @override
+  Future<String?> userConfirmedCategoryFor(String rawMerchant) async =>
+      null;
+
+  @override
   Future<bool> hasCategoryForMerchant(String rawMerchant) async => false;
 
   @override

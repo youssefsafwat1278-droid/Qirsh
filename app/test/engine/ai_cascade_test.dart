@@ -96,6 +96,10 @@ class _CapturingTransactionRepo extends _StubTransactionRepo {
 
 class _StubMerchantRepo implements MerchantCategoryRepository {
   @override
+  Future<String?> userConfirmedCategoryFor(String rawMerchant) async =>
+      null;
+
+  @override
   Future<bool> hasCategoryForMerchant(String rawMerchant) async => false;
 
   @override
@@ -107,11 +111,39 @@ class _StubMerchantRepo implements MerchantCategoryRepository {
 
 class _StubMerchantRepoWithKnownMerchant implements MerchantCategoryRepository {
   @override
+  Future<String?> userConfirmedCategoryFor(String rawMerchant) async =>
+      null;
+
+  @override
   Future<bool> hasCategoryForMerchant(String rawMerchant) async => true;
 
   @override
   Future<Map<String, String>> getLearnedCategoryMap() async =>
       {'STARBUCKS': 'restaurants'};
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// A merchant repo whose learned map AND user-confirmed rules are given.
+/// [learned] models the whole map (seed rows included); [confirmed] only the
+/// rows the user confirmed — exactly the split `merchant_category_map` keeps.
+class _RulesMerchantRepo implements MerchantCategoryRepository {
+  _RulesMerchantRepo({this.learned = const {}, this.confirmed = const {}});
+
+  final Map<String, String> learned;
+  final Map<String, String> confirmed;
+
+  @override
+  Future<String?> userConfirmedCategoryFor(String rawMerchant) async =>
+      confirmed[rawMerchant.toUpperCase()];
+
+  @override
+  Future<bool> hasCategoryForMerchant(String rawMerchant) async =>
+      learned.containsKey(rawMerchant.toUpperCase());
+
+  @override
+  Future<Map<String, String>> getLearnedCategoryMap() async => learned;
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
@@ -828,6 +860,57 @@ void main() {
     expect(result.outcome, AddTransactionOutcome.added);
     expect(savedCategory, 'shopping');
   });
+
+  // Learned rules vs the AI's category: a rule the user confirmed wins; the
+  // catalog seed does not; with no rule the AI category is used as before.
+  for (final (label, repo, expected) in [
+    (
+      'a user-confirmed rule beats the AI category',
+      _RulesMerchantRepo(
+        learned: {'STARBUCKS': 'restaurants'},
+        confirmed: {'STARBUCKS': 'restaurants'},
+      ),
+      'restaurants',
+    ),
+    (
+      'a seed-only mapping does not beat the AI category',
+      _RulesMerchantRepo(learned: {'STARBUCKS': 'cafes'}),
+      'shopping',
+    ),
+    (
+      'with no rule the AI category is used',
+      _RulesMerchantRepo(),
+      'shopping',
+    ),
+  ]) {
+    test(label, () async {
+      const rawSms = 'Purchase EGP 85.00 At STARBUCKS on 08/06 at 06:55 AM';
+      String? savedCategory;
+      final useCase = AddTransactionUseCase(
+        transactionRepository: _CapturingTransactionRepo(
+          onSave: (_) {},
+          onSaveCategory: (category) => savedCategory = category,
+        ),
+        merchantCategoryRepository: repo,
+        parserIsolate: _FakeParserIsolate(ParseResult.notTransaction()),
+        loadAiConsent: () async => true,
+        aiClient: const _FixedResponseAiClient(AiParseResponse(
+          amount: 85.0,
+          amountText: '85.0',
+          currency: 'EGP',
+          type: 'payment',
+          merchantName: 'STARBUCKS',
+          categoryKey: 'shopping',
+        )),
+        dedupStore: _NoDedupStore(),
+      );
+
+      final result = await useCase(rawMessage: rawSms, senderId: 'CIB');
+
+      expect(result.outcome, AddTransactionOutcome.added);
+      expect(savedCategory, expected);
+    });
+  }
 
   test('AI runs on a valid local parse and its category and type win',
       () async {

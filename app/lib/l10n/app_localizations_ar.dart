@@ -1279,6 +1279,34 @@ class AppL10nAr extends AppL10n {
   String get setCategoriesSub => 'نظم المصروفات والدخل والتحويلات';
 
   @override
+  String get setLearnedRules => 'القواعد المحفوظة';
+
+  @override
+  String get setLearnedRulesSub => 'متاجر طلبت من قِرش أن يتذكّر تصنيفها';
+
+  @override
+  String get lrEmptyTitle => 'لا توجد قواعد محفوظة بعد';
+
+  @override
+  String get lrEmptyBody =>
+      'عند تغيير تصنيف عملية، اختر «تذكّر التصنيف لهذا المتجر» وستظهر القاعدة هنا.';
+
+  @override
+  String get lrDelete => 'احذف القاعدة';
+
+  @override
+  String get lrDeleted => 'حُذفت القاعدة';
+
+  @override
+  String get lrUndo => 'تراجع';
+
+  @override
+  String get lrLoadFailed => 'تعذّر تحميل القواعد';
+
+  @override
+  String get lrActionFailed => 'تعذّر تحديث القاعدة. حاول مرة أخرى.';
+
+  @override
   String get setAchievements => 'الإنجازات والمستوى';
 
   @override
@@ -5745,10 +5773,35 @@ class AppL10nAr extends AppL10n {
   String get ccThisOnly => 'هذه العملية فقط';
 
   @override
-  String get ccAllMerchant => 'كل عمليات هذا المتجر';
+  String get ccAllMerchant => 'تذكّر التصنيف لهذا المتجر';
 
   @override
   String get ccSave => 'حفظ التعديل';
+
+  @override
+  String get ccRememberHint =>
+      'ستأخذ العمليات القادمة من هذا المتجر هذا التصنيف.';
+
+  @override
+  String get ccAlsoUpdatePast => 'حدّث العمليات السابقة أيضًا';
+
+  @override
+  String ccPastCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ستتغير $count عملية سابقة.',
+      many: 'ستتغير $count عملية سابقة.',
+      few: 'ستتغير $count عمليات سابقة.',
+      two: 'ستتغير عمليتان سابقتان.',
+      one: 'ستتغير عملية سابقة واحدة.',
+      zero: 'لا توجد عمليات سابقة تحتاج إلى تحديث.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccPastManualKept => 'التصنيفات التي اخترتها بنفسك تبقى كما هي.';
 
   @override
   String get commonClose => 'إغلاق';

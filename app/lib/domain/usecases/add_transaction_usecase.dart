@@ -39,6 +39,7 @@ import '../repositories/sender_bank_mapping_repository.dart';
 import '../repositories/suspected_duplicate_repository.dart';
 import '../repositories/transaction_repository.dart';
 import '../services/bank_discovery_service.dart';
+import '../services/learned_rule_precedence.dart';
 import 'engagement_usecase.dart';
 import 'resolve_bank_for_sender_usecase.dart';
 import '../capture/proof_proposal_builder.dart';
@@ -1076,10 +1077,19 @@ class AddTransactionUseCase {
     );
     var effectiveParsed = parsed;
     final hasAiCategory = aiCategoryKey != null;
+    // A user-confirmed merchant rule outranks the AI's category (see
+    // learnedRuleCategoryFor). Without an AI category the categorizer above
+    // already ranks the rule first.
+    final learnedOverAi = hasAiCategory
+        ? await learnedRuleCategoryFor(
+            _merchantCategoryRepository, effectiveParsed.rawMerchant)
+        : null;
     final hasSpecificAiCategory = hasAiCategory &&
         aiCategoryKey != Categories.other.key &&
         Categories.byKey(aiCategoryKey) != Categories.other;
-    var effectiveCategory = hasAiCategory
+    var effectiveCategory = learnedOverAi != null
+        ? CategoryResult(learnedOverAi, CategorySource.userMap, 1.0)
+        : hasAiCategory
         ? CategoryResult(
             Categories.byKey(aiCategoryKey).key,
             hasSpecificAiCategory

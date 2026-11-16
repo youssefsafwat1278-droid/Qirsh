@@ -181,7 +181,7 @@ class _ChangeCategoryOutcomeRepository extends DriftTransactionRepository {
 
   @override
   Future<TransactionEntity> updateCategory({required String transactionId,
-      required String categoryKey}) {
+      required String categoryKey, bool appliedByRule = false}) {
     if (transactionId != visualParityChangeCategoryTransactionId) {
       throw StateError('change_category_visual_unexpected_transaction');
     }

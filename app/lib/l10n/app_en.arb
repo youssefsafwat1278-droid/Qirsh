@@ -439,6 +439,15 @@
   "setToolsAndSettings": "Tools and settings",
   "setCategories": "Categories",
   "setCategoriesSub": "Organise expenses, income and transfers",
+  "setLearnedRules": "Learned rules",
+  "setLearnedRulesSub": "Merchants whose category you asked Qirsh to remember",
+  "lrEmptyTitle": "No learned rules yet",
+  "lrEmptyBody": "When you change a transaction’s category, choose “Remember for this merchant” and the rule appears here.",
+  "lrDelete": "Delete rule",
+  "lrDeleted": "Rule deleted",
+  "lrUndo": "Undo",
+  "lrLoadFailed": "Couldn’t load your rules",
+  "lrActionFailed": "Couldn’t update the rule. Try again.",
   "setAchievements": "Achievements and level",
   "setAchievementsSub": "Badges and levels that encourage the habit of tracking",
   "setCurrencyRepair": "Confirm the currency for budgets and goals",
@@ -2931,8 +2940,19 @@
   "ccTitle": "Change the category",
   "ccScope": "Apply to",
   "ccThisOnly": "This transaction only",
-  "ccAllMerchant": "Every transaction from this merchant",
+  "ccAllMerchant": "Remember for this merchant",
   "ccSave": "Save the change",
+  "ccRememberHint": "Future transactions from this merchant will get this category.",
+  "ccAlsoUpdatePast": "Also update past transactions",
+  "ccPastCount": "{count, plural, =0{No past transactions need updating.} =1{1 past transaction will change.} other{{count} past transactions will change.}}",
+  "@ccPastCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccPastManualKept": "Categories you set by hand stay as they are.",
   "commonClose": "Close",
   "commonHide": "Hide",
   "commonSkip": "Skip",

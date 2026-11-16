@@ -300,6 +300,7 @@ class DriftTransactionRepository implements TransactionRepository {
   Future<TransactionEntity> updateCategory({
     required String transactionId,
     required String categoryKey,
+    bool appliedByRule = false,
   }) async {
     return _db.transaction(() async {
       final existing = await getById(transactionId);
@@ -310,8 +311,16 @@ class DriftTransactionRepository implements TransactionRepository {
         throw StateError('Unknown category key: $categoryKey');
       }
 
+      // A rule-applied write leaves the review status alone: re-categorising a
+      // pending row must not silently confirm it on the user's behalf.
       await _db.customUpdate(
+        appliedByRule
+            ? '''
+          UPDATE transactions
+          SET category_id = ?, updated_at = ?
+          WHERE id = ?;
         '''
+            : '''
           UPDATE transactions
           SET category_id = ?, status = 'confirmed', updated_at = ?
           WHERE id = ?;
@@ -330,12 +339,54 @@ class DriftTransactionRepository implements TransactionRepository {
       await _outboxQueue?.enqueue(OutboxOperation.update, updated);
       // PHASE 11: category is NOT a Proof-relevant field. Recorded so the
       // population stays visible, explicitly as a non-financial edit.
-      await _proofLog.record(
-          transactionId: transactionId,
-          event: ProofCorrectionEvent.nonFinancialEdit);
+      // A rule-applied write is not a user edit of THIS row: recording it would
+      // also mark the row as hand-set (see autoCategorizedForMerchant).
+      if (!appliedByRule) {
+        await _proofLog.record(
+            transactionId: transactionId,
+            event: ProofCorrectionEvent.nonFinancialEdit);
+      }
 
       return updated;
     });
+  }
+
+  @override
+  Future<List<TransactionEntity>> autoCategorizedForMerchant({
+    required String rawMerchant,
+    required String categoryKey,
+    String? excludeTransactionId,
+  }) async {
+    final merchantId = await _merchantIdByRawName(rawMerchant);
+    if (merchantId == null) return const [];
+    final categoryId = await _categoryIdByKey(categoryKey);
+    // "Set by hand" is read from provenance, never from timestamps:
+    // proof_correction_events is written only by the explicit user-edit
+    // repository methods (category, full edit, amount, account), so ANY such
+    // event means the user touched this row and its category is left alone.
+    // Manual ('unknown') and imported rows carry a category the user chose.
+    final rows = await _db.customSelect(
+      '''
+        SELECT t.* FROM transactions t
+        WHERE t.merchant_id = ?
+          AND t.status != 'ignored'
+          AND t.source IN ('bank', 'card', 'wallet', 'aiParsed')
+          AND (t.category_id IS NULL OR t.category_id != ?)
+          AND t.id != ?
+          AND NOT EXISTS (
+            SELECT 1 FROM proof_correction_events e
+            WHERE e.transaction_id = t.id
+              AND e.event_type IN ('non_financial_edit', 'corrected_financial')
+          )
+        ORDER BY t.occurred_at DESC, t.id DESC;
+      ''',
+      variables: [
+        Variable.withString(merchantId),
+        Variable.withString(categoryId ?? ''),
+        Variable.withString(excludeTransactionId ?? ''),
+      ],
+    ).get();
+    return rows.map(transactionFromRow).toList();
   }
 
   @override

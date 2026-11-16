@@ -7,6 +7,10 @@ import '../repositories/merchant_category_repository.dart';
 import '../repositories/transaction_repository.dart';
 import 'engagement_usecase.dart';
 
+/// OD-13: the default is [thisTransactionOnly] — a one-off that teaches
+/// nothing. [allMerchantTransactions] is the explicit "remember for this
+/// merchant" choice: it saves a user-confirmed merchant rule that future
+/// captures of the same normalised merchant follow.
 enum CategoryCorrectionScope { thisTransactionOnly, allMerchantTransactions }
 
 class CorrectCategoryUseCase {
@@ -31,6 +35,9 @@ class CorrectCategoryUseCase {
     required String transactionId,
     required String categoryKey,
     required CategoryCorrectionScope scope,
+    // Only honoured with "remember": also re-categorise this merchant's past
+    // transactions that were categorised automatically. Hand-set ones stay.
+    bool alsoUpdatePast = false,
   }) async {
     final updated = await _transactionRepository.updateCategory(
       transactionId: transactionId,
@@ -62,6 +69,24 @@ class CorrectCategoryUseCase {
         updated.rawMerchant!,
         categoryKey,
       );
+
+      if (alsoUpdatePast) {
+        // Through the same repository write as a single edit, one row at a
+        // time, so every change is enqueued for sync exactly like a normal
+        // category edit — never a bulk SQL update that skips the outbox.
+        final past = await _transactionRepository.autoCategorizedForMerchant(
+          rawMerchant: updated.rawMerchant!,
+          categoryKey: categoryKey,
+          excludeTransactionId: updated.id,
+        );
+        for (final tx in past) {
+          await _transactionRepository.updateCategory(
+            transactionId: tx.id,
+            categoryKey: categoryKey,
+            appliedByRule: true,
+          );
+        }
+      }
     }
 
     if (recordEngagementUseCase != null) {
@@ -72,5 +97,21 @@ class CorrectCategoryUseCase {
     }
 
     return updated;
+  }
+
+  /// How many past transactions "also update past transactions" would change
+  /// for [transaction] → [categoryKey]. Shown to the user before applying.
+  Future<int> countPastToUpdate({
+    required TransactionEntity transaction,
+    required String categoryKey,
+  }) async {
+    final merchant = transaction.rawMerchant;
+    if (merchant == null) return 0;
+    final past = await _transactionRepository.autoCategorizedForMerchant(
+      rawMerchant: merchant,
+      categoryKey: categoryKey,
+      excludeTransactionId: transaction.id,
+    );
+    return past.length;
   }
 }
