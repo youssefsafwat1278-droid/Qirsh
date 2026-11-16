@@ -2,7 +2,7 @@
  * Admin push broadcasts — shared by the API routes (authority) and the page
  * (UX). The database is the final authority: admin_create_push_broadcast()
  * re-checks the content, the deep-link allowlist and the confirmed count
- * (migration 20261116150000).
+ * (migration 20261116160000).
  */
 
 /**

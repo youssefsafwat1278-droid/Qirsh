@@ -1,4 +1,4 @@
-// Sends one admin push broadcast (migration 20261116150000).
+// Sends one admin push broadcast (migration 20261116160000).
 //
 // Caller: the Admin panel's server route, forwarding the signed-in admin's
 // access token. Authorization is the same as parser-test: the JWT is resolved

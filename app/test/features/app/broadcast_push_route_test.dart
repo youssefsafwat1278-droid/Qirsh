@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/domain/entities/engagement_entities.dart';
 import 'package:money_companion/features/app/capture_notification_actions.dart';
 
-/// Admin push broadcasts (migration 20261116150000, send-push-broadcast).
+/// Admin push broadcasts (migration 20261116160000, send-push-broadcast).
 void main() {
   group('broadcastRouteFor', () {
     for (final route in kBroadcastRoutes) {
@@ -88,7 +88,7 @@ void main() {
       isFalse,
     );
     final sql = File(
-      '../supabase/migrations/20261116150000_admin_push_broadcasts.sql',
+      '../supabase/migrations/20261116160000_admin_push_broadcasts.sql',
     ).readAsStringSync();
     expect(sql, contains("->> 'marketingMessages'"));
     final send = File('../supabase/functions/send-push-broadcast/send.ts')

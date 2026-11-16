@@ -1,4 +1,4 @@
-// Static contract for 20261116150000_admin_push_broadcasts.
+// Static contract for 20261116160000_admin_push_broadcasts.
 // Credential-free; the live proof is admin_push_broadcasts_20261116.sql.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -8,7 +8,7 @@ const root = new URL('../../', import.meta.url);
 const read = (p) => readFileSync(new URL(p, root), 'utf8');
 const stripComments = (sql) =>
   sql.split('\n').filter((l) => !l.trimStart().startsWith('--')).join('\n');
-const name = '20261116150000_admin_push_broadcasts';
+const name = '20261116160000_admin_push_broadcasts';
 const sql = stripComments(read(`supabase/migrations/${name}.sql`));
 
 const fnBody = (fn) => {

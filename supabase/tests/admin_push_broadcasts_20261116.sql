@@ -1,7 +1,7 @@
--- SQL proof for 20261116150000_admin_push_broadcasts.
+-- SQL proof for 20261116160000_admin_push_broadcasts.
 -- Run against a LOCAL Postgres ONLY. Everything is rolled back.
 --
---   { echo 'BEGIN;'; sed '/^BEGIN;$/d;/^COMMIT;$/d' supabase/migrations/20261116150000_admin_push_broadcasts.sql;
+--   { echo 'BEGIN;'; sed '/^BEGIN;$/d;/^COMMIT;$/d' supabase/migrations/20261116160000_admin_push_broadcasts.sql;
 --     cat supabase/tests/admin_push_broadcasts_20261116.sql; echo 'ROLLBACK;'; } \
 --   | psql "$LOCAL_URL" -v ON_ERROR_STOP=1
 --

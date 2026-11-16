@@ -78,7 +78,7 @@ test("drafts need both languages within the length limits and an allowed link", 
 
 test("the deep-link allowlist is identical in the admin, the database and the app", () => {
   const admin = BROADCAST_DEEP_LINKS.map((l) => l.value).sort();
-  const sql = read("../supabase/migrations/20261116150000_admin_push_broadcasts.sql");
+  const sql = read("../supabase/migrations/20261116160000_admin_push_broadcasts.sql");
   const check = sql.match(/deep_link IS NULL OR deep_link IN \(([^)]*)\)/);
   assert.ok(check);
   assert.deepEqual([...check[1].matchAll(/'([^']+)'/g)].map((m) => m[1]).sort(), admin);
