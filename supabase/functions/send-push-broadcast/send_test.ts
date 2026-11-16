@@ -26,13 +26,22 @@ type Delivery = {
   lastRunId: string | null;
   errorCode: string | null;
   language: string | null;
+  /// Mirrors next_attempt_at (ms on the fake clock); null = due now.
+  nextAttemptAt: number | null;
 };
 
-/// In-memory stand-in for the two sender RPCs with the migration's semantics:
-/// claim takes pending / failed-with-attempts-left rows not attempted by this
-/// run, finish moves only a 'sending' row.
-// deno-lint-ignore no-explicit-any -- test double for the loosely typed Edge client.
-function fakeStore(devices: Device[]): { client: any; deliveries: Delivery[]; cleared: string[] } {
+/// Fake clock shared by the store (backoff) and the handler (claim budget).
+const clock = { now: 0 };
+const MIN = 60_000;
+
+/// In-memory stand-in for the sender RPCs with the migrations' semantics:
+/// both claims take pending / failed-with-attempts-left rows not attempted by
+/// this run and move them to 'sending' (the shared lease); the scheduled claim
+/// also waits out next_attempt_at; finish moves only a 'sending' row.
+function fakeStore(
+  devices: Device[],
+  // deno-lint-ignore no-explicit-any -- test double for the loosely typed Edge client.
+): { client: any; deliveries: Delivery[]; cleared: string[]; calls: string[] } {
   const deliveries: Delivery[] = devices.map((d, i) => ({
     id: `delivery-${i}`,
     hash: d.hash,
@@ -41,14 +50,26 @@ function fakeStore(devices: Device[]): { client: any; deliveries: Delivery[]; cl
     lastRunId: null,
     errorCode: null,
     language: null,
+    nextAttemptAt: null,
   }));
   const cleared: string[] = [];
+  const calls: string[] = [];
+  const claimable = (x: Delivery, scheduled: boolean) =>
+    ['pending', 'failed'].includes(x.status) && x.attempts < 5 &&
+    (!scheduled || x.nextAttemptAt === null || x.nextAttemptAt <= clock.now);
   const client = {
     rpc(fn: string, args: Record<string, unknown>) {
-      if (fn === 'claim_push_broadcast_deliveries') {
-        assertEquals(args.p_actor, ADMIN);
+      calls.push(fn);
+      if (fn === 'push_broadcast_retry_due') {
+        const due = deliveries.some((x) => claimable(x, true));
+        return Promise.resolve({ data: due ? [{ broadcast_id: BROADCAST_ID }] : [], error: null });
+      }
+      if (fn === 'claim_push_broadcast_deliveries' || fn === 'claim_push_broadcast_retry_deliveries') {
+        const scheduled = fn === 'claim_push_broadcast_retry_deliveries';
+        if (scheduled) assertEquals(args.p_actor, undefined);
+        else assertEquals(args.p_actor, ADMIN);
         const picked = deliveries
-          .filter((x) => ['pending', 'failed'].includes(x.status) && x.attempts < 5 && x.lastRunId !== args.p_run_id)
+          .filter((x) => claimable(x, scheduled) && x.lastRunId !== args.p_run_id)
           .slice(0, args.p_limit as number);
         for (const x of picked) {
           x.status = 'sending';
@@ -78,6 +99,9 @@ function fakeStore(devices: Device[]): { client: any; deliveries: Delivery[]; cl
           x.errorCode = args.p_error_code as string | null;
           x.attempts = args.p_exhaust ? Math.max(x.attempts, 5) : x.attempts + (args.p_count_attempt ? 1 : 0);
           x.language = (args.p_language as string | null) ?? x.language;
+          x.nextAttemptAt = x.status !== 'failed' || args.p_exhaust
+            ? null
+            : clock.now + (args.p_count_attempt ? 10 * MIN * 2 ** (x.attempts - 1) : 30 * MIN);
         }
         return Promise.resolve({ data: x != null, error: null });
       }
@@ -122,7 +146,7 @@ function fakeStore(devices: Device[]): { client: any; deliveries: Delivery[]; cl
       return builder;
     },
   };
-  return { client, deliveries, cleared };
+  return { client, deliveries, cleared, calls };
 }
 
 type Sent = Parameters<typeof sendApnsAlert>[0];
@@ -132,6 +156,7 @@ function deps(
   client: any,
   sendAlert: SendPushBroadcastDependencies['sendAlert'],
   admin = true,
+  extra: Partial<SendPushBroadcastDependencies> = {},
 ): SendPushBroadcastDependencies {
   let run = 0;
   return {
@@ -142,8 +167,24 @@ function deps(
       ),
     sendAlert,
     newRunId: () => `run-${++run}`,
+    workerSecret: () => WORKER_SECRET,
+    apnsConfigured: () => true,
+    now: () => clock.now,
+    ...extra,
   };
 }
+
+const WORKER_SECRET = 'worker-secret-for-tests';
+
+const scheduledRequest = (secret = WORKER_SECRET) =>
+  new Request('http://local/send-push-broadcast', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${secret}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ mode: 'scheduled' }),
+  });
+
+const fail = (reason: string, httpStatus: number, errorCode: string) => () =>
+  Promise.resolve({ ok: false as const, reason, httpStatus, errorCode });
 
 const request = (broadcastId = BROADCAST_ID) =>
   new Request('http://local/send-push-broadcast', {
@@ -283,7 +324,7 @@ Deno.test('a transient APNs failure is retried by the next run, not the same one
   assertEquals([calls, store.deliveries[0].status], [2, 'sent']);
 });
 
-Deno.test('a dead token is cleared and its row exhausted', async () => {
+Deno.test('a dead token is cleared and its row skipped for good', async () => {
   const store = fakeStore([device('a')]);
   await handleSendPushBroadcast(
     request(),
@@ -299,7 +340,7 @@ Deno.test('a dead token is cleared and its row exhausted', async () => {
     ),
   );
   assertEquals(store.cleared, ['a']);
-  assertEquals([store.deliveries[0].status, store.deliveries[0].attempts], ['failed', 5]);
+  assertEquals([store.deliveries[0].status, store.deliveries[0].errorCode], ['skipped', 'apns_410_Unregistered']);
 });
 
 Deno.test('non-admins and missing tokens are refused before anything is claimed', async () => {
@@ -314,4 +355,116 @@ Deno.test('non-admins and missing tokens are refused before anything is claimed'
   assertEquals(noToken.status, 401);
   assertEquals(sent.length, 0);
   assertEquals(store.deliveries[0].status, 'pending');
+});
+
+Deno.test('BadDeviceToken and DeviceTokenNotForTopic are skipped, only the dead token is cleared', async () => {
+  const store = fakeStore([device('bad'), device('topic')]);
+  await handleSendPushBroadcast(
+    request(),
+    deps(
+      store.client,
+      (m: Sent) =>
+        m.token === 'tok-bad'
+          ? fail('apns_400_BadDeviceToken', 400, 'BadDeviceToken')()
+          : fail('apns_400_DeviceTokenNotForTopic', 400, 'DeviceTokenNotForTopic')(),
+    ),
+  );
+  assertEquals(store.deliveries.map((d) => d.status), ['skipped', 'skipped']);
+  assertEquals(store.cleared, ['bad']);
+  // Neither path picks a skipped row up again, however much later.
+  clock.now += 24 * 60 * MIN;
+  const manual = await (await handleSendPushBroadcast(request(), deps(store.client, accept([])))).json();
+  const scheduled = await (await handleSendPushBroadcast(scheduledRequest(), deps(store.client, accept([])))).json();
+  assertEquals([manual.claimed, scheduled.claimed], [0, 0]);
+});
+
+Deno.test('scheduled run: worker secret, no admin auth, backoff-aware claim', async () => {
+  const store = fakeStore([device('a')]);
+  let calls = 0;
+  let adminChecks = 0;
+  const d = deps(
+    store.client,
+    (m: Sent) => {
+      calls++;
+      return calls === 1 ? fail('apns_503_ServiceUnavailable', 503, 'ServiceUnavailable')() : accept([])(m);
+    },
+    true,
+    {
+      authenticateAdmin: () => {
+        adminChecks++;
+        return Promise.resolve({ ok: true as const, userId: ADMIN });
+      },
+    },
+  );
+  const first = await (await handleSendPushBroadcast(scheduledRequest(), d)).json();
+  assertEquals([first.mode, first.broadcasts, first.failed], ['scheduled', 1, 1]);
+  assert(store.calls.includes('claim_push_broadcast_retry_deliveries'));
+  assert(!store.calls.includes('claim_push_broadcast_deliveries'));
+  assertEquals(adminChecks, 0);
+
+  // Inside the 10-minute backoff nothing is due.
+  clock.now += 5 * MIN;
+  const early = await (await handleSendPushBroadcast(scheduledRequest(), d)).json();
+  assertEquals([early.broadcasts, early.claimed, calls], [0, 0, 1]);
+
+  clock.now += 6 * MIN;
+  const later = await (await handleSendPushBroadcast(scheduledRequest(), d)).json();
+  assertEquals([later.sent, calls, store.deliveries[0].status], [1, 2, 'sent']);
+});
+
+Deno.test('a wrong or empty worker secret never reaches the scheduled path', async () => {
+  const store = fakeStore([device('a')]);
+  const sent: Sent[] = [];
+  const refuse = {
+    authenticateAdmin: () => Promise.resolve({ ok: false as const, status: 401, error: 'unauthenticated' }),
+  };
+  const wrong = await handleSendPushBroadcast(scheduledRequest('nope'), deps(store.client, accept(sent), true, refuse));
+  assertEquals(wrong.status, 401);
+  const unset = await handleSendPushBroadcast(
+    scheduledRequest(''),
+    deps(store.client, accept(sent), true, { ...refuse, workerSecret: () => '' }),
+  );
+  assertEquals(unset.status, 401);
+  assertEquals([sent.length, store.calls.length], [0, 0]);
+});
+
+Deno.test('scheduled run claims nothing while APNs is not configured', async () => {
+  const store = fakeStore([device('a')]);
+  const res = await (await handleSendPushBroadcast(
+    scheduledRequest(),
+    deps(store.client, accept([]), true, { apnsConfigured: () => false }),
+  )).json();
+  assertEquals(res.skipped, 'apns_not_configured');
+  assertEquals(store.calls, []);
+  assertEquals([store.deliveries[0].status, store.deliveries[0].attempts], ['pending', 0]);
+});
+
+Deno.test('a manual run during a scheduled run cannot take or resend its rows', async () => {
+  const store = fakeStore([device('a'), device('b')]);
+  const sent: Sent[] = [];
+  let manualClaimed = -1;
+  const manualDeps = deps(store.client, accept(sent));
+  const scheduledDeps = deps(store.client, async (m: Sent) => {
+    // The admin presses the button while the scheduler is mid-send.
+    if (manualClaimed < 0) {
+      manualClaimed = (await (await handleSendPushBroadcast(request(), manualDeps)).json()).claimed;
+    }
+    return accept(sent)(m);
+  });
+  await handleSendPushBroadcast(scheduledRequest(), scheduledDeps);
+  assertEquals(manualClaimed, 0);
+  assertEquals(sent.map((m) => m.token).sort(), ['tok-a', 'tok-b']);
+});
+
+Deno.test('no new batch is claimed once the claim budget is spent', async () => {
+  // Each APNs call takes 1 s. Batch 1 (100 rows) ends at +100 s, inside the
+  // 120 s budget, so batch 2 is claimed; batch 3 is not.
+  const store = fakeStore(Array.from({ length: 250 }, (_, i) => device(`e${i}`)));
+  const d = deps(store.client, (m: Sent) => {
+    clock.now += 1_000;
+    return accept([])(m);
+  });
+  const res = await (await handleSendPushBroadcast(request(), d)).json();
+  assertEquals(res.claimed, 200);
+  assertEquals(store.deliveries.filter((x) => x.status === 'pending').length, 50);
 });
