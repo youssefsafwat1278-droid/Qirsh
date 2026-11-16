@@ -28,6 +28,10 @@ void main() {
   const gated = <String, String>{
     'data/sync/sender_bank_mapping_sync_service.dart':
         'EgressClass.senderBankMappings — which banks the user holds',
+    'features/planning_sync/services/merchant_rule_sync_service.dart':
+        'EgressClass.financialSync — learned merchant→category rules, '
+            'injected mayEgress (default deny) plus the merchant_rules_sync '
+            'capability',
     'features/planning_sync/services/accounts_push_service.dart':
         'EgressClass.financialSync — money',
     'features/capture/services/ledger_push_service.dart':
