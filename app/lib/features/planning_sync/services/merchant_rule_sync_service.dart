@@ -198,8 +198,9 @@ class MerchantRuleSyncService {
         return const MerchantRuleSyncResult();
       }
       final pushed = await _push(run, phase, uid);
-      if (!pull)
+      if (!pull) {
         return MerchantRuleSyncResult(pushed: pushed.$1, failed: pushed.$2);
+      }
       final pulled = await _pull(run, phase, uid);
       await _backfill(run, uid, pulled.seen);
       // Rows the backfill just queued go out in this same run.
