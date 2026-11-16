@@ -4018,5 +4018,27 @@
   },
   "captureQueueNotSaved": "تعذّر حفظ رسالة بنكية واحدة أو أكثر على هذا الجهاز. أعد مشاركتها أو أضف العملية يدوياً.",
   "captureQueueReadFailed": "تعذّرت قراءة الرسائل البنكية المحفوظة على هذا الجهاز. لم يُحذف شيء، وسنعيد المحاولة تلقائياً.",
-  "smsAutoCaptureRestoredNotice": "تمت إعادة تشغيل الالتقاط التلقائي للرسائل لهذا الحساب."
+  "smsAutoCaptureRestoredNotice": "تمت إعادة تشغيل الالتقاط التلقائي للرسائل لهذا الحساب.",
+  "updateAvailableAction": "حدّث الآن",
+  "whatsNewTitle": "ما الجديد",
+  "whatsNewSubtitle": "ما تغيّر في كل إصدار من قِرش.",
+  "whatsNewVersion": "الإصدار {version}",
+  "@whatsNewVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "whatsNewSheetTitle": "الجديد في قِرش {version}",
+  "@whatsNewSheetTitle": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "whatsNewFromQirsh": "من فريق قِرش",
+  "whatsNewSeeAll": "كل التغييرات",
+  "whatsNewUnavailable": "تعذّر عرض ملاحظات الإصدار."
 }

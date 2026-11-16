@@ -3784,5 +3784,27 @@
   "billsV3Counts": "{subs} subscriptions · {instalments} instalments",
   "captureQueueNotSaved": "One or more bank messages couldn't be saved on this device. Share them again or add the transaction manually.",
   "captureQueueReadFailed": "Couldn't read the bank messages saved on this device. Nothing was deleted, and we'll try again automatically.",
-  "smsAutoCaptureRestoredNotice": "Automatic SMS capture was turned back on for this account."
+  "smsAutoCaptureRestoredNotice": "Automatic SMS capture was turned back on for this account.",
+  "updateAvailableAction": "Update now",
+  "whatsNewTitle": "What's new",
+  "whatsNewSubtitle": "What changed in each version of Qirsh.",
+  "whatsNewVersion": "Version {version}",
+  "@whatsNewVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "whatsNewSheetTitle": "What's new in Qirsh {version}",
+  "@whatsNewSheetTitle": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "whatsNewFromQirsh": "From the Qirsh team",
+  "whatsNewSeeAll": "See all changes",
+  "whatsNewUnavailable": "Couldn't show the release notes."
 }
