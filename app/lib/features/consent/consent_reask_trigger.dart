@@ -44,6 +44,10 @@ class ConsentReaskTrigger {
   /// Backoff for an unknown server choice before falling back to resume.
   final List<Duration> retryDelays;
 
+  /// True while an ask is running (including its sheet). Other first-launch
+  /// sheets (What's new) wait for it so they never stack.
+  final ValueNotifier<bool> busy = ValueNotifier<bool>(false);
+
   VoidCallback? _gate;
   Timer? _retry;
   bool _inFlight = false;
@@ -125,8 +129,10 @@ class ConsentReaskTrigger {
     if (_disposed || _inFlight || !isForeground()) return;
     final generation = _generation;
     _inFlight = true;
+    busy.value = true;
     void settled() {
       _inFlight = false;
+      if (!_disposed) busy.value = false;
       // An attempt of an older lifecycle: ignore its outcome, then ask for
       // the account admitted meanwhile.
       if (generation != _generation) _schedule();

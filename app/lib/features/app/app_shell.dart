@@ -56,6 +56,9 @@ import '../capture/capture_runtime.dart';
 import '../common/top_banner.dart';
 import '../consent/consent_reask_trigger.dart';
 import '../consent/smart_analysis_consent_sheet.dart';
+import '../whats_new/whats_new_sheet.dart';
+import '../whats_new/whats_new_trigger.dart';
+import '../../core/backend/app_version.dart';
 import '../transactions/manual_transaction_sheet.dart';
 import '../../core/privacy/consent_authority.dart';
 import '../capture/services/capture_import_service.dart';
@@ -235,6 +238,7 @@ class _AppShellState extends ConsumerState<AppShell> {
       if (mounted && AppSession.instance.status == SessionStatus.authenticated) {
         _consentReask.start();
       }
+      if (mounted) unawaited(_whatsNew.start());
     });
     _lifecycleListener = AppLifecycleListener(
       onResume: _onResume,
@@ -381,6 +385,15 @@ class _AppShellState extends ConsumerState<AppShell> {
         : ReaskOutcome.stale,
   );
 
+  /// One-time What's new sheet after an update: only once the shell is idle
+  /// (no restore loader, no consent re-ask, no other sheet or dialog open).
+  late final WhatsNewTrigger _whatsNew = WhatsNewTrigger(
+    runningVersion: kAppVersion,
+    blockers: [appDataRestoring, _consentReask.busy, modalRouteOpen],
+    isForeground: _isForeground,
+    show: () async => mounted && await showWhatsNewSheet(context),
+  );
+
   /// Resumed, or not yet reported by the engine (cold start).
   static bool _isForeground() {
     final state = WidgetsBinding.instance.lifecycleState;
@@ -390,6 +403,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void dispose() {
     _consentReask.dispose();
+    _whatsNew.dispose();
     AppSession.instance.removeListener(_handleSessionStatusChange);
     AppSession.instance.configureSignOutFlush(null);
     _restoreGateTimeout?.cancel();
@@ -491,6 +505,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     // F1: a restore offer that was dismissed (or left by backgrounding) is
     // offered again now; an answered one is not (see maybeReaskConsent).
     if (mounted) _consentReask.onResume();
+    if (mounted) _whatsNew.onResume();
     // Returning after restoring connectivity should not wait for an old OFF
     // retry timer. This is the same pending revoke only, never a data sync.
     if (!mounted) return;
