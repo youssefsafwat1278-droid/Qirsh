@@ -319,6 +319,14 @@ def inline(text: str) -> str:
 
 def render(md: str) -> str:
     """Render the Markdown subset used by docs/legal/. Unknown syntax raises."""
+    # HTML comments are maintainer notes ("DEPLOYMENT NOTE — not part of the
+    # published text"). They used to be escaped into visible paragraphs, so the
+    # live policy showed its own to-do list.
+    md = re.sub(r"<!--.*?-->", "", md, flags=re.S)
+    # A placeholder in the published text is worse than a failed build.
+    for marker in ("<CONTACT_EMAIL>", "[OWNER MUST CONFIRM", "<!--"):
+        if marker in md:
+            raise ValueError(f"unresolved placeholder in legal text: {marker}")
     lines = md.split("\n")
     out: list[str] = []
     i = 0

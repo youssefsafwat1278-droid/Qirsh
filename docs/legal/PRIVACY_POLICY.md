@@ -5,6 +5,9 @@
 Qirsh (قِرش) is a personal finance app that reads bank SMS on your device and
 turns them into a private record of your spending.
 
+Qirsh is currently available on iOS. The Android app has not been released yet;
+the parts of this policy marked Android describe how it behaves once it is.
+
 This policy describes what the app actually does. It was written after the
 privacy behaviour was audited and corrected, not before — several statements
 that used to be aspirational are now enforced in code and covered by tests.
@@ -211,10 +214,8 @@ advertising.
 setting that turns off storage of the request in Google AI Studio logs. Google
 states that it keeps prompts and responses for 55 days to detect abuse, and that
 only authorised staff can see data flagged for review.
-[OWNER MUST CONFIRM before publishing: "We use Google's paid Gemini API service,
-under which Google does not use our requests to improve its products." — true
-only if the production project is on the paid tier with an active billing
-account.] Google does not offer a choice of processing location for this
+We use Google's paid Gemini API service, under which Google does not use our
+requests to improve its products. Google does not offer a choice of processing location for this
 service.
 
 **Google Places API.** Google receives the merchant name as a search term and,
@@ -341,7 +342,7 @@ any time in Settings → Privacy & data; sending stops immediately.
 
 ## 9. Contact
 
-Questions, or a data request: **<CONTACT_EMAIL>**
+Questions, or a data request: **business@qirsh.site**
 
 ---
 

@@ -96,7 +96,7 @@ Material changes will be announced in the app before taking effect.
 
 ## 9. Contact
 
-**<CONTACT_EMAIL>**
+**business@qirsh.site**
 
 ---
 
