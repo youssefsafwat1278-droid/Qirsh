@@ -13,12 +13,25 @@ void main() {
   late ValueNotifier<bool> restoring;
   late List<Completer<ReaskOutcome>> calls;
   late ConsentReaskTrigger trigger;
+  late bool foreground;
+
+  void goBackground() {
+    foreground = false;
+    trigger.onBackground();
+  }
+
+  void goForeground() {
+    foreground = true;
+    trigger.onResume();
+  }
 
   setUp(() {
     restoring = ValueNotifier(false);
     calls = [];
+    foreground = true;
     trigger = ConsentReaskTrigger(
       restoring: restoring,
+      isForeground: () => foreground,
       ask: () {
         final c = Completer<ReaskOutcome>();
         calls.add(c);
@@ -151,5 +164,68 @@ void main() {
     await tester.pump(const Duration(minutes: 5));
     trigger.onResume();
     expect(calls, hasLength(1));
+  });
+
+  group('foreground only', () {
+    testWidgets('not started while in the background; asked on resume',
+        (tester) async {
+      foreground = false;
+      trigger.start();
+      expect(calls, isEmpty);
+      goForeground();
+      expect(calls, hasLength(1));
+    });
+
+    testWidgets('backgrounded during the F2 backoff: the retry never starts '
+        'off-screen, and the resume asks exactly once', (tester) async {
+      trigger.start();
+      calls.single.complete(ReaskOutcome.unknownPreference);
+      await tester.pump();
+      goBackground();
+      await tester.pump(const Duration(minutes: 5));
+      expect(calls, hasLength(1), reason: 'no retry while in the background');
+      goForeground();
+      expect(calls, hasLength(2));
+      goForeground();
+      expect(calls, hasLength(2), reason: 'one sheet at a time');
+    });
+
+    testWidgets('backgrounded during an in-flight read: the deferred outcome '
+        'starts nothing; the resume asks once', (tester) async {
+      trigger.start();
+      goBackground();
+      calls.single.complete(ReaskOutcome.deferred);
+      await tester.pump();
+      await tester.pump(const Duration(minutes: 5));
+      expect(calls, hasLength(1));
+      goForeground();
+      expect(calls, hasLength(2));
+      calls.last.complete(ReaskOutcome.shown);
+      await tester.pump();
+      expect(calls, hasLength(2));
+    });
+
+    testWidgets('resumed again before the in-flight read returns: no second '
+        'ask, the running one presents', (tester) async {
+      trigger.start();
+      goBackground();
+      goForeground();
+      expect(calls, hasLength(1), reason: 'never a duplicate sheet');
+      calls.single.complete(ReaskOutcome.shown);
+      await tester.pump();
+      await tester.pump(const Duration(minutes: 5));
+      expect(calls, hasLength(1));
+    });
+
+    testWidgets('the restore loader closes while in the background: nothing '
+        'is asked until the resume', (tester) async {
+      restoring.value = true;
+      trigger.start();
+      goBackground();
+      restoring.value = false;
+      expect(calls, isEmpty);
+      goForeground();
+      expect(calls, hasLength(1));
+    });
   });
 }

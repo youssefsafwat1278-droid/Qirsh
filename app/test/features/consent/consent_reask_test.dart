@@ -12,11 +12,16 @@ import 'consent_test_harness.dart';
 
 class _Host extends ConsumerStatefulWidget {
   const _Host(
-      {required this.seen, required this.markSeen, this.readChoice, this.onOutcome});
+      {required this.seen,
+      required this.markSeen,
+      this.readChoice,
+      this.onOutcome,
+      this.isForeground});
   final Future<bool> Function() seen;
   final Future<void> Function() markSeen;
   final Future<AccountCloudChoice> Function()? readChoice;
   final void Function(ReaskOutcome)? onOutcome;
+  final bool Function()? isForeground;
 
   @override
   ConsumerState<_Host> createState() => _HostState();
@@ -32,6 +37,7 @@ class _HostState extends ConsumerState<_Host> {
           seen: widget.seen,
           markSeen: widget.markSeen,
           readChoice: widget.readChoice,
+          isForeground: widget.isForeground,
         ).then((o) => widget.onOutcome?.call(o)));
   }
 
@@ -50,7 +56,8 @@ void main() {
   Future<void> pump(WidgetTester tester,
       {bool seen = false,
       String locale = 'en',
-      Future<AccountCloudChoice> Function()? readChoice}) async {
+      Future<AccountCloudChoice> Function()? readChoice,
+      bool Function()? isForeground}) async {
     outcome = null;
     await tester.binding.setSurfaceSize(const Size(800, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -65,6 +72,7 @@ void main() {
           asked = true;
         },
         readChoice: readChoice,
+        isForeground: isForeground,
         onOutcome: (o) => outcome = o,
       ),
       locale: locale,
@@ -172,5 +180,20 @@ void main() {
       expect(outcome, ReaskOutcome.notNeeded);
       expect(repo.saveCalls, 0, reason: 'the explicit choice is not touched');
     });
+  });
+
+  testWidgets('backgrounded while the server read was pending: no sheet, '
+      'nothing recorded, deferred to the resume', (tester) async {
+    var foreground = true;
+    await pump(tester,
+        readChoice: () async {
+          foreground = false;
+          return AccountCloudChoice.on;
+        },
+        isForeground: () => foreground);
+    expect(find.text('Restore your cloud data'), findsNothing);
+    expect(markCalls, 0);
+    expect(repo.saveCalls, 0);
+    expect(outcome, ReaskOutcome.deferred);
   });
 }

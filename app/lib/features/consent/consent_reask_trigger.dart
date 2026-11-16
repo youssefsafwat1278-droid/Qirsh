@@ -18,10 +18,17 @@ import 'smart_analysis_consent_sheet.dart';
 /// F2: when the account's server choice could not be read
 /// ([ReaskOutcome.unknownPreference]) it is retried after [retryDelays] while
 /// the app stays in the foreground, then on each resume.
+///
+/// Foreground only: nothing starts while [isForeground] is false, leaving the
+/// foreground ([onBackground]) cancels a waiting retry and the loader gate, and
+/// the next [onResume] asks again. An ask that was already running when the
+/// app left is not duplicated: [maybeReaskConsent] rechecks the foreground
+/// before it presents and reports [ReaskOutcome.deferred] instead.
 class ConsentReaskTrigger {
   ConsentReaskTrigger({
     required this.restoring,
     required this.ask,
+    required this.isForeground,
     this.retryDelays = const [Duration(seconds: 15), Duration(seconds: 60)],
   });
 
@@ -30,6 +37,9 @@ class ConsentReaskTrigger {
 
   /// One re-ask attempt (the shell binds it to its context and ref).
   final Future<ReaskOutcome> Function() ask;
+
+  /// True while the app is resumed (visible and interactive).
+  final bool Function() isForeground;
 
   /// Backoff for an unknown server choice before falling back to resume.
   final List<Duration> retryDelays;
@@ -55,6 +65,13 @@ class ConsentReaskTrigger {
   void onResume() {
     _unknownRetries = 0;
     _schedule();
+  }
+
+  /// The app left the foreground (inactive, hidden or paused).
+  void onBackground() {
+    _retry?.cancel();
+    _retry = null;
+    _dropGate();
   }
 
   /// A (possibly different) account was admitted while the shell is mounted.
@@ -87,6 +104,7 @@ class ConsentReaskTrigger {
 
   void _schedule() {
     if (_disposed || !_authenticated || _inFlight || _gate != null) return;
+    if (!isForeground()) return;
     _retry?.cancel();
     _retry = null;
     if (!restoring.value) {
@@ -104,7 +122,7 @@ class ConsentReaskTrigger {
   }
 
   void _run() {
-    if (_disposed || _inFlight) return;
+    if (_disposed || _inFlight || !isForeground()) return;
     final generation = _generation;
     _inFlight = true;
     void settled() {

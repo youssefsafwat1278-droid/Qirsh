@@ -236,7 +236,13 @@ class _AppShellState extends ConsumerState<AppShell> {
         _consentReask.start();
       }
     });
-    _lifecycleListener = AppLifecycleListener(onResume: _onResume);
+    _lifecycleListener = AppLifecycleListener(
+      onResume: _onResume,
+      // F1: a sheet is never presented, nor a retry started, off-screen.
+      onInactive: () => _consentReask.onBackground(),
+      onHide: () => _consentReask.onBackground(),
+      onPause: () => _consentReask.onBackground(),
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_reconcileAchievements(announce: false));
     });
@@ -368,10 +374,18 @@ class _AppShellState extends ConsumerState<AppShell> {
   /// dismissed sheet comes back on resume, not only on the next launch.
   late final ConsentReaskTrigger _consentReask = ConsentReaskTrigger(
     restoring: appDataRestoring,
+    isForeground: _isForeground,
     ask: () async => mounted
-        ? await maybeReaskConsent(context, ref)
+        ? await ref.read(reaskConsentProvider)(context, ref,
+            isForeground: _isForeground)
         : ReaskOutcome.stale,
   );
+
+  /// Resumed, or not yet reported by the engine (cold start).
+  static bool _isForeground() {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return state == null || state == AppLifecycleState.resumed;
+  }
 
   @override
   void dispose() {

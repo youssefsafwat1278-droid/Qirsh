@@ -76,6 +76,10 @@ enum ReaskOutcome {
   /// recorded, so the caller may ask again later.
   unknownPreference,
 
+  /// The app was not in the foreground when the sheet would have been shown;
+  /// nothing was shown or recorded, so the caller asks again on resume.
+  deferred,
+
   /// The lifecycle that started the call ended (logout, account switch,
   /// unmounted); nothing was shown.
   stale,
@@ -89,12 +93,15 @@ enum ReaskOutcome {
 /// so the question comes back (F1: on the next resume, not only the next
 /// launch). [seen]/[markSeen] default to the per-uid marker kept by
 /// [AppSession]; [readChoice] defaults to the account's server choice.
+/// [isForeground] is rechecked after the server read, right before the sheet
+/// is presented: a sheet is never opened while the app is in the background.
 Future<ReaskOutcome> maybeReaskConsent(
   BuildContext context,
   WidgetRef ref, {
   Future<bool> Function()? seen,
   Future<void> Function()? markSeen,
   Future<AccountCloudChoice> Function()? readChoice,
+  bool Function()? isForeground,
 }) async {
   final work = ref.read(consentLocalWorkProvider)();
   if (work == null) return ReaskOutcome.stale;
@@ -143,6 +150,7 @@ Future<ReaskOutcome> maybeReaskConsent(
   } on StaleAdmissionException {
     return ReaskOutcome.stale;
   }
+  if (isForeground != null && !isForeground()) return ReaskOutcome.deferred;
   await showSmartAnalysisConsentSheet(
     context,
     ref,
@@ -190,6 +198,15 @@ class ConsentLocalWork {
     return _run(action);
   }
 }
+
+/// The shell's re-ask entry point (a seam for the AppShell lifecycle test).
+typedef ReaskConsent = Future<ReaskOutcome> Function(
+    BuildContext context, WidgetRef ref, {bool Function()? isForeground});
+
+final reaskConsentProvider = Provider<ReaskConsent>(
+  (ref) => (context, ref, {isForeground}) =>
+      maybeReaskConsent(context, ref, isForeground: isForeground),
+);
 
 /// Seam for widget tests with fake repositories (no authenticated session).
 final consentLocalWorkProvider =
