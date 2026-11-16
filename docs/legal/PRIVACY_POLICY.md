@@ -1,6 +1,6 @@
 # Qirsh — Privacy Policy
 
-**Last updated: 2026-11-12**
+**Last updated: 2026-11-16**
 
 Qirsh (قِرش) is a personal finance app that reads bank SMS on your device and
 turns them into a private record of your spending.
@@ -84,14 +84,17 @@ app start.
 | Category | Sent when enabled | Purpose |
 |---|---|---|
 | Financial sync | Accounts, transactions, budgets, goals, plans | Multi-device sync |
+| Learned merchant rules | Each "Remember for this merchant" rule: the merchant name and the category you chose | Restore your rules on a new device or after reinstalling |
 | Encrypted backup | An encrypted archive of your data | Restore after device loss |
 | Message reading (Smart Analysis) | Sanitized bank-message text (see section 8) | Read the amount, merchant, date and type |
 | Bank identification | For a bank sender we do not recognise: the sender's name (letters, such as a bank's name; never a phone number) and the sanitized text | Identify which bank sent it |
 | Merchant lookup | A merchant name we cannot categorise | Find the merchant's category |
 | Bank mappings | Which bank a sender ID belongs to | Improve parsing for everyone |
+| Shared category learning (**on by default** once Smart Analysis & Cloud Sync is on; you can turn it off) | When you choose "Remember for this merchant": the merchant name and the category only, with a one-way code in place of your account ID. Never amounts, dates, messages, transfers, wallet movements, or anything that looks like a person's name or contains numbers | Improve categories for everyone (see section 4) |
 | Smart Inbox | Messages awaiting your confirmation | Review across devices |
 | Gamification | Achievement progress | Cross-device streaks |
 | Telemetry | Notification delivery/open events | Reliability of capture |
+| Messages from us | Nothing extra: a notification we send reaches devices with Cloud Sync on whose "Qirsh messages and tips" notifications are on; we record whether it was delivered, against a one-way code of the install | Product news and announcements |
 | Diagnostics | Crash reports | Fixing crashes |
 
 **Diagnostics fail closed:** when cloud/privacy consent is off, crash reporting
@@ -120,6 +123,15 @@ Two things are not consent-gated:
 - **Revocation is immediate.** The check is performed at each transmission, so
   turning cloud off stops the next sync — including retries, background work,
   and startup reconciliation.
+- **Shared category learning is a separate switch, on by default.** It only
+  works while Smart Analysis & Cloud Sync is on, and the app says so at the
+  moment you choose "Remember for this merchant". Turn it off any time in
+  Privacy; the choice is kept for your account on that device. Choices are
+  pooled: a merchant→category pair is added to the categories everyone
+  receives only when at least 6 users agree and they are a clear majority
+  (75%), or after an admin reviews it, and an admin can remove it at any time.
+  Turning the switch off stops future contributions; deleting your account
+  deletes the contributions you made.
 - **Across devices, the more restrictive setting wins.** Turning consent OFF on
   one device propagates as a revocation. Turning it ON does **not** silently
   grant consent on your other devices — you grant it on each device yourself.
@@ -166,6 +178,8 @@ account and we will action the deletion.
 | Daily request counters | **No fixed expiry** — removed when you delete your account |
 | Device identifiers used for capture | **No fixed expiry** — removed when you delete your account |
 | Merchant names added to the shared merchant catalogue | **No fixed expiry** — a business name and category, not linked to you or your account |
+| Your shared-learning contributions (merchant name, category, one-way code) | **No fixed expiry** — deleted when you delete your account. A pair already added to the shared catalogue stays there as a business name and category, not linked to you |
+| Learned merchant rules in the cloud | **No fixed expiry** — a rule you delete is kept as a deletion marker so your other devices drop it too; all of it is removed when you delete your account |
 | Encrypted backups | Until replaced or deleted by you |
 | Text sent to Google's Gemini API | Per Google's terms — see section 7 |
 | Crash reports (if enabled) | Per the diagnostics provider's retention |
