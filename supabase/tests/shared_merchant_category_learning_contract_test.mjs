@@ -68,3 +68,49 @@ test('the migration ships a rollback', () => {
   assert.match(rb, /DROP TABLE IF EXISTS public\.merchant_category_contributions/);
   assert.match(rb, /DROP TRIGGER IF EXISTS on_auth_user_deleted_erase_merchant_contributions ON auth\.users/);
 });
+
+// ── 20261116170000: auto-approval ───────────────────────────────────────────
+const autoName = '20261116170000_shared_learning_auto_approve';
+const autoSql = stripComments(read(`supabase/migrations/${autoName}.sql`));
+const evaluate = autoSql.slice(autoSql.indexOf('FUNCTION public.evaluate_merchant_category_auto_approval('));
+const evaluateBody = evaluate.slice(0, evaluate.indexOf('$$;', evaluate.indexOf('$$') + 2));
+
+test('auto-approval: 6 users AND >= 75% of the merchant, as named constants', () => {
+  assert.match(autoSql, /merchant_category_auto_min_users\(\)\s+RETURNS INTEGER LANGUAGE sql IMMUTABLE AS \$\$ SELECT 6 \$\$/);
+  assert.match(autoSql, /merchant_category_auto_min_percent\(\)\s+RETURNS INTEGER LANGUAGE sql IMMUTABLE AS \$\$ SELECT 75 \$\$/);
+  assert.match(evaluateBody, /v_count < public\.merchant_category_auto_min_users\(\)/);
+  assert.match(evaluateBody, /v_count \* 100 < v_total \* public\.merchant_category_auto_min_percent\(\)/);
+});
+
+test('auto-approval never overrides a review, another approval or a catalog keyword', () => {
+  assert.match(evaluateBody, /r\.merchant_key = p_merchant_key AND r\.category_key = v_category\)/);
+  assert.match(evaluateBody, /r\.merchant_key = p_merchant_key AND r\.decision = 'approved'\)/);
+  assert.match(evaluateBody, /k\.category_key <> v_category\)/);
+});
+
+test('auto and manual approval publish through one function; auto is marked', () => {
+  assert.equal((autoSql.match(/(INSERT INTO|UPDATE) public\.merchant_keywords\b/g) ?? []).length, 3,
+    'publish (insert + update) and revoke (update) only');
+  assert.match(evaluateBody, /PERFORM public\.merchant_category_publish\(p_merchant_key, v_category\)/);
+  assert.match(evaluateBody, /'approved', v_category, v_count, NULL, TRUE\)/);
+  const review = autoSql.slice(autoSql.indexOf('FUNCTION public.admin_review_merchant_category_candidate('));
+  assert.match(review.slice(0, review.indexOf('$$;')), /PERFORM public\.merchant_category_publish\(p_merchant_key, v_final\)/);
+});
+
+test('evaluation runs from a contribution trigger (no cron)', () => {
+  assert.match(autoSql, /AFTER INSERT OR UPDATE ON public\.merchant_category_contributions\s+FOR EACH ROW EXECUTE FUNCTION public\.trg_merchant_category_auto_approval\(\)/);
+});
+
+test('revoke is admin-only, soft-deletes the keyword and rejects the pair', () => {
+  const revoke = autoSql.slice(autoSql.indexOf('FUNCTION public.admin_revoke_merchant_category_mapping('));
+  const body = revoke.slice(0, revoke.indexOf('$$;', revoke.indexOf('$$') + 2));
+  assert.match(body, /FROM public\.admin_users a WHERE a\.id = p_actor/);
+  assert.match(body, /SET is_active = FALSE, is_deleted = TRUE/);
+  assert.match(body, /SET decision = 'rejected'/);
+  assert.match(autoSql, /REVOKE ALL ON FUNCTION public\.admin_revoke_merchant_category_mapping\(UUID, TEXT, TEXT\)\s+FROM PUBLIC, anon, authenticated/);
+});
+
+test('the auto-approval migration ships a rollback and leaves 20261116150000 alone', () => {
+  assert.match(read(`supabase/rollback/${autoName}_rollback.sql`), /DROP TRIGGER IF EXISTS trg_merchant_category_contributions_auto_approve/);
+  assert.doesNotMatch(sql, /auto_approv/);
+});
