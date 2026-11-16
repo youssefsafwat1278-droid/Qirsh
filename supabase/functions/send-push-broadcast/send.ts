@@ -1,9 +1,18 @@
 // Sends one admin push broadcast (migration 20261116160000).
 //
-// Caller: the Admin panel's server route, forwarding the signed-in admin's
-// access token. Authorization is the same as parser-test: the JWT is resolved
-// with the service client and the user must be in public.admin_users; the
-// claim RPC re-checks that id. Never trust a role claim or a header.
+// Callers:
+//  * the Admin panel's server route, forwarding the signed-in admin's access
+//    token (send + the manual retry button). The JWT is resolved with the
+//    service client and the user must be in public.admin_users; the claim RPC
+//    re-checks that id. Never trust a role claim or a header.
+//  * the pg_cron dispatcher (migration 20261117010000), presenting
+//    PUSH_BROADCAST_WORKER_SECRET as a raw bearer. It resumes every recent
+//    broadcast with deliveries due, through the backoff-aware claim. verify_jwt
+//    is off for this function (config.toml) so that raw secret reaches here; the
+//    admin path still verifies its JWT itself.
+//
+// Both paths claim through the same SQL lease (SKIP LOCKED + 'sending'), so a
+// scheduled run and a manual run never hold, and never send, the same row.
 //
 // Per device, at send time: the claim RPC re-evaluates the Cloud audience, this
 // function re-checks "Messages from Qirsh" and picks Arabic or English from the
@@ -12,7 +21,7 @@
 // send a device the same broadcast twice. Missing APNs credentials fail every
 // row closed as `apns_not_configured` without consuming an attempt.
 import { type ApnsEnvironment, type ApnsResult, sendApnsAlert } from '../_shared/apns.ts';
-import { corsHeaders, json, serviceClient } from '../_shared/capture_auth.ts';
+import { bearerSecretAuthorized, corsHeaders, json, serviceClient } from '../_shared/capture_auth.ts';
 import { clearDeadApnsToken, isDeadApnsToken } from '../_shared/capture_push.ts';
 
 /// `notificationType` and `source` of a broadcast push. The app routes a tap on
@@ -21,6 +30,17 @@ export const BROADCAST_SOURCE = 'qirsh_broadcast';
 
 const BATCH_SIZE = 100;
 const MAX_BATCHES = 50;
+/// No new batch is claimed after this long. Keeps every claimed row far inside
+/// its 15-minute SQL lease (and the Edge wall clock); the rest is picked up by
+/// the next scheduled run or click.
+export const CLAIM_BUDGET_MS = 120_000;
+/// Broadcasts one scheduled run resumes at most.
+const SCHEDULED_BROADCASTS = 20;
+/// APNs answers that no retry of this token can fix. Recorded as 'skipped'
+/// (terminal). DeviceTokenNotForTopic is permanent for the token but can also
+/// mean a wrong APNS_BUNDLE_ID, so the token itself is only cleared for the
+/// dead-token codes isDeadApnsToken() already recognises.
+const PERMANENT_TOKEN_CODES = new Set(['DeviceTokenNotForTopic']);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // deno-lint-ignore no-explicit-any -- the Supabase Edge client is loosely typed here.
@@ -33,6 +53,12 @@ export type SendPushBroadcastDependencies = {
   authenticateAdmin: (supabase: SupabaseClientLike, token: string) => Promise<AdminAuth>;
   sendAlert: typeof sendApnsAlert;
   newRunId: () => string;
+  /// PUSH_BROADCAST_WORKER_SECRET; empty or weak (usableWorkerSecret)
+  /// disables the scheduled path.
+  workerSecret: () => string;
+  /// False while any APNs credential is missing.
+  apnsConfigured: () => boolean;
+  now: () => number;
 };
 
 type Broadcast = {
@@ -83,6 +109,51 @@ export function broadcastMessagesEnabled(notificationsJson: string | null | unde
   }
 }
 
+/// Minimum strength of PUSH_BROADCAST_WORKER_SECRET. Generate it with
+/// `openssl rand -hex 32` (64 chars). A value shorter than 32 characters or
+/// with fewer than 10 distinct characters (e.g. "aaaa…", "abababab…") is
+/// treated as UNSET: the scheduled path is disabled and fails closed.
+export const WORKER_SECRET_MIN_LENGTH = 32;
+export const WORKER_SECRET_MIN_DISTINCT = 10;
+
+let warnedWeakSecret = false;
+
+/// The configured worker secret if it is strong enough, otherwise ''.
+/// Never logs the value.
+export function usableWorkerSecret(secret: string): string {
+  if (!secret) return '';
+  const strong = secret.length >= WORKER_SECRET_MIN_LENGTH &&
+    new Set(secret).size >= WORKER_SECRET_MIN_DISTINCT;
+  if (strong) return secret;
+  if (!warnedWeakSecret) {
+    warnedWeakSecret = true;
+    console.warn(
+      'send-push-broadcast: PUSH_BROADCAST_WORKER_SECRET is too weak ' +
+        `(needs >= ${WORKER_SECRET_MIN_LENGTH} chars and >= ${WORKER_SECRET_MIN_DISTINCT} distinct); ` +
+        'scheduled retries are disabled',
+    );
+  }
+  return '';
+}
+
+const BASE64URL_RE = /^[A-Za-z0-9_-]+$/;
+
+/// True only for a structurally valid JWT: three non-empty base64url
+/// segments whose header decodes to a JSON object naming an `alg`. Signature
+/// and claims are verified by GoTrue, not here.
+export function looksLikeJwt(token: string): boolean {
+  const parts = token.split('.');
+  if (parts.length !== 3 || parts.some((p) => !p || !BASE64URL_RE.test(p))) return false;
+  try {
+    const b64 = parts[0].replace(/-/g, '+').replace(/_/g, '/');
+    const header = JSON.parse(atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4)));
+    return !!header && typeof header === 'object' && typeof header.alg === 'string' &&
+      header.alg.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function authenticateAdmin(supabase: SupabaseClientLike, token: string): Promise<AdminAuth> {
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data?.user) return { ok: false, status: 401, error: 'unauthenticated' };
@@ -97,7 +168,16 @@ const defaultDependencies: SendPushBroadcastDependencies = {
   authenticateAdmin,
   sendAlert: sendApnsAlert,
   newRunId: () => crypto.randomUUID(),
+  workerSecret: () => Deno.env.get('PUSH_BROADCAST_WORKER_SECRET') ?? '',
+  apnsConfigured: () =>
+    ['APNS_KEY_ID', 'APNS_TEAM_ID', 'APNS_BUNDLE_ID', 'APNS_PRIVATE_KEY'].every((k) => !!Deno.env.get(k)),
+  now: () => Date.now(),
 };
+
+type Totals = { claimed: number; sent: number; failed: number; skipped: number; not_configured: number };
+type Claim = (limit: number) => PromiseLike<{ data: unknown; error: unknown }>;
+
+const BROADCAST_COLUMNS = 'id,title_ar,title_en,body_ar,body_en,deep_link';
 
 export async function handleSendPushBroadcast(
   req: Request,
@@ -107,8 +187,13 @@ export async function handleSendPushBroadcast(
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405);
 
   const authHeader = req.headers.get('authorization') ?? '';
+  if (bearerSecretAuthorized(authHeader, usableWorkerSecret(deps.workerSecret()))) {
+    return await runScheduled(deps);
+  }
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  if (!token) return json({ error: 'unauthenticated' }, 401);
+  // Only something shaped like a JWT may reach the login check. A wrong or
+  // near-miss worker secret (or any other junk) ends here, never at GoTrue.
+  if (!token || !looksLikeJwt(token)) return json({ error: 'unauthenticated' }, 401);
 
   const supabase = deps.createServiceClient();
   const auth = await deps.authenticateAdmin(supabase, token);
@@ -120,7 +205,7 @@ export async function handleSendPushBroadcast(
 
   const loaded = await supabase
     .from('push_broadcasts')
-    .select('id,title_ar,title_en,body_ar,body_en,deep_link')
+    .select(BROADCAST_COLUMNS)
     .eq('id', broadcastId)
     .maybeSingle();
   if (loaded.error) return json({ error: 'broadcast_lookup_failed' }, 500);
@@ -128,17 +213,85 @@ export async function handleSendPushBroadcast(
   const broadcast = loaded.data as Broadcast;
 
   const runId = deps.newRunId();
-  const totals = { claimed: 0, sent: 0, failed: 0, skipped: 0, not_configured: 0 };
-  for (let batch = 0; batch < MAX_BATCHES; batch++) {
-    const claim = await supabase.rpc('claim_push_broadcast_deliveries', {
-      p_actor: auth.userId,
-      p_broadcast_id: broadcastId,
-      p_run_id: runId,
-      p_limit: BATCH_SIZE,
-    });
-    // Claimed rows of a failed call stay 'sending' and become reclaimable after 5 minutes.
-    if (claim.error) return json({ error: 'claim_failed', ...totals }, 500);
-    const rows = (claim.data ?? []) as ClaimedRow[];
+  const deadline = deps.now() + CLAIM_BUDGET_MS;
+  const run = await sendBroadcast(
+    supabase,
+    broadcast,
+    deps,
+    deadline,
+    (limit) =>
+      supabase.rpc('claim_push_broadcast_deliveries', {
+        p_actor: auth.userId,
+        p_broadcast_id: broadcastId,
+        p_run_id: runId,
+        p_limit: limit,
+      }),
+  );
+  console.log(JSON.stringify({ event: 'push_broadcast_run', broadcastId, runId, ...run.totals }));
+  if (!run.ok) return json({ error: 'claim_failed', ...run.totals }, 500);
+  return json({ broadcast_id: broadcastId, run_id: runId, ...run.totals });
+}
+
+/// Scheduled path: resume every recent broadcast that has deliveries due under
+/// the backoff. Never claims while APNs is unconfigured, so a missing key
+/// leaves rows untouched (no attempt burned, nothing churned) for later.
+async function runScheduled(deps: SendPushBroadcastDependencies): Promise<Response> {
+  if (!deps.apnsConfigured()) {
+    console.log(JSON.stringify({ event: 'push_broadcast_scheduled_skipped', reason: 'apns_not_configured' }));
+    return json({ mode: 'scheduled', skipped: 'apns_not_configured', broadcasts: 0 });
+  }
+  const supabase = deps.createServiceClient();
+  const due = await supabase.rpc('push_broadcast_retry_due', { p_limit: SCHEDULED_BROADCASTS });
+  if (due.error) return json({ error: 'due_lookup_failed' }, 500);
+  const ids = ((due.data ?? []) as { broadcast_id: string }[]).map((r) => r.broadcast_id);
+
+  const runId = deps.newRunId();
+  const deadline = deps.now() + CLAIM_BUDGET_MS;
+  const totals: Totals = { claimed: 0, sent: 0, failed: 0, skipped: 0, not_configured: 0 };
+  let broadcasts = 0;
+  let errors = 0;
+  for (const broadcastId of ids) {
+    if (deps.now() >= deadline) break;
+    const loaded = await supabase.from('push_broadcasts').select(BROADCAST_COLUMNS).eq('id', broadcastId)
+      .maybeSingle();
+    if (loaded.error || !loaded.data) {
+      errors++;
+      continue;
+    }
+    broadcasts++;
+    const run = await sendBroadcast(
+      supabase,
+      loaded.data as Broadcast,
+      deps,
+      deadline,
+      (limit) =>
+        supabase.rpc('claim_push_broadcast_retry_deliveries', {
+          p_broadcast_id: broadcastId,
+          p_run_id: runId,
+          p_limit: limit,
+        }),
+    );
+    if (!run.ok) errors++;
+    for (const k of Object.keys(totals) as (keyof Totals)[]) totals[k] += run.totals[k];
+  }
+  console.log(JSON.stringify({ event: 'push_broadcast_scheduled_run', runId, broadcasts, errors, ...totals }));
+  return json({ mode: 'scheduled', run_id: runId, broadcasts, errors, ...totals }, errors > 0 ? 500 : 200);
+}
+
+/// Claims and delivers batches until nothing is left or the claim budget ends.
+async function sendBroadcast(
+  supabase: SupabaseClientLike,
+  broadcast: Broadcast,
+  deps: SendPushBroadcastDependencies,
+  deadline: number,
+  claim: Claim,
+): Promise<{ ok: boolean; totals: Totals }> {
+  const totals: Totals = { claimed: 0, sent: 0, failed: 0, skipped: 0, not_configured: 0 };
+  for (let batch = 0; batch < MAX_BATCHES && deps.now() < deadline; batch++) {
+    const claimed = await claim(BATCH_SIZE);
+    // Claimed rows of a failed call stay 'sending' and become reclaimable after 15 minutes.
+    if (claimed.error) return { ok: false, totals };
+    const rows = (claimed.data ?? []) as ClaimedRow[];
     if (rows.length === 0) break;
 
     for (const row of rows) {
@@ -160,9 +313,7 @@ export async function handleSendPushBroadcast(
       }
     }
   }
-
-  console.log(JSON.stringify({ event: 'push_broadcast_run', broadcastId, runId, ...totals }));
-  return json({ broadcast_id: broadcastId, run_id: runId, ...totals });
+  return { ok: true, totals };
 }
 
 async function deliverOne(
@@ -211,9 +362,10 @@ async function deliverOne(
       apnsId: null,
     };
   }
-  if (isDeadApnsToken(result)) {
-    await clearDeadApnsToken(supabase, row.device_hash, row.token);
-    return { status: 'failed', errorCode: result.reason, countAttempt: true, exhaust: true, language, apnsId: null };
+  if (isDeadApnsToken(result) || PERMANENT_TOKEN_CODES.has(result.errorCode)) {
+    // Permanent for this token: terminal 'skipped', never retried by either path.
+    if (isDeadApnsToken(result)) await clearDeadApnsToken(supabase, row.device_hash, row.token);
+    return { status: 'skipped', errorCode: result.reason, countAttempt: true, exhaust: false, language, apnsId: null };
   }
   return { status: 'failed', errorCode: result.reason, countAttempt: true, exhaust: false, language, apnsId: null };
 }
