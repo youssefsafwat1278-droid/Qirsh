@@ -53,6 +53,7 @@ import '../../core/utils/install_id.dart';
 import '../../data/db/app_database.dart';
 import '../privacy/cloud_egress_gate.dart';
 import '../privacy/consent_authority.dart';
+import '../privacy/shared_learning_preference.dart';
 import '../../data/sync/planning_currency_capability_probe.dart';
 import '../../data/sync/seq_pull.dart';
 import '../../data/sync/revision_cas.dart';
@@ -1972,14 +1973,17 @@ final confirmTransactionUseCaseProvider =
 });
 
 /// Shared category learning. Null when the backend is not configured. A
-/// contribution needs Cloud AND AI consent (aiProcessing), read fresh at offer
-/// time and again before each send.
+/// contribution needs the account's opt-in (OFF by default) AND Cloud AND AI
+/// consent (aiProcessing), all read fresh at offer time and again before each
+/// send.
 final sharedCategoryLearningClientProvider =
     Provider<SharedCategoryLearningClient?>((ref) {
   if (!SupabaseConfig.isConfigured) return null;
   final db = ref.watch(appDatabaseProvider);
+  final preference = ref.watch(sharedLearningPreferenceProvider);
   return SharedCategoryLearningClient.supabase(
     supabase.Supabase.instance.client,
+    optedIn: preference.isOn,
     mayEgress: () => ConsentAuthority(
       () => DriftUserSettingsRepository(db).getSettings(),
     ).allows(EgressClass.aiProcessing),

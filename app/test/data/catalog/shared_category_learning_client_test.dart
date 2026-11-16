@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/privacy/consent_authority.dart';
+import 'package:money_companion/core/privacy/shared_learning_preference.dart';
 import 'package:money_companion/data/catalog/shared_category_learning_client.dart';
 import 'package:money_companion/domain/entities/supporting_entities.dart';
 import 'package:money_companion/domain/entities/transaction_entity.dart';
@@ -56,10 +59,17 @@ TransactionEntity _tx({
 /// Consent driven by the real policy (ConsentAuthority.decide), switchable
 /// between the offer-time and send-time checks.
 class _Harness {
-  _Harness({bool cloud = true, bool ai = true})
-      : settings = _settings(cloud: cloud, ai: ai);
+  /// [optedIn]: the "Help improve categories for everyone" switch for the
+  /// signed-in account. Its real default is OFF.
+  _Harness({bool cloud = true, bool ai = true, bool optedIn = false})
+      : settings = _settings(cloud: cloud, ai: ai) {
+    if (optedIn) prefs[SharedLearningPreference.keyFor(uid!)] = 'on';
+  }
 
   UserSettingsEntity settings;
+  String? uid = 'uid-a';
+  final prefs = <String, String>{};
+  late final preference = SharedLearningPreference.memory(prefs);
   final sent = <Map<String, String>>[];
   int checks = 0;
 
@@ -68,6 +78,8 @@ class _Harness {
   final onCheck = <int, UserSettingsEntity>{};
 
   late final client = SharedCategoryLearningClient(
+    accountUid: () => uid,
+    optedIn: preference.isOn,
     mayEgress: () async {
       final allowed =
           ConsentAuthority.decide(EgressClass.aiProcessing, settings);
@@ -81,16 +93,126 @@ class _Harness {
 }
 
 void main() {
+  group('opt-in (Help improve categories for everyone)', () {
+    test('OFF by default: nothing is sent, even with Cloud and AI on',
+        () async {
+      final h = _Harness();
+      expect(await h.preference.isOn('uid-a'), isFalse);
+      await h.client.offer(_tx(), 'shopping');
+      expect(h.sent, isEmpty);
+      expect(h.client.queuedCount, 0);
+    });
+
+    test('ON with Cloud and AI: sent', () async {
+      final h = _Harness();
+      await h.preference.set('uid-a', true);
+      await h.client.offer(_tx(), 'shopping');
+      expect(h.sent, [
+        {'merchant_key': 'HALA BOUTIQUE', 'category_key': 'shopping'}
+      ]);
+    });
+
+    test('turned OFF between offer and send: nothing sent, queue dropped',
+        () async {
+      final h = _Harness(optedIn: true);
+      // The switch goes off right after the offer-time check passes.
+      final client = SharedCategoryLearningClient(
+        accountUid: () => h.uid,
+        optedIn: (uid) async {
+          final on = await h.preference.isOn(uid);
+          if (on) await h.preference.set('uid-a', false);
+          return on;
+        },
+        mayEgress: () async => true,
+        send: (body) async => h.sent.add(body),
+      );
+      await client.offer(_tx(), 'shopping');
+      expect(h.sent, isEmpty);
+      expect(client.queuedCount, 0);
+      await h.preference.set('uid-a', true);
+      await client.flush();
+      expect(h.sent, isEmpty, reason: 'the dropped item never comes back');
+    });
+
+    test('turning the switch OFF (dropQueued) drops what is waiting', () async {
+      final h = _Harness(optedIn: true);
+      final gate = Completer<void>();
+      final client = SharedCategoryLearningClient(
+        accountUid: () => h.uid,
+        optedIn: h.preference.isOn,
+        mayEgress: () async => true,
+        send: (body) async {
+          await gate.future;
+          h.sent.add(body);
+        },
+      );
+      final first = client.offer(_tx(), 'shopping');
+      await Future<void>.delayed(Duration.zero);
+      await client.offer(_tx(merchant: 'NEW CAFE'), 'cafes');
+      expect(client.queuedCount, 1, reason: 'waiting behind the first send');
+      client.dropQueued();
+      gate.complete();
+      await first;
+      expect(h.sent.map((b) => b['merchant_key']), ['HALA BOUTIQUE']);
+      expect(client.queuedCount, 0);
+    });
+
+    test('another account on the same device starts OFF', () async {
+      final h = _Harness(optedIn: true);
+      h.uid = 'uid-b';
+      expect(await h.preference.isOn('uid-b'), isFalse);
+      await h.client.offer(_tx(), 'shopping');
+      expect(h.sent, isEmpty);
+      h.uid = null; // signed out
+      await h.client.offer(_tx(), 'shopping');
+      expect(h.sent, isEmpty);
+    });
+
+    test('an account switch between offer and send drops the item', () async {
+      final h = _Harness(optedIn: true);
+      await h.preference.set('uid-b', true);
+      final client = SharedCategoryLearningClient(
+        accountUid: () => h.uid,
+        optedIn: (uid) async {
+          final on = await h.preference.isOn(uid);
+          h.uid = 'uid-b'; // switched after the offer-time check
+          return on;
+        },
+        mayEgress: () async => true,
+        send: (body) async => h.sent.add(body),
+      );
+      await client.offer(_tx(), 'shopping');
+      expect(h.sent, isEmpty,
+          reason: "uid-a's contribution is never sent as uid-b");
+      expect(client.queuedCount, 0);
+    });
+
+    test('turning it ON sends nothing retroactively', () async {
+      final h = _Harness();
+      // Rules confirmed while OFF.
+      await h.client.offer(_tx(), 'shopping');
+      await h.client.offer(_tx(merchant: 'OLD CAFE'), 'cafes');
+      await h.preference.set('uid-a', true);
+      await h.client.flush();
+      expect(h.sent, isEmpty);
+      // Only a later choice contributes.
+      await h.client.offer(_tx(merchant: 'NEW CAFE'), 'cafes');
+      expect(h.sent, [
+        {'merchant_key': 'NEW CAFE', 'category_key': 'cafes'}
+      ]);
+    });
+  });
+
   group('consent', () {
     test('Cloud OFF: nothing is sent', () async {
-      final h = _Harness(cloud: false, ai: true);
+      final h = _Harness(cloud: false, ai: true, optedIn: true);
       await h.client.offer(_tx(), 'shopping');
       expect(h.sent, isEmpty);
       expect(h.client.queuedCount, 0);
     });
 
     test('AI OFF: nothing is sent', () async {
-      final h = _Harness(cloud: true, ai: false);
+      final h = _Harness(cloud: true, ai: false, optedIn: true);
       await h.client.offer(_tx(), 'shopping');
       expect(h.sent, isEmpty);
       expect(h.client.queuedCount, 0);
@@ -100,7 +222,7 @@ void main() {
       test(
           '$revoked revoked between enqueue and send: nothing sent, queue '
           'dropped, and a later re-grant does not release it', () async {
-        final h = _Harness()
+        final h = _Harness(optedIn: true)
           ..onCheck[1] =
               _settings(cloud: revoked != 'cloud', ai: revoked != 'ai');
         await h.client.offer(_tx(), 'shopping');
@@ -122,7 +244,7 @@ void main() {
 
   group('payload', () {
     test('only the normalised merchant key and the category key', () async {
-      final h = _Harness();
+      final h = _Harness(optedIn: true);
       await h.client.offer(_tx(), 'shopping');
       expect(h.sent, hasLength(1));
       expect(h.sent.single.keys.toList(), ['merchant_key', 'category_key']);
@@ -172,7 +294,7 @@ void main() {
     };
     for (final entry in cases.entries) {
       test(entry.key, () async {
-        final h = _Harness();
+        final h = _Harness(optedIn: true);
         await h.client.offer(entry.value, 'shopping');
         expect(h.sent, isEmpty);
         expect(h.checks, 0, reason: 'dropped before consent is even asked');
