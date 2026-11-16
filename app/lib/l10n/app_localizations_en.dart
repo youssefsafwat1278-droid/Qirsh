@@ -1297,6 +1297,35 @@ class AppL10nEn extends AppL10n {
   String get setCategoriesSub => 'Organise expenses, income and transfers';
 
   @override
+  String get setLearnedRules => 'Learned rules';
+
+  @override
+  String get setLearnedRulesSub =>
+      'Merchants whose category you asked Qirsh to remember';
+
+  @override
+  String get lrEmptyTitle => 'No learned rules yet';
+
+  @override
+  String get lrEmptyBody =>
+      'When you change a transaction’s category, choose “Remember for this merchant” and the rule appears here.';
+
+  @override
+  String get lrDelete => 'Delete rule';
+
+  @override
+  String get lrDeleted => 'Rule deleted';
+
+  @override
+  String get lrUndo => 'Undo';
+
+  @override
+  String get lrLoadFailed => 'Couldn’t load your rules';
+
+  @override
+  String get lrActionFailed => 'Couldn’t update the rule. Try again.';
+
+  @override
   String get setAchievements => 'Achievements and level';
 
   @override

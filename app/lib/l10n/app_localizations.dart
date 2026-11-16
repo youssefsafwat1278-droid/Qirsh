@@ -2383,6 +2383,60 @@ abstract class AppL10n {
   /// **'نظم المصروفات والدخل والتحويلات'**
   String get setCategoriesSub;
 
+  /// No description provided for @setLearnedRules.
+  ///
+  /// In ar, this message translates to:
+  /// **'القواعد المحفوظة'**
+  String get setLearnedRules;
+
+  /// No description provided for @setLearnedRulesSub.
+  ///
+  /// In ar, this message translates to:
+  /// **'متاجر طلبت من قِرش أن يتذكّر تصنيفها'**
+  String get setLearnedRulesSub;
+
+  /// No description provided for @lrEmptyTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد قواعد محفوظة بعد'**
+  String get lrEmptyTitle;
+
+  /// No description provided for @lrEmptyBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'عند تغيير تصنيف عملية، اختر «تذكّر التصنيف لهذا المتجر» وستظهر القاعدة هنا.'**
+  String get lrEmptyBody;
+
+  /// No description provided for @lrDelete.
+  ///
+  /// In ar, this message translates to:
+  /// **'احذف القاعدة'**
+  String get lrDelete;
+
+  /// No description provided for @lrDeleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'حُذفت القاعدة'**
+  String get lrDeleted;
+
+  /// No description provided for @lrUndo.
+  ///
+  /// In ar, this message translates to:
+  /// **'تراجع'**
+  String get lrUndo;
+
+  /// No description provided for @lrLoadFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحميل القواعد'**
+  String get lrLoadFailed;
+
+  /// No description provided for @lrActionFailed.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر تحديث القاعدة. حاول مرة أخرى.'**
+  String get lrActionFailed;
+
   /// No description provided for @setAchievements.
   ///
   /// In ar, this message translates to:

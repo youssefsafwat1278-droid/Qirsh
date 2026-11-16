@@ -23,6 +23,7 @@ import '../../core/backend/supabase_config.dart';
 import '../../core/di/app_providers.dart';
 import '../planning_sync/planning_conflicts_sheet.dart';
 import 'sign_out_sheet.dart';
+import 'learned_rules_screen.dart';
 import 'sign_in_methods_sheet.dart';
 import '../../data/catalog/catalog_daos.dart';
 import '../../core/security/app_lock_service.dart';
@@ -414,6 +415,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: l10n.setCategories,
               subtitle: l10n.setCategoriesSub,
               onTap: () => _showCategoriesSheet(context, ref),
+            ),
+            _NavTile(
+              icon: AppLucideIcons.sparkles,
+              title: l10n.setLearnedRules,
+              subtitle: l10n.setLearnedRulesSub,
+              onTap: () => LearnedRulesScreen.open(context),
             ),
             _NavTile(
               icon: AppLucideIcons.trophy,

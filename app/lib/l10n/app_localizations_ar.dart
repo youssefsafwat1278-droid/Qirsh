@@ -1279,6 +1279,34 @@ class AppL10nAr extends AppL10n {
   String get setCategoriesSub => 'نظم المصروفات والدخل والتحويلات';
 
   @override
+  String get setLearnedRules => 'القواعد المحفوظة';
+
+  @override
+  String get setLearnedRulesSub => 'متاجر طلبت من قِرش أن يتذكّر تصنيفها';
+
+  @override
+  String get lrEmptyTitle => 'لا توجد قواعد محفوظة بعد';
+
+  @override
+  String get lrEmptyBody =>
+      'عند تغيير تصنيف عملية، اختر «تذكّر التصنيف لهذا المتجر» وستظهر القاعدة هنا.';
+
+  @override
+  String get lrDelete => 'احذف القاعدة';
+
+  @override
+  String get lrDeleted => 'حُذفت القاعدة';
+
+  @override
+  String get lrUndo => 'تراجع';
+
+  @override
+  String get lrLoadFailed => 'تعذّر تحميل القواعد';
+
+  @override
+  String get lrActionFailed => 'تعذّر تحديث القاعدة. حاول مرة أخرى.';
+
+  @override
   String get setAchievements => 'الإنجازات والمستوى';
 
   @override
