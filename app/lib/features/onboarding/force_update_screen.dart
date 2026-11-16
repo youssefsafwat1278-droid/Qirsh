@@ -14,8 +14,7 @@ class ForceUpdateScreen extends ConsumerWidget {
   const ForceUpdateScreen({super.key});
 
   /// Also the fallback of the optional update banner.
-  static const appStoreUrl =
-      'https://apps.apple.com/app/mali/id0000000000'; // update with real ID
+  static const appStoreUrl = 'https://apps.apple.com/app/id6785476254';
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
