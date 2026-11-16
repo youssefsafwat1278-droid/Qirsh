@@ -6294,6 +6294,20 @@ class AppL10nEn extends AppL10n {
   String get sessionRecoverySignIn => 'Sign in again';
 
   @override
+  String get sessionRecoveryOfflineTitle => 'No connection';
+
+  @override
+  String get sessionRecoveryOfflineBody =>
+      'We couldn\'t reach the server to finish opening Qirsh. Your data on this phone is safe. We\'ll try again automatically, or you can try now.';
+
+  @override
+  String get sessionRecoveryRejectedTitle => 'Your session has ended';
+
+  @override
+  String get sessionRecoveryRejectedBody =>
+      'Sign in again to continue. Your data on this phone stays safe.';
+
+  @override
   String get localReadBannerTitle => 'Offline — read only';
 
   @override

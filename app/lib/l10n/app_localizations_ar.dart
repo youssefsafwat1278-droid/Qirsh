@@ -6308,6 +6308,20 @@ class AppL10nAr extends AppL10n {
   String get sessionRecoverySignIn => 'تسجيل الدخول من جديد';
 
   @override
+  String get sessionRecoveryOfflineTitle => 'لا يوجد اتصال';
+
+  @override
+  String get sessionRecoveryOfflineBody =>
+      'تعذّر الوصول إلى الخادم لإكمال فتح قرش. بياناتك على هذا الجهاز آمنة. سنعيد المحاولة تلقائيًا، أو يمكنك المحاولة الآن.';
+
+  @override
+  String get sessionRecoveryRejectedTitle => 'انتهت جلستك';
+
+  @override
+  String get sessionRecoveryRejectedBody =>
+      'سجّل الدخول من جديد للمتابعة. بياناتك على هذا الجهاز تبقى آمنة.';
+
+  @override
   String get localReadBannerTitle => 'بدون اتصال — للعرض فقط';
 
   @override

@@ -20,7 +20,8 @@ import 'local_read_cleanup_notice.dart';
 /// Presentation for an existing, verified read-only scope. The scope and its
 /// restrictions stay intact; automatic recovery shows only the branded loader.
 /// If it stops, offer retry or explicit sign-in without mounting financial
-/// providers, producers or the old Offline / Reconnect screen.
+/// providers, producers or the old Offline / Reconnect screen: offline offers
+/// only retry and logout, a rejected credential asks to sign in again.
 class LocalReadShell extends StatefulWidget {
   const LocalReadShell({
     super.key,
@@ -89,71 +90,103 @@ class _LocalReadShellState extends State<LocalReadShell> {
           }
           final l10n = context.l10n;
           final c = context.colors;
-          return Scaffold(
-            body: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(24),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 360),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Image.asset(AppAssets.getLogoTagline(context),
-                            width: 220),
-                        const SizedBox(height: 28),
-                        Text(l10n.sessionRecoveryTitle,
-                            textAlign: TextAlign.center,
-                            style: AppTypography.title2(c.textPrimary)),
-                        const SizedBox(height: 12),
-                        Text(l10n.sessionRecoveryBody,
-                            textAlign: TextAlign.center,
-                            style: AppTypography.body(c.textSecondary)),
-                        const SizedBox(height: 24),
-                        if (AutomaticSessionRecovery.active != null)
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              key: const Key('session_recovery_retry'),
-                              onPressed: () =>
-                                  AutomaticSessionRecovery.active?.trigger(),
-                              child: Text(l10n.startRetry),
-                            ),
-                          ),
-                        TextButton(
-                          key: const Key('local_read_reconnect'),
-                          onPressed: widget.onReconnect ??
-                              () {
-                                AutomaticSessionRecovery.active
-                                    ?.yieldToExplicitAttempt();
-                                GoRouter.of(context).go('/onboarding/auth');
-                              },
-                          child: Text(l10n.sessionRecoverySignIn),
-                        ),
-                        TextButton(
-                          key: const Key('local_read_logout'),
-                          onPressed: () async {
-                            final navigator =
-                                Navigator.of(context, rootNavigator: true);
-                            try {
-                              await (widget.onLogout?.call() ??
-                                  _logout(navigator, l10n));
-                            } catch (_) {
-                              if (context.mounted) {
-                                AppToast.showError(
-                                    context, l10n.localReadLogoutFailed);
-                              }
-                            }
-                          },
-                          child: Text(l10n.localReadLogout),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          return ValueListenableBuilder<AsrFailure?>(
+            valueListenable: AutomaticSessionRecovery.lastFailure,
+            builder: (context, failure, _) => _stopped(context, l10n, c, failure),
           );
         },
       );
+
+  /// After recovery stopped: offline (retry and logout only), rejected
+  /// (sign in again), or the generic screen.
+  Widget _stopped(
+      BuildContext context, AppL10n l10n, AppColors c, AsrFailure? failure) {
+    final offline = failure == AsrFailure.offline;
+    final rejected = failure == AsrFailure.rejected;
+    final onSignIn = widget.onReconnect ??
+        () {
+          AutomaticSessionRecovery.active?.yieldToExplicitAttempt();
+          GoRouter.of(context).go('/onboarding/auth');
+        };
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(AppAssets.getLogoTagline(context),
+                      width: 220),
+                  const SizedBox(height: 28),
+                  Text(
+                      offline
+                          ? l10n.sessionRecoveryOfflineTitle
+                          : rejected
+                              ? l10n.sessionRecoveryRejectedTitle
+                              : l10n.sessionRecoveryTitle,
+                      textAlign: TextAlign.center,
+                      style: AppTypography.title2(c.textPrimary)),
+                  const SizedBox(height: 12),
+                  Text(
+                      offline
+                          ? l10n.sessionRecoveryOfflineBody
+                          : rejected
+                              ? l10n.sessionRecoveryRejectedBody
+                              : l10n.sessionRecoveryBody,
+                      textAlign: TextAlign.center,
+                      style: AppTypography.body(c.textSecondary)),
+                  const SizedBox(height: 24),
+                  if (!rejected && AutomaticSessionRecovery.active != null)
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        key: const Key('session_recovery_retry'),
+                        onPressed: () =>
+                            AutomaticSessionRecovery.active?.trigger(),
+                        child: Text(l10n.startRetry),
+                      ),
+                    ),
+                  if (rejected)
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        key: const Key('local_read_reconnect'),
+                        onPressed: onSignIn,
+                        child: Text(l10n.sessionRecoverySignIn),
+                      ),
+                    )
+                  else if (!offline)
+                    TextButton(
+                      key: const Key('local_read_reconnect'),
+                      onPressed: onSignIn,
+                      child: Text(l10n.sessionRecoverySignIn),
+                    ),
+                  TextButton(
+                    key: const Key('local_read_logout'),
+                    onPressed: () async {
+                      final navigator =
+                          Navigator.of(context, rootNavigator: true);
+                      try {
+                        await (widget.onLogout?.call() ??
+                            _logout(navigator, l10n));
+                      } catch (_) {
+                        if (context.mounted) {
+                          AppToast.showError(
+                              context, l10n.localReadLogoutFailed);
+                        }
+                      }
+                    },
+                    child: Text(l10n.localReadLogout),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

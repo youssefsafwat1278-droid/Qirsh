@@ -10603,6 +10603,30 @@ abstract class AppL10n {
   /// **'تسجيل الدخول من جديد'**
   String get sessionRecoverySignIn;
 
+  /// No description provided for @sessionRecoveryOfflineTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يوجد اتصال'**
+  String get sessionRecoveryOfflineTitle;
+
+  /// No description provided for @sessionRecoveryOfflineBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر الوصول إلى الخادم لإكمال فتح قرش. بياناتك على هذا الجهاز آمنة. سنعيد المحاولة تلقائيًا، أو يمكنك المحاولة الآن.'**
+  String get sessionRecoveryOfflineBody;
+
+  /// No description provided for @sessionRecoveryRejectedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'انتهت جلستك'**
+  String get sessionRecoveryRejectedTitle;
+
+  /// No description provided for @sessionRecoveryRejectedBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّل الدخول من جديد للمتابعة. بياناتك على هذا الجهاز تبقى آمنة.'**
+  String get sessionRecoveryRejectedBody;
+
   /// No description provided for @localReadBannerTitle.
   ///
   /// In ar, this message translates to:
