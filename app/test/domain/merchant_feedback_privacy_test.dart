@@ -92,6 +92,10 @@ class _StubTransactionRepo implements TransactionRepository {
 
 class _StubMerchantRepo implements MerchantCategoryRepository {
   @override
+  Future<String?> userConfirmedCategoryFor(String rawMerchant) async =>
+      null;
+
+  @override
   Future<bool> hasCategoryForMerchant(String rawMerchant) async => false;
 
   @override

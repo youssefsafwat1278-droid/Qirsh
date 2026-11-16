@@ -1546,6 +1546,7 @@ final captureSyncServiceProvider = writerProvider<CaptureSyncService>((ref) {
     ownershipGuard: OwnershipGuard(),
     currentUserId: () => supabase.Supabase.instance.client.auth.currentUser?.id,
     accountRepository: ref.watch(accountRepositoryProvider),
+    merchantCategoryRepository: DriftMerchantCategoryRepository(db),
     client: ref.watch(captureBackendClientProvider),
     coordinator: ref.watch(planningCutoverCoordinatorProvider),
     isLocalAutoConfirmV2: () => featureFlags.getBool('local_auto_confirm_v2'),

@@ -20,6 +20,10 @@ abstract class MerchantCategoryRepository {
     double confidence = 1,
   });
 
+  /// The category of the user-confirmed rule for [rawMerchant]'s normalised
+  /// merchant, or null. Seed (catalog) mappings never answer here.
+  Future<String?> userConfirmedCategoryFor(String rawMerchant);
+
   /// Only the rules the user confirmed, newest first.
   Future<List<LearnedMerchantRule>> getUserConfirmedRules();
 

@@ -19,6 +19,8 @@ import '../../../data/db/planning_cutover.dart';
 import '../../../domain/entities/transaction_entity.dart';
 import '../../../domain/finance/money.dart';
 import '../../../domain/repositories/account_repository.dart';
+import '../../../domain/repositories/merchant_category_repository.dart';
+import '../../../domain/services/learned_rule_precedence.dart';
 import '../../../domain/usecases/add_transaction_usecase.dart';
 import '../../../domain/usecases/user_settings_usecases.dart';
 import '../../../domain/usecases/ingest_captured_message_usecase.dart';
@@ -90,6 +92,9 @@ class CaptureSyncService {
     required OwnershipGuard ownershipGuard,
     required String? Function() currentUserId,
     AccountRepository? accountRepository,
+    // The user's confirmed merchant rules outrank the server's category.
+    // Absent => the server category is used as-is.
+    MerchantCategoryRepository? merchantCategoryRepository,
     CaptureBackendClient? client,
     bool? backendConfigured,
     Future<String> Function()? loadInstallId,
@@ -127,6 +132,7 @@ class CaptureSyncService {
         _ownershipGuard = ownershipGuard,
         _currentUserId = currentUserId,
         _accountRepository = accountRepository,
+        _merchantCategoryRepository = merchantCategoryRepository,
         _client = client,
         _backendConfigured = backendConfigured,
         _loadInstallId = loadInstallId,
@@ -140,6 +146,7 @@ class CaptureSyncService {
   final DriftDedupStore _dedupStore;
   final DriftSmartInboxRepository _smartInboxRepository;
   final DriftSuspectedDuplicateRepository _suspectedDuplicateRepository;
+  final MerchantCategoryRepository? _merchantCategoryRepository;
   final CaptureDeviceRegistrationService _registrationService;
   final OwnershipGuard _ownershipGuard;
   final String? Function() _currentUserId;
@@ -1082,10 +1089,13 @@ class CaptureSyncService {
     );
     // Atomic import (MALI-012): the surrounding per-capture transaction includes
     // any account creation, the transaction/outbox row, and its dedup marker.
+    final categoryKey = await learnedRuleCategoryFor(
+            _merchantCategoryRepository, transaction.rawMerchant) ??
+        _string(parsed['category']);
     await requireCurrentAdmission();
     final saved = await _transactionRepository.saveTransaction(
       transaction: transaction,
-      categoryKey: _string(parsed['category']),
+      categoryKey: categoryKey,
     );
     await requireCurrentAdmission();
     await markPayloadImported(

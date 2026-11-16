@@ -98,6 +98,23 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
   }
 
   @override
+  Future<String?> userConfirmedCategoryFor(String rawMerchant) async {
+    final row = await _db.customSelect(
+      '''
+        SELECT categories.key AS category_key
+        FROM merchant_category_map
+        INNER JOIN merchants ON merchants.id = merchant_category_map.merchant_id
+        INNER JOIN categories ON categories.id = merchant_category_map.category_id
+        WHERE merchants.normalized_name = ?
+          AND merchant_category_map.is_user_confirmed = 1
+        LIMIT 1;
+      ''',
+      variables: [Variable.withString(AppDatabase.normalizeMerchant(rawMerchant))],
+    ).getSingleOrNull();
+    return row?.read<String>('category_key');
+  }
+
+  @override
   Future<List<LearnedMerchantRule>> getUserConfirmedRules() async {
     final rows = await _db.customSelect(
       '''
