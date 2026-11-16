@@ -355,7 +355,8 @@ final activeAnnouncementsProvider =
   return ref.watch(announcementServiceProvider).getActiveAnnouncements();
 });
 
-final growthCampaignServiceProvider = writerProvider<GrowthCampaignService>((ref) {
+final growthCampaignServiceProvider =
+    writerProvider<GrowthCampaignService>((ref) {
   return GrowthCampaignService(
     database: ref.watch(appDatabaseProvider),
     dao: RemoteGrowthCampaignsDao(ref.watch(appDatabaseProvider)),
@@ -443,14 +444,16 @@ FeatureFlagService get featureFlags {
 // service class survives only for the credential-gated contract tests. Do NOT
 // re-wire it for reads without canonicalizing the RPCs first.
 
-final accountDeletionServiceProvider = writerProvider<AccountDeletionService>((ref) {
+final accountDeletionServiceProvider =
+    writerProvider<AccountDeletionService>((ref) {
   return AccountDeletionService();
 });
 
 /// LEGACY: the scheduled (30-day) deletion backend, reported truthfully (never
 /// as completed). The Delete account screen no longer uses it; it remains only
 /// for the status/cancel of requests scheduled before immediate deletion.
-final accountDeletionGatewayProvider = writerProvider<AccountDeletionGateway>((ref) {
+final accountDeletionGatewayProvider =
+    writerProvider<AccountDeletionGateway>((ref) {
   return ScheduledAccountDeletionGateway(
       ref.watch(accountDeletionServiceProvider));
 });
@@ -466,7 +469,8 @@ final appleDeletionReauthProvider = writerProvider<AppleDeletionReauth>(
 /// Immediate, permanent deletion: operation-bound (prepare/challenge/Apple
 /// re-auth/request/recover) with original-owner local removal. A writer provider,
 /// so it is never built under an offline local-read scope.
-final immediateDeletionFlowProvider = writerProvider<ImmediateDeletionFlow>((ref) {
+final immediateDeletionFlowProvider =
+    writerProvider<ImmediateDeletionFlow>((ref) {
   final host = ref.watch(accountScopeHostProvider);
   final base = Uri.tryParse(SupabaseConfig.url);
   if (host == null || !SupabaseConfig.isConfigured || base == null) {
@@ -499,7 +503,8 @@ final immediateDeletionFlowProvider = writerProvider<ImmediateDeletionFlow>((ref
         if (credential == null) return const AppleReauthCancelled();
         final token = credential['idToken'];
         if (token == null || token.isEmpty) return const AppleReauthFailed();
-        return AppleReauthGranted(jsonEncode({'proof': 'google', 'identity_token': token}));
+        return AppleReauthGranted(
+            jsonEncode({'proof': 'google', 'identity_token': token}));
       } catch (_) {
         return const AppleReauthFailed();
       }
@@ -964,7 +969,8 @@ final ledgerPushServiceProvider = writerProvider<LedgerPushService>((ref) {
 });
 
 /// الواجهة تقرأ/تكتب من Drift دائمًا؛ المزامنة خلفية عبر outbox/push/pull.
-final transactionRepositoryProvider = writerProvider<TransactionRepository>((ref) {
+final transactionRepositoryProvider =
+    writerProvider<TransactionRepository>((ref) {
   final db = ref.watch(appDatabaseProvider);
   return DriftTransactionRepository(
     db,
@@ -983,7 +989,8 @@ final suspectedDuplicatesProvider =
   return ref.watch(suspectedDuplicateRepositoryProvider).getAll();
 });
 
-final smartInboxRepositoryProvider = writerProvider<SmartInboxRepository>((ref) {
+final smartInboxRepositoryProvider =
+    writerProvider<SmartInboxRepository>((ref) {
   final db = ref.watch(appDatabaseProvider);
   return DriftSmartInboxRepository(db);
 });
@@ -1128,7 +1135,8 @@ final goalRepositoryProvider = writerProvider<GoalRepository>((ref) {
 /// (replaces the planning-only resolver). Covers all twelve synced entities;
 /// the keep-local re-enqueue is wired per interactive entity via its typed
 /// repository + outbox queue, so resolving carries the current local state.
-final conflictResolverProvider = writerProvider<UniversalConflictResolver>((ref) {
+final conflictResolverProvider =
+    writerProvider<UniversalConflictResolver>((ref) {
   final ledgerQueue = ref.watch(ledgerOutboxQueueProvider);
   final planningQueue = ref.watch(planningOutboxQueueProvider);
   final transactions = ref.watch(transactionRepositoryProvider);
@@ -1308,11 +1316,13 @@ final accountHasTransactionsProvider =
       .hasTransactions(accountId);
 });
 
-final gamificationRepositoryProvider = writerProvider<GamificationRepository>((ref) {
+final gamificationRepositoryProvider =
+    writerProvider<GamificationRepository>((ref) {
   return DriftGamificationRepository(ref.watch(appDatabaseProvider));
 });
 
-final userSettingsRepositoryProvider = writerProvider<UserSettingsRepository>((ref) {
+final userSettingsRepositoryProvider =
+    writerProvider<UserSettingsRepository>((ref) {
   return DriftUserSettingsRepository(
     ref.watch(appDatabaseProvider),
     outboxQueue: ref.watch(planningOutboxQueueProvider),
@@ -1323,7 +1333,8 @@ final userSettingsRepositoryProvider = writerProvider<UserSettingsRepository>((r
 /// same atomic local outbox as [userSettingsRepositoryProvider]). Every consent
 /// decision goes through it; the generic settings save stays for the settings
 /// that are not consent.
-final consentSettingsWriterProvider = writerProvider<ConsentSettingsWriter>((ref) {
+final consentSettingsWriterProvider =
+    writerProvider<ConsentSettingsWriter>((ref) {
   return DriftUserSettingsRepository(
     ref.watch(appDatabaseProvider),
     outboxQueue: ref.watch(planningOutboxQueueProvider),
@@ -1346,7 +1357,8 @@ final categoryRepositoryProvider = writerProvider<CategoryRepository>((ref) {
   );
 });
 
-final dataPortabilityServiceProvider = writerProvider<DataPortabilityService>((ref) {
+final dataPortabilityServiceProvider =
+    writerProvider<DataPortabilityService>((ref) {
   return AppDataPortabilityService(
     db: ref.watch(appDatabaseProvider),
     accounts: ref.watch(accountRepositoryProvider),
@@ -1396,7 +1408,8 @@ final bankDiscoveryClientProvider = writerProvider<BankDiscoveryClient?>((ref) {
   );
 });
 
-final bankDiscoveryServiceProvider = writerProvider<BankDiscoveryService?>((ref) {
+final bankDiscoveryServiceProvider =
+    writerProvider<BankDiscoveryService?>((ref) {
   final client = ref.watch(bankDiscoveryClientProvider);
   if (client == null) return null;
   return BankDiscoveryService(
@@ -1448,7 +1461,8 @@ final installIdProvider = FutureProvider<String>((ref) {
   return InstallId.get();
 });
 
-final captureBackendClientProvider = writerProvider<CaptureBackendClient?>((ref) {
+final captureBackendClientProvider =
+    writerProvider<CaptureBackendClient?>((ref) {
   if (!SupabaseConfig.isConfigured) return null;
   return CaptureBackendClient(
     supabaseUrl: SupabaseConfig.url,
@@ -1494,7 +1508,8 @@ class _CaptureRegistrationStatusNotifier
 }
 
 /// Phase 1 notification tracking (docs/NOTIFICATION_PIPELINE_AUDIT.md).
-final notificationLogServiceProvider = writerProvider<NotificationLogService>((ref) {
+final notificationLogServiceProvider =
+    writerProvider<NotificationLogService>((ref) {
   final db = ref.watch(appDatabaseProvider);
   var disposed = false;
   ref.onDispose(() => disposed = true);
@@ -1530,6 +1545,15 @@ final captureRetryLedgerProvider = writerProvider<CaptureRetryLedger>(
   (ref) => CaptureRetryLedger(store: const PrefsCaptureRetryStore()),
 );
 
+/// The synced catalog keywords for the user's country (all when unset).
+Future<List<RemoteMerchantKeyword>> _loadRemoteKeywords(AppDatabase db) async {
+  final settings = await DriftUserSettingsRepository(db).getSettings();
+  final country = settings.country;
+  return country.isEmpty
+      ? RemoteMerchantKeywordsDao(db).getAll()
+      : RemoteMerchantKeywordsDao(db).getActiveForCountry(country);
+}
+
 final captureSyncServiceProvider = writerProvider<CaptureSyncService>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final ingest = ref.watch(ingestCapturedMessageUseCaseProvider);
@@ -1549,6 +1573,7 @@ final captureSyncServiceProvider = writerProvider<CaptureSyncService>((ref) {
     currentUserId: () => supabase.Supabase.instance.client.auth.currentUser?.id,
     accountRepository: ref.watch(accountRepositoryProvider),
     merchantCategoryRepository: DriftMerchantCategoryRepository(db),
+    loadRemoteKeywords: () => _loadRemoteKeywords(db),
     client: ref.watch(captureBackendClientProvider),
     coordinator: ref.watch(planningCutoverCoordinatorProvider),
     isLocalAutoConfirmV2: () => featureFlags.getBool('local_auto_confirm_v2'),
@@ -1594,7 +1619,8 @@ final legacyCaptureDrainProvider = writerProvider<LegacyCaptureDrain>((ref) {
 /// CAP-5: the iOS capture import, bound to the account scope. Built per scope
 /// (the root `ProviderScope` is keyed by the scope generation), so it can only
 /// ever touch the active replica. Used only behind `capture_import_v3`.
-final captureImportServiceProvider = writerProvider<CaptureImportService>((ref) {
+final captureImportServiceProvider =
+    writerProvider<CaptureImportService>((ref) {
   final db = ref.watch(appDatabaseProvider);
   final sync = ref.watch(captureSyncServiceProvider);
   return CaptureImportService(
@@ -1650,7 +1676,8 @@ final unboundCapturePromptServiceProvider =
 });
 
 /// §4.7: removes legacy v2 queue items the adopted replica proves consumed.
-final legacyCaptureResolverProvider = writerProvider<LegacyCaptureResolver>((ref) {
+final legacyCaptureResolverProvider =
+    writerProvider<LegacyCaptureResolver>((ref) {
   final db = ref.watch(appDatabaseProvider);
   return LegacyCaptureResolver(
     queue: const NativeCaptureImportQueue(),
@@ -1719,7 +1746,8 @@ final ledgerSyncEngineProvider = writerProvider<LedgerSyncEngine>((ref) {
   );
 });
 
-final smartInboxSyncServiceProvider = writerProvider<SmartInboxSyncService>((ref) {
+final smartInboxSyncServiceProvider =
+    writerProvider<SmartInboxSyncService>((ref) {
   final db = ref.watch(appDatabaseProvider);
   return SmartInboxSyncService(
     db: db,
@@ -1741,7 +1769,8 @@ final smartInboxSyncServiceProvider = writerProvider<SmartInboxSyncService>((ref
 /// [StartupSyncReconcileService].
 /// A-4b: records sync intent for server-backed rows a raw-SQL bypass writer left
 /// `pending` with no outbox row. Run at the start of each sync cycle.
-final pendingSyncReconcilerProvider = writerProvider<PendingSyncReconciler>((ref) {
+final pendingSyncReconcilerProvider =
+    writerProvider<PendingSyncReconciler>((ref) {
   return PendingSyncReconciler(
     db: ref.watch(appDatabaseProvider),
     ledgerQueue: ref.watch(ledgerOutboxQueueProvider),
@@ -1787,7 +1816,8 @@ final startupSyncReconcileServiceProvider =
 ///
 /// It is seeded lazily from the user's persisted merchant confirmations, so the
 /// learned map stays the single source of truth and no second store exists.
-final merchantIntelligenceProvider = writerProvider<MerchantIntelligenceStore>((ref) {
+final merchantIntelligenceProvider =
+    writerProvider<MerchantIntelligenceStore>((ref) {
   final store = MerchantIntelligenceStore();
   // Fire-and-forget rehydrate: the model is an optional suggestion source, so
   // capture must never wait on it. Until it resolves the model simply behaves
@@ -1800,7 +1830,8 @@ final merchantIntelligenceProvider = writerProvider<MerchantIntelligenceStore>((
   return store;
 });
 
-final addTransactionUseCaseProvider = writerProvider<AddTransactionUseCase>((ref) {
+final addTransactionUseCaseProvider =
+    writerProvider<AddTransactionUseCase>((ref) {
   // Capture the DB once at build time. The async callbacks below run later
   // (during a slow AI call); reading `ref` inside them would throw if this
   // provider rebuilt in the meantime (e.g. installId resolving).
@@ -1844,13 +1875,7 @@ final addTransactionUseCaseProvider = writerProvider<AddTransactionUseCase>((ref
     loadBankProfiles: ref.watch(rulesClientProvider).localBankProfiles,
     // F-016: raw catalog rules — the engine's first parsing authority.
     loadCatalogRules: ref.watch(rulesClientProvider).catalogRulesForSender,
-    loadRemoteKeywords: () async {
-      final settings = await DriftUserSettingsRepository(db).getSettings();
-      final country = settings.country;
-      return country.isEmpty
-          ? RemoteMerchantKeywordsDao(db).getAll()
-          : RemoteMerchantKeywordsDao(db).getActiveForCountry(country);
-    },
+    loadRemoteKeywords: () => _loadRemoteKeywords(db),
     noteMerchantFeedback: (keyword) =>
         PendingMerchantFeedbackDao(db).record(keyword),
     // Real-time category assist for unknown merchants: when neither rules nor
@@ -1990,7 +2015,8 @@ final sharedCategoryLearningClientProvider =
   );
 });
 
-final correctCategoryUseCaseProvider = writerProvider<CorrectCategoryUseCase>((ref) {
+final correctCategoryUseCaseProvider =
+    writerProvider<CorrectCategoryUseCase>((ref) {
   return CorrectCategoryUseCase(
     transactionRepository: ref.watch(transactionRepositoryProvider),
     merchantCategoryRepository: ref.watch(merchantCategoryRepositoryProvider),
@@ -2062,7 +2088,8 @@ final addGoalContributionUseCaseProvider =
   );
 });
 
-final budgetProgressUseCaseProvider = writerProvider<BudgetProgressUseCase>((ref) {
+final budgetProgressUseCaseProvider =
+    writerProvider<BudgetProgressUseCase>((ref) {
   // MALI-063n: the dormant Supabase budget-summary batch-fetch (pre-canonical
   // semantics) is retired — budget consumption is always the canonical Drift
   // path.

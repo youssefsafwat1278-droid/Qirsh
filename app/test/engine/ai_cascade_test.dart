@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/data/catalog/catalog_daos.dart';
 import 'package:money_companion/domain/entities/account_entity.dart';
 import 'package:money_companion/domain/entities/transaction_entity.dart';
 import 'package:money_companion/domain/finance/money.dart';
@@ -96,8 +97,7 @@ class _CapturingTransactionRepo extends _StubTransactionRepo {
 
 class _StubMerchantRepo implements MerchantCategoryRepository {
   @override
-  Future<String?> userConfirmedCategoryFor(String rawMerchant) async =>
-      null;
+  Future<String?> userConfirmedCategoryFor(String rawMerchant) async => null;
 
   @override
   Future<bool> hasCategoryForMerchant(String rawMerchant) async => false;
@@ -111,8 +111,7 @@ class _StubMerchantRepo implements MerchantCategoryRepository {
 
 class _StubMerchantRepoWithKnownMerchant implements MerchantCategoryRepository {
   @override
-  Future<String?> userConfirmedCategoryFor(String rawMerchant) async =>
-      null;
+  Future<String?> userConfirmedCategoryFor(String rawMerchant) async => null;
 
   @override
   Future<bool> hasCategoryForMerchant(String rawMerchant) async => true;
@@ -455,7 +454,8 @@ void main() {
     expect(result.droppedByParser, isTrue);
   });
 
-  test('over-precision capture token is retained only as pending legacy fallback',
+  test(
+      'over-precision capture token is retained only as pending legacy fallback',
       () async {
     final fakeParsed = ParsedTransaction(
       amountText: '1.234',
@@ -469,8 +469,8 @@ void main() {
     );
     TransactionEntity? saved;
     final useCase = AddTransactionUseCase(
-      transactionRepository:
-          _CapturingTransactionRepo(onSave: (transaction) => saved = transaction),
+      transactionRepository: _CapturingTransactionRepo(
+          onSave: (transaction) => saved = transaction),
       merchantCategoryRepository: _StubMerchantRepoWithKnownMerchant(),
       parserIsolate: _FakeParserIsolate(ParseResult.success(fakeParsed)),
       loadAiConsent: () async => false,
@@ -484,8 +484,7 @@ void main() {
     expect(saved!.status, TransactionStatus.pending);
   });
 
-  test('unsupported-bank generic parse still consults AI',
-      () async {
+  test('unsupported-bank generic parse still consults AI', () async {
     // A missing AI result preserves the local parse (pending).
     final countingClient = _CountingAiClient();
     TransactionEntity? savedTransaction;
@@ -516,8 +515,7 @@ void main() {
     expect(savedTransaction!.status, TransactionStatus.pending);
   });
 
-  test('sender-bank mapping does not bypass AI',
-      () async {
+  test('sender-bank mapping does not bypass AI', () async {
     // Use a sender NOT in BankProfiles.all so the mapping-based resolution fires.
     const unknownSender = 'GULFCORP-XYZ';
     final countingClient = _CountingAiClient();
@@ -616,7 +614,8 @@ void main() {
     );
     final fakeParseResult = ParseResult.success(fakeParsed);
     const lyingClient = _FixedResponseAiClient(AiParseResponse(
-      amount: 999.99, amountText: '999.99',
+      amount: 999.99,
+      amountText: '999.99',
       currency: 'SAR',
       type: 'payment',
     ));
@@ -657,7 +656,8 @@ void main() {
     final fakeParseResult =
         ParseResult.success(fakeParsed, bankKey: 'instapay_eg');
     const confusedAiClient = _FixedResponseAiClient(AiParseResponse(
-      amount: 1938.0, amountText: '1938.0',
+      amount: 1938.0,
+      amountText: '1938.0',
       currency: 'EGP',
       type: 'transfer',
       categoryKey: 'transfers',
@@ -694,7 +694,8 @@ void main() {
     const rawSms =
         'Transfer sent with amount of EGP 250.00 to Ahmed Hassan on 08/06';
     const aiClient = _FixedResponseAiClient(AiParseResponse(
-      amount: 250, amountText: '250',
+      amount: 250,
+      amountText: '250',
       currency: 'EGP',
       type: 'transfer',
       merchantName: 'Ahmed Hassan',
@@ -736,7 +737,8 @@ void main() {
         'Your account was credited by EGP 2000 on 14-06 23:10 IPN REF# '
         '92420545267 from **نبيل نصير عبدالسيد ميخائ for details please call 19342.';
     final aiClient = _FixedResponseAiClient(AiParseResponse(
-      amount: 2000, amountText: '2000',
+      amount: 2000,
+      amountText: '2000',
       currency: 'EGP',
       type: 'income',
       merchantName: 'نبيل نصير عبدالسيد ميخائ',
@@ -835,7 +837,8 @@ void main() {
     const rawSms = 'Purchase EGP 85.00 At STARBUCKS on 08/06 at 06:55 AM';
     final fakeParseResult = ParseResult.notTransaction();
     const aiClient = _FixedResponseAiClient(AiParseResponse(
-      amount: 85.0, amountText: '85.0',
+      amount: 85.0,
+      amountText: '85.0',
       currency: 'EGP',
       type: 'payment',
       merchantName: 'STARBUCKS',
@@ -861,9 +864,22 @@ void main() {
     expect(savedCategory, 'shopping');
   });
 
-  // Learned rules vs the AI's category: a rule the user confirmed wins; the
-  // catalog seed does not; with no rule the AI category is used as before.
-  for (final (label, repo, expected) in [
+  // Learned rules vs the AI's category: a rule the user confirmed wins, then a
+  // shared-learning mapping for the exact merchant; the catalog seed and
+  // non-shared keywords do not; with neither the AI category is used.
+  RemoteMerchantKeyword kw(String keyword, String category, int priority) =>
+      RemoteMerchantKeyword(
+        id: 'kw-$keyword-$priority',
+        keyword: keyword,
+        categoryKey: category,
+        language: 'any',
+        countryCode: 'ALL',
+        priority: priority,
+        isActive: true,
+        isDeleted: false,
+        updatedAt: '2026-11-16T00:00:00Z',
+      );
+  for (final (label, repo, expected, keywords) in [
     (
       'a user-confirmed rule beats the AI category',
       _RulesMerchantRepo(
@@ -871,16 +887,46 @@ void main() {
         confirmed: {'STARBUCKS': 'restaurants'},
       ),
       'restaurants',
+      <RemoteMerchantKeyword>[],
     ),
     (
       'a seed-only mapping does not beat the AI category',
       _RulesMerchantRepo(learned: {'STARBUCKS': 'cafes'}),
       'shopping',
+      <RemoteMerchantKeyword>[],
     ),
     (
       'with no rule the AI category is used',
       _RulesMerchantRepo(),
       'shopping',
+      <RemoteMerchantKeyword>[],
+    ),
+    (
+      'a shared-learning mapping for the exact merchant beats the AI category',
+      _RulesMerchantRepo(),
+      'cafes',
+      [kw('STARBUCKS', 'cafes', 1000)],
+    ),
+    (
+      'a user-confirmed rule beats a shared mapping and the AI category',
+      _RulesMerchantRepo(
+        learned: {'STARBUCKS': 'restaurants'},
+        confirmed: {'STARBUCKS': 'restaurants'},
+      ),
+      'restaurants',
+      [kw('STARBUCKS', 'cafes', 1000)],
+    ),
+    (
+      'a non-shared keyword (curated / Places) does not beat the AI category',
+      _RulesMerchantRepo(),
+      'shopping',
+      [kw('STARBUCKS', 'cafes', 0)],
+    ),
+    (
+      'a shared mapping matching only a substring does not beat the AI',
+      _RulesMerchantRepo(),
+      'shopping',
+      [kw('STAR', 'cafes', 1000), kw('STARBUCKS COFFEE', 'cafes', 1000)],
     ),
   ]) {
     test(label, () async {
@@ -892,6 +938,7 @@ void main() {
           onSaveCategory: (category) => savedCategory = category,
         ),
         merchantCategoryRepository: repo,
+        loadRemoteKeywords: () async => keywords,
         parserIsolate: _FakeParserIsolate(ParseResult.notTransaction()),
         loadAiConsent: () async => true,
         aiClient: const _FixedResponseAiClient(AiParseResponse(
@@ -931,7 +978,8 @@ void main() {
     final aiClient = _CapturingAiClient(
       onParse: (_, __, ___) => aiCalls++,
       response: const AiParseResponse(
-        amount: 85.0, amountText: '85.00',
+        amount: 85.0,
+        amountText: '85.00',
         currency: 'EGP',
         type: 'payment',
         merchantName: 'STARBUCKS',
@@ -974,11 +1022,14 @@ void main() {
       aiClient: ai,
       dedupStore: _NoDedupStore(),
     );
-    await useCase(rawMessage: 'Purchase EGP 56.78 at Orange', onDeviceOnly: true);
+    await useCase(
+        rawMessage: 'Purchase EGP 56.78 at Orange', onDeviceOnly: true);
     expect(ai.callCount, 0);
   });
 
-  test('unknown sender with previous failures still gets sanitized AI categorization', () async {
+  test(
+      'unknown sender with previous failures still gets sanitized AI categorization',
+      () async {
     const sender = 'UNKNOWN';
     for (var i = 0; i < 3; i++) {
       AiSenderFailureTracker.instance.recordFailure(sender);
@@ -991,22 +1042,27 @@ void main() {
         expect(sms, isNot(contains('4111111111115398')));
         expect(sms, contains('56.78'));
       },
-      response: const AiParseResponse(amount: 56.78, amountText: '56.78',
-        currency: 'EGP', type: 'payment', categoryKey: 'bills',
-        merchantName: 'Orange - Home Internet'),
+      response: const AiParseResponse(
+          amount: 56.78,
+          amountText: '56.78',
+          currency: 'EGP',
+          type: 'payment',
+          categoryKey: 'bills',
+          merchantName: 'Orange - Home Internet'),
     );
     final useCase = AddTransactionUseCase(
-      transactionRepository: _CapturingTransactionRepo(onSave: (_) {},
-        onSaveCategory: (value) => category = value),
+      transactionRepository: _CapturingTransactionRepo(
+          onSave: (_) {}, onSaveCategory: (value) => category = value),
       merchantCategoryRepository: _StubMerchantRepo(),
       parserIsolate: _FakeParserIsolate(ParseResult.notTransaction()),
       loadAiConsent: () async => true,
       aiClient: ai,
       dedupStore: _NoDedupStore(),
     );
-    final result = await useCase(rawMessage:
-      'Purchase EGP 56.78 at Orange - Home Internet with card 4111111111115398',
-      senderId: sender);
+    final result = await useCase(
+        rawMessage:
+            'Purchase EGP 56.78 at Orange - Home Internet with card 4111111111115398',
+        senderId: sender);
     expect(calls, 1);
     expect(result.outcome, AddTransactionOutcome.added);
     expect(category, 'bills');
@@ -1135,7 +1191,8 @@ void main() {
     AiSenderFailureTracker.instance.recordFailure('');
 
     const aiClient = _FixedResponseAiClient(AiParseResponse(
-      amount: 31.43, amountText: '31.43',
+      amount: 31.43,
+      amountText: '31.43',
       currency: 'EGP',
       type: 'transfer',
       categoryKey: 'transfers',
@@ -1269,7 +1326,8 @@ void main() {
     );
     final fakeParseResult = ParseResult.success(fakeParsed);
     const aiClient = _FixedResponseAiClient(AiParseResponse(
-      amount: 200.0, amountText: '200.0',
+      amount: 200.0,
+      amountText: '200.0',
       currency: 'EGP',
       type: 'payment',
       merchantName: 'BDC OROBA',
@@ -1307,12 +1365,12 @@ void main() {
     expect(saved!.status, TransactionStatus.confirmed);
   });
 
-  test('validated AI other remains authoritative over Maps',
-      () async {
+  test('validated AI other remains authoritative over Maps', () async {
     const rawSms = 'Purchase EGP 85.00 At STARBUCKS on 08/06 at 06:55 AM';
     final fakeParseResult = ParseResult.notTransaction();
     const aiClient = _FixedResponseAiClient(AiParseResponse(
-      amount: 85.0, amountText: '85.0',
+      amount: 85.0,
+      amountText: '85.0',
       currency: 'EGP',
       type: 'payment',
       merchantName: 'STARBUCKS',
@@ -1346,8 +1404,8 @@ void main() {
     expect(savedCategory, 'other');
   });
 
-  test(
-      'validated AI other is retained without speculative categorization', () async {
+  test('validated AI other is retained without speculative categorization',
+      () async {
     const rawSms = 'Purchase EGP 40.00 At RANDOM SHOP on 08/06 at 06:55 AM';
     final fakeParsed = ParsedTransaction(
       amountText: '40',
@@ -1360,7 +1418,8 @@ void main() {
     );
     final fakeParseResult = ParseResult.success(fakeParsed);
     const aiClient = _FixedResponseAiClient(AiParseResponse(
-      amount: 40.0, amountText: '40.0',
+      amount: 40.0,
+      amountText: '40.0',
       currency: 'EGP',
       type: 'payment',
       merchantName: 'RANDOM SHOP',
@@ -1405,7 +1464,8 @@ void main() {
         parseConfidence: 0.79,
       );
       const aiClient = _FixedResponseAiClient(AiParseResponse(
-        amount: 40.0, amountText: '40.0',
+        amount: 40.0,
+        amountText: '40.0',
         currency: 'EGP',
         type: 'payment',
         merchantName: 'RANDOM SHOP',
@@ -1527,7 +1587,8 @@ void main() {
     final aiClient = _CapturingAiClient(
       onParse: (sms, sender, installId) => seenInstallId = installId,
       response: const AiParseResponse(
-        amount: 10.0, amountText: '10.0',
+        amount: 10.0,
+        amountText: '10.0',
         currency: 'EGP',
         type: 'income',
         categoryKey: 'transfers',
@@ -1644,8 +1705,8 @@ void main() {
     // Fee/tax surfaced as a separate transaction in the local currency.
     expect(result.secondary, isNotNull);
     expect(result.secondary!.outcome, AddTransactionOutcome.added);
-    expect(result.secondary!.transaction!.amountMoney,
-        Money.parse('7.44', 'SAR'));
+    expect(
+        result.secondary!.transaction!.amountMoney, Money.parse('7.44', 'SAR'));
     expect(result.secondary!.transaction!.amount, 7.44);
     expect(result.secondary!.transaction!.currency, 'SAR');
     expect(result.secondary!.transaction!.type, TransactionTypeEntity.payment);
@@ -1828,7 +1889,8 @@ void main() {
     // says credit. The classified TYPE must agree with the stored direction so
     // the amount lands in income — never in the expense total with a green "+".
     const aiClient = _FixedResponseAiClient(AiParseResponse(
-      amount: 750.0, amountText: '750.0',
+      amount: 750.0,
+      amountText: '750.0',
       currency: 'EGP',
       type: 'transfer',
       categoryKey: 'transfers',
@@ -1926,8 +1988,7 @@ void main() {
       expect(ai.callCount, 1);
     });
 
-    test('a local transaction without a resolved bank consults AI',
-        () async {
+    test('a local transaction without a resolved bank consults AI', () async {
       final ai = _CountingAiClient();
       await build(parse: ParseResult.success(local(0.95)), ai: ai)(
         rawMessage: 'شراء 125.75 ر.س',
@@ -2084,7 +2145,8 @@ void main() {
       expect(result.droppedByParser, isTrue);
     });
 
-    test('a rejected AI candidate from a non-bank sender is still surfaced (not silent)',
+    test(
+        'a rejected AI candidate from a non-bank sender is still surfaced (not silent)',
         () async {
       final result = await runAi(
         const AiParseResponse(amount: 76, amountText: '76', currency: 'SAR'),
@@ -2099,7 +2161,8 @@ void main() {
 
     test('AI confidence-like metadata has no effect on acceptance or status',
         () async {
-      Future<TransactionStatus?> statusFor(String? model, String? category) async {
+      Future<TransactionStatus?> statusFor(
+          String? model, String? category) async {
         TransactionEntity? saved;
         await runAi(
           AiParseResponse(
@@ -2122,7 +2185,8 @@ void main() {
       expect(low, high);
     });
 
-    test('final type contradicting the wording after reclassification: rejected',
+    test(
+        'final type contradicting the wording after reclassification: rejected',
         () async {
       // AI type "transfer" passes the validator (direction-neutral), but the AI
       // direction "debit" reclassifies the external transfer to a payment,

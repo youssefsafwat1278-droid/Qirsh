@@ -5,6 +5,7 @@ import '../../../core/backend/supabase_config.dart';
 import '../../../core/observability/diagnostics.dart';
 import '../../../core/privacy/consent_authority.dart';
 import '../../../core/utils/install_id.dart';
+import '../../../data/catalog/catalog_daos.dart';
 import '../../../data/db/ownership_guard.dart';
 import '../../../data/repositories/drift_dedup_store.dart';
 import '../../../data/repositories/drift_smart_inbox_repository.dart';
@@ -95,6 +96,9 @@ class CaptureSyncService {
     // The user's confirmed merchant rules outrank the server's category.
     // Absent => the server category is used as-is.
     MerchantCategoryRepository? merchantCategoryRepository,
+    // The synced catalog keywords; a shared-learning mapping for the exact
+    // merchant also outranks the server's category. Absent => rules only.
+    Future<List<RemoteMerchantKeyword>> Function()? loadRemoteKeywords,
     CaptureBackendClient? client,
     bool? backendConfigured,
     Future<String> Function()? loadInstallId,
@@ -133,6 +137,7 @@ class CaptureSyncService {
         _currentUserId = currentUserId,
         _accountRepository = accountRepository,
         _merchantCategoryRepository = merchantCategoryRepository,
+        _loadRemoteKeywords = loadRemoteKeywords,
         _client = client,
         _backendConfigured = backendConfigured,
         _loadInstallId = loadInstallId,
@@ -147,6 +152,7 @@ class CaptureSyncService {
   final DriftSmartInboxRepository _smartInboxRepository;
   final DriftSuspectedDuplicateRepository _suspectedDuplicateRepository;
   final MerchantCategoryRepository? _merchantCategoryRepository;
+  final Future<List<RemoteMerchantKeyword>> Function()? _loadRemoteKeywords;
   final CaptureDeviceRegistrationService _registrationService;
   final OwnershipGuard _ownershipGuard;
   final String? Function() _currentUserId;
@@ -297,7 +303,8 @@ class CaptureSyncService {
         continue;
       } catch (error) {
         // Release diagnostics contain no payload IDs, SMS, money or SQL.
-        Diag.log('[CaptureImport]', 'relay_commit_failed class=${error.runtimeType}');
+        Diag.log('[CaptureImport]',
+            'relay_commit_failed class=${error.runtimeType}');
         // One failing capture must not block the ones after it. It is not
         // acknowledged, so the server keeps it for the next run; once its
         // bounded retries are spent it is parked for review instead.
@@ -368,7 +375,8 @@ class CaptureSyncService {
     } on StaleOwnershipException {
       rethrow;
     } catch (error) {
-      Diag.log('[CaptureImport]', 'relay_park_failed class=${error.runtimeType}');
+      Diag.log(
+          '[CaptureImport]', 'relay_park_failed class=${error.runtimeType}');
       return false;
     }
     Diag.log('[CaptureImport]', 'relay_parked_for_review');
@@ -437,7 +445,8 @@ class CaptureSyncService {
     if (!await _registrationService.isLinkedForCloud()) return false;
     final secret = await _registrationService.readDeviceSecret();
     if (secret == null || secret.isEmpty) return false;
-    final preferences = await LoadNotificationPreferencesUseCase(_settingsRepository).call();
+    final preferences =
+        await LoadNotificationPreferencesUseCase(_settingsRepository).call();
     final client = _client ??
         CaptureBackendClient(
           supabaseUrl: SupabaseConfig.url,
@@ -623,7 +632,8 @@ class CaptureSyncService {
       if (ParserEngine.isIgnoredMessage(verdictText,
           senderId: _string(parsed['senderId']))) {
         await requireCurrentAdmission();
-        await markPayloadImported(payloadId: capture.payloadId, transactionId: 'ignored');
+        await markPayloadImported(
+            payloadId: capture.payloadId, transactionId: 'ignored');
         return;
       }
     }
@@ -1006,8 +1016,8 @@ class CaptureSyncService {
           existingTransactionId: possibleDuplicate.transaction.id,
           amountMoney: amountMoney,
           currency: normalizedCurrency,
-          rawMerchant:
-              MerchantSanity.forMessage(_string(parsed['merchant']), rawMessage),
+          rawMerchant: MerchantSanity.forMessage(
+              _string(parsed['merchant']), rawMessage),
           occurredAt: occurredAt,
           createdAt: now,
           cardLast4: _string(parsed['last4']),
@@ -1050,9 +1060,10 @@ class CaptureSyncService {
       currency: normalizedCurrency,
       accountId: account?.id,
       type: type,
-      source: const {'ai', 'ai_hybrid'}.contains(_string(parsed['parserSource']))
-          ? TransactionSourceEntity.aiParsed
-          : TransactionSourceEntity.bank,
+      source:
+          const {'ai', 'ai_hybrid'}.contains(_string(parsed['parserSource']))
+              ? TransactionSourceEntity.aiParsed
+              : TransactionSourceEntity.bank,
       occurredAt: occurredAt,
       rawMessage: rawMessage,
       parseConfidence: _num(parsed['confidence']) ?? 0.8,
@@ -1089,8 +1100,12 @@ class CaptureSyncService {
     );
     // Atomic import (MALI-012): the surrounding per-capture transaction includes
     // any account creation, the transaction/outbox row, and its dedup marker.
-    final categoryKey = await learnedRuleCategoryFor(
-            _merchantCategoryRepository, transaction.rawMerchant) ??
+    final categoryKey = (await learnedRuleCategoryFor(
+          _merchantCategoryRepository,
+          transaction.rawMerchant,
+          loadRemoteKeywords: _loadRemoteKeywords,
+        ))
+            ?.categoryKey ??
         _string(parsed['category']);
     await requireCurrentAdmission();
     final saved = await _transactionRepository.saveTransaction(

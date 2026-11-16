@@ -1,5 +1,6 @@
-// A user-confirmed merchant rule outranks the category a server-analysed
-// (iOS relay) capture arrives with; a catalog seed mapping does not. Real
+// A user-confirmed merchant rule, then a shared-learning mapping for the exact
+// merchant, outrank the category a server-analysed (iOS relay) capture arrives
+// with; a catalog seed mapping or a non-shared keyword does not. Real
 // CaptureSyncService over a real in-memory Drift database; only the network is
 // a MockClient. All messages are synthetic.
 import 'dart:convert';
@@ -9,6 +10,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:money_companion/data/catalog/catalog_daos.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
 import 'package:money_companion/data/db/ownership_guard.dart';
@@ -112,6 +114,7 @@ void main() {
       currentUserId: () => 'user-A',
       accountRepository: DriftAccountRepository(db),
       merchantCategoryRepository: merchants,
+      loadRemoteKeywords: () => RemoteMerchantKeywordsDao(db).getAll(),
       client: CaptureBackendClient(
         supabaseUrl: 'https://example.supabase.co',
         anonKey: 'anon',
@@ -153,5 +156,55 @@ void main() {
     rows.add(_serverRow('srv-3', 'ZARYAB DIMASHQI'));
     await sync.sync();
     expect(await categoryOf('srv-3'), 'shopping');
+  });
+
+  Future<void> keyword(String keyword, String category, int priority) =>
+      RemoteMerchantKeywordsDao(db).upsertAll([
+        RemoteMerchantKeyword(
+          id: 'kw-$keyword',
+          keyword: keyword,
+          categoryKey: category,
+          language: 'any',
+          countryCode: 'ALL',
+          priority: priority,
+          isActive: true,
+          isDeleted: false,
+          updatedAt: '2026-11-16T00:00:00Z',
+        ),
+      ]);
+
+  test('a shared-learning mapping for the exact merchant beats the server',
+      () async {
+    await keyword('ZARYAB DIMASHQI', 'restaurants', 1000);
+    rows.add(_serverRow('srv-4', 'Zaryab Dimashqi 12'));
+    await sync.sync();
+    expect(await categoryOf('srv-4'), 'restaurants');
+  });
+
+  test('a user rule beats a shared mapping and the server', () async {
+    await keyword('ZARYAB DIMASHQI', 'restaurants', 1000);
+    await merchants.confirmMerchantCategory(
+        rawMerchant: 'ZARYAB DIMASHQI',
+        categoryKey: 'groceries',
+        isUserConfirmed: true);
+    rows.add(_serverRow('srv-5', 'ZARYAB DIMASHQI'));
+    await sync.sync();
+    expect(await categoryOf('srv-5'), 'groceries');
+  });
+
+  test('a non-shared keyword (curated / Places) does not beat the server',
+      () async {
+    await keyword('ZARYAB DIMASHQI', 'restaurants', 0);
+    rows.add(_serverRow('srv-6', 'ZARYAB DIMASHQI'));
+    await sync.sync();
+    expect(await categoryOf('srv-6'), 'shopping');
+  });
+
+  test('a shared mapping matching only a substring does not beat the server',
+      () async {
+    await keyword('ZARYAB', 'restaurants', 1000);
+    rows.add(_serverRow('srv-7', 'ZARYAB DIMASHQI'));
+    await sync.sync();
+    expect(await categoryOf('srv-7'), 'shopping');
   });
 }
