@@ -43,6 +43,10 @@ void main() {
     'data/catalog/merchant_feedback_client.dart':
         'EgressClass.aiProcessing — user-derived merchant keywords. Unwired '
             'today; gated now so whoever wires it must pass consent',
+    'data/catalog/shared_category_learning_client.dart':
+        'EgressClass.aiProcessing (Cloud AND AI) — a confirmed merchant rule '
+            '(normalised merchant + category key). mayEgress is asked at offer '
+            'AND before every send; a refusal drops the in-memory queue',
     'features/planning_sync/services/accounts_pull_service.dart':
         'EgressClass.financialSync — money DOWN; a pull also WRITES locally',
     'features/planning_sync/services/planning_pull_service.dart':
