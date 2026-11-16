@@ -40,10 +40,23 @@ export function validateReviewPayload(body) {
   };
 }
 
-/** SQLSTATEs raised by the review RPC → HTTP. */
+/** Revoke of a published mapping (manual or auto): only the pair. */
+export function validateRevokePayload(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return { ok: false, fields: [{ field: "body", code: "invalid" }] };
+  }
+  const fields = [];
+  const m = body.merchant_key;
+  if (typeof m !== "string" || m.length < 3 || m.length > 64) fields.push({ field: "merchant_key", code: "invalid" });
+  if (!categoryOk(body.category_key)) fields.push({ field: "category_key", code: "invalid" });
+  if (fields.length) return { ok: false, fields };
+  return { ok: true, fields, value: { merchant_key: m, category_key: body.category_key } };
+}
+
+/** SQLSTATEs raised by the review / revoke RPCs → HTTP. */
 export function mapReviewError(code) {
   if (code === "P0403") return { status: 403, error: "not_authorized" };
-  if (code === "P0409") return { status: 409, error: "not_a_candidate_or_already_reviewed" };
+  if (code === "P0409") return { status: 409, error: "not_a_candidate_or_already_reviewed" }; // revoke: not published
   if (code === "P0422") return { status: 400, error: "validation_failed" };
   return { status: 500, error: "unexpected" };
 }
