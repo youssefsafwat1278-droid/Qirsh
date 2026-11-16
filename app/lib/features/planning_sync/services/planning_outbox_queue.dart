@@ -115,6 +115,12 @@ class PlanningOutboxQueue {
   static const String goalContributionsEntityType = 'goal_contribution';
   static const String planLinksEntityType = 'plan_transaction_link';
 
+  /// A user-confirmed merchant→category rule ("Remember for this merchant").
+  /// Keyed by the normalised merchant key, which is the same on every device,
+  /// so the rule converges per merchant (like the settings singleton). Seed /
+  /// catalog mappings are never enqueued. Delivered by MerchantRuleSyncService.
+  static const String merchantRulesEntityType = 'merchant_rule';
+
   /// MALI-055n — a dedicated default-account command (NOT an account field
   /// mutation). It carries only the target account + an operation id, so a
   /// default switch never rewrites unrelated account fields. Written under a
@@ -343,6 +349,34 @@ class PlanningOutboxQueue {
       localUpdateSql: "UPDATE plan_transaction_links SET sync_status = 'pending' "
           'WHERE plan_id = ${sqlString(planId)} '
           'AND transaction_id = ${sqlString(transactionId)};',
+    );
+    return true;
+  }
+
+  /// Records sync intent for one user-confirmed merchant rule. A set (create /
+  /// edit / undo of a delete) is always an `update` — the server upserts by
+  /// merchant key — and a removal is a `delete` (tombstone). Delete then Undo
+  /// therefore folds into one `update`. There is no local sync column to mark:
+  /// the outbox row itself is the pending state.
+  Future<bool> enqueueMerchantRule(
+    PlanningSyncOperation op, {
+    required String merchantKey,
+    required String categoryKey,
+  }) async {
+    final intent = await resolveOutboxIntent(_getOwnerUid, _getAuthUserId);
+    if (intent == null) return false;
+    await _writeOutbox(
+      ownerUid: intent.ownerUid,
+      entityType: merchantRulesEntityType,
+      entityId: merchantKey,
+      opName: op == PlanningSyncOperation.delete
+          ? PlanningSyncOperation.delete.name
+          : PlanningSyncOperation.update.name,
+      payload: {
+        'merchant_key': merchantKey,
+        'category_key': categoryKey,
+      },
+      localUpdateSql: 'UPDATE merchant_category_map SET id = id WHERE 1 = 0;',
     );
     return true;
   }

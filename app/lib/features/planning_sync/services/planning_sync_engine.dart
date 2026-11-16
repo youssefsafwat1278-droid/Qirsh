@@ -9,6 +9,7 @@ import '../../../data/db/legacy_financial_cache_reconciler.dart';
 import '../../app/legacy_reconcile_domains.dart';
 import 'accounts_pull_service.dart';
 import 'accounts_push_service.dart';
+import 'merchant_rule_sync_service.dart';
 import 'planning_outbox_queue.dart';
 import 'planning_pull_service.dart';
 import 'planning_push_service.dart';
@@ -43,7 +44,9 @@ class PlanningSyncEngine {
     required UniversalConflictResolver conflictResolver,
     SyncHealth? health,
     Future<void> Function()? ensureCapabilities,
+    MerchantRuleSyncService? merchantRuleSync,
   })  : _health = health,
+        _merchantRules = merchantRuleSync,
         _ensureCapabilities = ensureCapabilities,
         _accountsPush = accountsPushService,
         _accountsPull = accountsPullService,
@@ -61,6 +64,10 @@ class PlanningSyncEngine {
   final PlanningStartupRegistrationService _startupRegistration;
   final UniversalConflictResolver _conflictResolver;
   final SyncHealth? _health;
+
+  /// The user's learned category rules. Runs after the planning pull and the
+  /// registration push, so a rule's custom category is already restored.
+  final MerchantRuleSyncService? _merchantRules;
 
   /// Resolves runtime capability probes (planning currency) at the start of a
   /// cycle so the gates below see a fresh answer. Never throws.
@@ -225,6 +232,14 @@ class PlanningSyncEngine {
       _check(original);
     }, 'registration', binding: registrationPhase);
     _check(original);
+    final rules = _merchantRules;
+    if (rules != null) {
+      final rulesPhase = original.forNextPhase();
+      await _phase(SyncDomain.planning, SyncDirection.pull,
+          () => rules.syncWithPhase(rulesPhase), 'merchant rules',
+          binding: rulesPhase);
+      _check(original);
+    }
     return SyncParentsOutcome(accounts: accounts, planning: planning);
   }
 

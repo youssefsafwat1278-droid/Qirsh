@@ -41,6 +41,10 @@ const String kCapRevisionCas = 'revision_cas';
 /// production until G5; false keeps today's typed `epochMismatch` stop.
 const String kCapReplicaEpoch = 'replica_epoch';
 
+/// 20261116180000: the server holds `user_merchant_rules`. A kill switch like
+/// [kCapSyncSeq]; false/absent keeps the user's learned rules device-local.
+const String kCapMerchantRulesSync = 'merchant_rules_sync';
+
 class ServerCapabilitiesService {
   ServerCapabilitiesService({
     required Future<String?> Function() getAuthUserId,
@@ -86,6 +90,8 @@ class ServerCapabilitiesService {
   final Map<String, DateTime> _replicaEpochAt = {};
   final Map<String, ServerCapabilityState> _revisionCas = {};
   final Map<String, DateTime> _revisionCasAt = {};
+  final Map<String, ServerCapabilityState> _merchantRules = {};
+  final Map<String, DateTime> _merchantRulesAt = {};
 
   String _key(String uid) => '${_getServerUrl()}|$uid';
 
@@ -159,6 +165,11 @@ class ServerCapabilitiesService {
   Future<ServerCapabilityState> revisionCas({String? uid}) =>
       _killSwitch(kCapRevisionCas, _revisionCas, _revisionCasAt, uid);
 
+  /// Whether the server advertises `merchant_rules_sync` (same rules as
+  /// [syncSeq]). Until verified, learned rules are neither pushed nor pulled.
+  Future<ServerCapabilityState> merchantRulesSync({String? uid}) =>
+      _killSwitch(kCapMerchantRulesSync, _merchantRules, _merchantRulesAt, uid);
+
   /// WP-8 (diagnostics): the last cached answer for a kill-switch capability
   /// with no network and no TTL check; [ServerCapabilityState.unknown] when
   /// nothing was probed. [capKey] is one of [kCapSyncSeq], [kCapReplicaEpoch],
@@ -169,6 +180,7 @@ class ServerCapabilitiesService {
       kCapReplicaEpoch => _replicaEpoch,
       kCapRevisionCas => _revisionCas,
       kCapCaptureContractV2 => _captureV2,
+      kCapMerchantRulesSync => _merchantRules,
       _ => null,
     };
     return cache?[_key(uid)] ?? ServerCapabilityState.unknown;
