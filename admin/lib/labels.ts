@@ -69,12 +69,16 @@ const SEVERITY: Record<string, string> = {
   warning: "تنبيه",
   maintenance: "صيانة",
   force_update: "تحديث إجباري",
+  update_available: "تحديث متاح",
+  release_notes: "ما الجديد",
 };
 const SEVERITY_TONE: Record<string, Tone> = {
   info: "info",
   warning: "warning",
   maintenance: "brand",
   force_update: "danger",
+  update_available: "info",
+  release_notes: "brand",
 };
 export const severityLabel = (v: string | null | undefined) => pick(SEVERITY, v);
 export const severityTone = (v: string | null | undefined): Tone => (v && SEVERITY_TONE[v]) || "neutral";
@@ -83,6 +87,8 @@ export const SEVERITY_OPTIONS = [
   { value: "warning", label: "تنبيه — أمر يحتاج انتباه المستخدم" },
   { value: "maintenance", label: "صيانة — عمل مجدول على الخدمة" },
   { value: "force_update", label: "تحديث إجباري — يمنع استخدام التطبيق" },
+  { value: "update_available", label: "تحديث متاح — لافتة اختيارية تدعو للتحديث" },
+  { value: "release_notes", label: "ما الجديد — ملاحظات في صفحة «ما الجديد»" },
 ];
 
 /* ─────────────────────────────────────────────────────── campaigns ── */

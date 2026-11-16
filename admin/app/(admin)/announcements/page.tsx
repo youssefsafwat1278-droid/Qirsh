@@ -59,6 +59,10 @@ const empty: Announcement = {
   is_active: true,
 };
 
+// Types whose audience is narrowed by app version. update_available needs
+// max_app_version so users who already updated stop seeing it.
+const VERSION_TARGETED = ["force_update", "update_available", "release_notes"];
+
 export default function AnnouncementsPage() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [form, setForm] = useState<Announcement | null>(null);
@@ -92,6 +96,9 @@ export default function AnnouncementsPage() {
   function requestSave() {
     if (!form) return;
     if (!form.title_ar.trim()) return setError("عنوان الإعلان بالعربية مطلوب.");
+    if (form.severity === "update_available" && !form.action_url.trim()) {
+      return setError("رابط المتجر مطلوب لإعلان «تحديث متاح» — هو وجهة زر التحديث.");
+    }
     if (armsForceUpdate(form)) {
       const range =
         form.min_app_version || form.max_app_version
@@ -192,6 +199,12 @@ export default function AnnouncementsPage() {
         وجود سبب فعلي يمنع تشغيل النسخة القديمة.
       </HelpNote>
 
+      <HelpNote>
+        «تحديث متاح» لافتة يستطيع المستخدم إغلاقها ولا تمنعه من الاستخدام؛ حدّد أعلى إصدار مستهدف
+        لتظهر فقط لمن لديه نسخة أقدم. «ما الجديد» يظهر في صفحة «ما الجديد» داخل الإعدادات فوق
+        الملاحظات المضمّنة في التطبيق.
+      </HelpNote>
+
       {error && <Banner tone="danger" onDismiss={() => setError("")}>{error}</Banner>}
       {notice && <Banner tone="success" onDismiss={() => setNotice("")}>{notice}</Banner>}
 
@@ -255,7 +268,7 @@ export default function AnnouncementsPage() {
               />
             </div>
 
-            {form.severity === "force_update" && (
+            {VERSION_TARGETED.includes(form.severity) && (
               <div className="grid gap-4 md:grid-cols-2">
                 <TextField
                   label="أقل إصدار مستهدف (min_app_version)"
@@ -263,7 +276,11 @@ export default function AnnouncementsPage() {
                   mono
                   value={form.min_app_version}
                   onChange={(e) => set("min_app_version", e.target.value)}
-                  hint="مثال: 1.2.0 — يُحجب من إصداره ≥ هذا الحد."
+                  hint={
+                    form.severity === "force_update"
+                      ? "مثال: 1.2.0 — يُحجب من إصداره ≥ هذا الحد."
+                      : "مثال: 1.2.0 — يظهر لمن إصداره ≥ هذا الحد."
+                  }
                 />
                 <TextField
                   label="أعلى إصدار مستهدف (max_app_version)"
@@ -271,7 +288,13 @@ export default function AnnouncementsPage() {
                   mono
                   value={form.max_app_version}
                   onChange={(e) => set("max_app_version", e.target.value)}
-                  hint="مثال: 1.4.9 — يُحجب من إصداره ≤ هذا الحد. الفراغ في الحقلين = حجب الجميع."
+                  hint={
+                    form.severity === "force_update"
+                      ? "مثال: 1.4.9 — يُحجب من إصداره ≤ هذا الحد. الفراغ في الحقلين = حجب الجميع."
+                      : form.severity === "update_available"
+                        ? "اكتب آخر إصدار قديم (مثال: 1.0.0) — تظهر اللافتة فقط لمن إصداره ≤ هذا الحد، فلا يراها من حدّث."
+                        : "مثال: 1.4.9 — يظهر لمن إصداره ≤ هذا الحد. الفراغ = كل الإصدارات."
+                  }
                 />
               </div>
             )}
