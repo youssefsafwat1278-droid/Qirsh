@@ -246,6 +246,7 @@ class AutomaticSessionRecovery {
     this.native = const BridgeAsrNativePort(),
     this.foregroundDeadline = const Duration(seconds: 5),
     this.presentationDeadline = const Duration(seconds: 30),
+    this.offlineBackoff = offlineRetry,
   });
 
   final AuthCoordinator coordinator;
@@ -255,6 +256,9 @@ class AutomaticSessionRecovery {
   final AsrNativePort native;
   final Duration foregroundDeadline;
   final Duration presentationDeadline;
+
+  /// The retry delays while the local read screen says offline (test seam).
+  final List<Duration> offlineBackoff;
 
   static const Duration installMinimum = Duration(seconds: 120);
   static const Duration publishMinimum = Duration(seconds: 30);
@@ -928,19 +932,43 @@ class AutomaticSessionRecovery {
     Duration(seconds: 16),
     Duration(seconds: 60),
   ];
+  /// While the last failure is offline: automatic retries in the foreground
+  /// after these delays, then only on resume or Try again.
+  static const List<Duration> offlineRetry = [
+    Duration(seconds: 5),
+    Duration(seconds: 15),
+    Duration(seconds: 60),
+  ];
   Timer? _retry;
   int _attempt = 0;
+  int _offlineAttempt = 0;
 
-  /// A trigger (cold start after the first frame, resume): runs now and, while
-  /// the user stays in local read after an eligible attempt, retries on the
-  /// backoff while resumed.
+  /// A trigger (cold start after the first frame, resume, Try again): runs
+  /// now and, while the user stays in local read after an eligible attempt,
+  /// retries on the backoff while resumed. It restarts the offline schedule.
   void trigger() {
+    _offlineAttempt = 0;
+    _fire();
+  }
+
+  void _fire() {
     _retry?.cancel();
     _retry = null;
     unawaited(run().then(_afterRun, onError: (Object _) {}));
   }
 
   void _afterRun(AsrOutcome outcome) {
+    if (outcome == AsrOutcome.stayedLocalRead &&
+        lastFailure.value == AsrFailure.offline &&
+        host.localReadOwner != null) {
+      _attempt = 0;
+      if (!host.resumed || _offlineAttempt >= offlineBackoff.length) return;
+      _retry = Timer(offlineBackoff[_offlineAttempt++], () {
+        _retry = null;
+        if (host.resumed) _fire();
+      });
+      return;
+    }
     final transientSkip = outcome == AsrOutcome.skipped &&
         host.localReadOwner != null &&
         const {'native_evidence', 'cloud', 'elig', 'indeterminate'}.contains(lastStop);
@@ -955,7 +983,7 @@ class AutomaticSessionRecovery {
     _attempt++;
     _retry = Timer(delay, () {
       _retry = null;
-      if (host.resumed) trigger();
+      if (host.resumed) _fire();
     });
   }
 

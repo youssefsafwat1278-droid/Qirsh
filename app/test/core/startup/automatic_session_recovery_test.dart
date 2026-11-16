@@ -322,6 +322,15 @@ void main() {
     await dir.delete(recursive: true);
   });
 
+  AutomaticSessionRecovery newAsr({required List<Duration> offline}) =>
+      AutomaticSessionRecovery(
+          coordinator: coord,
+          gate: egress.gate,
+          host: host,
+          capture: capture,
+          native: native,
+          offlineBackoff: offline);
+
   void expectReleased() {
     expect(coord.asrExclusion, isNull);
     expect(egress.gate.holdActive, isFalse);
@@ -631,6 +640,10 @@ void main() {
 
   test('choosing explicit sign-in cancels a scheduled automatic retry', () async {
     await seed();
+    // An offline stop now retries on the offline schedule (5 s first by
+    // default); shorten it so the 2.2 s wait below spans a scheduled retry.
+    asr.dispose();
+    asr = newAsr(offline: const [Duration(milliseconds: 500)]);
     script.openError = const SocketException('synthetic offline');
     asr.trigger();
     await asr.quiesced();
@@ -839,6 +852,113 @@ void main() {
       expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.other);
       asr.yieldToExplicitAttempt();
       expect(AutomaticSessionRecovery.lastFailure.value, isNull);
+    });
+  });
+
+  group('offline retry schedule', () {
+    // Scaled down from 5 s / 15 s / 60 s: retries at 400 ms, 1200 ms, 2800 ms.
+    const schedule = [
+      Duration(milliseconds: 400),
+      Duration(milliseconds: 800),
+      Duration(milliseconds: 1600),
+    ];
+    Future<void> at(Stopwatch clock, int ms) => Future<void>.delayed(
+        Duration(milliseconds: ms) - clock.elapsed);
+
+    setUp(() async {
+      asr.dispose();
+      asr = newAsr(offline: schedule);
+      await seed();
+      script.openError = const SocketException('synthetic offline');
+    });
+
+    test('the production schedule is 5 s, 15 s, 60 s', () {
+      expect(AutomaticSessionRecovery.offlineRetry, const [
+        Duration(seconds: 5),
+        Duration(seconds: 15),
+        Duration(seconds: 60),
+      ]);
+    });
+
+    test('retries on the schedule while in the foreground, then stops',
+        () async {
+      final clock = Stopwatch()..start();
+      asr.trigger();
+      await at(clock, 200);
+      expect(script.opens, 1);
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.offline);
+      await at(clock, 700);
+      expect(script.opens, 2);
+      await at(clock, 1000);
+      expect(script.opens, 2);
+      await at(clock, 1600);
+      expect(script.opens, 3);
+      await at(clock, 2400);
+      expect(script.opens, 3);
+      await at(clock, 3300);
+      expect(script.opens, 4);
+      await at(clock, 5000);
+      expect(script.opens, 4,
+          reason: 'after the third retry, only a resume or Try again');
+      expect(store.committed!.tokenDispatches?.count ?? 0, 0);
+    });
+
+    test('no retry fires in the background', () async {
+      asr.trigger();
+      await asr.quiesced();
+      expect(script.opens, 1);
+      host.isResumed = false;
+      asr.onBackground();
+      await Future<void>.delayed(const Duration(milliseconds: 2500));
+      expect(script.opens, 1);
+    });
+
+    test('a resume runs now and restarts the schedule', () async {
+      final clock = Stopwatch()..start();
+      asr.trigger();
+      await at(clock, 600);
+      expect(script.opens, 2); // the first retry has been used
+      host.isResumed = false;
+      asr.onBackground();
+      await at(clock, 900);
+      host.isResumed = true;
+      asr.trigger(); // resume
+      await at(clock, 1000);
+      expect(script.opens, 3);
+      // Restarted: the next retry comes after the first delay (400 ms, at
+      // ~1300 ms), not the second (800 ms, at ~1700 ms).
+      await at(clock, 1500);
+      expect(script.opens, 4);
+    });
+
+    test('never two attempts at once: Try again replaces the pending retry',
+        () async {
+      final clock = Stopwatch()..start();
+      script.holdResponse = Completer<void>();
+      script.openError = null;
+      script.result = () => throw const SocketException('synthetic lost reply');
+      asr.trigger();
+      await pumpEventQueue();
+      expect(asr.running, isTrue);
+      // Triggers while an attempt is in flight start nothing.
+      asr.trigger();
+      asr.trigger();
+      await pumpEventQueue();
+      expect(script.sentTokens, hasLength(1));
+      script.holdResponse!.complete();
+      await asr.quiesced();
+      expect(AutomaticSessionRecovery.lastFailure.value, AsrFailure.offline);
+      script
+        ..holdResponse = null
+        ..openError = const SocketException('synthetic offline');
+      // Try again before the scheduled retry: exactly one attempt, and the
+      // earlier timer no longer fires on its own.
+      await at(clock, 200);
+      asr.trigger();
+      await at(clock, 500);
+      expect(script.opens, 2);
+      await at(clock, 800);
+      expect(script.opens, 3, reason: 'one retry 400 ms after Try again');
     });
   });
 
