@@ -4,15 +4,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/di/app_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_typography.dart';
 import '../../core/theme/widgets/app_toast.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../../core/utils/l10n_ext.dart';
 import '../../domain/repositories/merchant_category_repository.dart';
 import '../common/app_empty_state.dart';
 import '../common/app_error_state.dart';
-import '../common/app_header.dart';
+import '../common/app_loading_state.dart';
+import '../common/app_avatar.dart';
 import '../common/category_catalog.dart';
+import 'widgets/settings_v2.dart';
 
 /// Only the merchant rules the user confirmed ("Remember for this merchant").
 final learnedRulesProvider =
@@ -65,50 +66,74 @@ class LearnedRulesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
     final c = context.colors;
     final rules = ref.watch(learnedRulesProvider);
     final catalog = ref.watch(categoryCatalogProvider).valueOrNull;
-    return Scaffold(
-      backgroundColor: c.bg,
-      appBar: AppHeader(title: context.l10n.setLearnedRules),
-      body: rules.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => AppErrorState(
-          title: context.l10n.lrLoadFailed,
-          description: context.l10n.lrActionFailed,
-          onRetry: () => ref.invalidate(learnedRulesProvider),
+    return SettingsV2Page(
+      title: l10n.setLearnedRules,
+      subtitle: l10n.setLearnedRulesSub,
+      children: [
+        ...rules.when(
+          loading: () => [
+            const SizedBox(height: AppSpacing.s8),
+            const AppLoadingState(),
+          ],
+          error: (_, __) => [
+            const SizedBox(height: AppSpacing.s8),
+            AppErrorState(
+              title: l10n.lrLoadFailed,
+              description: l10n.lrActionFailed,
+              onRetry: () => ref.invalidate(learnedRulesProvider),
+            ),
+          ],
+          data: (list) => list.isEmpty
+              ? [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                        AppSpacing.gutter,
+                        MediaQuery.sizeOf(context).height * 0.08,
+                        AppSpacing.gutter,
+                        0),
+                    child: AppEmptyState(
+                      icon: AppLucideIcons.tag,
+                      title: l10n.lrEmptyTitle,
+                      subtitle: l10n.lrEmptyBody,
+                    ),
+                  ),
+                ]
+              : [
+                  const SizedBox(height: AppSpacing.s5),
+                  settingsV2Enter(
+                    0,
+                    SettingsV2Group(children: [
+                      for (final rule in list)
+                        _ruleRow(context, ref, c, rule,
+                            catalog?.byKey(rule.categoryKey)),
+                    ]),
+                  ),
+                ],
         ),
-        data: (list) {
-          if (list.isEmpty) {
-            return AppEmptyState(
-              icon: AppLucideIcons.tag,
-              title: context.l10n.lrEmptyTitle,
-              subtitle: context.l10n.lrEmptyBody,
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(AppSpacing.gutter),
-            itemCount: list.length,
-            separatorBuilder: (_, __) => Divider(height: 1, color: c.border),
-            itemBuilder: (_, i) {
-              final rule = list[i];
-              final CategoryView? category = catalog?.byKey(rule.categoryKey);
-              return ListTile(
-                key: ValueKey('learned-rule-${rule.rawMerchant}'),
-                contentPadding: EdgeInsets.zero,
-                title: Text(rule.rawMerchant,
-                    style: AppTypography.body(c.textMain)),
-                subtitle: Text(category?.name ?? rule.categoryKey,
-                    style: AppTypography.caption(c.textLight)),
-                trailing: IconButton(
-                  tooltip: context.l10n.lrDelete,
-                  icon: Icon(AppLucideIcons.trash2, color: c.textLight),
-                  onPressed: () => _delete(context, ref, rule),
-                ),
-              );
-            },
-          );
-        },
+      ],
+    );
+  }
+
+  /// A v2 row: the category's own tile, the merchant, the category it is
+  /// remembered as, and a trailing delete (undo follows in a snackbar).
+  Widget _ruleRow(BuildContext context, WidgetRef ref, AppColors c,
+      LearnedMerchantRule rule, CategoryView? category) {
+    return SettingsV2Row(
+      key: ValueKey('learned-rule-${rule.rawMerchant}'),
+      leading:
+          AppAvatar.category(category: category, size: AppSpacing.avatarSm),
+      title: rule.rawMerchant,
+      subtitle: category?.name ?? rule.categoryKey,
+      showChevron: false,
+      trailing: IconButton(
+        tooltip: context.l10n.lrDelete,
+        icon: Icon(AppLucideIcons.trash2, size: 20, color: c.danger),
+        constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        onPressed: () => _delete(context, ref, rule),
       ),
     );
   }
