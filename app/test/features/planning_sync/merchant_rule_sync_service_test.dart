@@ -314,7 +314,7 @@ void main() {
 
       // Next capture: both categorization paths pick the restored rule.
       expect(await learnedRuleCategoryFor(rules, 'Zaryab Dimashqi 991'),
-          'restaurants');
+          (categoryKey: 'restaurants', userConfirmed: true));
       final categorizer = Categorizer(
           map: MerchantCategoryMap(await rules.getLearnedCategoryMap()));
       final result = categorizer.categorize(_capture('Zaryab Dimashqi 991'));
@@ -394,7 +394,7 @@ void main() {
         await LearnedRulesUseCase(merchantCategoryRepository: fresh).list();
     expect(listed.map((r) => r.categoryKey), ['restaurants']);
     expect(await learnedRuleCategoryFor(fresh, 'ZARYAB DIMASHQI 7'),
-        'restaurants');
+        (categoryKey: 'restaurants', userConfirmed: true));
   });
 }
 
