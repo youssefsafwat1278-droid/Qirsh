@@ -1,0 +1,19 @@
+{
+  "releases": [
+    {
+      "version": "1.0.0",
+      "ar": [
+        "شاشات أوضح عند انقطاع الاتصال أو انتهاء الجلسة: يعيد قِرش المحاولة تلقائيًا، ويعرض «تسجيل الدخول من جديد» عندما تنتهي جلستك. بياناتك تبقى على جهازك.",
+        "«تذكّر التصنيف لهذا المتجر»: عند تغيير تصنيف عملية يمكنك أن تطلب من قِرش استخدام التصنيف نفسه لهذا المتجر بعد ذلك.",
+        "صفحة «القواعد المحفوظة» في الإعدادات لمراجعة ما طلبت من قِرش أن يتذكّره وحذفه، مع إمكانية التراجع.",
+        "صفحة «ما الجديد» هذه، لترى ما تغيّر بعد كل تحديث."
+      ],
+      "en": [
+        "Clearer screens when you're offline or your session has ended: Qirsh retries on its own, and offers Sign in again when your session is over. Your data stays on your device.",
+        "\"Remember for this merchant\": when you change a transaction's category, you can ask Qirsh to use that category for the merchant from then on.",
+        "A Learned rules page in Settings to review and delete what you asked Qirsh to remember, with undo.",
+        "This What's new page, so you can see what changed after each update."
+      ]
+    }
+  ]
+}

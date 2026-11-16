@@ -13,7 +13,8 @@ import '../announcements/announcement_text.dart';
 class ForceUpdateScreen extends ConsumerWidget {
   const ForceUpdateScreen({super.key});
 
-  static const _appStoreUrl =
+  /// Also the fallback of the optional update banner.
+  static const appStoreUrl =
       'https://apps.apple.com/app/mali/id0000000000'; // update with real ID
 
   @override
@@ -29,7 +30,7 @@ class ForceUpdateScreen extends ConsumerWidget {
     // forward at all.
     final titleText = announcement?.titleFor(context) ?? context.l10n.fuTitle;
     final bodyText = announcement?.bodyFor(context) ?? context.l10n.fuBody;
-    final actionUrl = announcement?.actionUrl ?? _appStoreUrl;
+    final actionUrl = announcement?.actionUrl ?? appStoreUrl;
     final actionLabel =
         announcement?.actionLabelFor(context) ?? context.l10n.fuNow;
 

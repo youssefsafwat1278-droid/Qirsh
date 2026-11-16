@@ -25,6 +25,7 @@ import '../backend/supabase_config.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 import '../../features/reports/reports_screen.dart';
 import '../../features/help/help_screen.dart';
+import '../../features/whats_new/whats_new_screen.dart';
 import '../../features/settings/delete_account_screen.dart';
 import '../../features/settings/privacy_screen.dart';
 import '../../features/settings/data_transfer_screen.dart';
@@ -228,6 +229,11 @@ final appRouter = GoRouter(
       path: '/help',
       name: 'help',
       builder: (context, state) => const HelpScreen(),
+    ),
+    GoRoute(
+      path: '/whats-new',
+      name: 'whats-new',
+      builder: (context, state) => const WhatsNewScreen(),
     ),
     GoRoute(
       path: '/reports',

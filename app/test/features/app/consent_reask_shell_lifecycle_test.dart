@@ -15,7 +15,10 @@ import 'package:money_companion/core/theme/app_theme.dart';
 import 'package:money_companion/features/app/app_boot_loader.dart';
 import 'package:money_companion/features/app/app_shell.dart';
 import 'package:money_companion/features/consent/smart_analysis_consent_sheet.dart';
+import 'package:money_companion/features/whats_new/whats_new_trigger.dart';
+import 'package:money_companion/core/backend/app_version.dart';
 import 'package:money_companion/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/session/f2_fixture.dart';
@@ -261,5 +264,36 @@ void main() {
     expect(ask.foregroundAtCall, [true, true]);
     await tester.pump(const Duration(seconds: 1));
     expect(ask.calls, 2);
+  });
+
+  testWidgets(
+      "What's new after an update waits for the restore loader and the "
+      'consent re-ask, then shows once', (tester) async {
+    SharedPreferences.setMockInitialValues(
+        {kWhatsNewLastSeenKey: '0.9.0'});
+    addTearDown(() => SharedPreferences.setMockInitialValues({}));
+    appDataRestoring.value = true;
+    final ask = await _mount(tester);
+    final title = find.textContaining(kAppVersion);
+    await _settle(tester);
+    await tester.pump(const Duration(seconds: 5));
+    expect(title, findsNothing, reason: 'the restore loader is up');
+
+    appDataRestoring.value = false;
+    await _until(tester, () => ask.calls == 1);
+    await _settle(tester);
+    await tester.pump(const Duration(seconds: 5));
+    expect(title, findsNothing, reason: 'the consent re-ask is running');
+
+    ask.complete(ReaskOutcome.notNeeded);
+    await _settle(tester);
+    await tester.pump(const Duration(seconds: 2));
+    await _until(tester, () => title.evaluate().isNotEmpty);
+    await tester.pump(const Duration(seconds: 1)); // sheet entrance
+    expect(title, findsOneWidget);
+    final l10n = AppL10n.of(tester.element(find.byType(AppShell)));
+    expect(find.text(l10n.whatsNewSheetTitle(kAppVersion)), findsOneWidget);
+    expect((await SharedPreferences.getInstance())
+        .getString(kWhatsNewLastSeenKey), kAppVersion);
   });
 }

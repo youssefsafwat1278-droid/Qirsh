@@ -63,7 +63,7 @@ import 'app_localizations_en.dart';
 /// property.
 abstract class AppL10n {
   AppL10n(String locale)
-      : localeName = intl.Intl.canonicalizedLocale(locale.toString());
+    : localeName = intl.Intl.canonicalizedLocale(locale.toString());
 
   final String localeName;
 
@@ -85,16 +85,16 @@ abstract class AppL10n {
   /// of delegates is preferred or required.
   static const List<LocalizationsDelegate<dynamic>> localizationsDelegates =
       <LocalizationsDelegate<dynamic>>[
-    delegate,
-    GlobalMaterialLocalizations.delegate,
-    GlobalCupertinoLocalizations.delegate,
-    GlobalWidgetsLocalizations.delegate,
-  ];
+        delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+      ];
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
     Locale('ar'),
-    Locale('en')
+    Locale('en'),
   ];
 
   /// No description provided for @shortcutAddReady.
@@ -12462,6 +12462,54 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'تمت إعادة تشغيل الالتقاط التلقائي للرسائل لهذا الحساب.'**
   String get smsAutoCaptureRestoredNotice;
+
+  /// No description provided for @updateAvailableAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّث الآن'**
+  String get updateAvailableAction;
+
+  /// No description provided for @whatsNewTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما الجديد'**
+  String get whatsNewTitle;
+
+  /// No description provided for @whatsNewSubtitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما تغيّر في كل إصدار من قِرش.'**
+  String get whatsNewSubtitle;
+
+  /// No description provided for @whatsNewVersion.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإصدار {version}'**
+  String whatsNewVersion(String version);
+
+  /// No description provided for @whatsNewSheetTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'الجديد في قِرش {version}'**
+  String whatsNewSheetTitle(String version);
+
+  /// No description provided for @whatsNewFromQirsh.
+  ///
+  /// In ar, this message translates to:
+  /// **'من فريق قِرش'**
+  String get whatsNewFromQirsh;
+
+  /// No description provided for @whatsNewSeeAll.
+  ///
+  /// In ar, this message translates to:
+  /// **'كل التغييرات'**
+  String get whatsNewSeeAll;
+
+  /// No description provided for @whatsNewUnavailable.
+  ///
+  /// In ar, this message translates to:
+  /// **'تعذّر عرض ملاحظات الإصدار.'**
+  String get whatsNewUnavailable;
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {
@@ -12490,8 +12538,9 @@ AppL10n lookupAppL10n(Locale locale) {
   }
 
   throw FlutterError(
-      'AppL10n.delegate failed to load unsupported locale "$locale". This is likely '
-      'an issue with the localizations generation tool. Please file an issue '
-      'on GitHub with a reproducible sample app and the gen-l10n configuration '
-      'that was used.');
+    'AppL10n.delegate failed to load unsupported locale "$locale". This is likely '
+    'an issue with the localizations generation tool. Please file an issue '
+    'on GitHub with a reproducible sample app and the gen-l10n configuration '
+    'that was used.',
+  );
 }

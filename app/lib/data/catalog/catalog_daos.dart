@@ -1687,7 +1687,9 @@ class RemoteAnnouncement {
   final String titleEn;
   final String? bodyAr;
   final String? bodyEn;
-  final String severity; // 'info'|'warning'|'maintenance'|'force_update'
+  /// 'info'|'warning'|'maintenance'|'force_update'|'update_available'|
+  /// 'release_notes'. Only 'force_update' blocks the app.
+  final String severity;
   final String? minAppVersion;
   final String? maxAppVersion;
   final String? actionLabelAr;
@@ -1702,6 +1704,28 @@ class RemoteAnnouncement {
   final DateTime syncedAt;
 
   bool get isForceUpdate => severity == 'force_update';
+
+  /// A dismissible "a newer version is in the App Store" banner. Never blocks.
+  bool get isUpdateAvailable => severity == 'update_available';
+
+  /// Server notes for the What's new page; never shown as a banner.
+  bool get isReleaseNotes => severity == 'release_notes';
+
+  /// Whether [version] lies inside [minAppVersion]..[maxAppVersion]
+  /// (inclusive, same rule as the catalog-announcements function). The server
+  /// already filters by the X-App-Version header; this re-check stops a row
+  /// cached before an app update from showing to the updated app.
+  bool targetsVersion(String version) {
+    final min = minAppVersion;
+    final max = maxAppVersion;
+    if (min != null && min.isNotEmpty && compareAppVersions(version, min) < 0) {
+      return false;
+    }
+    if (max != null && max.isNotEmpty && compareAppVersions(version, max) > 0) {
+      return false;
+    }
+    return true;
+  }
 
   static RemoteAnnouncement fromJson(Map<String, Object?> json) {
     return RemoteAnnouncement(
@@ -1727,6 +1751,24 @@ class RemoteAnnouncement {
       syncedAt: DateTime.now().toUtc(),
     );
   }
+}
+
+/// Compares `major.minor.patch` versions numerically (missing or non-numeric
+/// parts count as 0), like `compareSemver` in catalog-announcements.
+int compareAppVersions(String a, String b) {
+  List<int> parts(String v) {
+    final p = v.replaceAll(RegExp(r'[^0-9.]'), '').split('.');
+    return [
+      for (var i = 0; i < 3; i++) i < p.length ? int.tryParse(p[i]) ?? 0 : 0,
+    ];
+  }
+
+  final pa = parts(a);
+  final pb = parts(b);
+  for (var i = 0; i < 3; i++) {
+    if (pa[i] != pb[i]) return pa[i].compareTo(pb[i]);
+  }
+  return 0;
 }
 
 class RemoteAnnouncementsDao {

@@ -368,3 +368,26 @@ test("C-2a-2: a missing RPC fails CLOSED — it must not fall back", () => {
     "the arm path must never fall through to the generic update",
   );
 });
+
+// ── optional update + What's new: non-blocking types ───────────────────────
+
+test("update_available and release_notes never need the force-update confirmation", () => {
+  for (const severity of ["update_available", "release_notes"]) {
+    const payload = { severity, is_active: true };
+    assert.equal(armsForceUpdate(payload), false, severity);
+    assert.equal(blocksClients(payload), false, severity);
+    assert.deepEqual(validateAnnouncementPublish(payload), { ok: true }, severity);
+  }
+});
+
+test("the form offers both new types with version targeting and a store link", () => {
+  const labels = read("lib/labels.ts");
+  assert.match(labels, /value: "update_available", label: "تحديث متاح/);
+  assert.match(labels, /value: "release_notes", label: "ما الجديد/);
+  const page = read("app/(admin)/announcements/page.tsx");
+  assert.match(page, /VERSION_TARGETED = \["force_update", "update_available", "release_notes"\]/,
+    "update_available must be targetable with max_app_version");
+  assert.match(page, /VERSION_TARGETED\.includes\(form\.severity\)/);
+  assert.match(page, /form\.severity === "update_available" && !form\.action_url\.trim\(\)/,
+    "an update banner without a store link would open the placeholder app id");
+});

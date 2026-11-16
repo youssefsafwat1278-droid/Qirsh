@@ -228,4 +228,16 @@ void main() {
       expect(calls, hasLength(1));
     });
   });
+
+  test('busy is true from the start of an ask until it settles', () async {
+    restoring.value = true;
+    trigger.start();
+    expect(trigger.busy.value, isFalse, reason: 'waiting for the loader');
+    restoring.value = false;
+    expect(trigger.busy.value, isTrue,
+        reason: 'busy before the ask has even shown its sheet');
+    calls.single.complete(ReaskOutcome.notNeeded);
+    await pumpEventQueue();
+    expect(trigger.busy.value, isFalse);
+  });
 }

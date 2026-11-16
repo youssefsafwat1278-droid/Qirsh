@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import '../../announcements/announcement_text.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../../core/backend/app_version.dart';
 import '../../../core/privacy/gated_url_launcher.dart';
+import '../../onboarding/force_update_screen.dart';
 
 import '../../../core/di/app_providers.dart';
 import '../../../core/theme/app_colors.dart';
@@ -25,7 +27,11 @@ class AnnouncementBanner extends ConsumerWidget {
 
     final announcementsAsync = ref.watch(activeAnnouncementsProvider);
     final announcements = announcementsAsync.valueOrNull
-            ?.where((a) => !a.isForceUpdate && !a.isDismissed)
+            ?.where((a) =>
+                !a.isForceUpdate &&
+                !a.isDismissed &&
+                !a.isReleaseNotes &&
+                (!a.isUpdateAvailable || a.targetsVersion(kAppVersion)))
             .toList() ??
         [];
 
@@ -152,6 +158,7 @@ class _BannerTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
+    if (announcement.isUpdateAvailable) return _updateTile(context);
     final (icon, color) = switch (announcement.severity) {
       'warning' => (AppLucideIcons.alertTriangle, c.warning),
       'maintenance' => (AppLucideIcons.wrench, c.accent),
@@ -167,6 +174,26 @@ class _BannerTile extends ConsumerWidget {
       onTap: () => _handleTap(context, announcement.actionUrl),
       dismiss: announcement.isDismissible
           ? _DismissButton(announcementId: announcement.id) : null,
+    );
+  }
+
+  /// Optional update: always dismissible (even if the row says otherwise, it
+  /// must never trap anyone) and always offers the App Store.
+  Widget _updateTile(BuildContext context) {
+    final url = announcement.actionUrl?.trim();
+    final storeUrl =
+        url == null || url.isEmpty ? ForceUpdateScreen.appStoreUrl : url;
+    final label = announcement.actionLabelFor(context)?.trim();
+    return _CompactAnnouncementTile(
+      title: announcement.titleFor(context),
+      body: announcement.bodyFor(context)?.trim(),
+      actionLabel: label == null || label.isEmpty
+          ? context.l10n.updateAvailableAction
+          : label,
+      icon: AppLucideIcons.download,
+      iconColor: context.colors.primary,
+      onTap: () => launchExternalUrl(Uri.parse(storeUrl)),
+      dismiss: _DismissButton(announcementId: announcement.id),
     );
   }
 
