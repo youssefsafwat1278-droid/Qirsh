@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import '../../engine/categorization/categorizer.dart';
 import '../../engine/categorization/merchant_category_map.dart';
 import '../../engine/intelligence/merchant_intelligence_store.dart';
@@ -22,13 +24,20 @@ class CorrectCategoryUseCase {
     // Optional — when absent the correction still persists exactly as before,
     // so the model is never load-bearing for a user action.
     MerchantIntelligenceStore? merchantIntelligence,
+    // Shared category learning: offered ONLY a rule the user just confirmed.
+    // The receiver decides eligibility and consent; it is never awaited, so a
+    // slow or failing network never delays or breaks the user's correction.
+    Future<void> Function(TransactionEntity transaction, String categoryKey)?
+        offerSharedRule,
   })  : _transactionRepository = transactionRepository,
         _merchantCategoryRepository = merchantCategoryRepository,
-        _merchantIntelligence = merchantIntelligence;
+        _merchantIntelligence = merchantIntelligence,
+        _offerSharedRule = offerSharedRule;
 
   final TransactionRepository _transactionRepository;
   final MerchantCategoryRepository _merchantCategoryRepository;
   final MerchantIntelligenceStore? _merchantIntelligence;
+  final Future<void> Function(TransactionEntity, String)? _offerSharedRule;
   final RecordEngagementUseCase? recordEngagementUseCase;
 
   Future<TransactionEntity> call({
@@ -69,6 +78,10 @@ class CorrectCategoryUseCase {
         updated.rawMerchant!,
         categoryKey,
       );
+      final offer = _offerSharedRule;
+      if (offer != null) {
+        unawaited(offer(updated, categoryKey).catchError((Object _) {}));
+      }
 
       if (alsoUpdatePast) {
         // Through the same repository write as a single edit, one row at a

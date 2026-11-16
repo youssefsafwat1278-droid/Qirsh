@@ -71,4 +71,27 @@ void main() {
   test('privAiAnalysisBody (en) is not in the old absolute form', () {
     expect(en['privAiAnalysisBody'], isNot(contains('EVERY')));
   });
+
+  test('the shared-learning disclosure says what is sent and what is not', () {
+    final s = en['privSharedLearningBody'] as String;
+    for (final part in [
+      'Cloud Sync and Smart Analysis both on',
+      'Remember for this merchant',
+      'merchant’s name and the category you chose',
+      'no amounts, dates, messages or transfers to people',
+      'an admin may add it',
+    ]) {
+      expect(s, contains(part));
+    }
+    final a = ar['privSharedLearningBody'] as String;
+    for (final part in [
+      'المزامنة السحابية والتحليل الذكي معًا',
+      ar['ccAllMerchant'] as String,
+      'اسم المتجر والتصنيف الذي اخترته',
+      'دون مبالغ أو تواريخ أو رسائل أو تحويلات لأشخاص',
+      'قد يضيفه مشرف',
+    ]) {
+      expect(a, contains(part));
+    }
+  });
 }

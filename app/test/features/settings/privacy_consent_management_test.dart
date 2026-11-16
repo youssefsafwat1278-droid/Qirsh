@@ -109,6 +109,17 @@ void main() {
   Finder status(String text) =>
       find.descendant(of: find.byKey(const Key('consentStatus')), matching: find.text(text));
 
+  group('shared learning disclosure', () {
+    for (final locale in ['en', 'ar']) {
+      testWidgets('the Privacy screen discloses it ($locale)', (tester) async {
+        set(ConsentState.accepted, ConsentState.accepted);
+        await pump(tester, locale: locale);
+        final l10n = lookupAppL10n(Locale(locale));
+        expect(find.text(l10n.privSharedLearningBody), findsOneWidget);
+      });
+    }
+  });
+
   group('honest status', () {
     testWidgets('active', (tester) async {
       set(ConsentState.accepted, ConsentState.accepted);

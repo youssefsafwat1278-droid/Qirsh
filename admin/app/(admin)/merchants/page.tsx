@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireAdmin } from "@/lib/auth-guard";
 import { createAdminClient } from "@/lib/supabase-server";
 import { HelpNote, PageHeader } from "@/components/ui/primitives";
@@ -71,6 +72,10 @@ export default async function MerchantsPage() {
         زيادة التغطية تكون بإضافة أسماء بديلة صحيحة، لا بتخفيف المطابقة. وأي اسم
         بديل جديد يبقى <strong>غير معتمد</strong> ولا يصل لأي جهاز حتى تعتمده.
       </HelpNote>
+
+      <Link href="/merchants/shared-learning" className="text-tiny text-brand-700 underline">
+        اقتراحات التعلّم المشترك للتصنيفات
+      </Link>
 
       <MerchantsManager merchants={merchantRows} aliases={aliasRows} />
     </div>

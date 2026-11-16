@@ -42,6 +42,7 @@ import '../../engine/intelligence/merchant_intelligence_store.dart';
 import '../../engine/ai/bank_discovery_client.dart';
 import '../../data/catalog/announcement_service.dart';
 import '../../data/catalog/catalog_daos.dart';
+import '../../data/catalog/shared_category_learning_client.dart';
 import '../../data/catalog/catalog_sync_service.dart';
 import '../../data/catalog/feature_flag_service.dart';
 import '../../data/catalog/growth_campaign_service.dart';
@@ -1970,12 +1971,28 @@ final confirmTransactionUseCaseProvider =
   );
 });
 
+/// Shared category learning. Null when the backend is not configured. A
+/// contribution needs Cloud AND AI consent (aiProcessing), read fresh at offer
+/// time and again before each send.
+final sharedCategoryLearningClientProvider =
+    Provider<SharedCategoryLearningClient?>((ref) {
+  if (!SupabaseConfig.isConfigured) return null;
+  final db = ref.watch(appDatabaseProvider);
+  return SharedCategoryLearningClient.supabase(
+    supabase.Supabase.instance.client,
+    mayEgress: () => ConsentAuthority(
+      () => DriftUserSettingsRepository(db).getSettings(),
+    ).allows(EgressClass.aiProcessing),
+  );
+});
+
 final correctCategoryUseCaseProvider = writerProvider<CorrectCategoryUseCase>((ref) {
   return CorrectCategoryUseCase(
     transactionRepository: ref.watch(transactionRepositoryProvider),
     merchantCategoryRepository: ref.watch(merchantCategoryRepositoryProvider),
     recordEngagementUseCase: ref.watch(recordEngagementUseCaseProvider),
     merchantIntelligence: ref.watch(merchantIntelligenceProvider),
+    offerSharedRule: ref.watch(sharedCategoryLearningClientProvider)?.offer,
   );
 });
 

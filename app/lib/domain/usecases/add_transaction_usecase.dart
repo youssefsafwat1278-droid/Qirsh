@@ -1945,6 +1945,10 @@ class AddTransactionUseCase {
         lower.contains('من حسابك إلى حسابك');
   }
 
+  /// Public for shared category learning, which must never share a transfer.
+  static bool looksLikeTransferMessage(String rawMessage) =>
+      _looksLikeTransferMessage(rawMessage);
+
   static bool _looksLikeTransferMessage(String rawMessage) {
     final lower = rawMessage.toLowerCase();
     return lower.contains('ipn transfer') ||

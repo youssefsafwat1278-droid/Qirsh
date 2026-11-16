@@ -91,6 +91,59 @@ void main() {
     return row.read<String?>('k');
   }
 
+  group('shared learning offer', () {
+    late List<(String, String)> offered;
+    late CorrectCategoryUseCase sharing;
+    setUp(() {
+      offered = [];
+      sharing = CorrectCategoryUseCase(
+        transactionRepository: transactions,
+        merchantCategoryRepository: merchants,
+        merchantIntelligence: model,
+        offerSharedRule: (tx, key) async => offered.add((tx.id, key)),
+      );
+    });
+
+    test('a one-off edit is never offered', () async {
+      final a = await capture(1);
+      await sharing(
+        transactionId: a.id,
+        categoryKey: 'restaurants',
+        scope: CategoryCorrectionScope.thisTransactionOnly,
+      );
+      expect(offered, isEmpty);
+    });
+
+    test('only the confirmed rule is offered, never the past updates',
+        () async {
+      await capture(1);
+      await capture(2);
+      final edited = await capture(3);
+      await sharing(
+        transactionId: edited.id,
+        categoryKey: 'restaurants',
+        scope: CategoryCorrectionScope.allMerchantTransactions,
+        alsoUpdatePast: true,
+      );
+      expect(offered, [(edited.id, 'restaurants')]);
+    });
+
+    test('a failing offer never breaks the correction', () async {
+      final a = await capture(1);
+      final failing = CorrectCategoryUseCase(
+        transactionRepository: transactions,
+        merchantCategoryRepository: merchants,
+        offerSharedRule: (_, __) async => throw StateError('offline'),
+      );
+      await failing(
+        transactionId: a.id,
+        categoryKey: 'restaurants',
+        scope: CategoryCorrectionScope.allMerchantTransactions,
+      );
+      expect(await categoryKeyOf(a.id), 'restaurants');
+    });
+  });
+
   test('the default edit changes only that transaction and teaches nothing',
       () async {
     final a = await capture(1);
