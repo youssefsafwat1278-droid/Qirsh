@@ -18,6 +18,7 @@ import '../../../domain/errors/repo_exceptions.dart';
 import '../../../domain/usecases/add_transaction_usecase.dart';
 import '../../../domain/usecases/correct_category_usecase.dart';
 import '../../common/app_sheet_scaffold.dart';
+import '../../settings/widgets/settings_v2.dart';
 import '../../common/app_category_chip.dart';
 import '../../common/app_button.dart';
 import '../../common/category_catalog.dart';
@@ -332,20 +333,22 @@ class _ConfirmSheetState extends ConsumerState<_ConfirmSheet> {
             ),
           ),
 
-          if (tx.rawMerchant != null && _selectedCategoryKey != null)
-            CheckboxListTile(
-              key: const ValueKey('confirm-remember-merchant'),
-              value: _rememberForMerchant,
-              onChanged: (v) =>
-                  setState(() => _rememberForMerchant = v ?? false),
-              title: Text(context.l10n.ccAllMerchant,
-                  style: AppTypography.body(c.textMain)),
-              subtitle: Text(context.l10n.ccRememberHint,
-                  style: AppTypography.caption(c.textLight)),
-              activeColor: c.primary,
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
+          if (tx.rawMerchant != null && _selectedCategoryKey != null) ...[
+            const SizedBox(height: AppSpacing.s3),
+            // Same v2 switch row as the change-category sheet's options.
+            Material(
+              color: c.surfaceElevated,
+              clipBehavior: Clip.antiAlias,
+              borderRadius: BorderRadius.circular(AppRadius.card),
+              child: SettingsV2SwitchRow(
+                key: const ValueKey('confirm-remember-merchant'),
+                title: context.l10n.ccAllMerchant,
+                subtitle: context.l10n.ccRememberHint,
+                value: _rememberForMerchant,
+                onChanged: (v) => setState(() => _rememberForMerchant = v),
+              ),
             ),
+          ],
 
           const SizedBox(height: AppSpacing.s4),
 

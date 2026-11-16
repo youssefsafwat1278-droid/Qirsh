@@ -5808,6 +5808,16 @@ class AppL10nEn extends AppL10n {
   String get ccPastManualKept => 'Categories you set by hand stay as they are.';
 
   @override
+  String get ccScopeThis => 'This transaction';
+
+  @override
+  String get ccScopeMerchant => 'This merchant';
+
+  @override
+  String get ccThisOnlyHint =>
+      'Only this transaction changes. Nothing is remembered.';
+
+  @override
   String get commonClose => 'Close';
 
   @override

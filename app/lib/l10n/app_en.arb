@@ -2956,6 +2956,9 @@
     }
   },
   "ccPastManualKept": "Categories you set by hand stay as they are.",
+  "ccScopeThis": "This transaction",
+  "ccScopeMerchant": "This merchant",
+  "ccThisOnlyHint": "Only this transaction changes. Nothing is remembered.",
   "commonClose": "Close",
   "commonHide": "Hide",
   "commonSkip": "Skip",

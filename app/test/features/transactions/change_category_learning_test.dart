@@ -151,7 +151,7 @@ void main() {
     final l10n = await _open(tester, txs, merchants);
 
     await tester.tap(find.text('Travel'));
-    await tester.tap(find.text(l10n.ccAllMerchant));
+    await tester.tap(find.text(l10n.ccScopeMerchant));
     await tester.pumpAndSettle();
     expect(find.text(l10n.ccAlsoUpdatePast), findsOneWidget);
     await tester.tap(find.text(l10n.ccSave));
@@ -169,7 +169,7 @@ void main() {
     final l10n = await _open(tester, txs, merchants);
 
     await tester.tap(find.text('Travel'));
-    await tester.tap(find.text(l10n.ccAllMerchant));
+    await tester.tap(find.text(l10n.ccScopeMerchant));
     await tester.pumpAndSettle();
     await tester.tap(find.text(l10n.ccAlsoUpdatePast));
     await tester.pumpAndSettle();
