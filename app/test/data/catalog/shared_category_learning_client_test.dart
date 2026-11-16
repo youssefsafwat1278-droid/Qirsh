@@ -60,10 +60,13 @@ TransactionEntity _tx({
 /// between the offer-time and send-time checks.
 class _Harness {
   /// [optedIn]: the "Help improve categories for everyone" switch for the
-  /// signed-in account. Its real default is OFF.
-  _Harness({bool cloud = true, bool ai = true, bool optedIn = false})
+  /// signed-in account, as an explicit choice. Null leaves it unset, which is
+  /// the real default (ON).
+  _Harness({bool cloud = true, bool ai = true, bool? optedIn = false})
       : settings = _settings(cloud: cloud, ai: ai) {
-    if (optedIn) prefs[SharedLearningPreference.keyFor(uid!)] = 'on';
+    if (optedIn != null) {
+      prefs[SharedLearningPreference.keyFor(uid!)] = optedIn ? 'on' : 'off';
+    }
   }
 
   UserSettingsEntity settings;
@@ -94,13 +97,43 @@ class _Harness {
 
 void main() {
   group('opt-in (Help improve categories for everyone)', () {
-    test('OFF by default: nothing is sent, even with Cloud and AI on',
+    test('ON by default: with Cloud and AI on, an unset switch sends',
         () async {
-      final h = _Harness();
+      final h = _Harness(optedIn: null);
+      expect(await h.preference.isOn('uid-a'), isTrue);
+      await h.client.offer(_tx(), 'shopping');
+      expect(h.sent, [
+        {'merchant_key': 'HALA BOUTIQUE', 'category_key': 'shopping'}
+      ]);
+    });
+
+    test('ON by default still needs Cloud and AI consent', () async {
+      for (final h in [
+        _Harness(optedIn: null, cloud: false),
+        _Harness(optedIn: null, ai: false),
+      ]) {
+        await h.client.offer(_tx(), 'shopping');
+        expect(h.sent, isEmpty);
+      }
+    });
+
+    test('turned OFF explicitly: nothing is sent, and it stays OFF', () async {
+      final h = _Harness(optedIn: null);
+      await h.preference.set('uid-a', false);
       expect(await h.preference.isOn('uid-a'), isFalse);
       await h.client.offer(_tx(), 'shopping');
       expect(h.sent, isEmpty);
       expect(h.client.queuedCount, 0);
+    });
+
+    test('an unreadable store is OFF; signed out is OFF', () async {
+      final broken = SharedLearningPreference(
+        read: (_) async => throw StateError('keychain locked'),
+        write: (_, __) async {},
+      );
+      expect(await broken.isOn('uid-a'), isFalse);
+      expect(await SharedLearningPreference.memory().isOn(null), isFalse);
+      expect(await SharedLearningPreference.memory().isOn(''), isFalse);
     });
 
     test('ON with Cloud and AI: sent', () async {
@@ -157,10 +190,12 @@ void main() {
       expect(client.queuedCount, 0);
     });
 
-    test('another account on the same device starts OFF', () async {
-      final h = _Harness(optedIn: true);
+    test('each account keeps its own choice on a shared device', () async {
+      final h = _Harness(optedIn: false);
       h.uid = 'uid-b';
-      expect(await h.preference.isOn('uid-b'), isFalse);
+      expect(await h.preference.isOn('uid-b'), isTrue,
+          reason: 'uid-a turning it off does not turn it off for uid-b');
+      await h.preference.set('uid-b', false);
       await h.client.offer(_tx(), 'shopping');
       expect(h.sent, isEmpty);
       h.uid = null; // signed out

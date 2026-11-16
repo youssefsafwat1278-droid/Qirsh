@@ -16,6 +16,7 @@ import '../../common/app_category_chip.dart';
 import '../../common/app_button.dart';
 import '../../common/category_catalog.dart';
 import '../../dashboard/dashboard_providers.dart';
+import '../../settings/settings_providers.dart';
 import '../../settings/widgets/settings_v2.dart';
 import '../transactions_providers.dart';
 import '../../../core/utils/l10n_ext.dart';
@@ -178,7 +179,10 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
               child: Text(
                 _scope == CategoryCorrectionScope.thisTransactionOnly
                     ? context.l10n.ccThisOnlyHint
-                    : context.l10n.ccRememberHint,
+                    : ref.watch(sharedLearningActiveProvider).valueOrNull == true
+                        ? '${context.l10n.ccRememberHint}\n'
+                            '${context.l10n.ccSharedLearningHint}'
+                        : context.l10n.ccRememberHint,
                 style: AppTypography.caption(c.textMuted),
               ),
             ),

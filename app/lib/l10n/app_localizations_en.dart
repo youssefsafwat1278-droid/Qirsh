@@ -2928,7 +2928,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get privSharedLearningBody =>
-      'Off by default. When on, each time you choose “Remember for this merchant”, Qirsh sends only that merchant’s name and the category you chose. Amounts, dates, messages, transfers and names of people are never sent. Choices are pooled with other users’. A choice is added to the categories everyone receives when at least 6 users agree on it and they are a clear majority (75%), or after an admin reviews it; an admin can remove it at any time. Needs Cloud Sync and Smart Analysis on.';
+      'On by default; you can turn it off at any time. When on, each time you choose “Remember for this merchant”, Qirsh sends only that merchant’s name and the category you chose. Amounts, dates, messages, transfers and names of people are never sent. Choices are pooled with other users’. A choice is added to the categories everyone receives when at least 6 users agree on it and they are a clear majority (75%), or after an admin reviews it; an admin can remove it at any time. Needs Cloud Sync and Smart Analysis on.';
 
   @override
   String get privSharedLearningNeedsConsent =>
@@ -5788,6 +5788,10 @@ class AppL10nEn extends AppL10n {
   @override
   String get ccRememberHint =>
       'Future transactions from this merchant will get this category.';
+
+  @override
+  String get ccSharedLearningHint =>
+      'Only the merchant name and category are shared, to improve categories for everyone. You can turn this off in Privacy.';
 
   @override
   String get ccAlsoUpdatePast => 'Also update past transactions';

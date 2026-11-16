@@ -18,6 +18,7 @@ import '../../../domain/errors/repo_exceptions.dart';
 import '../../../domain/usecases/add_transaction_usecase.dart';
 import '../../../domain/usecases/correct_category_usecase.dart';
 import '../../common/app_sheet_scaffold.dart';
+import '../../settings/settings_providers.dart';
 import '../../settings/widgets/settings_v2.dart';
 import '../../common/app_category_chip.dart';
 import '../../common/app_button.dart';
@@ -343,7 +344,11 @@ class _ConfirmSheetState extends ConsumerState<_ConfirmSheet> {
               child: SettingsV2SwitchRow(
                 key: const ValueKey('confirm-remember-merchant'),
                 title: context.l10n.ccAllMerchant,
-                subtitle: context.l10n.ccRememberHint,
+                subtitle:
+                    ref.watch(sharedLearningActiveProvider).valueOrNull == true
+                        ? '${context.l10n.ccRememberHint}\n'
+                            '${context.l10n.ccSharedLearningHint}'
+                        : context.l10n.ccRememberHint,
                 value: _rememberForMerchant,
                 onChanged: (v) => setState(() => _rememberForMerchant = v),
               ),

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di/app_providers.dart';
+import '../../core/privacy/shared_learning_preference.dart';
 import '../../domain/entities/engagement_entities.dart';
 import '../../domain/entities/supporting_entities.dart';
 import '../capture/services/android_sms_capture_service.dart';
@@ -38,6 +39,18 @@ class CaptureHealthStatus {
 final userSettingsProvider = FutureProvider<UserSettingsEntity>((ref) async {
   ref.watch(dbRevisionProvider);
   return ref.watch(loadUserSettingsUseCaseProvider).call();
+});
+
+/// Whether "Remember for this merchant" also shares the merchant and category
+/// right now: the account's shared-learning switch (on by default) AND Cloud
+/// AND AI consent — the same three the client checks before sending. Drives
+/// the just-in-time notice in the category sheets.
+final sharedLearningActiveProvider = FutureProvider.autoDispose<bool>((ref) async {
+  final settings = await ref.watch(userSettingsProvider.future);
+  if (!settings.cloudProcessingEnabled || !settings.aiConsentGranted) {
+    return false;
+  }
+  return ref.watch(sharedLearningOptInProvider.future);
 });
 
 final notificationPreferencesProvider =

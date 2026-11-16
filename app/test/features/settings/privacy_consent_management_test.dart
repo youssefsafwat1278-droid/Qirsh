@@ -126,13 +126,13 @@ void main() {
         t.widget<SwitchListTile>(learningSwitch());
 
     for (final locale in ['en', 'ar']) {
-      testWidgets('explained, and OFF by default ($locale)', (tester) async {
+      testWidgets('explained, and ON by default ($locale)', (tester) async {
         set(ConsentState.accepted, ConsentState.accepted);
         await pump(tester, locale: locale);
         final l10n = lookupAppL10n(Locale(locale));
         expect(find.text(l10n.privSharedLearningTitle), findsOneWidget);
         expect(find.text(l10n.privSharedLearningBody), findsOneWidget);
-        expect(tile(tester).value, isFalse);
+        expect(tile(tester).value, isTrue);
         expect(tile(tester).onChanged, isNotNull);
       });
     }
@@ -144,7 +144,6 @@ void main() {
     ]) {
       testWidgets('disabled with a hint when Cloud=$cloud AI=$ai',
           (tester) async {
-        learningPrefs[SharedLearningPreference.keyFor('acct-a')] = 'on';
         set(cloud, ai);
         await pump(tester);
         expect(tile(tester).onChanged, isNull);
@@ -157,30 +156,31 @@ void main() {
       });
     }
 
-    testWidgets('turning it on is stored for this account only',
+    testWidgets('turning it off is stored for this account only, and back on',
         (tester) async {
       set(ConsentState.accepted, ConsentState.accepted);
       await pump(tester);
+      expect(learningPrefs, isEmpty, reason: 'the default writes nothing');
       await tester.tap(learningSwitch());
       await tester.pumpAndSettle();
-      expect(tile(tester).value, isTrue);
-      expect(learningPrefs.keys, [SharedLearningPreference.keyFor('acct-a')]);
+      expect(tile(tester).value, isFalse);
+      expect(learningPrefs, {SharedLearningPreference.keyFor('acct-a'): 'off'});
       expect(learningPrefs.keys.single, isNot(contains('acct-a')),
           reason: 'the key is an opaque hash of the account id');
 
       await tester.tap(learningSwitch());
       await tester.pumpAndSettle();
-      expect(tile(tester).value, isFalse);
-      expect(learningPrefs, isEmpty);
+      expect(tile(tester).value, isTrue);
+      expect(learningPrefs, {SharedLearningPreference.keyFor('acct-a'): 'on'});
     });
 
-    testWidgets('another account on the same device starts OFF',
+    testWidgets('one account turning it off leaves another account ON',
         (tester) async {
-      learningPrefs[SharedLearningPreference.keyFor('acct-a')] = 'on';
+      learningPrefs[SharedLearningPreference.keyFor('acct-a')] = 'off';
       learningAccount = 'acct-b';
       set(ConsentState.accepted, ConsentState.accepted);
       await pump(tester);
-      expect(tile(tester).value, isFalse);
+      expect(tile(tester).value, isTrue);
     });
   });
 

@@ -77,7 +77,7 @@ void main() {
         en['privSharedLearningTitle'], 'Help improve categories for everyone');
     final s = en['privSharedLearningBody'] as String;
     for (final part in [
-      'Off by default',
+      'On by default; you can turn it off at any time',
       'Remember for this merchant',
       'only that merchant’s name and the category you chose',
       'Amounts, dates, messages, transfers and names of people are never sent',
@@ -91,7 +91,7 @@ void main() {
     }
     final a = ar['privSharedLearningBody'] as String;
     for (final part in [
-      'متوقف افتراضيًا',
+      'مفعّل افتراضيًا ويمكنك إيقافه في أي وقت',
       ar['ccAllMerchant'] as String,
       'اسم المتجر والتصنيف الذي اخترته فقط',
       'المبالغ أو التواريخ أو الرسائل أو التحويلات أو أسماء الأشخاص',

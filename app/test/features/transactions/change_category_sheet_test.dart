@@ -6,6 +6,7 @@ import 'package:money_companion/domain/entities/category_entity.dart';
 import 'package:money_companion/domain/entities/transaction_entity.dart';
 import 'package:money_companion/domain/finance/money.dart';
 import 'package:money_companion/features/common/category_catalog.dart';
+import 'package:money_companion/features/settings/settings_providers.dart';
 import 'package:money_companion/features/transactions/widgets/change_category_sheet.dart';
 import 'package:money_companion/l10n/app_localizations.dart';
 
@@ -77,4 +78,60 @@ void main() {
     expect(find.text('حدّث العمليات السابقة أيضًا'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  for (final active in [true, false]) {
+    testWidgets('"This merchant" says it is shared only while sharing is active '
+        '(active=$active)', (tester) async {
+      final now = DateTime.utc(2026, 7, 18, 12);
+      final transaction = TransactionEntity(
+        id: 'tx-1',
+        amountMoney: Money.fromLegacyReal(100, 'EGP'),
+        currency: 'EGP',
+        type: TransactionTypeEntity.payment,
+        source: TransactionSourceEntity.bank,
+        occurredAt: now,
+        rawMessage: 'test',
+        rawMerchant: 'Test merchant',
+        categoryId: 'food',
+        parseConfidence: 1,
+        status: TransactionStatus.confirmed,
+        createdAt: now,
+        updatedAt: now,
+      );
+      final catalog = CategoryCatalog(const [
+        CategoryEntity(id: 'food', key: 'food', nameAr: 'مطاعم',
+            icon: 'utensils', color: '#22C55E', isIncome: false, sort: 1),
+      ]);
+      await tester.pumpWidget(ProviderScope(
+        overrides: [
+          sharedLearningActiveProvider.overrideWith((_) async => active),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          locale: const Locale('ar'),
+          localizationsDelegates: AppL10n.localizationsDelegates,
+          supportedLocales: AppL10n.supportedLocales,
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () =>
+                    showChangeCategorySheet(context, transaction, catalog),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      final l10n = lookupAppL10n(const Locale('ar'));
+      // Never on "This transaction": nothing is shared from it.
+      expect(find.textContaining(l10n.ccSharedLearningHint), findsNothing);
+      await tester.tap(find.text(l10n.ccScopeMerchant));
+      await tester.pumpAndSettle();
+      expect(find.textContaining(l10n.ccSharedLearningHint),
+          active ? findsOneWidget : findsNothing);
+      expect(find.textContaining(l10n.ccRememberHint), findsOneWidget);
+    });
+  }
 }
