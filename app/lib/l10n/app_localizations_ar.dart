@@ -7511,4 +7511,126 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get whatsNewUnavailable => 'تعذّر عرض ملاحظات الإصدار.';
+
+  @override
+  String get ccPastExcludedTitle => 'لن تتغيّر:';
+
+  @override
+  String ccPastExclChosen(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عملية اخترت تصنيفها بنفسك',
+      many: '$count عملية اخترت تصنيفها بنفسك',
+      few: '$count عمليات اخترت تصنيفها بنفسك',
+      two: 'عمليتان اخترت تصنيفهما بنفسك',
+      one: 'عملية اخترت تصنيفها بنفسك',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ccPastExclUnknown(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عملية لا نعرف من اختار تصنيفها (سجل قديم)',
+      many: '$count عملية لا نعرف من اختار تصنيفها (سجل قديم)',
+      few: '$count عمليات لا نعرف من اختار تصنيفها (سجل قديم)',
+      two: 'عمليتان لا نعرف من اختار تصنيفهما (سجل قديم)',
+      one: 'عملية لا نعرف من اختار تصنيفها (سجل قديم)',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ccPastExclIgnored(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عملية متجاهَلة',
+      many: '$count عملية متجاهَلة',
+      few: '$count عمليات متجاهَلة',
+      two: 'عمليتان متجاهَلتان',
+      one: 'عملية متجاهَلة',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ccPastExclManual(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عملية أضفتها يدويًا',
+      many: '$count عملية أضفتها يدويًا',
+      few: '$count عمليات أضفتها يدويًا',
+      two: 'عمليتان أضفتهما يدويًا',
+      one: 'عملية أضفتها يدويًا',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccIncludeUnknown => 'حدّث أيضًا العمليات غير معروفة المصدر';
+
+  @override
+  String get ccIncludeChosen => 'حدّث أيضًا ما اخترت تصنيفه بنفسك';
+
+  @override
+  String get ccIncludeChosenConfirmTitle => 'تغيير تصنيفات اخترتها بنفسك؟';
+
+  @override
+  String ccIncludeChosenConfirmBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ستتغير $count عملية اخترت تصنيفها بنفسك من قبل.',
+      many: 'ستتغير $count عملية اخترت تصنيفها بنفسك من قبل.',
+      few: 'ستتغير $count عمليات اخترت تصنيفها بنفسك من قبل.',
+      two: 'ستتغير عمليتان اخترت تصنيفهما بنفسك من قبل.',
+      one: 'ستتغير عملية اخترت تصنيفها بنفسك من قبل.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccIncludeChosenConfirmYes => 'نعم، غيّرها';
+
+  @override
+  String ccPastExclImported(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count عملية من ملف مستورد',
+      many: '$count عملية من ملف مستورد',
+      few: '$count عمليات من ملف مستورد',
+      two: 'عمليتان من ملف مستورد',
+      one: 'عملية من ملف مستورد',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccIncludeImported => 'حدّث أيضًا العمليات المستوردة من ملف';
+
+  @override
+  String get ccIncludeImportedConfirmTitle => 'تغيير العمليات المستوردة؟';
+
+  @override
+  String ccIncludeImportedConfirmBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ستتغير $count عملية مستوردة من ملف.',
+      many: 'ستتغير $count عملية مستوردة من ملف.',
+      few: 'ستتغير $count عمليات مستوردة من ملف.',
+      two: 'ستتغير عمليتان مستوردتان من ملف.',
+      one: 'ستتغير عملية مستوردة من ملف.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccIncludeImportedConfirmYes => 'نعم، غيّرها';
 }

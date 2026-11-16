@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 
 import '../../data/db/app_database.dart';
+import '../../data/db/merchant_identity.dart';
 import '../../data/db/money_codec.dart';
 import '../../data/db/sql_value_codec.dart';
 import '../../data/repositories/drift_repository_support.dart'
@@ -100,6 +101,11 @@ class DriftFinancialImporter {
           imported += 1;
         }
       }
+
+      // A file says nothing trustworthy about who chose a category (rows above
+      // are 'unknown'), but its merchant names are real: link every imported
+      // row to its stable merchant identity, by the exact normalised name.
+      await repairMissingMerchantLinks(_db);
 
       final result = ImportResult(
         imported: imported,
@@ -450,11 +456,18 @@ class DriftFinancialImporter {
             raw_message,parse_confidence,status,created_at,updated_at,
             foreign_amount,foreign_amount_minor,foreign_currency,direction,transaction_time_from_sms,
             sms_received_at,comparison_timestamp,comparison_timestamp_source,
-            duplicate_status,possible_duplicate_of_transaction_id,duplicate_reason)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?, '',1,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            duplicate_status,possible_duplicate_of_transaction_id,duplicate_reason,
+            category_source,imported_from_file)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?, '',1,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'unknown',1)
           ON CONFLICT(id) DO UPDATE SET account_id=excluded.account_id,
             amount=excluded.amount,amount_minor=excluded.amount_minor,currency=excluded.currency,
-            raw_merchant=excluded.raw_merchant,category_id=excluded.category_id,
+            raw_merchant=excluded.raw_merchant,
+            category_source=CASE WHEN transactions.category_id IS excluded.category_id
+                                 THEN transactions.category_source ELSE 'unknown' END,
+            category_id=excluded.category_id,
+            -- The row's content now comes from a file. The marker is sticky
+            -- and separate: `source` keeps the file's original bank/SMS origin.
+            imported_from_file=1,
             type=excluded.type,source=excluded.source,card_last4=excluded.card_last4,
             balance_after=excluded.balance_after,
             balance_after_minor=excluded.balance_after_minor,note=excluded.note,

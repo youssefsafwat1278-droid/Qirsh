@@ -32,7 +32,10 @@ TransactionEntity _tx(String id) => TransactionEntity(
 
 class _Transactions implements TransactionRepository {
   final writes = <({String id, String key, bool byRule})>[];
-  final past = [_tx('past-1'), _tx('past-2')];
+  final past = [
+    _tx('past-1').copyWith(categoryProvenance: CategoryProvenance.auto),
+    _tx('past-2').copyWith(categoryProvenance: CategoryProvenance.rule),
+  ];
   int countQueries = 0;
 
   @override
@@ -45,13 +48,17 @@ class _Transactions implements TransactionRepository {
   }
 
   @override
-  Future<List<TransactionEntity>> autoCategorizedForMerchant(
-      {required String rawMerchant,
-      required String categoryKey,
-      String? excludeTransactionId}) async {
+  Future<List<TransactionEntity>> sameMerchantTransactions(
+      {required String rawMerchant, String? excludeTransactionId}) async {
     countQueries++;
     return past;
   }
+
+  @override
+  Future<String?> categoryIdForKey(String categoryKey) async => categoryKey;
+
+  @override
+  Future<TransactionEntity?> getById(String id) async => _tx(id);
 
   @override
   dynamic noSuchMethod(Invocation invocation) =>
@@ -63,6 +70,9 @@ class _Merchants implements MerchantCategoryRepository {
 
   @override
   Future<Map<String, String>> getLearnedCategoryMap() async => {};
+
+  @override
+  Future<String?> userConfirmedCategoryFor(String rawMerchant) async => null;
 
   @override
   Future<void> confirmMerchantCategory(
@@ -175,8 +185,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(txs.writes, isEmpty, reason: 'nothing changes before saving');
-    expect(find.text('${l10n.ccPastCount(2)} ${l10n.ccPastManualKept}'),
-        findsOneWidget);
+    expect(find.text(l10n.ccPastCount(2)), findsOneWidget);
+    expect(find.textContaining(l10n.ccPastExcludedTitle), findsNothing);
     expect(l10n.ccPastCount(2), '2 past transactions will change.');
 
     await tester.tap(find.text(l10n.ccSave));
@@ -188,5 +198,48 @@ void main() {
       (id: 'past-2', key: 'travel', byRule: true),
     ]);
     expect(merchants.rules, [('QA merchant', 'travel')]);
+  });
+
+  testWidgets(
+      'imported rows need their own switch, behind a confirmation that names them',
+      (tester) async {
+    final txs = _Transactions()
+      ..past.add(_tx('imp-1').copyWith(
+          categoryProvenance: CategoryProvenance.unknown,
+          importedFromFile: true));
+    final merchants = _Merchants();
+    final l10n = await _open(tester, txs, merchants);
+
+    await tester.tap(find.text('Travel'));
+    await tester.tap(find.text(l10n.ccScopeMerchant));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10n.ccAlsoUpdatePast));
+    await tester.pumpAndSettle();
+
+    expect(find.text(l10n.ccPastCount(2)), findsOneWidget);
+    expect(find.textContaining(l10n.ccPastExclImported(1)), findsOneWidget);
+    final toggle = find.byKey(const ValueKey('cc-include-imported'));
+    await tester.ensureVisible(toggle);
+
+    // Cancelling the confirmation leaves the imported row out.
+    await tester.tap(find.descendant(of: toggle, matching: find.byType(Switch)));
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.ccIncludeImportedConfirmBody(1)), findsOneWidget);
+    await tester.tap(find.text(l10n.commonCancel));
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.ccPastCount(2)), findsOneWidget);
+
+    // Confirming includes it, and the preview count follows.
+    await tester.tap(find.descendant(of: toggle, matching: find.byType(Switch)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('cc-include-imported-confirm')));
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.ccPastCount(3)), findsOneWidget);
+
+    await tester.ensureVisible(find.text(l10n.ccSave));
+    await tester.tap(find.text(l10n.ccSave));
+    await tester.pumpAndSettle();
+    expect(txs.writes.map((w) => w.id),
+        ['tx-1', 'past-1', 'past-2', 'imp-1']);
   });
 }

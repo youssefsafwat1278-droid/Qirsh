@@ -32,6 +32,22 @@ enum TransactionPricingState { priced, awaitingFx }
 
 enum SyncStatus { localOnly, synced, pending, conflict }
 
+/// Who chose a transaction's CATEGORY (stored as `transactions.category_source`
+/// and synced as `user_transactions.category_source`). It is the one thing
+/// "also update past transactions" reads to decide what it may change:
+///   * [auto]    — the engine categorised it at capture; a rule may change it.
+///   * [rule]    — a confirmed merchant rule set it; a newer rule may change it.
+///   * [user]    — the user picked it by hand; never changed by default.
+///   * [unknown] — history that predates this field, an imported file, or a
+///                 change made by an older app version; never changed by default.
+/// Only an explicit category choice writes [user]; editing the note, amount,
+/// date or account never touches it.
+enum CategoryProvenance { auto, rule, user, unknown }
+
+CategoryProvenance categoryProvenanceFromSql(String? value) =>
+    CategoryProvenance.values.firstWhere((v) => v.name == value,
+        orElse: () => CategoryProvenance.unknown);
+
 class TransactionEntity {
   TransactionEntity({
     required this.id,
@@ -66,6 +82,8 @@ class TransactionEntity {
     this.syncedAt,
     this.serverUpdatedAt,
     this.syncStatus = SyncStatus.localOnly,
+    this.categoryProvenance,
+    this.importedFromFile = false,
   })  : assert((foreignMoney == null) == (foreignCurrency == null)),
         assert(foreignMoney == null ||
             foreignMoney.currency == foreignCurrency!.trim().toUpperCase());
@@ -102,6 +120,16 @@ class TransactionEntity {
   final DateTime? syncedAt;
   final DateTime? serverUpdatedAt;
   final SyncStatus syncStatus;
+
+  /// Null only on an entity that was never stored (a fresh capture or a pulled
+  /// row before saving): the repository then derives it from [source].
+  final CategoryProvenance? categoryProvenance;
+
+  /// Came in through a file import. Recorded on its own, separately from
+  /// [source] (which keeps the original bank/SMS/manual origin) and from
+  /// [categoryProvenance]; once set it is never cleared. Imported rows are
+  /// excluded from bulk category updates unless the user opts in to them.
+  final bool importedFromFile;
 
   /// DISPLAY-ONLY compatibility getters. Never use these as a persistence,
   /// calculation, comparison, validation, dedup-input, or transport source.
@@ -149,6 +177,8 @@ class TransactionEntity {
     DateTime? syncedAt,
     DateTime? serverUpdatedAt,
     SyncStatus? syncStatus,
+    CategoryProvenance? categoryProvenance,
+    bool? importedFromFile,
   }) {
     return TransactionEntity(
       id: id ?? this.id,
@@ -186,6 +216,8 @@ class TransactionEntity {
       syncedAt: syncedAt ?? this.syncedAt,
       serverUpdatedAt: serverUpdatedAt ?? this.serverUpdatedAt,
       syncStatus: syncStatus ?? this.syncStatus,
+      categoryProvenance: categoryProvenance ?? this.categoryProvenance,
+      importedFromFile: importedFromFile ?? this.importedFromFile,
     );
   }
 }

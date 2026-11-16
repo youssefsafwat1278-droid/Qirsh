@@ -15,6 +15,119 @@ import 'engagement_usecase.dart';
 /// captures of the same normalised merchant follow.
 enum CategoryCorrectionScope { thisTransactionOnly, allMerchantTransactions }
 
+/// Why "also update past transactions" leaves a transaction alone.
+enum PastUpdateExclusion {
+  /// The user picked this category by hand. Changed only with
+  /// [PastUpdateOverrides.includeChosenByYou].
+  chosenByYou,
+
+  /// Nobody can say who chose it (older history, an older app version).
+  /// Changed only with [PastUpdateOverrides.includeUnknown].
+  unknownOrigin,
+
+  /// Ignored transactions are never re-categorised.
+  ignored,
+
+  /// Added by hand. Never re-categorised in bulk.
+  manual,
+
+  /// Came in through a file import ([TransactionEntity.importedFromFile]).
+  /// Changed only with [PastUpdateOverrides.includeImported] — never by
+  /// [PastUpdateOverrides.includeUnknown].
+  imported,
+}
+
+/// Explicit, separate opt-ins, all off by default. Ignored and manual rows
+/// have no override at all.
+class PastUpdateOverrides {
+  const PastUpdateOverrides({
+    this.includeUnknown = false,
+    this.includeChosenByYou = false,
+    this.includeImported = false,
+  });
+
+  final bool includeUnknown;
+  final bool includeChosenByYou;
+
+  /// Imported rows whose category was not picked by hand. A hand-picked one
+  /// still needs [includeChosenByYou] as well.
+  final bool includeImported;
+}
+
+/// What "also update past transactions" would do — computed by the same code
+/// that applies it, so the preview and the result cannot disagree.
+class PastCategoryUpdatePlan {
+  const PastCategoryUpdatePlan({
+    required this.eligible,
+    required this.excluded,
+    required this.alreadyInCategory,
+  });
+
+  static const empty =
+      PastCategoryUpdatePlan(eligible: [], excluded: {}, alreadyInCategory: 0);
+
+  final List<TransactionEntity> eligible;
+  final Map<PastUpdateExclusion, List<TransactionEntity>> excluded;
+
+  /// Same merchant and already in the chosen category: nothing to do.
+  final int alreadyInCategory;
+
+  int excludedCount(PastUpdateExclusion reason) =>
+      excluded[reason]?.length ?? 0;
+
+  int get totalExcluded =>
+      excluded.values.fold(0, (sum, rows) => sum + rows.length);
+}
+
+/// Sorts [candidates] for a bulk change to [categoryId]. The first matching
+/// reason wins, in the order below, so a row is counted exactly once.
+PastCategoryUpdatePlan planPastCategoryUpdate(
+  List<TransactionEntity> candidates,
+  String categoryId, {
+  PastUpdateOverrides overrides = const PastUpdateOverrides(),
+}) {
+  final eligible = <TransactionEntity>[];
+  final excluded = <PastUpdateExclusion, List<TransactionEntity>>{};
+  var already = 0;
+  void exclude(PastUpdateExclusion r, TransactionEntity t) =>
+      (excluded[r] ??= []).add(t);
+  for (final t in candidates) {
+    if (t.categoryId == categoryId) {
+      already++;
+    } else if (t.status == TransactionStatus.ignored) {
+      exclude(PastUpdateExclusion.ignored, t);
+    } else if (t.source == TransactionSourceEntity.unknown) {
+      exclude(PastUpdateExclusion.manual, t);
+    } else if (t.importedFromFile ||
+        t.source == TransactionSourceEntity.imported) {
+      if (!overrides.includeImported) {
+        exclude(PastUpdateExclusion.imported, t);
+      } else if (t.categoryProvenance == CategoryProvenance.user &&
+          !overrides.includeChosenByYou) {
+        exclude(PastUpdateExclusion.chosenByYou, t);
+      } else {
+        eligible.add(t);
+      }
+    } else {
+      switch (t.categoryProvenance ?? CategoryProvenance.unknown) {
+        case CategoryProvenance.auto:
+        case CategoryProvenance.rule:
+          eligible.add(t);
+        case CategoryProvenance.user:
+          overrides.includeChosenByYou
+              ? eligible.add(t)
+              : exclude(PastUpdateExclusion.chosenByYou, t);
+        case CategoryProvenance.unknown:
+          overrides.includeUnknown
+              ? eligible.add(t)
+              : exclude(PastUpdateExclusion.unknownOrigin, t);
+      }
+    }
+  }
+  return PastCategoryUpdatePlan(
+      eligible: eligible, excluded: excluded, alreadyInCategory: already);
+}
+
 class CorrectCategoryUseCase {
   CorrectCategoryUseCase({
     required TransactionRepository transactionRepository,
@@ -45,16 +158,29 @@ class CorrectCategoryUseCase {
     required String categoryKey,
     required CategoryCorrectionScope scope,
     // Only honoured with "remember": also re-categorise this merchant's past
-    // transactions that were categorised automatically. Hand-set ones stay.
+    // transactions per [planPastCategoryUpdate]. Hand-picked and unknown-origin
+    // ones change only through their explicit [overrides].
     bool alsoUpdatePast = false,
+    PastUpdateOverrides overrides = const PastUpdateOverrides(),
   }) async {
+    final before = await _transactionRepository.getById(transactionId);
     final updated = await _transactionRepository.updateCategory(
       transactionId: transactionId,
       categoryKey: categoryKey,
     );
+    final rowChanged = before == null ||
+        before.categoryId != updated.categoryId ||
+        before.categoryProvenance != updated.categoryProvenance ||
+        before.status != updated.status;
+    var ruleChanged = false;
 
     if (scope == CategoryCorrectionScope.allMerchantTransactions &&
         updated.rawMerchant != null) {
+      ruleChanged = await _merchantCategoryRepository
+              .userConfirmedCategoryFor(updated.rawMerchant!) !=
+          categoryKey;
+    }
+    if (ruleChanged) {
       final learnedMap =
           await _merchantCategoryRepository.getLearnedCategoryMap();
       final categorizer = Categorizer(map: MerchantCategoryMap(learnedMap));
@@ -83,26 +209,43 @@ class CorrectCategoryUseCase {
         unawaited(offer(updated, categoryKey).catchError((Object _) {}));
       }
 
-      if (alsoUpdatePast) {
-        // Through the same repository write as a single edit, one row at a
-        // time, so every change is enqueued for sync exactly like a normal
-        // category edit — never a bulk SQL update that skips the outbox.
-        final past = await _transactionRepository.autoCategorizedForMerchant(
+    }
+
+    var pastChanged = 0;
+    // The target id comes from the key exactly as in [previewPastUpdate], so
+    // what is applied is what was shown.
+    final targetCategoryId =
+        scope == CategoryCorrectionScope.allMerchantTransactions &&
+                alsoUpdatePast &&
+                updated.rawMerchant != null
+            ? await _transactionRepository.categoryIdForKey(categoryKey)
+            : null;
+    if (targetCategoryId != null) {
+      // Through the same repository write as a single edit, one row at a
+      // time, so every change is enqueued for sync exactly like a normal
+      // category edit — never a bulk SQL update that skips the outbox. Rows
+      // already in the category are skipped, so a repeat run changes nothing.
+      final plan = planPastCategoryUpdate(
+        await _transactionRepository.sameMerchantTransactions(
           rawMerchant: updated.rawMerchant!,
-          categoryKey: categoryKey,
           excludeTransactionId: updated.id,
+        ),
+        targetCategoryId,
+        overrides: overrides,
+      );
+      for (final tx in plan.eligible) {
+        await _transactionRepository.updateCategory(
+          transactionId: tx.id,
+          categoryKey: categoryKey,
+          appliedByRule: true,
         );
-        for (final tx in past) {
-          await _transactionRepository.updateCategory(
-            transactionId: tx.id,
-            categoryKey: categoryKey,
-            appliedByRule: true,
-          );
-        }
+        pastChanged++;
       }
     }
 
-    if (recordEngagementUseCase != null) {
+    // Nothing changed (a repeat of the same choice): no correction feedback.
+    if (recordEngagementUseCase != null &&
+        (rowChanged || ruleChanged || pastChanged > 0)) {
       await recordEngagementUseCase!(
         action: EngagementAction.categoryCorrected,
         occurredAt: updated.updatedAt,
@@ -112,19 +255,26 @@ class CorrectCategoryUseCase {
     return updated;
   }
 
-  /// How many past transactions "also update past transactions" would change
-  /// for [transaction] → [categoryKey]. Shown to the user before applying.
-  Future<int> countPastToUpdate({
+  /// What "also update past transactions" would change for [transaction] →
+  /// [categoryKey], and what it would leave alone and why. Shown to the user
+  /// before applying; [call] applies exactly this plan.
+  Future<PastCategoryUpdatePlan> previewPastUpdate({
     required TransactionEntity transaction,
     required String categoryKey,
+    PastUpdateOverrides overrides = const PastUpdateOverrides(),
   }) async {
     final merchant = transaction.rawMerchant;
-    if (merchant == null) return 0;
-    final past = await _transactionRepository.autoCategorizedForMerchant(
-      rawMerchant: merchant,
-      categoryKey: categoryKey,
-      excludeTransactionId: transaction.id,
+    if (merchant == null) return PastCategoryUpdatePlan.empty;
+    final categoryId =
+        await _transactionRepository.categoryIdForKey(categoryKey);
+    if (categoryId == null) return PastCategoryUpdatePlan.empty;
+    return planPastCategoryUpdate(
+      await _transactionRepository.sameMerchantTransactions(
+        rawMerchant: merchant,
+        excludeTransactionId: transaction.id,
+      ),
+      categoryId,
+      overrides: overrides,
     );
-    return past.length;
   }
 }

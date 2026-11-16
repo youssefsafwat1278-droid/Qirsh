@@ -240,7 +240,14 @@ TransactionEntity transactionFromRow(QueryRow row) {
   final syncedAt = row.readNullable<String>('synced_at');
   final serverUpdatedAt = row.readNullable<String>('server_updated_at');
   final syncStatus = row.readNullable<String>('sync_status');
+  final categoryProvenance = row.data.containsKey('category_source')
+      ? categoryProvenanceFromSql(row.readNullable<String>('category_source'))
+      : null;
+  final importedFromFile = row.data.containsKey('imported_from_file') &&
+      (row.readNullable<int>('imported_from_file') ?? 0) == 1;
   return TransactionEntity(
+    categoryProvenance: categoryProvenance,
+    importedFromFile: importedFromFile,
     id: row.read<String>('id'),
     amountMoney: kMoneyCodec.readColumn(row, 'amount', currency),
     currency: currency,

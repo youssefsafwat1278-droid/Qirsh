@@ -46,6 +46,12 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
     double confidence = 1,
   }) =>
       _db.transaction(() async {
+        // Re-confirming the rule the user already has is a no-op: no write and
+        // no second sync event, so repeating "remember" is idempotent.
+        if (isUserConfirmed &&
+            await userConfirmedCategoryFor(rawMerchant) == categoryKey) {
+          return;
+        }
         await _confirm(rawMerchant, categoryKey, isUserConfirmed, confidence);
         final key = AppDatabase.normalizeMerchant(rawMerchant);
         if (isUserConfirmed && isSyncableMerchantKey(key)) {

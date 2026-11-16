@@ -68,7 +68,7 @@ void main() {
       final db = await AppDatabase.open(
           executor: NativeDatabase.memory(), keyStore: _MemoryKeyStore());
       addTearDown(db.close);
-      expect(await _userVersion(db), 42);
+      expect(await _userVersion(db), 43);
       expect(await _hasTable(db, 'remote_coupons'), isTrue);
       expect(await RemoteCouponsDao(db).count(), 0);
     });
@@ -95,7 +95,7 @@ void main() {
       final v31 = await AppDatabase.open(
           executor: NativeDatabase(File(path)), keyStore: _MemoryKeyStore());
       addTearDown(v31.close);
-      expect(await _userVersion(v31), 42);
+      expect(await _userVersion(v31), 43);
       expect(await _hasTable(v31, 'remote_coupons'), isTrue);
       expect(await RemoteCouponsDao(v31).count(), 0, reason: 'starts empty');
       // C: pre-existing financial data survived untouched.
@@ -120,7 +120,7 @@ void main() {
         caught = e;
       }
       expect(caught, isA<UnsupportedDatabaseVersionException>());
-      expect((caught! as UnsupportedDatabaseVersionException).supportedVersion, 42);
+      expect((caught! as UnsupportedDatabaseVersionException).supportedVersion, 43);
       // Fail-closed: nothing was migrated or rewritten.
       expect(await _userVersion(db), 999);
     });
@@ -361,7 +361,7 @@ void main() {
           .customSelect("SELECT name FROM accounts WHERE id = 'acc-1';")
           .getSingleOrNull();
       expect(account?.read<String>('name'), 'Bank');
-      expect(await _userVersion(db), 42);
+      expect(await _userVersion(db), 43);
     });
   });
 }

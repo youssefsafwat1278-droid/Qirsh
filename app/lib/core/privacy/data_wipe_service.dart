@@ -29,6 +29,8 @@ class DataWipeService {
     'goals',
     'budgets',
     'merchant_category_map',
+    // Verified merchant aliases are the user's own confirmations.
+    'merchant_aliases',
     'merchants',
     'subscriptions',
     'bill_payments',

@@ -36,7 +36,7 @@ void main() {
     final db = await AppDatabase.open(
         executor: NativeDatabase.memory(), keyStore: _MemoryKeyStore());
     addTearDown(db.close);
-    expect(await userVersion(db), 42);
+    expect(await userVersion(db), 43);
     expect(await hasRestoreOps(db), isTrue);
     // operation_id PRIMARY KEY: a duplicate insert must be rejected/replace, never
     // create a second row.
@@ -71,7 +71,7 @@ void main() {
     // Reopen → the versioned migration pipeline runs 27 -> 28 and creates the table.
     db = await AppDatabase.open(
         executor: NativeDatabase(File(path)), keyStore: _MemoryKeyStore());
-    expect(await userVersion(db), 42);
+    expect(await userVersion(db), 43);
     expect(await hasRestoreOps(db), isTrue, reason: 'upgrade created the table');
     // Existing data preserved.
     expect(
@@ -84,7 +84,7 @@ void main() {
     db = await AppDatabase.open(
         executor: NativeDatabase(File(path)), keyStore: _MemoryKeyStore());
     addTearDown(db.close);
-    expect(await userVersion(db), 42);
+    expect(await userVersion(db), 43);
     expect(await hasRestoreOps(db), isTrue);
   });
 }

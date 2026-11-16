@@ -56,12 +56,16 @@ echo "══ MALI-034 architecture guard ══"
 #         base_revision on both outboxes (revision CAS, lost-ACK receipts)
 #   v42 — Beta 1: consent_version_watermark, the per-replica consent version
 #         frontier that survives sign-out (Cloud enable never reuses a version)
+#   v43 — Category learning fix (user-approved 2026-11-16): transactions.
+#         category_source (auto|rule|user|unknown), transactions.
+#         imported_from_file (sticky file-import marker, separate from source),
+#         merchant_aliases (verified, reversible) + deterministic link repair
 #
 # The guard sat at 31 for four bumps and failed CI on correct, approved work,
 # which is the failure mode that teaches people to ignore a gate. Raising the
 # number is the whole point of the check — an UNAPPROVED bump still fails here,
 # loudly, because whoever makes it has to come and edit this list.
-AUTHORIZED_SCHEMA=42
+AUTHORIZED_SCHEMA=43
 schema_line="$(grep -E 'const int _targetSchemaVersion = [0-9]+;' "$LIB/data/db/app_database.dart" 2>/dev/null)"
 if echo "$schema_line" | grep -qE "= ${AUTHORIZED_SCHEMA};"; then
   okc "schema pinned at ${AUTHORIZED_SCHEMA}"

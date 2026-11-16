@@ -214,8 +214,10 @@ void main() {
     );
     final otherBefore = await categoryKeyOf(other.id);
 
-    final count = await correctCategory.countPastToUpdate(
-        transaction: edited, categoryKey: 'restaurants');
+    final count = (await correctCategory.previewPastUpdate(
+            transaction: edited, categoryKey: 'restaurants'))
+        .eligible
+        .length;
     expect(count, 2);
 
     outbox.enqueued.clear();
@@ -242,8 +244,10 @@ void main() {
     // Applied by the rule, not by hand: nothing left to update, and a later
     // re-teach can still move these rows.
     expect(
-        await correctCategory.countPastToUpdate(
-            transaction: edited, categoryKey: 'cafes'),
+        (await correctCategory.previewPastUpdate(
+                transaction: edited, categoryKey: 'cafes'))
+            .eligible
+            .length,
         2);
   });
 

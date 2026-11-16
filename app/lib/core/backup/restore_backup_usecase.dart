@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 
 import '../security/lock_prompt_language.dart';
 import '../../data/db/app_database.dart';
+import '../../data/db/merchant_identity.dart';
 import '../../data/db/planning_cutover.dart';
 import '../../data/db/money_v30_backfill.dart';
 import '../../data/db/planning_canonical_invariants.dart';
@@ -233,6 +234,12 @@ class RestoreBackupUseCase {
         // and the original database is preserved.
         if (plan != null) await _verifyAgainstPlan(plan, fault);
         fault('afterVerification');
+        // A backup keeps each transaction's merchant link, but a legacy or
+        // cross-catalog snapshot can carry a link the sanitizer above had to
+        // null. Relink by the exact normalised merchant name — deterministic,
+        // never fuzzy — AFTER verification, so the plan is checked against the
+        // snapshot as restored. Category and provenance are untouched.
+        await repairMissingMerchantLinks(_db);
         // Audit H-20: these steps are required for CORRECTNESS, not
         // convenience, so they belong inside the atomic transaction.
         // `runPostRestoreSetup` resets ai/cloud consent (MALI-059n) so a

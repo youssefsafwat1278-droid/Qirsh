@@ -12,6 +12,7 @@ import 'ledger_sync_engine.dart';
 import '../../../core/backend/supabase_config.dart';
 import '../../../core/utils/id_generator.dart';
 import '../../../data/db/app_database.dart';
+import '../../../data/db/merchant_identity.dart';
 import '../../../data/db/money_codec.dart';
 import '../../../data/db/sql_value_codec.dart';
 import '../../../data/repositories/drift_dedup_store.dart';
@@ -469,7 +470,9 @@ class LedgerSyncService implements LedgerPullAdapter {
       final meta = await _db
           .customSelect(
             'SELECT sync_status, server_id, server_updated_at, server_revision, '
-            'account_id FROM transactions WHERE id = ${sqlString(localId)} LIMIT 1;',
+            'account_id, category_id, category_source, raw_merchant, merchant_id, '
+            'imported_from_file '
+            'FROM transactions WHERE id = ${sqlString(localId)} LIMIT 1;',
           )
           .getSingleOrNull();
       if (meta == null) return _RowOutcome.skipped;
@@ -580,6 +583,30 @@ class LedgerSyncService implements LedgerPullAdapter {
         canonicalDirection: _canonicalMeta(metadata, 'canonical_direction'),
         type: mappedType,
       );
+      // Category provenance travels in its own column. A server that predates
+      // it sends no key: then a changed category could have been anyone's
+      // choice, so it becomes 'unknown'; an unchanged one keeps its provenance.
+      final currentProvenance = meta.readNullable<String>('category_source');
+      final pulledProvenance = row['category_source'] as String?;
+      final categoryProvenance = pulledProvenance != null
+          ? categoryProvenanceFromSql(pulledProvenance).name
+          : localCategoryId != meta.readNullable<String>('category_id')
+              ? CategoryProvenance.unknown.name
+              : (currentProvenance ?? CategoryProvenance.unknown.name);
+      // A changed merchant name moves the row to that merchant's identity
+      // (the same deterministic key captures use); transfers and income never
+      // carry a merchant link.
+      final pulledMerchant = (row['merchant'] as String?)?.trim();
+      final merchantless = mappedType == TransactionTypeEntity.transfer ||
+          mappedType == TransactionTypeEntity.income;
+      final merchantId = merchantless ||
+              pulledMerchant == null ||
+              pulledMerchant.isEmpty
+          ? null
+          : pulledMerchant == meta.readNullable<String>('raw_merchant')?.trim() &&
+                  meta.readNullable<String>('merchant_id') != null
+              ? meta.readNullable<String>('merchant_id')
+              : await resolveOrCreateMerchantId(_db, pulledMerchant);
       final serverStatus = row['status'] as String?;
       final mappedStatus = switch (serverStatus) {
         'pending' => 'pending',
@@ -592,6 +619,10 @@ class LedgerSyncService implements LedgerPullAdapter {
             amount_minor = ${kMoneyCodec.sqlMinorLiteral(pulledMoney.amountMoney)},
             currency = ${sqlString(currency)},
             raw_merchant = ${sqlNullableString(row['merchant'] as String?)},
+            merchant_id = ${sqlNullableString(merchantId)},
+            category_source = ${sqlString(categoryProvenance)},
+            -- Sticky: a pull can mark a row imported, never unmark it.
+            imported_from_file = ${(meta.readNullable<int>('imported_from_file') ?? 0) == 1 || row['imported_from_file'] == true ? 1 : 0},
             note = ${sqlNullableString(row['description'] as String?)},
             type = ${sqlString(mappedType.name)},
             source = ${sqlString(mappedSource.name)},
@@ -908,6 +939,11 @@ class LedgerSyncService implements LedgerPullAdapter {
         type: canonicalType,
       ),
       accountId: accountId,
+      // Who chose the category, from its own server column. Absent (an older
+      // server) or null: nobody can say, so 'unknown' — never auto-changed.
+      categoryProvenance:
+          categoryProvenanceFromSql(row['category_source'] as String?),
+      importedFromFile: row['imported_from_file'] == true,
       // Card linkage lives in metadata.last4 on the server (no dedicated
       // column); restore it so pulled transactions stay linked to their card.
       cardLast4: _last4FromMetadata(row['metadata']),

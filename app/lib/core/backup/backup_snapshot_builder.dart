@@ -91,6 +91,11 @@ class BackupSnapshotBuilder {
       'duplicate_status',
       'possible_duplicate_of_transaction_id',
       'duplicate_reason',
+      // Who chose the category (auto | rule | user | unknown). A backup made
+      // before the column existed restores as 'unknown' (the column default),
+      // so a restored hand-picked category is never treated as automatic.
+      'category_source',
+      'imported_from_file',
       // MALI-026 (B8-3 §2): v4 exact minor units (decimal-int STRINGS on the
       // wire). Currency authority: `currency` (own) / `foreign_currency`.
       'amount_minor',
@@ -436,6 +441,11 @@ class BackupSnapshotBuilder {
     // staler.
     'remote_catalog_merchants',
     'remote_merchant_aliases',
+    // Verified "same merchant" names. Empty until the alias-linking screen
+    // ships; it is added to the backup together with that screen (as a new
+    // snapshot version — a v4 restore requires every listed table, so adding
+    // it here would make existing v4 backups unrestorable).
+    'merchant_aliases',
     // COUPONS Phase 3 — click receipts hold a plaintext claim token. Restoring
     // one would present credentials for a click made on a DIFFERENT install,
     // possibly while that install is still polling it, and an attribution

@@ -16,6 +16,7 @@ import '../../../data/db/planning_cutover.dart';
 import '../../../data/db/sql_value_codec.dart';
 import '../../../data/sync/exact_transport_capability.dart';
 import '../../../data/sync/revision_cas.dart';
+import '../../../core/utils/id_generator.dart';
 import '../../../data/sync/server_capabilities.dart';
 import '../../../data/sync/sync_cursor.dart';
 import 'ledger_outbox_queue.dart';
@@ -933,6 +934,35 @@ class LedgerPushService implements LedgerPushAdapter {
       metadata['canonical_type'] = canonicalType;
       metadata['canonical_source'] = payload['canonical_source'];
       metadata['canonical_direction'] = payload['canonical_direction'];
+    }
+    // Category provenance has its own server column. The server trusts it only
+    // from a write that carries a FRESH `cs_op` token in metadata: an older app
+    // version replaces metadata without one (or leaves it untouched), so its
+    // category change is recorded as 'unknown' instead of keeping a stale
+    // provenance (migration 20261117000000). Sent only with the canonical
+    // metadata this write already carries, and only to a server that
+    // advertises the column — an older server never sees an unknown column.
+    final categorySource = payload['category_source'] as String?;
+    if (useCanonical &&
+        categorySource != null &&
+        await _capabilities?.transactionCategorySource(uid: userId) ==
+            ServerCapabilityState.verified) {
+      row['category_source'] = categorySource;
+      // The token names the value and the category it was minted for, so a
+      // stale token echoed by another writer can never vouch for a different
+      // category; the server takes the provenance from the token itself.
+      metadata['cs_op'] = {
+        'n': IdGenerator.next(),
+        's': categorySource,
+        'c': row['category_id'] ?? '',
+      };
+    }
+    // The file-import marker shares the same server capability. Only ever
+    // sent as true: the server keeps it sticky, so false could not clear it.
+    if (payload['imported_from_file'] == true &&
+        await _capabilities?.transactionCategorySource(uid: userId) ==
+            ServerCapabilityState.verified) {
+      row['imported_from_file'] = true;
     }
     if (metadata.isNotEmpty) row['metadata'] = metadata;
     return row;

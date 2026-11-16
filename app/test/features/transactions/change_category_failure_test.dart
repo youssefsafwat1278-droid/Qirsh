@@ -31,6 +31,9 @@ class _FailingTransactions implements TransactionRepository {
   }
 
   @override
+  Future<TransactionEntity?> getById(String id) async => null;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw StateError('Unexpected transaction operation ${invocation.memberName}');
 }

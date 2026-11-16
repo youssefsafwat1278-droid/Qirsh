@@ -15,6 +15,7 @@ import '../../features/capture/services/ledger_outbox_queue.dart';
 import '../capture/proof_correction_log.dart';
 import '../db/app_database.dart';
 import '../db/database_seed.dart';
+import '../db/merchant_identity.dart';
 import '../db/money_codec.dart';
 import '../db/sql_value_codec.dart';
 import 'drift_repository_support.dart';
@@ -251,7 +252,8 @@ class DriftTransactionRepository implements TransactionRepository {
           created_at, updated_at, foreign_amount, foreign_amount_minor, foreign_currency, direction,
           transaction_time_from_sms, sms_received_at, comparison_timestamp,
           comparison_timestamp_source, duplicate_status,
-          possible_duplicate_of_transaction_id, duplicate_reason
+          possible_duplicate_of_transaction_id, duplicate_reason, category_source,
+          imported_from_file
         ) VALUES (
           ${sqlString(transaction.id)},
           ${kMoneyCodec.sqlRealLiteral(transaction.amountMoney)},
@@ -283,7 +285,9 @@ class DriftTransactionRepository implements TransactionRepository {
           ${sqlString(comparisonTimestampSourceToSql(transaction.comparisonTimestampSource))},
           ${sqlString(duplicateStatusToSql(transaction.duplicateStatus))},
           ${sqlNullableString(transaction.possibleDuplicateOfTransactionId)},
-          ${sqlNullableString(transaction.duplicateReason)}
+          ${sqlNullableString(transaction.duplicateReason)},
+          ${sqlString(_provenanceForNew(transaction).name)},
+          ${transaction.importedFromFile ? 1 : 0}
         );
       ''');
 
@@ -310,6 +314,16 @@ class DriftTransactionRepository implements TransactionRepository {
       if (categoryId == null) {
         throw StateError('Unknown category key: $categoryKey');
       }
+      // Idempotent: the same category from the same kind of decision changes
+      // nothing, so it writes nothing, syncs nothing and logs nothing.
+      final targetProvenance =
+          appliedByRule ? CategoryProvenance.rule : CategoryProvenance.user;
+      if (existing != null &&
+          existing.categoryId == categoryId &&
+          existing.categoryProvenance == targetProvenance &&
+          (appliedByRule || existing.status == TransactionStatus.confirmed)) {
+        return existing;
+      }
 
       // A rule-applied write leaves the review status alone: re-categorising a
       // pending row must not silently confirm it on the user's behalf.
@@ -317,12 +331,13 @@ class DriftTransactionRepository implements TransactionRepository {
         appliedByRule
             ? '''
           UPDATE transactions
-          SET category_id = ?, updated_at = ?
+          SET category_id = ?, category_source = 'rule', updated_at = ?
           WHERE id = ?;
         '''
             : '''
           UPDATE transactions
-          SET category_id = ?, status = 'confirmed', updated_at = ?
+          SET category_id = ?, category_source = 'user', status = 'confirmed',
+              updated_at = ?
           WHERE id = ?;
         ''',
         variables: [
@@ -352,42 +367,44 @@ class DriftTransactionRepository implements TransactionRepository {
   }
 
   @override
-  Future<List<TransactionEntity>> autoCategorizedForMerchant({
+  Future<String?> categoryIdForKey(String categoryKey) =>
+      _categoryIdByKey(categoryKey);
+
+  @override
+  Future<List<TransactionEntity>> sameMerchantTransactions({
     required String rawMerchant,
-    required String categoryKey,
     String? excludeTransactionId,
   }) async {
     final merchantId = await _merchantIdByRawName(rawMerchant);
     if (merchantId == null) return const [];
-    final categoryId = await _categoryIdByKey(categoryKey);
-    // "Set by hand" is read from provenance, never from timestamps:
-    // proof_correction_events is written only by the explicit user-edit
-    // repository methods (category, full edit, amount, account), so ANY such
-    // event means the user touched this row and its category is left alone.
-    // Manual ('unknown') and imported rows carry a category the user chose.
+    // The same merchant = the stable merchant identity plus verified aliases
+    // only (merchant_identity.dart). Every row of this replica — and a replica
+    // belongs to exactly one signed-in user — across all accounts and cards.
+    final ids = (await sameMerchantIds(_db, merchantId)).toList();
     final rows = await _db.customSelect(
-      '''
-        SELECT t.* FROM transactions t
-        WHERE t.merchant_id = ?
-          AND t.status != 'ignored'
-          AND t.source IN ('bank', 'card', 'wallet', 'aiParsed')
-          AND (t.category_id IS NULL OR t.category_id != ?)
-          AND t.id != ?
-          AND NOT EXISTS (
-            SELECT 1 FROM proof_correction_events e
-            WHERE e.transaction_id = t.id
-              AND e.event_type IN ('non_financial_edit', 'corrected_financial')
-          )
-        ORDER BY t.occurred_at DESC, t.id DESC;
-      ''',
+      'SELECT t.* FROM transactions t '
+      'WHERE t.merchant_id IN (${List.filled(ids.length, '?').join(', ')}) '
+      'AND t.id != ? '
+      'ORDER BY t.occurred_at DESC, t.id DESC;',
       variables: [
-        Variable.withString(merchantId),
-        Variable.withString(categoryId ?? ''),
+        for (final id in ids) Variable.withString(id),
         Variable.withString(excludeTransactionId ?? ''),
       ],
     ).get();
     return rows.map(transactionFromRow).toList();
   }
+
+  /// Provenance of a row being inserted: the entity's own when it carries one
+  /// (a pulled or restored row), otherwise from how it was made — a manual
+  /// entry was categorised by the user, an imported row is of unknown origin,
+  /// and a capture was categorised by the engine.
+  static CategoryProvenance _provenanceForNew(TransactionEntity t) =>
+      t.categoryProvenance ??
+      switch (t.source) {
+        TransactionSourceEntity.unknown => CategoryProvenance.user,
+        TransactionSourceEntity.imported => CategoryProvenance.unknown,
+        _ => CategoryProvenance.auto,
+      };
 
   @override
   Future<TransactionEntity> updateTransaction({
@@ -440,6 +457,8 @@ class DriftTransactionRepository implements TransactionRepository {
           UPDATE transactions
           SET ${accountClause}amount = ?, amount_minor = ?, currency = ?, type = ?, occurred_at = ?,
               comparison_timestamp = ?, merchant_id = ?, raw_merchant = ?,
+              category_source = CASE WHEN category_id IS ? THEN category_source
+                                     ELSE 'user' END,
               category_id = ?, note = ?,
               status = 'confirmed', updated_at = ?
           WHERE id = ?;
@@ -458,6 +477,11 @@ class DriftTransactionRepository implements TransactionRepository {
           trimmedMerchant == null || trimmedMerchant.isEmpty
               ? const Variable<String>(null)
               : Variable.withString(trimmedMerchant),
+          // Provenance changes ONLY when the category itself changes; a note,
+          // amount, date or account edit keeps whoever chose the category.
+          normalizedCategoryId == null || normalizedCategoryId.isEmpty
+              ? const Variable<String>(null)
+              : Variable.withString(normalizedCategoryId),
           normalizedCategoryId == null || normalizedCategoryId.isEmpty
               ? const Variable<String>(null)
               : Variable.withString(normalizedCategoryId),

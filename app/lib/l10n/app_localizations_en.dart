@@ -7501,4 +7501,107 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get whatsNewUnavailable => 'Couldn\'t show the release notes.';
+
+  @override
+  String get ccPastExcludedTitle => 'Won\'t change:';
+
+  @override
+  String ccPastExclChosen(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count transactions whose category you picked',
+      one: '1 transaction whose category you picked',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ccPastExclUnknown(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count transactions of unknown origin (older history)',
+      one: '1 transaction of unknown origin (older history)',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ccPastExclIgnored(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ignored transactions',
+      one: '1 ignored transaction',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ccPastExclManual(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count transactions you added by hand',
+      one: '1 transaction you added by hand',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccIncludeUnknown => 'Also update transactions of unknown origin';
+
+  @override
+  String get ccIncludeChosen => 'Also update the ones you picked yourself';
+
+  @override
+  String get ccIncludeChosenConfirmTitle =>
+      'Change categories you picked yourself?';
+
+  @override
+  String ccIncludeChosenConfirmBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count transactions whose category you picked will change.',
+      one: '1 transaction whose category you picked will change.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccIncludeChosenConfirmYes => 'Yes, change them';
+
+  @override
+  String ccPastExclImported(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count transactions from an imported file',
+      one: '1 transaction from an imported file',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccIncludeImported =>
+      'Also update transactions from imported files';
+
+  @override
+  String get ccIncludeImportedConfirmTitle => 'Change imported transactions?';
+
+  @override
+  String ccIncludeImportedConfirmBody(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count transactions from an imported file will change.',
+      one: '1 transaction from an imported file will change.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get ccIncludeImportedConfirmYes => 'Yes, change them';
 }

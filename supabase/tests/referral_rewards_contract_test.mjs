@@ -671,7 +671,7 @@ test('the client Drift schema is untouched by this SERVER migration', () => {
   // 41 with WP-5 (outbox operation_id/base_revision columns + sync_conflicts),
   // weeks after these tests were last touched, and none of those bumps came
   // from the server migration under test. Assertion unchanged, value current.
-  assert.match(read('app/lib/data/db/app_database.dart'), /const int _targetSchemaVersion = 42;/);
+  assert.match(read('app/lib/data/db/app_database.dart'), /const int _targetSchemaVersion = 43;/);
   assert.doesNotMatch(sql, /_targetSchemaVersion|drift/i);
 });
 

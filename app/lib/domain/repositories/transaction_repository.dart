@@ -94,15 +94,14 @@ abstract class TransactionRepository {
     bool appliedByRule = false,
   });
 
-  /// Past transactions of [rawMerchant]'s normalised merchant that were
-  /// categorised automatically and are not already in [categoryKey].
-  ///
-  /// "Automatically" excludes: manual and imported entries (their category came
-  /// from the user), ignored rows, and any transaction the user has edited
-  /// (an explicit user edit is on record for it).
-  Future<List<TransactionEntity>> autoCategorizedForMerchant({
+  /// The local category id for a stable category key, or null.
+  Future<String?> categoryIdForKey(String categoryKey);
+
+  /// Every other transaction of the same merchant (stable identity + verified
+  /// aliases), across all accounts and cards of this replica's user. The
+  /// caller decides which of them a bulk category update may change.
+  Future<List<TransactionEntity>> sameMerchantTransactions({
     required String rawMerchant,
-    required String categoryKey,
     String? excludeTransactionId,
   });
 

@@ -12552,6 +12552,96 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'تعذّر عرض ملاحظات الإصدار.'**
   String get whatsNewUnavailable;
+
+  /// No description provided for @ccPastExcludedTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'لن تتغيّر:'**
+  String get ccPastExcludedTitle;
+
+  /// No description provided for @ccPastExclChosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عملية اخترت تصنيفها بنفسك} =2{عمليتان اخترت تصنيفهما بنفسك} few{{count} عمليات اخترت تصنيفها بنفسك} many{{count} عملية اخترت تصنيفها بنفسك} other{{count} عملية اخترت تصنيفها بنفسك}}'**
+  String ccPastExclChosen(int count);
+
+  /// No description provided for @ccPastExclUnknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عملية لا نعرف من اختار تصنيفها (سجل قديم)} =2{عمليتان لا نعرف من اختار تصنيفهما (سجل قديم)} few{{count} عمليات لا نعرف من اختار تصنيفها (سجل قديم)} many{{count} عملية لا نعرف من اختار تصنيفها (سجل قديم)} other{{count} عملية لا نعرف من اختار تصنيفها (سجل قديم)}}'**
+  String ccPastExclUnknown(int count);
+
+  /// No description provided for @ccPastExclIgnored.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عملية متجاهَلة} =2{عمليتان متجاهَلتان} few{{count} عمليات متجاهَلة} many{{count} عملية متجاهَلة} other{{count} عملية متجاهَلة}}'**
+  String ccPastExclIgnored(int count);
+
+  /// No description provided for @ccPastExclManual.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عملية أضفتها يدويًا} =2{عمليتان أضفتهما يدويًا} few{{count} عمليات أضفتها يدويًا} many{{count} عملية أضفتها يدويًا} other{{count} عملية أضفتها يدويًا}}'**
+  String ccPastExclManual(int count);
+
+  /// No description provided for @ccIncludeUnknown.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّث أيضًا العمليات غير معروفة المصدر'**
+  String get ccIncludeUnknown;
+
+  /// No description provided for @ccIncludeChosen.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّث أيضًا ما اخترت تصنيفه بنفسك'**
+  String get ccIncludeChosen;
+
+  /// No description provided for @ccIncludeChosenConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير تصنيفات اخترتها بنفسك؟'**
+  String get ccIncludeChosenConfirmTitle;
+
+  /// No description provided for @ccIncludeChosenConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{ستتغير عملية اخترت تصنيفها بنفسك من قبل.} =2{ستتغير عمليتان اخترت تصنيفهما بنفسك من قبل.} few{ستتغير {count} عمليات اخترت تصنيفها بنفسك من قبل.} many{ستتغير {count} عملية اخترت تصنيفها بنفسك من قبل.} other{ستتغير {count} عملية اخترت تصنيفها بنفسك من قبل.}}'**
+  String ccIncludeChosenConfirmBody(int count);
+
+  /// No description provided for @ccIncludeChosenConfirmYes.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعم، غيّرها'**
+  String get ccIncludeChosenConfirmYes;
+
+  /// No description provided for @ccPastExclImported.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{عملية من ملف مستورد} =2{عمليتان من ملف مستورد} few{{count} عمليات من ملف مستورد} many{{count} عملية من ملف مستورد} other{{count} عملية من ملف مستورد}}'**
+  String ccPastExclImported(int count);
+
+  /// No description provided for @ccIncludeImported.
+  ///
+  /// In ar, this message translates to:
+  /// **'حدّث أيضًا العمليات المستوردة من ملف'**
+  String get ccIncludeImported;
+
+  /// No description provided for @ccIncludeImportedConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'تغيير العمليات المستوردة؟'**
+  String get ccIncludeImportedConfirmTitle;
+
+  /// No description provided for @ccIncludeImportedConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'{count, plural, =1{ستتغير عملية مستوردة من ملف.} =2{ستتغير عمليتان مستوردتان من ملف.} few{ستتغير {count} عمليات مستوردة من ملف.} many{ستتغير {count} عملية مستوردة من ملف.} other{ستتغير {count} عملية مستوردة من ملف.}}'**
+  String ccIncludeImportedConfirmBody(int count);
+
+  /// No description provided for @ccIncludeImportedConfirmYes.
+  ///
+  /// In ar, this message translates to:
+  /// **'نعم، غيّرها'**
+  String get ccIncludeImportedConfirmYes;
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {

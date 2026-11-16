@@ -724,6 +724,11 @@ class LedgerOutboxQueue {
       // Null direction is carried as absent → the pull derives it from the
       // canonical type (lossless for income/refund/payment/withdrawal).
       'canonical_direction': tx.direction?.name,
+      // Who chose the category. Sent to the server only once it advertises
+      // `transaction_category_source` (see LedgerPushService._toServerRow).
+      'category_source': tx.categoryProvenance?.name,
+      // Came in through a file import (sticky; separate from source).
+      'imported_from_file': tx.importedFromFile,
     };
 
     // Include source only for create operations.

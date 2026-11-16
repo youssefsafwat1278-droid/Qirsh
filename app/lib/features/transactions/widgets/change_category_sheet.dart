@@ -8,6 +8,7 @@ import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/widgets/navy_sheet_theme.dart';
 import '../../../core/theme/widgets/segmented_control.dart';
 import '../../../core/theme/widgets/app_toast.dart';
+import '../../../core/theme/widgets/glass_dialog.dart';
 import '../../../domain/entities/budget_entity.dart';
 import '../../../domain/entities/transaction_entity.dart';
 import '../../../domain/usecases/correct_category_usecase.dart';
@@ -54,30 +55,101 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
   /// "Also update past transactions" — only offered with "remember".
   bool _alsoUpdatePast = false;
 
-  /// How many past transactions that would change; null while counting.
-  int? _pastCount;
+  /// What updating past transactions would do; null while computing.
+  PastCategoryUpdatePlan? _plan;
   int _countRequest = 0;
+
+  /// Separate, explicit opt-ins (both off by default).
+  bool _includeUnknown = false;
+  bool _includeChosen = false;
+  bool _includeImported = false;
+
+  PastUpdateOverrides get _overrides => PastUpdateOverrides(
+      includeUnknown: _includeUnknown,
+      includeChosenByYou: _includeChosen,
+      includeImported: _includeImported);
 
   bool get _updatesPast =>
       _scope == CategoryCorrectionScope.allMerchantTransactions &&
       _alsoUpdatePast;
 
-  /// The count is shown BEFORE applying, and follows the selected category.
+  /// The plan is shown BEFORE applying and follows the selected category and
+  /// the opt-ins. Saving applies the same plan through the same code.
   Future<void> _refreshPastCount() async {
     final request = ++_countRequest;
-    setState(() => _pastCount = null);
+    setState(() => _plan = null);
     final key = _selectedKey;
     if (!_updatesPast || key == null) return;
     try {
-      final count = await ref
-          .read(correctCategoryUseCaseProvider)
-          .countPastToUpdate(transaction: widget.transaction, categoryKey: key);
+      final plan = await ref.read(correctCategoryUseCaseProvider).previewPastUpdate(
+          transaction: widget.transaction,
+          categoryKey: key,
+          overrides: _overrides);
       if (mounted && request == _countRequest) {
-        setState(() => _pastCount = count);
+        setState(() => _plan = plan);
       }
     } catch (_) {
-      // The count is advisory; saving still works and reports its own errors.
+      // The preview is advisory; saving still works and reports its own errors.
     }
+  }
+
+  /// Turning on an opt-in that overwrites protected rows takes its own
+  /// confirmation, naming how many rows it would add.
+  Future<bool> _confirmOptIn({
+    required String title,
+    required String body,
+    required String yes,
+    required Key yesKey,
+  }) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => GlassAlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text(ctx.l10n.commonCancel)),
+          TextButton(
+              key: yesKey,
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text(yes)),
+        ],
+      ),
+    );
+    return ok == true && mounted;
+  }
+
+  Future<void> _setIncludeChosen(bool v) async {
+    if (v) {
+      final n = _plan?.excludedCount(PastUpdateExclusion.chosenByYou) ?? 0;
+      final l = context.l10n;
+      if (!await _confirmOptIn(
+          title: l.ccIncludeChosenConfirmTitle,
+          body: l.ccIncludeChosenConfirmBody(n),
+          yes: l.ccIncludeChosenConfirmYes,
+          yesKey: const ValueKey('cc-include-chosen-confirm'))) {
+        return;
+      }
+    }
+    setState(() => _includeChosen = v);
+    _refreshPastCount();
+  }
+
+  Future<void> _setIncludeImported(bool v) async {
+    if (v) {
+      final n = _plan?.excludedCount(PastUpdateExclusion.imported) ?? 0;
+      final l = context.l10n;
+      if (!await _confirmOptIn(
+          title: l.ccIncludeImportedConfirmTitle,
+          body: l.ccIncludeImportedConfirmBody(n),
+          yes: l.ccIncludeImportedConfirmYes,
+          yesKey: const ValueKey('cc-include-imported-confirm'))) {
+        return;
+      }
+    }
+    setState(() => _includeImported = v);
+    _refreshPastCount();
   }
 
   @override
@@ -95,6 +167,7 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
         categoryKey: _selectedKey!,
         scope: _scope,
         alsoUpdatePast: _updatesPast,
+        overrides: _overrides,
       );
       refreshTransactions(ref);
       ref.invalidate(dashboardDataProvider);
@@ -199,23 +272,106 @@ class _State extends ConsumerState<_ChangeCategorySheet> {
                   key: const ValueKey('cc-past-count'),
                   title: context.l10n.ccAlsoUpdatePast,
                   subtitle: _alsoUpdatePast
-                      ? _pastCount == null
+                      ? _plan == null
                           ? context.l10n.ccPastManualKept
-                          : '${context.l10n.ccPastCount(_pastCount!)} '
-                              '${context.l10n.ccPastManualKept}'
+                          : context.l10n.ccPastCount(_plan!.eligible.length)
                       : null,
                   value: _alsoUpdatePast,
                   onChanged: (v) {
-                    setState(() => _alsoUpdatePast = v);
+                    setState(() {
+                      _alsoUpdatePast = v;
+                      if (!v) {
+                        _includeUnknown = _includeChosen = false;
+                        _includeImported = false;
+                      }
+                    });
                     _refreshPastCount();
                   },
                 ),
               ),
+              if (_alsoUpdatePast && _plan != null) ..._planDetails(context),
             ],
           ],
           const SizedBox(height: AppSpacing.s2),
         ],
       ),
     );
+  }
+
+  /// Every exclusion with its reason, then the separate opt-ins.
+  List<Widget> _planDetails(BuildContext context) {
+    final c = context.colors;
+    final plan = _plan!;
+    final l = context.l10n;
+    final unknown = plan.excludedCount(PastUpdateExclusion.unknownOrigin);
+    final chosen = plan.excludedCount(PastUpdateExclusion.chosenByYou);
+    final imported = plan.excludedCount(PastUpdateExclusion.imported);
+    final lines = <String>[
+      if (chosen > 0) l.ccPastExclChosen(chosen),
+      if (unknown > 0) l.ccPastExclUnknown(unknown),
+      if (plan.excludedCount(PastUpdateExclusion.ignored) > 0)
+        l.ccPastExclIgnored(plan.excludedCount(PastUpdateExclusion.ignored)),
+      if (imported > 0) l.ccPastExclImported(imported),
+      if (plan.excludedCount(PastUpdateExclusion.manual) > 0)
+        l.ccPastExclManual(plan.excludedCount(PastUpdateExclusion.manual)),
+    ];
+    return [
+      if (lines.isNotEmpty) ...[
+        const SizedBox(height: AppSpacing.s3),
+        Padding(
+          padding: const EdgeInsetsDirectional.symmetric(horizontal: 4),
+          child: Text(
+            [l.ccPastExcludedTitle, ...lines.map((e) => '• $e')].join('\n'),
+            key: const ValueKey('cc-past-excluded'),
+            style: AppTypography.caption(c.textMuted),
+          ),
+        ),
+      ],
+      if (unknown > 0 || _includeUnknown) ...[
+        const SizedBox(height: AppSpacing.s3),
+        Material(
+          color: c.surfaceElevated,
+          clipBehavior: Clip.antiAlias,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: SettingsV2SwitchRow(
+            key: const ValueKey('cc-include-unknown'),
+            title: l.ccIncludeUnknown,
+            value: _includeUnknown,
+            onChanged: (v) {
+              setState(() => _includeUnknown = v);
+              _refreshPastCount();
+            },
+          ),
+        ),
+      ],
+      if (chosen > 0 || _includeChosen) ...[
+        const SizedBox(height: AppSpacing.s3),
+        Material(
+          color: c.surfaceElevated,
+          clipBehavior: Clip.antiAlias,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: SettingsV2SwitchRow(
+            key: const ValueKey('cc-include-chosen'),
+            title: l.ccIncludeChosen,
+            value: _includeChosen,
+            onChanged: (v) => _setIncludeChosen(v),
+          ),
+        ),
+      ],
+      if (imported > 0 || _includeImported) ...[
+        const SizedBox(height: AppSpacing.s3),
+        Material(
+          color: c.surfaceElevated,
+          clipBehavior: Clip.antiAlias,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          child: SettingsV2SwitchRow(
+            key: const ValueKey('cc-include-imported'),
+            title: l.ccIncludeImported,
+            value: _includeImported,
+            onChanged: (v) => _setIncludeImported(v),
+          ),
+        ),
+      ],
+    ];
   }
 }

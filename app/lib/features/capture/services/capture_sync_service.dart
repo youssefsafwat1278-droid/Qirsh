@@ -1100,16 +1100,18 @@ class CaptureSyncService {
     );
     // Atomic import (MALI-012): the surrounding per-capture transaction includes
     // any account creation, the transaction/outbox row, and its dedup marker.
-    final categoryKey = (await learnedRuleCategoryFor(
-          _merchantCategoryRepository,
-          transaction.rawMerchant,
-          loadRemoteKeywords: _loadRemoteKeywords,
-        ))
-            ?.categoryKey ??
-        _string(parsed['category']);
+    final learned = await learnedRuleCategoryFor(
+      _merchantCategoryRepository,
+      transaction.rawMerchant,
+      loadRemoteKeywords: _loadRemoteKeywords,
+    );
+    final categoryKey = learned?.categoryKey ?? _string(parsed['category']);
     await requireCurrentAdmission();
     final saved = await _transactionRepository.saveTransaction(
-      transaction: transaction,
+      transaction: transaction.copyWith(
+          categoryProvenance: learned?.userConfirmed == true
+              ? CategoryProvenance.rule
+              : CategoryProvenance.auto),
       categoryKey: categoryKey,
     );
     await requireCurrentAdmission();

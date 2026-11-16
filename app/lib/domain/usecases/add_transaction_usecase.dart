@@ -1430,7 +1430,13 @@ class AddTransactionUseCase {
     // payload receipt commit together or not at all.
     final committed = await _commitCapture(capture, () async {
       final saved = await _transactionRepository.saveTransaction(
-        transaction: transaction,
+        // A user-confirmed merchant rule chose it ('rule'); anything else the
+        // engine chose ('auto'). Neither is a hand-picked category.
+        transaction: transaction.copyWith(
+            categoryProvenance:
+                effectiveCategory.source == CategorySource.userMap
+                    ? CategoryProvenance.rule
+                    : CategoryProvenance.auto),
         categoryKey: effectiveCategory.categoryKey,
       );
       if (_recordEngagementUseCase != null) {

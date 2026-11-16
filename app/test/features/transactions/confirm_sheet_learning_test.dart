@@ -76,6 +76,7 @@ class _RecordingCorrect extends CorrectCategoryUseCase {
     required String categoryKey,
     required CategoryCorrectionScope scope,
     bool alsoUpdatePast = false,
+    PastUpdateOverrides overrides = const PastUpdateOverrides(),
   }) async {
     calls.add((categoryKey, scope));
     return _tx;

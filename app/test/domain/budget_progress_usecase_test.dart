@@ -285,11 +285,15 @@ class _FakeTransactionRepository implements TransactionRepository {
   }
 
   @override
-  Future<List<TransactionEntity>> autoCategorizedForMerchant({
+  Future<List<TransactionEntity>> sameMerchantTransactions({
     required String rawMerchant,
-    required String categoryKey,
     String? excludeTransactionId,
   }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<String?> categoryIdForKey(String categoryKey) {
     throw UnimplementedError();
   }
 

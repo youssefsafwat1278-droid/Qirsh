@@ -4067,5 +4067,69 @@
   },
   "whatsNewFromQirsh": "من فريق قِرش",
   "whatsNewSeeAll": "كل التغييرات",
-  "whatsNewUnavailable": "تعذّر عرض ملاحظات الإصدار."
+  "whatsNewUnavailable": "تعذّر عرض ملاحظات الإصدار.",
+  "ccPastExcludedTitle": "لن تتغيّر:",
+  "ccPastExclChosen": "{count, plural, =1{عملية اخترت تصنيفها بنفسك} =2{عمليتان اخترت تصنيفهما بنفسك} few{{count} عمليات اخترت تصنيفها بنفسك} many{{count} عملية اخترت تصنيفها بنفسك} other{{count} عملية اخترت تصنيفها بنفسك}}",
+  "@ccPastExclChosen": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccPastExclUnknown": "{count, plural, =1{عملية لا نعرف من اختار تصنيفها (سجل قديم)} =2{عمليتان لا نعرف من اختار تصنيفهما (سجل قديم)} few{{count} عمليات لا نعرف من اختار تصنيفها (سجل قديم)} many{{count} عملية لا نعرف من اختار تصنيفها (سجل قديم)} other{{count} عملية لا نعرف من اختار تصنيفها (سجل قديم)}}",
+  "@ccPastExclUnknown": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccPastExclIgnored": "{count, plural, =1{عملية متجاهَلة} =2{عمليتان متجاهَلتان} few{{count} عمليات متجاهَلة} many{{count} عملية متجاهَلة} other{{count} عملية متجاهَلة}}",
+  "@ccPastExclIgnored": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccPastExclManual": "{count, plural, =1{عملية أضفتها يدويًا} =2{عمليتان أضفتهما يدويًا} few{{count} عمليات أضفتها يدويًا} many{{count} عملية أضفتها يدويًا} other{{count} عملية أضفتها يدويًا}}",
+  "@ccPastExclManual": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccIncludeUnknown": "حدّث أيضًا العمليات غير معروفة المصدر",
+  "ccIncludeChosen": "حدّث أيضًا ما اخترت تصنيفه بنفسك",
+  "ccIncludeChosenConfirmTitle": "تغيير تصنيفات اخترتها بنفسك؟",
+  "ccIncludeChosenConfirmBody": "{count, plural, =1{ستتغير عملية اخترت تصنيفها بنفسك من قبل.} =2{ستتغير عمليتان اخترت تصنيفهما بنفسك من قبل.} few{ستتغير {count} عمليات اخترت تصنيفها بنفسك من قبل.} many{ستتغير {count} عملية اخترت تصنيفها بنفسك من قبل.} other{ستتغير {count} عملية اخترت تصنيفها بنفسك من قبل.}}",
+  "@ccIncludeChosenConfirmBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccIncludeChosenConfirmYes": "نعم، غيّرها",
+  "ccPastExclImported": "{count, plural, =1{عملية من ملف مستورد} =2{عمليتان من ملف مستورد} few{{count} عمليات من ملف مستورد} many{{count} عملية من ملف مستورد} other{{count} عملية من ملف مستورد}}",
+  "ccIncludeImported": "حدّث أيضًا العمليات المستوردة من ملف",
+  "ccIncludeImportedConfirmTitle": "تغيير العمليات المستوردة؟",
+  "ccIncludeImportedConfirmBody": "{count, plural, =1{ستتغير عملية مستوردة من ملف.} =2{ستتغير عمليتان مستوردتان من ملف.} few{ستتغير {count} عمليات مستوردة من ملف.} many{ستتغير {count} عملية مستوردة من ملف.} other{ستتغير {count} عملية مستوردة من ملف.}}",
+  "ccIncludeImportedConfirmYes": "نعم، غيّرها",
+  "@ccPastExclImported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@ccIncludeImportedConfirmBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

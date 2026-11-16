@@ -3833,5 +3833,69 @@
   },
   "whatsNewFromQirsh": "From the Qirsh team",
   "whatsNewSeeAll": "See all changes",
-  "whatsNewUnavailable": "Couldn't show the release notes."
+  "whatsNewUnavailable": "Couldn't show the release notes.",
+  "ccPastExcludedTitle": "Won't change:",
+  "ccPastExclChosen": "{count, plural, =1{1 transaction whose category you picked} other{{count} transactions whose category you picked}}",
+  "@ccPastExclChosen": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccPastExclUnknown": "{count, plural, =1{1 transaction of unknown origin (older history)} other{{count} transactions of unknown origin (older history)}}",
+  "@ccPastExclUnknown": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccPastExclIgnored": "{count, plural, =1{1 ignored transaction} other{{count} ignored transactions}}",
+  "@ccPastExclIgnored": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccPastExclManual": "{count, plural, =1{1 transaction you added by hand} other{{count} transactions you added by hand}}",
+  "@ccPastExclManual": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccIncludeUnknown": "Also update transactions of unknown origin",
+  "ccIncludeChosen": "Also update the ones you picked yourself",
+  "ccIncludeChosenConfirmTitle": "Change categories you picked yourself?",
+  "ccIncludeChosenConfirmBody": "{count, plural, =1{1 transaction whose category you picked will change.} other{{count} transactions whose category you picked will change.}}",
+  "@ccIncludeChosenConfirmBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccIncludeChosenConfirmYes": "Yes, change them",
+  "ccPastExclImported": "{count, plural, =1{1 transaction from an imported file} other{{count} transactions from an imported file}}",
+  "@ccPastExclImported": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccIncludeImported": "Also update transactions from imported files",
+  "ccIncludeImportedConfirmTitle": "Change imported transactions?",
+  "ccIncludeImportedConfirmBody": "{count, plural, =1{1 transaction from an imported file will change.} other{{count} transactions from an imported file will change.}}",
+  "@ccIncludeImportedConfirmBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ccIncludeImportedConfirmYes": "Yes, change them"
 }

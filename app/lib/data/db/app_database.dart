@@ -13,6 +13,7 @@ import 'existing_only_sqlite3.dart';
 import 'database_lease.dart';
 import 'database_process_liveness.dart';
 import 'database_seed.dart';
+import 'merchant_identity.dart';
 import 'money_v30_backfill.dart';
 import 'ownership_guard.dart';
 import 'replica_location.dart';
@@ -20,7 +21,7 @@ import 'sql_value_codec.dart';
 
 // v28 (MALI-014 Batch-5 closure): adds the durable `restore_operations` journal
 // (created idempotently by _createSchema on both fresh install and upgrade).
-const int _targetSchemaVersion = 42;
+const int _targetSchemaVersion = 43;
 
 /// The notification preferences of the seeded default settings row. Shared so a
 /// recovery can tell the pristine seed from a row the user has edited.
@@ -871,7 +872,83 @@ class AppDatabase extends GeneratedDatabase {
       apply: _applyV42ConsentVersionWatermark,
       postcondition: _verifyV42ConsentVersionWatermark,
     ),
+    // Category provenance + stable merchant identity. ADDITIVE:
+    //   * transactions.category_source (auto | rule | user | unknown). History
+    //     cannot say who chose a category (the old edit log also recorded note
+    //     and amount edits, and was never backed up or synced), so every
+    //     existing row is 'unknown' — excluded from "update past transactions"
+    //     by default — except manual entries, whose category the user picked.
+    //   * merchant_aliases: verified "same merchant" names (user-confirmed or
+    //     catalog), reversible through revoked_at. Empty on upgrade.
+    //   * transactions that lost their merchant link (file import) are relinked
+    //     by the exact normalised name. No category or sync state changes.
+    _SchemaMigration(
+      from: 42,
+      to: 43,
+      apply: _applyV43CategoryProvenance,
+      postcondition: _verifyV43CategoryProvenance,
+    ),
   ];
+
+  Future<void> _ensureCategoryProvenanceColumn() => _ensureColumn(
+        'transactions',
+        'category_source',
+        "TEXT NOT NULL DEFAULT 'unknown' "
+            "CHECK(category_source IN ('auto', 'rule', 'user', 'unknown'))",
+      );
+
+  /// Sticky marker for rows that came in through a file import, kept apart
+  /// from `source` (the original bank/SMS/manual origin) and from
+  /// `category_source`.
+  Future<void> _ensureImportedFromFileColumn() => _ensureColumn(
+        'transactions',
+        'imported_from_file',
+        'INTEGER NOT NULL DEFAULT 0 CHECK(imported_from_file IN (0, 1))',
+      );
+
+  static Future<void> _applyV43CategoryProvenance(AppDatabase db) async {
+    await db._ensureCategoryProvenanceColumn();
+    await db._ensureImportedFromFileColumn();
+    // Rows whose source already says "imported" are file imports. Older file
+    // imports that kept a bank/SMS source cannot be told apart deterministically
+    // and stay 'unknown' (excluded by default).
+    await db.customStatement(
+      "UPDATE transactions SET imported_from_file = 1 "
+      "WHERE source = 'imported' AND imported_from_file = 0;",
+    );
+    await db.customStatement(
+      "UPDATE transactions SET category_source = 'user' "
+      "WHERE source = 'unknown' AND category_source = 'unknown';",
+    );
+    await db._createMerchantAliasesTable();
+    await repairMissingMerchantLinks(db);
+  }
+
+  static Future<bool> _verifyV43CategoryProvenance(AppDatabase db) async {
+    final cols = (await db
+            .customSelect("SELECT name FROM pragma_table_info('transactions');")
+            .get())
+        .map((r) => r.read<String>('name'))
+        .toSet();
+    final aliases = await db
+        .customSelect("SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name='merchant_aliases';")
+        .getSingleOrNull();
+    return cols.contains('category_source') &&
+        cols.contains('imported_from_file') &&
+        aliases != null;
+  }
+
+  Future<void> _createMerchantAliasesTable() => customStatement('''
+        CREATE TABLE IF NOT EXISTS merchant_aliases(
+          alias_normalized TEXT PRIMARY KEY,
+          merchant_id TEXT NOT NULL,
+          origin TEXT NOT NULL CHECK(origin IN ('user', 'catalog')),
+          created_at TEXT NOT NULL,
+          revoked_at TEXT NULL,
+          FOREIGN KEY (merchant_id) REFERENCES merchants(id) ON DELETE CASCADE
+        );
+      ''');
 
   static Future<void> _applyV42ConsentVersionWatermark(AppDatabase db) =>
       db._createConsentVersionWatermarkTable();
@@ -2461,6 +2538,12 @@ class AppDatabase extends GeneratedDatabase {
     await _createReplicaMetaTable();
     await _createSyncConflictsTable();
     await _createConsentVersionWatermarkTable();
+    // v43: category provenance + verified merchant aliases. Unconditional for
+    // the same reason as above; the one-time backfill of EXISTING rows is the
+    // v42 -> v43 step in the versioned registry.
+    await _ensureCategoryProvenanceColumn();
+    await _ensureImportedFromFileColumn();
+    await _createMerchantAliasesTable();
 
     // v34 (COUPONS PHASE 1): the merchant catalog cache. Unconditional for the
     // same reason as the two above — a version gate would skip these on a

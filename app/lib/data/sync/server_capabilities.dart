@@ -49,6 +49,11 @@ const String kCapMerchantRulesSync = 'merchant_rules_sync';
 /// switch like [kCapSyncSeq]; false/absent keeps the profile photo on-device.
 const String kCapProfilePhotoBackup = 'profile_photo_backup';
 
+/// 20261117000000: `user_transactions.category_source` exists and is guarded
+/// against older app versions. Until verified, the push neither sends the
+/// column nor the write token, so an older server never sees an unknown column.
+const String kCapTransactionCategorySource = 'transaction_category_source';
+
 class ServerCapabilitiesService {
   ServerCapabilitiesService({
     required Future<String?> Function() getAuthUserId,
@@ -98,6 +103,8 @@ class ServerCapabilitiesService {
   final Map<String, DateTime> _merchantRulesAt = {};
   final Map<String, ServerCapabilityState> _profilePhoto = {};
   final Map<String, DateTime> _profilePhotoAt = {};
+  final Map<String, ServerCapabilityState> _categorySource = {};
+  final Map<String, DateTime> _categorySourceAt = {};
 
   String _key(String uid) => '${_getServerUrl()}|$uid';
 
@@ -181,6 +188,12 @@ class ServerCapabilitiesService {
   Future<ServerCapabilityState> profilePhotoBackup({String? uid}) =>
       _killSwitch(kCapProfilePhotoBackup, _profilePhoto, _profilePhotoAt, uid);
 
+  /// Whether the server advertises `transaction_category_source` (same rules
+  /// as [syncSeq]). Until verified, provenance stays device-local.
+  Future<ServerCapabilityState> transactionCategorySource({String? uid}) =>
+      _killSwitch(kCapTransactionCategorySource, _categorySource,
+          _categorySourceAt, uid);
+
   /// WP-8 (diagnostics): the last cached answer for a kill-switch capability
   /// with no network and no TTL check; [ServerCapabilityState.unknown] when
   /// nothing was probed. [capKey] is one of [kCapSyncSeq], [kCapReplicaEpoch],
@@ -193,6 +206,7 @@ class ServerCapabilitiesService {
       kCapCaptureContractV2 => _captureV2,
       kCapMerchantRulesSync => _merchantRules,
       kCapProfilePhotoBackup => _profilePhoto,
+      kCapTransactionCategorySource => _categorySource,
       _ => null,
     };
     return cache?[_key(uid)] ?? ServerCapabilityState.unknown;
