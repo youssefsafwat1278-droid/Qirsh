@@ -1,4 +1,5 @@
 import 'merchant_classifier.dart';
+import 'text_normalizer.dart';
 
 /// The single owner of the on-device merchant model's lifetime.
 ///
@@ -63,6 +64,15 @@ class MerchantIntelligenceStore implements MerchantIntelligence {
   /// is the one way an on-device learner can quietly degrade with no signal.
   void learnFromUserCorrection(String rawMerchant, String categoryKey) {
     _teach(rawMerchant, categoryKey);
+  }
+
+  /// Withdraws a correction the user has since deleted, so the model stops
+  /// suggesting a category the user no longer wants for this merchant.
+  void forgetUserCorrection(String rawMerchant) {
+    final norm = normalizeMerchant(rawMerchant);
+    _taught.removeWhere(
+        (key) => normalizeMerchant(key.split('\u0000').first) == norm);
+    _classifier.forget(rawMerchant);
   }
 
   void _teach(String rawMerchant, String categoryKey) {

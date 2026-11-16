@@ -279,6 +279,16 @@ class _FakeTransactionRepository implements TransactionRepository {
   Future<TransactionEntity> updateCategory({
     required String transactionId,
     required String categoryKey,
+    bool appliedByRule = false,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<TransactionEntity>> autoCategorizedForMerchant({
+    required String rawMerchant,
+    required String categoryKey,
+    String? excludeTransactionId,
   }) {
     throw UnimplementedError();
   }

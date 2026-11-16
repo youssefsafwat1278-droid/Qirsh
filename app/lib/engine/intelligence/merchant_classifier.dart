@@ -224,6 +224,13 @@ class CharNgramMerchantClassifier implements MerchantIntelligence {
     ));
   }
 
+  /// Drops a user correction, e.g. when the user deletes the rule it came from.
+  /// Catalog seeds are never removed.
+  void forget(String rawMerchant) {
+    final norm = normalizeMerchant(rawMerchant);
+    _learned.removeWhere((e) => e.normalized == norm);
+  }
+
   /// Exposed for the evaluation harness.
   int get exemplarCount => _exemplars.length;
   int get learnedCount => _learned.length;

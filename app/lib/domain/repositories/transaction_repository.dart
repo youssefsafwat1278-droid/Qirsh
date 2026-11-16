@@ -83,9 +83,27 @@ abstract class TransactionRepository {
 
   Future<TransactionEntity> confirm(String id);
 
+  /// [appliedByRule] marks a write made because the user taught a merchant
+  /// rule and asked to update past transactions — not a per-transaction hand
+  /// edit. Such a write still enqueues a normal sync update, but it neither
+  /// confirms a pending transaction nor records user edit provenance, so the
+  /// row keeps counting as automatically categorised.
   Future<TransactionEntity> updateCategory({
     required String transactionId,
     required String categoryKey,
+    bool appliedByRule = false,
+  });
+
+  /// Past transactions of [rawMerchant]'s normalised merchant that were
+  /// categorised automatically and are not already in [categoryKey].
+  ///
+  /// "Automatically" excludes: manual and imported entries (their category came
+  /// from the user), ignored rows, and any transaction the user has edited
+  /// (an explicit user edit is on record for it).
+  Future<List<TransactionEntity>> autoCategorizedForMerchant({
+    required String rawMerchant,
+    required String categoryKey,
+    String? excludeTransactionId,
   });
 
   Future<TransactionEntity> updateTransaction({

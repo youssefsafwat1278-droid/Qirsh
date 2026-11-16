@@ -103,6 +103,7 @@ import '../../domain/usecases/add_transaction_usecase.dart';
 import '../../domain/usecases/budget_progress_usecase.dart';
 import '../../domain/usecases/confirm_transaction_usecase.dart';
 import '../../domain/usecases/correct_category_usecase.dart';
+import '../../domain/usecases/learned_rules_usecase.dart';
 import '../../domain/usecases/engagement_usecase.dart';
 import '../../domain/usecases/goal_details_usecase.dart';
 import '../../domain/usecases/ingest_captured_message_usecase.dart';
@@ -1973,6 +1974,13 @@ final correctCategoryUseCaseProvider = writerProvider<CorrectCategoryUseCase>((r
     transactionRepository: ref.watch(transactionRepositoryProvider),
     merchantCategoryRepository: ref.watch(merchantCategoryRepositoryProvider),
     recordEngagementUseCase: ref.watch(recordEngagementUseCaseProvider),
+    merchantIntelligence: ref.watch(merchantIntelligenceProvider),
+  );
+});
+
+final learnedRulesUseCaseProvider = writerProvider<LearnedRulesUseCase>((ref) {
+  return LearnedRulesUseCase(
+    merchantCategoryRepository: ref.watch(merchantCategoryRepositoryProvider),
     merchantIntelligence: ref.watch(merchantIntelligenceProvider),
   );
 });

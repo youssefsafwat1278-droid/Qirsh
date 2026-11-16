@@ -86,7 +86,9 @@ class _ReadOnlyTransactions extends DriftTransactionRepository {
       _deny();
   @override
   Future<TransactionEntity> updateCategory(
-          {required String transactionId, required String categoryKey}) async =>
+          {required String transactionId,
+          required String categoryKey,
+          bool appliedByRule = false}) async =>
       _deny();
   @override
   Future<TransactionEntity> updateTransaction({

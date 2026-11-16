@@ -24,7 +24,7 @@ class _FailingTransactions implements TransactionRepository {
 
   @override
   Future<TransactionEntity> updateCategory({required String transactionId,
-      required String categoryKey}) {
+      required String categoryKey, bool appliedByRule = false}) {
     requests.add((transactionId: transactionId, categoryKey: categoryKey));
     return (pending = Completer<TransactionEntity>()).future;
   }
