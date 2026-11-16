@@ -31,13 +31,27 @@ type FakeOptions = {
   }) => void;
 };
 
-function fakeStorage(sourceTree: Tree, opts: FakeOptions = {}) {
-  const tree: Tree = Object.fromEntries(
-    Object.entries(sourceTree).map(([path, entries]) => [
-      path,
-      entries.map((entry) => ({ ...entry })),
-    ]),
-  );
+// `sourceTree` is the `backups` bucket; the other buckets (`profile-photos`)
+// are empty unless given in `otherBuckets`. Every call records its bucket, and
+// the returned `listCalls` / `removeCalls` / `objectPaths` / `hasObject` are
+// the `backups` bucket's (what the original tests assert on).
+function fakeStorage(
+  sourceTree: Tree,
+  opts: FakeOptions = {},
+  otherBuckets: Record<string, Tree> = {},
+) {
+  const copy = (t: Tree): Tree =>
+    Object.fromEntries(
+      Object.entries(t).map(([path, entries]) => [
+        path,
+        entries.map((entry) => ({ ...entry })),
+      ]),
+    );
+  const trees: Record<string, Tree> = { backups: copy(sourceTree) };
+  for (const [name, t] of Object.entries(otherBuckets)) trees[name] = copy(t);
+  const allListCalls: Array<{ bucket: string; path: string }> = [];
+  const allRemoveCalls: Array<{ bucket: string; paths: string[] }> = [];
+  const tree: Tree = trees.backups;
   const removed: string[] = [];
   const listCalls: Array<{ path: string; offset: number; limit: number }> = [];
   const removeCalls: string[][] = [];
@@ -67,11 +81,13 @@ function fakeStorage(sourceTree: Tree, opts: FakeOptions = {}) {
     );
 
   const storage: StorageLike = {
-    from(_bucket: string) {
+    from(bucketName: string) {
+      if (bucketName !== 'backups') return otherBucket(bucketName);
       return {
         list(path: string, options?: { limit?: number; offset?: number }) {
           const limit = options?.limit ?? 100;
           const offset = options?.offset ?? 0;
+          allListCalls.push({ bucket: bucketName, path });
           listCalls.push({ path, offset, limit });
           const callNumber = listCalls.length;
           if (opts.listError || opts.listErrorAt === callNumber) {
@@ -90,6 +106,7 @@ function fakeStorage(sourceTree: Tree, opts: FakeOptions = {}) {
           return Promise.resolve({ data: page, error: null });
         },
         remove(paths: string[]) {
+          allRemoveCalls.push({ bucket: bucketName, paths: [...paths] });
           removeCalls.push([...paths]);
           const callNumber = removeCalls.length;
           if (opts.removeError || opts.removeErrorAt === callNumber) {
@@ -114,7 +131,49 @@ function fakeStorage(sourceTree: Tree, opts: FakeOptions = {}) {
     },
   };
 
-  return { storage, removed, listCalls, removeCalls, hasObject, objectPaths };
+  // A plain bucket (no fault injection): lists one page, removes what it is given.
+  function otherBucket(bucketName: string) {
+    trees[bucketName] ??= {};
+    const t = trees[bucketName];
+    return {
+      list(path: string, options?: { limit?: number; offset?: number }) {
+        allListCalls.push({ bucket: bucketName, path });
+        const limit = options?.limit ?? 100;
+        const offset = options?.offset ?? 0;
+        return Promise.resolve({
+          data: (t[path] ?? []).slice(offset, offset + limit).map((e) => ({ ...e })),
+          error: null,
+        });
+      },
+      remove(paths: string[]) {
+        allRemoveCalls.push({ bucket: bucketName, paths: [...paths] });
+        for (const objectPath of paths) {
+          const separator = objectPath.lastIndexOf('/');
+          const parent = objectPath.slice(0, separator);
+          const name = objectPath.slice(separator + 1);
+          t[parent] = (t[parent] ?? []).filter((e) => !(e.name === name && e.id != null));
+        }
+        return Promise.resolve({ data: paths, error: null });
+      },
+    };
+  }
+
+  const bucketObjects = (bucketName: string) =>
+    Object.entries(trees[bucketName] ?? {}).flatMap(([parent, entries]) =>
+      entries.filter((e) => e.id != null).map((e) => `${parent}/${e.name}`)
+    );
+
+  return {
+    storage,
+    removed,
+    listCalls,
+    removeCalls,
+    hasObject,
+    objectPaths,
+    allListCalls,
+    allRemoveCalls,
+    bucketObjects,
+  };
 }
 
 function flatObjects(count: number): Entry[] {
@@ -199,6 +258,72 @@ Deno.test('an empty/absent prefix is idempotent success after two empty scans', 
   assertEquals(removed, []);
   assertEquals(removeCalls.length, 0);
   assertEquals(listCalls.length, 2, 'one empty listing alone is not terminal proof');
+});
+
+// ── profile photo (Cloud Sync copy, migration 20261116210000) ────────────────
+
+Deno.test('account erasure also sweeps the profile-photos bucket, owner prefix only', async () => {
+  const { storage, bucketObjects, allRemoveCalls, allListCalls } = fakeStorage(
+    { [USER]: [{ name: 'backup.enc', id: 'b1' }] },
+    {},
+    {
+      'profile-photos': {
+        [USER]: [{ name: 'avatar', id: 'p1' }],
+        [OTHER_USER]: [{ name: 'avatar', id: 'p2' }],
+      },
+    },
+  );
+
+  const result = await eraseBackupObjects(storage, USER, null);
+
+  assertEquals(result.complete, true);
+  assert(result.removed.includes(`${USER}/backup.enc`));
+  assert(result.removed.includes(`${USER}/avatar`), 'the profile photo survived account erasure');
+  assertEquals(bucketObjects('profile-photos'), [`${OTHER_USER}/avatar`],
+    'another account\'s photo must be untouched');
+  assert(
+    allRemoveCalls.every(({ paths }) => paths.every((p) => p.startsWith(`${USER}/`))),
+    'remove() received a path outside the exact owner prefix',
+  );
+  assertEquals(
+    allListCalls.filter((c) => c.bucket === 'profile-photos').length >= 2,
+    true,
+    'the photo bucket needs its own two empty scans before completion',
+  );
+});
+
+Deno.test('a backup-bucket failure stops before the photo bucket and stays retryable', async () => {
+  const { storage, bucketObjects } = fakeStorage(
+    { [USER]: [{ name: 'backup.enc', id: 'b1' }] },
+    { listError: 'down' },
+    { 'profile-photos': { [USER]: [{ name: 'avatar', id: 'p1' }] } },
+  );
+
+  const result = await eraseBackupObjects(storage, USER, null);
+
+  assertEquals(result.complete, false);
+  assertEquals(result.retryable, true);
+  assertEquals(bucketObjects('profile-photos'), [`${USER}/avatar`]);
+});
+
+Deno.test('a photo-bucket failure is incomplete and names the bucket', async () => {
+  const base = fakeStorage({}, {}, { 'profile-photos': { [USER]: [{ name: 'avatar', id: 'p1' }] } });
+  const storage: StorageLike = {
+    from(name: string) {
+      const bucket = base.storage.from(name);
+      if (name !== 'profile-photos') return bucket;
+      return {
+        list: bucket.list,
+        remove: () => Promise.resolve({ data: null, error: { message: 'nope' } }),
+      };
+    },
+  };
+
+  const result = await eraseBackupObjects(storage, USER, null);
+
+  assertEquals(result.complete, false);
+  assertEquals(result.retryable, true);
+  assert(result.error?.startsWith('profile-photos: remove_objects'), result.error);
 });
 
 Deno.test('removes an owned tracked path even when listing omits it', async () => {

@@ -1,7 +1,9 @@
-// Audit H-24 — complete, account-scoped erasure for backup Storage objects.
+// Audit H-24 — complete, account-scoped erasure for the user's Storage objects:
+// the encrypted backups (`backups`, migration 0010) and the Cloud Sync copy of
+// the profile photo (`profile-photos`, migration 20261116210000).
 //
-// Storage RLS in migration 0001 lets a user write any object under their own
-// `<uid>/` folder. The service-role deletion worker bypasses that RLS, so this
+// Storage RLS lets a user write objects under their own `<uid>/` folder of
+// each of those buckets. The service-role deletion worker bypasses that RLS, so this
 // helper must enforce the same ownership boundary itself before every remove.
 //
 // The sweep is deliberately bounded and convergent:
@@ -38,7 +40,12 @@ export type StorageErasureResult = {
   error?: string;
 };
 
-const BUCKET = 'backups';
+/**
+ * Every private bucket keyed by `<uid>/`. Each is swept in order with the same
+ * ownership and convergence rules; account deletion is complete only when ALL
+ * of them are. A bucket added here without its own `<uid>/` RLS is a bug.
+ */
+export const ERASURE_BUCKETS = ['backups', 'profile-photos'] as const;
 const PAGE_SIZE = 100;
 export const REMOVE_BATCH_SIZE = 100;
 export const MAX_REMOVE_BATCHES_PER_RUN = 10;
@@ -97,7 +104,8 @@ async function collectObjectBatch(
 }
 
 /**
- * Remove backup objects only from the exact `<userId>/` ownership prefix.
+ * Remove the user's objects (every bucket in [ERASURE_BUCKETS]) only from the
+ * exact `<userId>/` ownership prefix.
  *
  * `trackedBlobPath` is attempted only when it belongs to that prefix. A path
  * outside the prefix is ignored (never sent to service-role remove), while the
@@ -122,7 +130,34 @@ export async function eraseBackupObjects(
     };
   }
 
-  const bucket = storage.from(BUCKET);
+  // Buckets are swept in order; the first incomplete one stops the run (the
+  // durable caller retries from the start, and an already-empty bucket costs
+  // only its two empty scans). The tracked blob path belongs to `backups`.
+  const removed: string[] = [];
+  for (const name of ERASURE_BUCKETS) {
+    const result = await eraseBucketObjects(
+      storage.from(name),
+      userId,
+      name === 'backups' ? trackedBlobPath : null,
+    );
+    removed.push(...result.removed);
+    if (!result.complete) {
+      return {
+        removed,
+        complete: false,
+        retryable: true,
+        error: name === 'backups' ? result.error : `${name}: ${result.error}`,
+      };
+    }
+  }
+  return { removed, complete: true, retryable: false };
+}
+
+async function eraseBucketObjects(
+  bucket: BucketLike,
+  userId: string,
+  trackedBlobPath: string | null,
+): Promise<StorageErasureResult> {
   const removed = new Set<string>();
   let pendingTrackedPath = trackedBlobPath && isOwnedPath(trackedBlobPath, userId) ? trackedBlobPath : null;
   let removeBatches = 0;
