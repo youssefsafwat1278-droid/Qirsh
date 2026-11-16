@@ -121,6 +121,7 @@ flutter:
     - assets/shortcut_guide/
     - assets/illustrations/
     - assets/illustrations/dark/
+    - assets/whats_new/
   # IBM Plex Sans Arabic is the PRIMARY app family (SIL OFL 1.1, bundled) — a
   # UI-first face with harmonised Arabic/Latin and clear figures, and the SAME
   # family the PDF report renderer draws with, so app and export match.

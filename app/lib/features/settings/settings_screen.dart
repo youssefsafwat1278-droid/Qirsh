@@ -528,6 +528,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: l10n.helpSettingsTile,
               onTap: () => context.push('/help'),
             ),
+            _NavTile(
+              icon: AppLucideIcons.sparkles,
+              title: l10n.whatsNewTitle,
+              onTap: () => context.push('/whats-new'),
+            ),
           ]),
         ),
         const SizedBox(height: AppSpacing.s6),

@@ -102,6 +102,7 @@ void main() {
       'نقل البيانات',
       'الأمان والخصوصية',
       'المكافآت والدعم',
+      'ما الجديد',
       'تسجيل الخروج',
     ]) {
       expect(find.text(label), findsOneWidget, reason: label);
