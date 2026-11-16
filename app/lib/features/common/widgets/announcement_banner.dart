@@ -13,6 +13,7 @@ import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
 import '../../../core/theme/widgets/mali_card.dart';
 import '../../common/app_avatar.dart';
+import '../../common/app_button.dart';
 import '../../../data/catalog/catalog_daos.dart';
 import '../../../core/utils/app_lucide_icons.dart';
 import '../../../core/utils/l10n_ext.dart';
@@ -133,7 +134,8 @@ class _CampaignBannerTileState extends ConsumerState<_CampaignBannerTile> {
       iconColor: context.colors.primary,
       onTap: () => _handleTap(context),
       dismiss: widget.campaign.isDismissible
-          ? _CampaignDismissButton(campaignId: widget.campaign.id) : null,
+          ? _CampaignDismissButton(campaignId: widget.campaign.id)
+          : null,
     );
   }
 
@@ -168,12 +170,14 @@ class _BannerTile extends ConsumerWidget {
       title: announcement.titleFor(context),
       body: announcement.bodyFor(context)?.trim(),
       actionLabel: announcement.actionUrl != null
-          ? announcement.actionLabelFor(context)?.trim() : null,
+          ? announcement.actionLabelFor(context)?.trim()
+          : null,
       icon: icon,
       iconColor: color,
       onTap: () => _handleTap(context, announcement.actionUrl),
       dismiss: announcement.isDismissible
-          ? _DismissButton(announcementId: announcement.id) : null,
+          ? _DismissButton(announcementId: announcement.id)
+          : null,
     );
   }
 
@@ -194,6 +198,7 @@ class _BannerTile extends ConsumerWidget {
       iconColor: context.colors.primary,
       onTap: () => launchExternalUrl(Uri.parse(storeUrl)),
       dismiss: _DismissButton(announcementId: announcement.id),
+      prominentAction: true,
     );
   }
 
@@ -221,6 +226,7 @@ class _CompactAnnouncementTile extends StatelessWidget {
     required this.iconColor,
     required this.onTap,
     required this.dismiss,
+    this.prominentAction = false,
   });
 
   final String title;
@@ -231,6 +237,10 @@ class _CompactAnnouncementTile extends StatelessWidget {
   final VoidCallback onTap;
   final Widget? dismiss;
 
+  /// The action is the point of the card (an optional update): a compact
+  /// primary button instead of the quiet text link.
+  final bool prominentAction;
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -238,45 +248,64 @@ class _CompactAnnouncementTile extends StatelessWidget {
       padding: EdgeInsets.zero,
       onTap: onTap,
       child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              AppAvatar.icon(icon: icon, color: iconColor,
-                  tone: AppAvatarTone.soft, size: 36),
-              const SizedBox(width: AppSpacing.s3),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(title, style: AppTypography.custom(size: 14,
-                        weight: FontWeight.w600, height: 1.4, color: c.textMain)),
-                    if (body?.isNotEmpty ?? false) ...[
-                      const SizedBox(height: 3),
-                      Text(body!, style: AppTypography.caption(c.textLight)),
-                    ],
-                    if (actionLabel?.isNotEmpty ?? false)
-                      TextButton(
-                        onPressed: onTap,
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          alignment: AlignmentDirectional.centerStart,
-                          minimumSize: const Size(44, 36),
-                        ),
-                        child: Text(actionLabel!,
-                            style: AppTypography.caption(c.primary)
-                                .copyWith(fontWeight: FontWeight.w600)),
-                      ),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AppAvatar.icon(
+                icon: icon,
+                color: iconColor,
+                tone: AppAvatarTone.soft,
+                size: 36),
+            const SizedBox(width: AppSpacing.s3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(title,
+                      style: AppTypography.custom(
+                          size: 14,
+                          weight: FontWeight.w600,
+                          height: 1.4,
+                          color: c.textMain)),
+                  if (body?.isNotEmpty ?? false) ...[
+                    const SizedBox(height: 3),
+                    Text(body!, style: AppTypography.caption(c.textLight)),
                   ],
-                ),
+                  if (prominentAction && (actionLabel?.isNotEmpty ?? false))
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.s3),
+                      child: Align(
+                        alignment: AlignmentDirectional.centerStart,
+                        child: AppPrimaryButton(
+                          label: actionLabel!,
+                          onTap: onTap,
+                          height: 40,
+                        ),
+                      ),
+                    )
+                  else if (actionLabel?.isNotEmpty ?? false)
+                    TextButton(
+                      onPressed: onTap,
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        alignment: AlignmentDirectional.centerStart,
+                        minimumSize: const Size(44, 36),
+                      ),
+                      child: Text(actionLabel!,
+                          style: AppTypography.caption(c.primary)
+                              .copyWith(fontWeight: FontWeight.w600)),
+                    ),
+                ],
               ),
-              if (dismiss != null) ...[
-                const SizedBox(width: AppSpacing.s2),
-                dismiss!,
-              ],
+            ),
+            if (dismiss != null) ...[
+              const SizedBox(width: AppSpacing.s2),
+              dismiss!,
             ],
-          ),
+          ],
+        ),
       ),
     );
   }
