@@ -499,26 +499,27 @@ Deno.test('refund of a failed purchase stays a RESOLVED credit', () => {
   }
 });
 
-// DATA-01 / REV-01 / REV-02 / REV-04: the SAME table as the Dart
-// app/test/engine/parser/declined_state_cues_table_test.dart.
+// DATA-01 / REV-01 / REV-02 / REV-04 / V1-001 residuals: the SAME table as the
+// Dart app/test/engine/parser/declined_state_cues_table_test.dart.
 Deno.test('declined table: not completed is never confirmed money, on every server path', async () => {
   const ai = (type: string, direction: string) => ({ is_transaction: true, amount: 100, amount_text: '100.00',
     currency: 'SAR', type, direction, category: 'shopping' });
-  for (const c of declinedTable.cases as Array<{ text: string; expect: string; serverDirection?: string }>) {
+  for (const c of declinedTable.cases as Array<{ text: string; expect: string }>) {
     const text = c.text;
-    assertEquals(isDeclinedText(text), c.expect === 'review', `cue: ${text}`);
+    assertEquals(isDeclinedText(text), c.expect === 'not_completed', `cue: ${text}`);
     const p = deterministicParse(text, RECEIVED, 180);
-    if (c.expect === 'payment') {
+    if (c.expect === 'completed_payment') {
       assert(isResolved(p), `payment: ${text}`);
-      assertEquals(p.direction, 'debit', text);
+      assertEquals([p.direction, p.type], ['debit', 'payment'], text);
       continue;
     }
-    if (c.expect === 'credit') {
-      // serverDirection: a pre-existing deterministic direction, unchanged here.
-      if (isResolved(p)) assertEquals(p.direction, c.serverDirection ?? 'credit', text);
+    if (c.expect === 'completed_credit') {
+      // The device types a refund/reversal as `refund`; the server agrees.
+      assert(isResolved(p), `credit: ${text}`);
+      assertEquals([p.direction, p.type], ['credit', 'refund'], text);
       continue;
     }
-    assertEquals(isResolved(p), false, `review: ${text}`);
+    assertEquals(isResolved(p), false, `not completed: ${text}`);
     for (const [type, direction] of [['payment', 'debit'], ['refund', 'credit']]) {
       for (const allowAi of [true, false]) {
         const r = await run(text, allowAi, ai(type, direction));

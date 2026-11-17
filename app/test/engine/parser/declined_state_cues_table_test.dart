@@ -7,9 +7,10 @@ import 'package:money_companion/engine/ai/ai_candidate_validator.dart';
 import 'package:money_companion/engine/ai/ai_parser_client.dart';
 import 'package:money_companion/engine/models/transaction_type.dart';
 import 'package:money_companion/engine/parser/parser_engine.dart';
+import 'package:money_companion/engine/parser/shared_preview_parser.dart';
 import 'package:money_companion/engine/parser/transaction_state_cues.dart';
 
-/// DATA-01 / REV-01 / REV-02 / REV-04 — every probe from the audits, run on
+/// DATA-01 / REV-01 / REV-02 / REV-04 / V1-001 residuals — every probe from the audits, run on
 /// every on-device path. The table is shared with the server test
 /// (`process-ios-sms/parse_test.ts`) so the two runtimes judge the same text.
 /// Synthetic messages only.
@@ -21,16 +22,18 @@ void main() {
       jsonDecode(File(_casesPath).readAsStringSync()) as Map<String, dynamic>;
   final cases = (table['cases'] as List).cast<Map<String, dynamic>>();
   const engine = ParserEngine();
+  final preview = SharedPreviewParser.fromJsonString(
+      File('assets/catalog/parser_rules.json').readAsStringSync());
 
   test('the table covers all three outcomes', () {
     expect(cases.map((c) => c['expect']).toSet(),
-        {'review', 'payment', 'credit'});
+        {'not_completed', 'completed_payment', 'completed_credit'});
   });
 
   for (final c in cases) {
     final text = c['text'] as String;
     final expected = c['expect'] as String;
-    final review = expected == 'review';
+    final review = expected == 'not_completed';
 
     test('[${c['src']}] $expected: $text', () {
       expect(TransactionStateCues.isNotCompleted(text), review,
@@ -39,24 +42,31 @@ void main() {
       // On-device parse (also what the iOS import's local fallback runs).
       final r = engine.parse(text, senderId: 'AlRajhi');
       switch (expected) {
-        case 'review':
+        case 'not_completed':
           expect(r.isTransaction, isFalse, reason: 'never confirmed money');
           // Transaction-shaped: the capture becomes a Smart Inbox review row.
           expect(r.amountDetected, isTrue);
           expect(ParserEngine.isIgnoredMessage(text, senderId: 'AlRajhi'),
               isFalse);
-        case 'payment':
+        case 'completed_payment':
           expect(r.isTransaction, isTrue);
           expect(r.transaction!.type, TransactionType.payment);
-        case 'credit':
+        case 'completed_credit':
           expect(r.isTransaction, isTrue);
-          final engineType = c['engineType'] as String?;
-          if (engineType != null) {
-            // Pre-existing type, unchanged by DATA-01 (see the table readme).
-            expect(r.transaction!.type.name, engineType);
-          } else {
-            expect(r.transaction!.type.isExpense, isFalse);
-          }
+          // A refund or reversal returns money: the refund type, which nets
+          // against spend (never income, never a payment).
+          expect(r.transaction!.type, TransactionType.refund);
+      }
+
+      // Notification preview (the same asset the Swift preview reads): a
+      // message that did not complete never gets the detailed "purchase
+      // detected" notification with an amount.
+      // The preview matches its list as plain substrings without folding:
+      // vowel-marked (tashkeel) and tatweel-stretched forms are a documented
+      // gap (KNOWN-LIMITATIONS, cosmetic: the transaction itself is correct).
+      if (review && !RegExp('[\u064B-\u0652\u0640]').hasMatch(text)) {
+        expect(preview.parse(text).isHighConfidence, isFalse,
+            reason: 'preview');
       }
 
       // AI-validated and AI-primary candidates, in either direction.

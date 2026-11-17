@@ -154,7 +154,7 @@ const ARABIC_INDIC_DIGIT = /[٠-٩]/g;
 
 // A numeric token is a maximal digit run with digit-flanked group/decimal
 // separators (ASCII or Arabic), so a longer number never yields a sub-token.
-const NUMERIC_TOKEN = /[0-9٠-٩]+(?:[,٬.٫][0-9٠-٩]+)*/g;
+const NUMERIC_TOKEN = /[0-9٠-٩]+(?:[,٬،.٫][0-9٠-٩]+)*/g;
 
 // Digits that belong to a date/time/identifier rather than an amount.
 const DATE_TIME_SEP_BEFORE = /[0-9٠-٩][-/:]$/;
@@ -166,6 +166,7 @@ function canonicalTokenText(token: string): string | null {
   const ascii = token
     .replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660))
     .replaceAll('٬', ',')
+    .replaceAll('،', ',') // Arabic comma between digits (V1-057)
     .replaceAll('٫', '.');
   return canonicalMoneyText(ascii);
 }

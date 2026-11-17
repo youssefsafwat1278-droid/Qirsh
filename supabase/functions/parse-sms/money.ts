@@ -1,3 +1,4 @@
+import { amountGrounded } from '../_shared/ai_candidate_validator.ts';
 import { canonicalMoneyText, modelMoneyText } from '../_shared/money_text.ts';
 
 export const PARSE_SMS_CURRENCY_CODES = [
@@ -58,5 +59,19 @@ export function withValidatedModelAmountText(parsed: Record<string, unknown>): R
     next.amount_text = amountText;
     next.amount = Number(amountText);
   }
+  return next;
+}
+
+/**
+ * V1-060: [withValidatedModelAmountText], then the amount must be a whole
+ * numeric token of the sanitized [text] (the same grounding as
+ * validateAiCandidate and the app's GroundingCheck). An ungrounded amount is
+ * dropped, so the caller falls back to the amount read from the text itself.
+ */
+export function groundedModelAmount(parsed: Record<string, unknown>, text: string): Record<string, unknown> {
+  const next = withValidatedModelAmountText(parsed);
+  if (amountGrounded(next.amount, text)) return next;
+  delete next.amount;
+  delete next.amount_text;
   return next;
 }

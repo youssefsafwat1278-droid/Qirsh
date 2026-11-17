@@ -13,7 +13,7 @@ class GroundingCheck {
   /// A maximal digit run with digit-flanked group/decimal separators (ASCII
   /// or Arabic), so a longer number never yields a sub-token.
   static final RegExp _numericToken =
-      RegExp(r'[0-9٠-٩۰-۹]+(?:[,٬.٫][0-9٠-٩۰-۹]+)*');
+      RegExp(r'[0-9٠-٩۰-۹]+(?:[,٬،.٫][0-9٠-٩۰-۹]+)*');
   static final RegExp _dateTimeSepBefore = RegExp(r'[0-9٠-٩۰-۹][-/:]$');
   static final RegExp _dateTimeSepAfter = RegExp(r'^[-/:][0-9٠-٩۰-۹]');
   static final RegExp _last4Prefix = RegExp(
@@ -35,6 +35,7 @@ class GroundingCheck {
       if (_last4Prefix.hasMatch(text.substring(0, m.start))) continue;
       final ascii = Normalizer.normalizeDigits(m.group(0)!)
           .replaceAll('٬', ',')
+          .replaceAll('،', ',') // Arabic comma between digits (V1-057)
           .replaceAll('٫', '.');
       if (!_canonical.hasMatch(ascii)) continue;
       final value = double.tryParse(ascii.replaceAll(',', ''));

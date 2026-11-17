@@ -27,6 +27,9 @@ void main() {
       'stateCueMerchantIntroducers': TransactionStateCues.merchantIntroducers,
       'stateCueHypotheticalMarkers': TransactionStateCues.hypotheticalMarkers,
       'stateCueNegationMarkers': TransactionStateCues.negationMarkers,
+      'stateCueMerchantNameWords': TransactionStateCues.merchantNameWords,
+      'stateCueTransactionNouns': TransactionStateCues.transactionNouns,
+      'stateCueGenericNouns': TransactionStateCues.genericNouns,
     };
     for (final e in pairs.entries) {
       test(e.key, () => expect(strings(server[e.key]), e.value));

@@ -108,21 +108,26 @@ function isIgnoredText(lower: string): boolean {
 // app/lib/engine/parser/transaction_state_cues.dart, over the same lists
 // (parser_rules.json; Dart drift test transaction_state_cues_drift_test.dart):
 // 1. whole-token cues (Arabic: one و/ف/ب/ال clitic, never the purpose ل);
-// 2. a cue right after a merchant introducer ("at Failed Ventures") is a name;
-// 3. a cue preceded in its sentence by a hypothetical/future/instructional
-//    marker is not a status; a credit word that is negated, or directly
-//    followed by a declined cue / marker / negation, was not done;
+// 2. a cue right after a merchant introducer ("at Failed Ventures", "at The
+//    Failed Co", "لدى شركة مرفوض"; not "due to") is a name; a cue next to a
+//    plural generic noun ("Declined transactions incur…") or in a question
+//    ("Unauthorized transaction? Call us") is not a status;
+// 3. a cue preceded in its clause by a hypothetical/future/instructional
+//    marker is not a status; a credit word that is negated, directly followed
+//    by a declined cue / marker / negation, or followed later in its sentence
+//    by a declined status ("Refund of SAR 99 failed") was not done — unless
+//    that cue describes a transaction noun ("Refund for failed transaction");
 // 4. not completed = a declined status with no done credit before it, or a
 //    promised/negated credit in a message that names a declined operation.
-const ARABIC_LETTER = '\u0621-\u064A';
+const ARABIC_LETTER = 'ء-ي';
 const NO_LETTER_BEFORE = `(?<![a-z${ARABIC_LETTER}])`;
 const NO_LETTER_AFTER = `(?![a-z${ARABIC_LETTER}])`;
 
 /** Same as the Dart `TransactionStateCues.foldForCues`. */
 export function foldForCues(input: string): string {
   return input
-    .replace(/[\u064B-\u0670]/g, '') // tashkeel (Normalizer.stripTashkeel)
-    .replace(/\u0640/g, '') // tatweel
+    .replace(/[ً-ٰ]/g, '') // tashkeel (Normalizer.stripTashkeel)
+    .replace(/ـ/g, '') // tatweel
     .split(/[\r\n]+/).map((line) => line.replace(/[ \t]+/g, ' ').trim()).filter((l) => l.length > 0).join('\n')
     .toLowerCase()
     .replace(/[^\S\n]+/g, ' ')
@@ -140,49 +145,87 @@ function tokenPattern(cues: string[], lam: boolean, flags = ''): RegExp {
   const clitics = lam ? 'وال|بال|فال|لل|ال|و|ف|ب|ل' : 'وال|بال|فال|ال|و|ف|ب';
   return new RegExp(`${NO_LETTER_BEFORE}(?:${clitics})?(?:${alternation(cues)})${NO_LETTER_AFTER}`, flags);
 }
+const latin = (words: string[]) => words.filter((w) => /[a-z]/i.test(w));
+const arabic = (words: string[]) => words.filter((w) => !/[a-z]/i.test(w));
 const DECLINED_CUES = rules.declinedKeywords as string[];
 const HYPOTHETICAL_CUES = rules.stateCueHypotheticalMarkers as string[];
 const NEGATION_CUES = rules.stateCueNegationMarkers as string[];
+const GENERIC_NOUNS = rules.stateCueGenericNouns as string[];
+const ALL_NOUNS = [...(rules.stateCueTransactionNouns as string[]), ...GENERIC_NOUNS];
 const DECLINED = tokenPattern(DECLINED_CUES, false, 'g');
 const CREDIT_ACTION = tokenPattern(rules.declinedExemptKeywords as string[], false, 'g');
 const HYPOTHETICAL = tokenPattern(HYPOTHETICAL_CUES, true);
 const NEGATION = tokenPattern(NEGATION_CUES, false);
 const AFTER_INTRODUCER = new RegExp(
-  `${NO_LETTER_BEFORE}(?:${alternation(rules.stateCueMerchantIntroducers as string[])})[\\s:]*$`,
+  `${NO_LETTER_BEFORE}(?<!due )(?<!owing )(?:${alternation(rules.stateCueMerchantIntroducers as string[])})` +
+    `[\\s:]*(?:(?:${alternation(rules.stateCueMerchantNameWords as string[])}) )?$`,
 );
 const UNDONE_NEXT = new RegExp(
   `^ (?:was |has been |is |been |تم )?(?:${alternation([...DECLINED_CUES, ...HYPOTHETICAL_CUES, ...NEGATION_CUES])})${NO_LETTER_AFTER}`,
 );
+// A noun right after an English cue / right before an Arabic cue.
+const nounNext = (nouns: string[]) => new RegExp(`^ (?:${alternation(latin(nouns))})${NO_LETTER_AFTER}`);
+const nounBefore = (nouns: string[]) =>
+  new RegExp(`${NO_LETTER_BEFORE}(?:و|ف|ب)?(?:${alternation(arabic(nouns))}) $`);
+const GENERIC_NEXT = nounNext(GENERIC_NOUNS);
+const GENERIC_BEFORE = nounBefore(GENERIC_NOUNS);
+const NOUN_NEXT = nounNext(ALL_NOUNS);
+const NOUN_BEFORE = nounBefore(ALL_NOUNS);
 const BOUNDARY = /[\n!?؟;؛]|\.(?![0-9])/g;
+const CLAUSE_BOUNDARY = /[\n!?؟;؛]|[.,،:](?![0-9])/g;
 
-function sentenceStart(text: string, end: number): number {
+function lastBoundary(text: string, end: number, boundary: RegExp): number {
   let start = 0;
-  for (const b of text.slice(0, end).matchAll(BOUNDARY)) start = b.index! + b[0].length;
+  for (const b of text.slice(0, end).matchAll(boundary)) start = b.index! + b[0].length;
   return start;
 }
+function sentenceEnd(text: string, from: number): { at: number; mark: string } {
+  const m = /[\n!?؟;؛]|\.(?![0-9])/.exec(text.slice(from));
+  return m ? { at: from + m.index, mark: m[0] } : { at: text.length, mark: '' };
+}
 
-function firstStatus(cues: RegExp, text: string, negatable: boolean): { at: number | null; undone: boolean } {
-  let undone = false;
-  for (const m of text.matchAll(cues)) {
-    const sentence = text.slice(sentenceStart(text, m.index!), m.index!);
-    if (AFTER_INTRODUCER.test(sentence)) continue;
-    if (HYPOTHETICAL.test(sentence) ||
-      (negatable && (NEGATION.test(sentence) || UNDONE_NEXT.test(text.slice(m.index! + m[0].length))))) {
-      undone = true;
-      continue;
-    }
-    return { at: m.index!, undone };
-  }
-  return { at: null, undone };
+type Cue = { start: number; end: number };
+/** 'name' = not a status at all; 'hypothetical' = a status that did not (yet) happen. */
+function notStatus(text: string, m: Cue): 'name' | 'hypothetical' | null {
+  const sentence = text.slice(lastBoundary(text, m.start, BOUNDARY), m.start);
+  if (AFTER_INTRODUCER.test(sentence)) return 'name';
+  if (GENERIC_NEXT.test(text.slice(m.end)) || GENERIC_BEFORE.test(sentence)) return 'name';
+  if (/[?؟]/.test(sentenceEnd(text, m.end).mark)) return 'name';
+  const clause = text.slice(lastBoundary(text, m.start, CLAUSE_BOUNDARY), m.start);
+  return HYPOTHETICAL.test(clause) ? 'hypothetical' : null;
+}
+const cues = (re: RegExp, text: string): Cue[] =>
+  [...text.matchAll(re)].map((m) => ({ start: m.index!, end: m.index! + m[0].length }));
+
+/** A declined status later in [credit]'s sentence that is not attributive ("failed transaction"). */
+function failsLater(text: string, credit: Cue): boolean {
+  const end = sentenceEnd(text, credit.end).at;
+  return cues(DECLINED, text).some((d) =>
+    d.start >= credit.end && d.start < end && notStatus(text, d) === null &&
+    !NOUN_NEXT.test(text.slice(d.end)) && !NOUN_BEFORE.test(text.slice(0, d.start))
+  );
 }
 
 /** A transaction that did not complete (declined/failed/cancelled/...), unless the message is its refund/reversal. */
 export function isDeclinedText(raw: string): boolean {
   const text = foldForCues(raw);
-  const credit = firstStatus(CREDIT_ACTION, text, true);
-  const declinedAt = firstStatus(DECLINED, text, false).at;
-  if (declinedAt !== null) return credit.at === null || declinedAt < credit.at;
-  return credit.at === null && credit.undone && new RegExp(DECLINED.source).test(text);
+  let creditAt: number | null = null;
+  let undone = false;
+  for (const m of cues(CREDIT_ACTION, text)) {
+    const why = notStatus(text, m);
+    if (why === 'name') continue;
+    const clause = text.slice(lastBoundary(text, m.start, CLAUSE_BOUNDARY), m.start);
+    if (why === 'hypothetical' || NEGATION.test(clause) || UNDONE_NEXT.test(text.slice(m.end)) ||
+      failsLater(text, m)) {
+      undone = true;
+      continue;
+    }
+    creditAt = m.start;
+    break;
+  }
+  const declinedAt = cues(DECLINED, text).find((d) => notStatus(text, d) === null)?.start ?? null;
+  if (declinedAt !== null) return creditAt === null || declinedAt < creditAt;
+  return creditAt === null && undone && new RegExp(DECLINED.source).test(text);
 }
 
 /**
@@ -315,7 +358,8 @@ export function deterministicParse(
   const merchant = extractMerchant(normalized);
   const last4 = extractFirstGroup(normalized, rules.last4Patterns as string[]);
   const direction = detectDirection(lower);
-  const type = direction === 'credit' ? 'income' : direction === 'debit' ? 'payment' : 'unknown';
+  const type = direction === 'credit' ? (isRefundText(lower) ? 'refund' : 'income')
+    : direction === 'debit' ? 'payment' : 'unknown';
   const category = type === 'income' ? 'income' : inferCategory(merchant, type);
   const occurredAt = trustedSmsTimestamp(
     extractTimestamp(normalized, receivedAt, tzOffsetMinutes),
@@ -541,6 +585,13 @@ function detectDirection(lower: string): 'credit' | 'debit' | 'unknown' {
   if (credit == null) return 'debit';
   if (debit == null) return 'credit';
   return debit <= credit ? 'debit' : 'credit';
+}
+
+// The device types these as `refund` (ParserEngine._detectType), which nets
+// against spend; the server agrees instead of reading them as income.
+const REFUND_KEYWORDS = ['استرداد', 'رد مبلغ', 'refund', 'reversal', 'تم استرجاع', 'استرجاع مبلغ'];
+function isRefundText(lower: string): boolean {
+  return REFUND_KEYWORDS.some((keyword) => lower.includes(keyword));
 }
 
 function earliest(lower: string, keywords: string[]): number | null {

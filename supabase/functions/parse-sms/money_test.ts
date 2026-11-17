@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertNotEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { amountFromText, withValidatedModelAmountText } from './money.ts';
+import { amountFromText, groundedModelAmount, withValidatedModelAmountText } from './money.ts';
 
 Deno.test('parse-sms fallback validates currency scale without rounding exact text', () => {
   assertEquals(amountFromText('debited JPY 19'), { amount: 19, amount_text: '19', currency: 'JPY' });
@@ -64,4 +64,30 @@ Deno.test('parse-sms fallback rejects ambiguous grouping for exact text but reta
   const parsed = amountFromText('debited USD 1,2');
   assertEquals(parsed?.amount, 12);
   assertEquals(parsed?.amount_text, undefined);
+});
+
+// V1-060: the v1 (non-primary) path returned the model's amount without checking
+// it against the message. The amount must be a whole numeric token of the
+// sanitized text, as in validateAiCandidate and the app's GroundingCheck.
+Deno.test('parse-sms drops a model amount that is not in the message', () => {
+  const text = 'Purchase of SAR 47.50 at CAFE ONE card ending 1234 balance SAR 8,120.00';
+  for (const [amount, amount_text] of [[470, '470'], [1234, '1234'], [120, '120.00'], [8, '8']] as const) {
+    const r = groundedModelAmount({ amount, amount_text, currency: 'SAR', type: 'payment' }, text);
+    assertEquals([r.amount, r.amount_text], [undefined, undefined], String(amount));
+    assertEquals(r.type, 'payment');
+  }
+  // Legacy numeric-only response, ungrounded: dropped too.
+  assertEquals(groundedModelAmount({ amount: 99, currency: 'SAR' }, text).amount, undefined);
+  const ok = groundedModelAmount({ amount: 47.5, amount_text: '47.50', currency: 'SAR' }, text);
+  assertEquals([ok.amount, ok.amount_text], [47.5, '47.50']);
+  const grouped = groundedModelAmount({ amount: 8120, amount_text: '8120.00', currency: 'SAR' }, text);
+  assertEquals([grouped.amount, grouped.amount_text], [8120, '8120.00']);
+});
+
+// V1-057 on the server: the Arabic comma between digits groups thousands.
+Deno.test('parse-sms grounding reads the Arabic comma as a thousands separator', () => {
+  for (const text of ['شراء 1،250.00 SAR', 'شراء بمبلغ ١،٢٥٠٫٠٠ ريال']) {
+    assertEquals(groundedModelAmount({ amount: 1250, amount_text: '1250.00', currency: 'SAR' }, text).amount, 1250, text);
+    assertEquals(groundedModelAmount({ amount: 250, amount_text: '250.00', currency: 'SAR' }, text).amount, undefined, text);
+  }
 });

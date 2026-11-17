@@ -345,7 +345,16 @@ class ParserEngine {
         }
       }
     }
-    if (_containsAny(lower, ['استرداد', 'رد مبلغ', 'refund', 'reversal'])) {
+    // `تم استرجاع` / `استرجاع مبلغ` (money returned) as phrases: a bare
+    // `استرجاع` also occurs in "لا يمكن الاسترجاع" on a purchase.
+    if (_containsAny(lower, [
+      'استرداد',
+      'رد مبلغ',
+      'refund',
+      'reversal',
+      'تم استرجاع',
+      'استرجاع مبلغ',
+    ])) {
       return TransactionType.refund;
     }
     if (_containsAny(lower, ['سحب', 'صراف', 'atm'])) {

@@ -19,7 +19,7 @@ import {
 import { validateEvidenceSpans } from '../_shared/evidence_spans.ts';
 import { redactPii, redactThirdPartyNames } from '../_shared/sms_redaction.ts';
 import { resolveGeminiRoute } from '../_shared/proof_contract.ts';
-import { amountFromText, withValidatedModelAmountText } from './money.ts';
+import { amountFromText, groundedModelAmount } from './money.ts';
 
 const MAX_BODY_BYTES = 8192;
 const MAX_SMS_LENGTH = 2000;
@@ -510,7 +510,7 @@ Return ONLY valid JSON. No markdown, no explanation.`;
     return await finish({ is_transaction: false });
   }
 
-  const withExactText = parsed && typeof parsed === 'object' ? withValidatedModelAmountText(parsed) : null;
+  const withExactText = parsed && typeof parsed === 'object' ? groundedModelAmount(parsed, reSanitized) : null;
   if (!withExactText || typeof withExactText.amount !== 'number' || !withExactText.currency) {
     const fallback = fallbackParse(reSanitized);
     if (fallback) return await finish({ ...fallback, model_used: `${GEMINI_MODEL}+fallback` });

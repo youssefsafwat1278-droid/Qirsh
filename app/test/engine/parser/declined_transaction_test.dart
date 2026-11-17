@@ -90,11 +90,9 @@ void main() {
         expect(TransactionStateCues.isNotCompleted(sms), isFalse);
         final r = engine.parse(sms, senderId: _sender);
         expect(r.isTransaction, isTrue);
-        // Unchanged from before DATA-01 (`استرجاع` is not yet a refund type
-        // cue in _detectType, so the Arabic sample keeps its old type).
-        if (!sms.startsWith('تم استرجاع')) {
-          expect(r.transaction!.type, TransactionType.refund);
-        }
+        // V1-001 residual (c): `تم استرجاع …` is a refund too (it was typed
+        // as a payment before).
+        expect(r.transaction!.type, TransactionType.refund);
       });
     }
 

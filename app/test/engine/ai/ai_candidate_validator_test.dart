@@ -133,6 +133,23 @@ void main() {
           isFalse);
     });
 
+    // V1-057 / REV-17 — the Arabic comma `،` is a thousands separator between
+    // digits (the parser's Normalizer maps it to `,`): the whole number
+    // grounds, the fragment after it does not.
+    test('Arabic comma between digits groups thousands', () {
+      for (final text in ['شراء 1،250.00 SAR', 'شراء بمبلغ ١،٢٥٠٫٠٠ ريال']) {
+        expect(GroundingCheck.verify(amount: 1250, sanitizedText: text), isTrue,
+            reason: text);
+        expect(GroundingCheck.verify(amount: 250, sanitizedText: text), isFalse,
+            reason: text);
+      }
+      // A list separator followed by a space is not a group separator.
+      expect(
+          GroundingCheck.verify(
+              amount: 250, sanitizedText: 'مبلغ 100، رصيد 250 ريال'),
+          isTrue);
+    });
+
     test('validator rejects an AI amount taken from the card number', () {
       const text = 'Purchase of SAR 47.50 at CAFE card ending 1234';
       final r = _validator.validate(

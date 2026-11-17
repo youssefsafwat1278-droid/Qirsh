@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:money_companion/core/privacy/cloud_egress_gate.dart';
 import 'package:money_companion/core/session/admission_authority.dart';
 import 'package:money_companion/core/session/consent_capability.dart';
@@ -379,6 +382,58 @@ void main() {
     expect(stored, hasLength(1),
         reason: 'only the completed purchase becomes a transaction');
     expect(stored.single.rawMessage, isNot(contains('declined')));
+  });
+
+  test(
+      'V1-001 residuals: every not_completed case of the shared table, '
+      'marked processed by a server as a payment or a refund, changes no total',
+      () async {
+    final table = jsonDecode(File(
+                '../supabase/functions/process-ios-sms/declined_cases.json')
+            .readAsStringSync()) as Map<String, dynamic>;
+    final texts = [
+      for (final c in (table['cases'] as List).cast<Map<String, dynamic>>())
+        if (c['expect'] == 'not_completed') c['text'] as String,
+    ];
+    var n = 0;
+    final client = _FakeCaptureBackendClient([
+      for (final text in texts)
+        for (final (type, direction) in [
+          ('payment', 'debit'),
+          ('refund', 'credit'),
+        ])
+          _capture(
+            payloadId: 'not-completed-${n++}',
+            status: 'processed',
+            type: type,
+            direction: direction,
+            rawMessage: text,
+          ),
+    ]);
+    final txRepo = DriftTransactionRepository(db);
+
+    await service(client).sync();
+
+    final stored = await txRepo.getRecent(limit: 500, accountId: null);
+    expect(
+        stored
+            .where((t) => t.status == TransactionStatus.confirmed)
+            .map((t) => t.rawMessage),
+        isEmpty);
+    final from = DateTime.utc(2026);
+    final to = DateTime.utc(2027);
+    expect((await txRepo.expenseTotalBetween(
+                from: from, to: to, currency: 'SAR'))
+            .isZero,
+        isTrue);
+    expect((await txRepo.refundTotalBetween(
+                from: from, to: to, currency: 'SAR'))
+            .isZero,
+        isTrue);
+    expect((await txRepo.incomeTotalBetween(
+                from: from, to: to, currency: 'SAR'))
+            .isZero,
+        isTrue);
   });
 
   test(
