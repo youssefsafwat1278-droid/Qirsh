@@ -1,0 +1,100 @@
+# Summary extracted from baseline_ci_gates_run2.log (full log not kept in the repository)
+Tue Nov 17 02:35:38 EET 2026
+══ migration lint ══
+  ✓ migrations
+══ catalog asset drift ══
+  ✓ catalog asset in sync
+══ deno edge-function tests + lint ══
+  ✓ deno tests (all functions)
+  ✓ deno lint
+══ flutter analyze ══
+  ✓ analyze
+══ flutter test (bulk — parallel; crypto and deletion replica I/O excluded) ══
+44:41 +10662 ~35 -33: Some tests failed.
+  ✗ flutter test (bulk)
+══ flutter test (crypto — serialized production-cost Argon2, --concurrency=1) ══
+00:21 +24: All tests passed!
+  ✓ flutter test (crypto serialized)
+══ flutter test (deletion replica I/O — serialized, --concurrency=1) ══
+00:53 +79: All tests passed!
+  ✓ flutter test (deletion replica I/O serialized)
+══ node contract tests ══
+  ✓ node contract
+══ skip/ignore manifest enforcement ══
+  ✓ skip/ignore manifest satisfied
+  ✓ skip/ignore manifest
+══ admin authorization tests ══
+  ✓ admin auth
+══ l10n freshness (flutter gen-l10n) ══
+  ✓ l10n freshness
+══ MALI-034 architecture guard (retired Supabase-primary authority stays gone) ══
+══ MALI-034 architecture guard ══
+  ✓ schema pinned at 43
+  ✓ app/CLAUDE.md documents schema 43
+  ✓ no *_supabase_primary flag selectors
+  ✓ no FinancialCacheRepairService wiring
+  ✓ no legacy Supabase financial repo wiring
+  ✓ no vestigial Routed* repository wrappers
+  ✓ no Drift multi-db warning suppression (MALI-040)
+  ✓ no money SUM cast to REAL (exact integer minor totals)
+  ✓ arch guard
+══ MALI-037 dependency policy (offline: reproducibility + no git/rogue-path deps) ══
+══ MALI-037 dependency policy (offline) ══
+  ✓ pubspec.lock present (reproducible resolution)
+  ✓ no git: dependencies
+  ✓ path dependencies limited to the allowlist (packages/native_glass_navbar ../third_party/file_picker)
+  ✓ deps policy
+══ iOS packaging inventory (built Runner.app — PROVENANCE-GATED; source contract in flutter test) ══
+  ~ ios packaging (no built Runner.app; static Info.plist/privacy SOURCE contract runs in flutter test stage 4a) — ARTIFACT-DEPENDENT (deferred to a mandatory post-build check)
+══ truthful summary ══
+CI_GATES_EXIT=1
+
+## Failing tests
+test/architecture/head_completeness_test.dart: the gate result describes HEAD, not a working tree under REQUIRE_PRISTINE_TREE, no tracked file differs from HEAD [E]
+test/core/privacy/data_wipe_service_test.dart: repeated sign-out cycles never recreate an account (A-7) [E]
+test/core/privacy/data_wipe_service_test.dart: wipeAll clears every user-scoped financial/personal/capture table [E]
+test/core/privacy/data_wipe_service_test.dart: wipeAll leaves ZERO accounts — no silent default is reseeded (A-7) [E]
+test/core/privacy/data_wipe_service_test.dart: wipeAll resets user_settings to defaults and reseeds it immediately — the app must not crash reading it in the same session [E]
+test/features/capture/enable_cloud_native_flow_test.dart: version frontier ahead of the local consent history each preflight_uncertain site names its own allowlisted sub-reason [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security actual SDK CAS E4 security actual SDK CAS delete QD001 preserves original receipt [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security actual SDK CAS E4 security actual SDK CAS delete QD002 preserves original receipt [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security actual SDK CAS E4 security actual SDK CAS delete busy-QD001 preserves original receipt [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security actual SDK CAS E4 security actual SDK CAS delete busy-QD002 preserves original receipt [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security actual SDK CAS E4 security actual SDK CAS delete busy-success preserves original receipt [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security actual SDK CAS E4 security actual SDK CAS delete success preserves original receipt [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security actual SDK CAS E4 security actual SDK CAS rechecks after final awaited retry currency [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security actual SDK CAS E4 security actual SDK CAS update busy-QD001 preserves original receipt [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security actual SDK CAS E4 security actual SDK CAS update busy-QD002 preserves original receipt [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security current ledger plan reaches recorded=false positive path [E]
+test/features/capture/ledger_outbox_correctness_test.dart: E4 security current ledger plan reaches recorded=true positive path [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G14 background queue == foreground queue the background factory resolves the real cutover state and produces the same money payload as the foreground queue [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G15 tombstone ACK settles the entity ...but not while a newer edit is still queued for it [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G15 tombstone ACK settles the entity after a successful remote tombstone the transaction is synced [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G18 owner-scoped outbox a NULL-owner legacy row is stamped ONLY when ownership is verified [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G18 owner-scoped outbox a row recorded for owner A is NEVER sent under signed-in B; parked owner_mismatch; queue rearm and independent A delivery [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G3 in-flight edit a create cancelled by a delete WHILE IN FLIGHT becomes a delete (the server row that landed is tombstoned, not orphaned) [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G3 in-flight edit an edit folded in while the create is on the wire survives the ACK and is pushed next cycle as an UPDATE by server id [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G3 in-flight edit an offline create+delete that never reached a push is still dropped [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G3 in-flight edit op_seq increments on every coalesce; an unchanged ACK still settles [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G4 lookup errors never ACK a delete a CONFIRMED empty lookup is the only "never reached the server" [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G4 lookup errors never ACK a delete a network error during the server-id lookup keeps the delete pending [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G5 enqueue records intent a true guest (no owner, no session) keeps today's behaviour: no intent [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G5 enqueue records intent no live session but a local owner -> intent recorded; pushed once the session returns [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics G5 enqueue records intent reArmParked leaves A-2 park reasons alone [E]
+test/features/capture/ledger_outbox_correctness_test.dart: admitted ledger mechanics SyncHealth counts parked includes the new reasons with a per-reason breakdown [E]
+test/features/capture/ordinary_disable_lifecycle_followup_test.dart: ordinary disable after real same-UID readmission stays restrictive without stale settings save or false OFF completion [E]
+
+══ truthful summary ══
+  mandatory gates passed : 13
+  mandatory gates failed : 1
+  tools unavailable      : 0  (strict: FATAL)
+  caller-skipped tests   : 0  (strict: FATAL) — a bypassed mandatory test is NOT evidence
+  artifact-dependent     : 1  (deferred to a mandatory POST-BUILD check; never a pass, never strict-fatal)
+  node tests skipped     : 89  (credentials absent — see manifest)
+  deno tests ignored     : 2  (live-Postgres — see manifest)
+  skip/ignore manifest   : satisfied
+  external verification  : pending (device / live Supabase / native timing — see PHASE_6 checklist)
+  retained lint exceptions: 7 deno-lint-ignore (no-explicit-any; loosely-typed Supabase Edge client — see PHASE_7 doc)
+CI_GATES_JSON {"passed":13,"failed":1,"tool_missing":0,"caller_skipped":0,"artifact_pending":1,"strict":1,"node_skipped":"89","deno_ignored":"2","manifest":"satisfied","lint_exceptions":7}
+
+?? docs/releases/
