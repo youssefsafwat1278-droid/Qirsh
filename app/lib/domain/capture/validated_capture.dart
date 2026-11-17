@@ -257,16 +257,31 @@ bool localParseOpposesDirection({
 /// keeps for review: [ParserEngine.isNoticeMessage]). Neither reading is
 /// trusted then: every import path takes its recoverable review outcome
 /// (Smart Inbox), never a confirmed row from either side.
+/// OR-03 — so does a server [amount] that is neither the amount the device
+/// itself reads from the text nor its foreign amount ("a credit limit taken
+/// for the purchase"); when the device reads no amount, only the rules above
+/// apply.
 bool localParseContradictsServer({
   required String text,
   String? direction,
   String? type,
   String? senderId,
+  num? amount,
 }) =>
     ParserEngine.isIgnoredMessage(text, senderId: senderId) ||
     ParserEngine.isNoticeMessage(text, senderId: senderId) ||
     localParseOpposesDirection(
-        text: text, direction: direction, type: type, senderId: senderId);
+        text: text, direction: direction, type: type, senderId: senderId) ||
+    (amount != null &&
+        _localAmountDiffers(text, amount.toDouble(), senderId: senderId));
+
+bool _localAmountDiffers(String text, double amount, {String? senderId}) {
+  final local = const ParserEngine().parse(text, senderId: senderId);
+  if (!local.isTransaction) return false;
+  final t = local.transaction!;
+  bool same(double? v) => v != null && (v - amount).abs() < 0.005;
+  return !same(t.amount) && !same(t.foreignAmount);
+}
 
 DateTime? _inWindow(String? iso, DateTime receivedAt) {
   if (iso == null || iso.trim().isEmpty) return null;

@@ -74,6 +74,38 @@ void main() {
         isTrue);
   });
 
+  test(
+      'OR-03: a server amount the device does not read contradicts it; '
+      'none read by the device does not', () {
+    const text = 'Purchase of SAR 89.50 at Test Mart with card *4521. '
+        'Credit limit: SAR 20,000';
+    expect(
+        localParseContradictsServer(
+            text: text, direction: 'debit', amount: 20000),
+        isTrue);
+    expect(
+        localParseContradictsServer(
+            text: text, direction: 'debit', amount: 89.5),
+        isFalse);
+    // A foreign purchase: the server may read the foreign amount.
+    const fx = 'International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\n'
+        'At: SNAP INC';
+    expect(
+        localParseContradictsServer(text: fx, direction: 'debit', amount: 4.91),
+        isFalse);
+    expect(
+        localParseContradictsServer(
+            text: fx, direction: 'debit', amount: 18.44),
+        isFalse);
+    // The device reads no amount: only the other rules apply.
+    expect(
+        localParseContradictsServer(
+            text: 'Card *4521 authorised at Test Diner',
+            direction: 'debit',
+            amount: 45),
+        isFalse);
+  });
+
   test('a transfer or an unreadable text never blocks the server result', () {
     expect(
         localParseOpposesDirection(

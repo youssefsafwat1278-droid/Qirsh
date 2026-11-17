@@ -11,6 +11,7 @@ import 'package:money_companion/domain/entities/transaction_entity.dart';
 import 'package:money_companion/domain/usecases/add_transaction_usecase.dart';
 import 'package:money_companion/engine/ai/ai_parser_client.dart';
 import 'package:money_companion/engine/ai/grounding_check.dart';
+import 'package:money_companion/engine/parser/parser_engine.dart';
 
 /// V1-001 residuals — end to end on an in-memory database: every
 /// `not_completed` case of the shared table (`declined_cases.json`, also run by
@@ -113,12 +114,19 @@ void main() {
     // row: only the on-device path is asserted for it.
     final completed = (c['expect'] as String).startsWith('completed_');
     final withAi = onDevice(c) != 'review' && !completed;
+    // A review row that is not an account notice (its own words read as a
+    // movement: "Transfer limit SAR 5,000", a purchase code) is, with a bank
+    // layout appended, a second movement as for a completed row: only the
+    // message itself is asserted (V1-RES4 X19 was pinned `dropped` for this).
+    final composite = !completed &&
+        onDevice(c) != 'dropped' &&
+        (onDevice(c) != 'review' || ParserEngine.isNoticeMessage(text));
     test('[${c['src']}] ${onDevice(c)}: totals unchanged: $text', () async {
       // The bank layout appended to a real movement, or to a notice whose
       // own words name a transfer, is a second movement (NR-01).
       for (final sms in [
         text,
-        if (!completed && onDevice(c) != 'dropped') _snb(text),
+        if (composite) _snb(text),
       ]) {
         for (final sender in ['SNB', 'AlRajhi']) {
           await AddTransactionUseCase(
@@ -158,8 +166,15 @@ void main() {
         transactionRepository: txRepo,
         merchantCategoryRepository: DriftMerchantCategoryRepository(db),
       )(rawMessage: text, senderId: 'AlRajhi', onDeviceOnly: true);
-      expect(r.transaction?.type, otherCompleted[c['expect']],
+      // An ATM cash deposit the parser reads as a withdrawal (open defect
+      // OR-07) is stored as a neutral transfer (cash you already had): it
+      // moves no total.
+      final atmDeposit =
+          (c['defect'] as String? ?? '').startsWith('OPEN OR-07');
+      expect(r.transaction?.type,
+          atmDeposit ? TransactionTypeEntity.transfer : otherCompleted[onDevice(c)],
           reason: '${r.outcome}');
+      expect(r.transaction?.amount, closeTo(c['amount'] as num, 0.005));
     });
   }
 
@@ -168,7 +183,8 @@ void main() {
   for (final c in cases.where((c) =>
       const ['completed_payment', 'completed_credit'].contains(onDevice(c)))) {
     final text = c['text'] as String;
-    final payment = c['expect'] == 'completed_payment';
+    // An open wrong-direction defect is pinned at the outcome it has.
+    final payment = onDevice(c) == 'completed_payment';
     test('[${c['src']}] ${c['expect']} is recorded: $text', () async {
       final r = await AddTransactionUseCase(
         transactionRepository: txRepo,
@@ -179,6 +195,7 @@ void main() {
       expect(r.transaction?.type,
           payment ? TransactionTypeEntity.payment : TransactionTypeEntity.refund,
           reason: '${r.outcome}');
+      expect(r.transaction?.amount, closeTo(c['amount'] as num, 0.005));
     });
   }
 }

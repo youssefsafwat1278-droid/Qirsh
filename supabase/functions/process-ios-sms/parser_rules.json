@@ -40,7 +40,7 @@
     "prize",
     "winner"
   ],
-  "_nonTransactionReadme": "LR-04/LR-05/NR-01: words that make a message not a money movement ONLY when it names no money movement anywhere (no moneyKeywords word and no debit/credit direction): links, calls to action, complaint lines, further promotions, and account notices (credit limit, card activation/renewal, statements, PIN, beneficiary). A bank SMS puts these on real purchases, salaries and fees, so they never reject a message that does name one (isIgnoredText) and never make the AI candidate validator reject it. A word inside the merchant span ('Offer Mart') does not count. With ignoreKeywords equal, as a set, to the device's securityIgnoreWords + promotionWords + ignoreMarkers + noticeWords (drift test transaction_state_cues_drift_test.dart).",
+  "_nonTransactionReadme": "LR-04/LR-05/NR-01: words that make a message not a money movement ONLY when it names no money movement anywhere (no moneyKeywords word and no debit/credit direction): links, calls to action, complaint lines, further promotions, and account notices (credit limit, card activation/renewal, statements, PIN, beneficiary). A bank SMS puts these on real purchases, salaries and fees, so they never reject a message that does name one (isIgnoredText) and never make the AI candidate validator reject it. A word inside the merchant span ('Offer Mart') does not count. With ignoreKeywords equal, as a set, to the device's securityIgnoreWords + promotionWords + ignoreMarkers (drift test transaction_state_cues_drift_test.dart); the account notices are noticeKeywords (OR-01).",
   "nonTransactionKeywords": [
     "chequebook",
     "cheque book",
@@ -60,7 +60,10 @@
     "offer",
     "won",
     "winning",
-    "اربح",
+    "اربح"
+  ],
+  "_noticeReadme": "OR-01: account notices (credit limit, card activation/renewal, statements, PIN, beneficiary), equal to the device's ParserEngine.noticeWords (drift test). Like nonTransactionKeywords they count only in a message with no moneyKeywords word, and in addition only when the message names no amount with its currency: a notice that names an amount is never rejected with no AI (isIgnoredText), it goes on to the deterministic parse and the AI candidate validator.",
+  "noticeKeywords": [
     "credit limit",
     "card limit",
     "الحد الائتماني",
@@ -156,7 +159,20 @@
     "حواله",
     "صراف",
     "عملية",
-    "أموال"
+    "أموال",
+    "direct debit",
+    "authorised",
+    "authorized",
+    "approved",
+    "posted",
+    "payroll",
+    "standing order",
+    "عمولة",
+    "قيد مبلغ",
+    "تم قيد",
+    "أمر مستديم",
+    "أمر دائم",
+    "خصم مباشر"
   ],
   "_declinedReadme": "DATA-01: transaction-state cues, identical to app/lib/engine/parser/transaction_state_cues.dart (drift test: app/test/engine/parser/transaction_state_cues_drift_test.dart) and applied by the same rule in parse.ts isDeclinedText: whole-token match after folding tashkeel/tatweel/hamza/ta marbuta/alef maqsura; a cue right after a stateCueMerchantIntroducers word (except after 'due'/'owing'), optionally followed by one stateCueMerchantNameWords word, is part of a name; a cue next to a stateCueGenericNouns plural (English after it, Arabic before it) or in a question is not a status, unless the noun is followed by a colon or a count (a status header: 'Declined transactions: 1. …'); a cue preceded in its clause (sentence, or after a comma/colon) by a stateCueHypotheticalMarkers entry is not a status; a declinedExemptKeywords credit counts only when not negated, promised, or followed later in its sentence by a declined status that is not attributive (next to a stateCueTransactionNouns/stateCueGenericNouns word), and when it comes before the first declined status. A stateCueReversalWords status in a message naming a stateCuePurchaseNouns word, with no declined cue ('Purchase of SAR 100 at X reversed'), is ambiguous and also not completed (review, no total change). V1-RES3: a declined status counts even after a done credit (a refund of a declined original is review); a declined cue right after a stateCueNegationMarkers word ('not declined') is not a status; a feminine Arabic cue after an Arabic stateCueMerchantNameWords word is a status; the question rule applies only when the question mark ends the cue's own clause; a spaced dash ends a clause; a stateCueFutureMarkers-only clause that names an amount ('Payment of SAR 100 will be declined') does not make a declined cue hypothetical. A not-completed message is treated like ignoreKeywords (rejected, no AI). ignoreKeywords: a Latin word matches only as a whole word with an optional s/es/al/ed/ing ending; Arabic phrases and URL prefixes by substring.",
   "declinedKeywords": [
@@ -300,6 +316,7 @@
     "awaiting approval",
     "under review",
     "being processed",
+    "being reviewed",
     "was returned",
     "could not be authorised",
     "could not be authorized",

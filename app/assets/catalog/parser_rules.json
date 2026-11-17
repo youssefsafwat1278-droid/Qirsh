@@ -210,6 +210,7 @@
     "awaiting approval",
     "under review",
     "being processed",
+    "being reviewed",
     "was returned",
     "could not be authorised",
     "could not be authorized",

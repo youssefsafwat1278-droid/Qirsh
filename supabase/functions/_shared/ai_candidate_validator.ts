@@ -302,6 +302,8 @@ export function outsideMerchant(lower: string, merchant: string | undefined | nu
 // An OTP message carries its code ("OTP is 123456", "Use 482913 as OTP",
 // "Enter code 482913", "رمز التحقق: 4821"); a security footer on a purchase
 // ("Never share your OTP") does not. Mirrors ParserEngine._otpCode.
+const CODE_PURPOSE = '(?:for (?:the |your |an? )?(?:purchase|payment|online|transaction|' +
+  'sar|usd|aed|egp|eur|gbp)|to (?:pay|confirm|approve|complete|verify|authori[sz]e))';
 export const OTP_CODE = new RegExp(
   '(?:otp|one time password|verification code|security code|passcode|' +
     'رمز الدخول|رمز التحقق|كود التحقق)' +
@@ -318,11 +320,33 @@ export const OTP_CODE = new RegExp(
     '[0-9]{4,8}(?![0-9])' +
     // NR-06: "Enter code 482913 to approve …", not "Use code 482913 for your
     // next order" / "Enter code 482913 at the counter".
-    '|(?:enter|use|input) (?:the |your )?code\\s*:?\\s*[0-9]{4,8} to ' +
-    '(?:confirm|approve|complete|verify|authori[sz]e)',
+    '|(?:enter|use|input) (?:the |your )?code\\s*:?\\s*[0-9]{4,8}[^\n.]{0,20}? to ' +
+    '(?:pay|confirm|approve|complete|verify|authori[sz]e)' +
+    // OR-05: a purchase code named as such, with no "OTP".
+    '|(?<![0-9*x#.,])[0-9]{4,8} is (?:your|the) (?:[a-z]+ ){0,2}code ' + CODE_PURPOSE +
+    '|code(?: is)?\\s*:?\\s*[0-9]{4,8}(?![0-9])[:,]?\\s*' +
+    '(?:' + CODE_PURPOSE + '|confirm (?:the |your )?(?:payment|purchase|transaction))' +
+    '|code\\s*:?\\s*[0-9]{4,8}\\.?\\s+(?:valid|expires)' +
+    '|(?:الرمز|رمزك|رمز|الكود|كود)\\s*:?\\s*[0-9]{4,8}\\s+ل',
+);
+
+// OR-03: a figure introduced by a limit, balance, remaining, outstanding or
+// minimum-due label (English and Arabic) is never the transaction amount
+// (mirrors the balance / limit labels of ParserEngine._classifyAmountCandidate).
+// The label may be followed by up to 32 characters that do not introduce an
+// amount or name a movement ("Available Credit Limit: SAR 9,000.00", "حد البطاقة 20,000 ريال").
+export const LABELLED_FIGURE = new RegExp(
+  '(?<![a-z\u0621-\u064a])[وبل]?(?:credit limit|card limit|limit|available limit|payment due|' +
+    'available balance|available|balance|avl bal|bal\\.?|remaining|outstanding|' +
+    'minimum due|minimum payment|minimum amount|min\\.? due|amount due|due amount|total due|' +
+    'الحد|حد الائتمان|حد ائتماني|حد البطاقة|حد الشراء|حد السحب|حد التحويل|حد العمليات|موعد سداد|' +
+    'الرصيد|رصيد|المتبقي|المستحق|المتاح)(?![a-z])' +
+    '(?:(?!مبلغ|بقيمة|amount|amt|debited|credited|deducted|paid|transfer|خصم|تحويل|إيداع|ايداع)[^0-9\n|;]){0,32}[0-9][0-9,]*(?:\\.[0-9]+)?',
+  'gi',
 );
 
 export const NON_TRANSACTION_KEYWORDS = rules.nonTransactionKeywords as string[];
+export const NOTICE_KEYWORDS = rules.noticeKeywords as string[];
 const MONEY_KEYWORDS = (rules.moneyKeywords as string[]).map((w) =>
   /[a-z]/.test(w)
     ? ((lower: string) => new RegExp(`(?<![a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z])`).test(lower))
@@ -334,12 +358,14 @@ const MONEY_KEYWORDS = (rules.moneyKeywords as string[]).map((w) =>
  * as a whole word, Arabic by substring). Mirrors ParserEngine.hasMoneyWord.
  */
 export function hasMoneyWord(lower: string): boolean {
-  return MONEY_KEYWORDS.some((matches) => matches(lower));
+  // Without tashkeel ("قُيّد مبلغ", "سُحب"), as the device's Normalizer.
+  const plain = lower.replace(/[\u064B-\u0670\u065F]/g, '');
+  return MONEY_KEYWORDS.some((matches) => matches(plain));
 }
 
 /**
  * The message is not a money movement: an OTP code, or an ignore word or
- * account notice (ignoreKeywords, nonTransactionKeywords) outside [merchant]
+ * account notice (ignoreKeywords, nonTransactionKeywords, noticeKeywords) outside [merchant]
  * in a message that names no money movement anywhere (NR-02: "Available
  * credit limit" on a purchase does not count). Mirrors
  * ParserEngine.isNonTransactionText.
@@ -348,10 +374,9 @@ export function isNonTransactionText(text: string, merchant?: string | null): bo
   const lower = text.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660)).toLowerCase();
   if (OTP_CODE.test(lower)) return true;
   const outside = outsideMerchant(lower, merchant);
-  return [...(rules.ignoreKeywords as string[]), ...NON_TRANSACTION_KEYWORDS]
+  return [...(rules.ignoreKeywords as string[]), ...NON_TRANSACTION_KEYWORDS, ...NOTICE_KEYWORDS]
     .some((w) => containsIgnoreWord(outside, w)) && !hasMoneyWord(lower);
 }
-
 export function validateAiCandidate(input: {
   candidate: AiCandidate;
   sanitizedText: string;
@@ -367,6 +392,9 @@ export function validateAiCandidate(input: {
     return reject('not_a_transaction');
   }
   if (!amountGrounded(c.amount, text)) return reject('amount_not_grounded');
+  // OR-03 — a limit, balance or minimum-due figure is never the amount.
+  const ascii = text.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660));
+  if (!amountGrounded(c.amount, ascii.replace(LABELLED_FIGURE, ' '))) return reject('amount_is_account_figure');
   const amount = c.amount as number;
   const currency = (c.currency ?? '').trim().toUpperCase();
   if (local) {

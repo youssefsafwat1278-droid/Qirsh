@@ -585,6 +585,26 @@ void main() {
             await count('smart_inbox_items', "payload_id = '${_id(1)}'"), 1);
       });
 
+      // OR-03: a server amount that is not the amount the device reads from
+      // the same text (a credit limit taken for the purchase) is not
+      // confirmed: Smart Inbox, as for a direction conflict.
+      test(
+          'OR-03 (aiPrimary=$aiPrimary): a server amount the device does not '
+          'read is not confirmed: Smart Inbox', () async {
+        const text = 'Purchase of SAR 89.50 at Test Mart with card *4521. '
+            'Credit limit: SAR 20,000';
+        queue.items.add(item(_id(1), text: text));
+        server.fetch = CaptureServerFetch(CaptureFetchStatus.ok,
+            {_id(1): _processed(_id(1), amount: '20000')});
+
+        final report = await buildService(aiPrimary: aiPrimary).run();
+
+        expect(report.imported.single.path, CaptureImportPath.server);
+        expect(await db.customSelect('SELECT type FROM transactions;').get(),
+            isEmpty);
+        expect(await count('smart_inbox_items', "payload_id = '${_id(1)}'"), 1);
+      });
+
       // LR-03: the repository's IPN credit fixture
       // (sms_redaction_cases.json `en_ipn_credited_by`). The server's credit
       // 500 is right; the device used to read it as a payment 500, so the

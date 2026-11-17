@@ -15,6 +15,8 @@ import 'package:money_companion/engine/parser/transaction_state_cues.dart';
 /// (`process-ios-sms/parse_test.ts`) so the two runtimes judge the same text.
 /// Synthetic messages only.
 const _casesPath = '../supabase/functions/process-ios-sms/declined_cases.json';
+const _deviationsPath =
+    '../supabase/functions/process-ios-sms/declined_cases_deviations.json';
 const _notCompleted = 'transaction_not_completed';
 
 void main() {
@@ -37,8 +39,57 @@ void main() {
       'completed_transfer_in',
       'ignored',
     });
-    expect(cases.map((c) => c['device']).whereType<String>().toSet(),
-        {'review', 'not_completed', 'dropped', 'transfer'});
+    expect(cases.map((c) => c['device']).whereType<String>().toSet(), {
+      'review',
+      'not_completed',
+      'transfer',
+      // OR-03 / item 6: open wrong-direction defects ([defect] rows only).
+      'completed_payment',
+      'completed_withdrawal',
+    });
+  });
+
+  // Round 8 (item 6) — a deviation can only make a completed row MORE
+  // visible than recorded (review, a recoverable server leg), never silent,
+  // never another amount, never another direction unless it is a pinned open
+  // defect; and the SET of deviating rows is pinned by a checked-in
+  // allowlist, so adding or editing a deviation means editing it too.
+  test('deviations are constrained and pinned', () {
+    final allow = jsonDecode(File(_deviationsPath).readAsStringSync())
+        as Map<String, dynamic>;
+    final pinned = (allow['rows'] as List).cast<Map<String, dynamic>>();
+    String key(Map<String, dynamic> c) => jsonEncode([
+          c['text'],
+          c['device'],
+          c['server'],
+          c['ai'],
+          c['defect'],
+        ]);
+    final deviating = cases.where((c) =>
+        c['device'] != null ||
+        c['server'] != null ||
+        c['ai'] != null ||
+        c['defect'] != null);
+    expect(pinned.length, allow['count']);
+    expect(deviating.map(key).toSet(), pinned.map(key).toSet());
+    expect(deviating.length, allow['count']);
+    for (final c in cases) {
+      final completed = (c['expect'] as String).startsWith('completed_');
+      if (!completed) continue;
+      expect(c['amount'], isA<num>(), reason: '${c['text']}');
+      // Completed rows are run with a bank sender: never silent.
+      expect(['dropped', 'ignored'], isNot(contains(c['device'])),
+          reason: '${c['text']}');
+      expect(['dropped', 'ignored'], isNot(contains(c['server'])),
+          reason: '${c['text']}');
+      final device = c['device'] as String?;
+      if (device != null && device.startsWith('completed_')) {
+        // Another recorded outcome is a wrong direction: an open defect.
+        expect(c['defect'], isA<String>(), reason: '${c['text']}');
+      } else {
+        expect(c['defect'], isNull, reason: '${c['text']}');
+      }
+    }
   });
 
   for (final c in cases) {
@@ -60,9 +111,25 @@ void main() {
         expect(r.amountDetected, !ignored, reason: 'review row');
         expect(
             ParserEngine.isIgnoredMessage(text, senderId: 'AlRajhi'), ignored);
-        expect(preview.parse(text).isHighConfidence, isFalse,
-            reason: 'preview');
+        // Round 8: a completed fee the device keeps for review (its amount is
+        // set aside, OR-03) may get the detailed preview; one held back by an
+        // ignore word or a notice line, or anything not completed, never does.
+        if (!(c['expect'] as String).startsWith('completed_') ||
+            ParserEngine.hasIgnoreWord(text.toLowerCase()) ||
+            ParserEngine.isNoticeMessage(text)) {
+          expect(preview.parse(text).isHighConfidence, isFalse,
+              reason: 'preview');
+        } else {
+          expect(preview.parse(text).outcome, isNot(PreviewOutcome.ignored),
+              reason: 'preview');
+        }
         return;
+      }
+      // OR-03: a recorded completed row carries the table's amount (never a
+      // limit, balance or code figure).
+      if (r.isTransaction && (c['expect'] as String).startsWith('completed_')) {
+        expect(r.transaction!.amount, closeTo((c['amount'] as num), 0.005),
+            reason: 'amount');
       }
       switch (expected) {
         case 'not_completed':
@@ -133,10 +200,20 @@ void main() {
           expect(v.rejectionReason, isNot(_notCompleted), reason: 'AI $type');
         }
         // NR-02: a notice or footer word on a real movement never makes the
-        // validator call it "not a transaction".
+        // validator call it "not a transaction" — except the pinned rows
+        // (`ai`) with a notice line and no money word, which the AI may not
+        // confirm (they stay in review).
         if ((c['expect'] as String).startsWith('completed_')) {
-          expect(v.rejectionReason, isNot('not_a_transaction'),
-              reason: 'AI $type');
+          if (c['ai'] == 'not_a_transaction') {
+            // Rejected (whichever check reports it first), and the text is
+            // one the validator calls not a transaction, as on the server.
+            expect(v.accepted, isFalse, reason: 'AI $type');
+            expect(ParserEngine.isNonTransactionText(text), isTrue,
+                reason: 'AI $type');
+          } else {
+            expect(v.rejectionReason, isNot('not_a_transaction'),
+                reason: 'AI $type');
+          }
         }
       }
 

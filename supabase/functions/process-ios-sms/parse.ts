@@ -10,7 +10,10 @@ import {
   last4Grounded,
   type LocalCandidate,
   merchantGrounded,
+  LABELLED_FIGURE,
   NON_TRANSACTION_KEYWORDS,
+  NOTICE_KEYWORDS,
+  OTP_CODE,
   outsideMerchant,
   REDACTION_PLACEHOLDER,
   validateAiCandidate,
@@ -114,13 +117,22 @@ export function isResolved(p: ParsedCapture): boolean {
 // "Purchase … Available credit limit …" and "Card
 // renewal fee … deducted" are read as transactions. Mirrors
 // ParserEngine._isIgnored / _isNotice.
+// OR-01: a noticeKeywords word (an account notice) never rejects a message
+// that names an amount with its currency: that one goes on to the
+// deterministic parse and, unresolved, to the AI and its validator (as
+// before NR-01), so a completed fee or posting with a notice line is never
+// dropped with no AI. Mirrors ParserEngine.isIgnoredMessage.
 function isIgnoredText(normalized: string): boolean {
   const all = normalized.toLowerCase();
   const lower = outsideMerchant(all, extractMerchant(normalized));
-  return (rules.ignoreKeywords as string[]).some((w) => containsIgnoreWord(lower, w)) ||
-    (NON_TRANSACTION_KEYWORDS.some((w) => containsIgnoreWord(lower, w)) && !hasMoneyWord(all)) ||
+  const has = (words: string[]) => words.some((w) => containsIgnoreWord(lower, w));
+  return has(rules.ignoreKeywords as string[]) ||
+    (has(NON_TRANSACTION_KEYWORDS) && !hasMoneyWord(all)) ||
+    (has(NOTICE_KEYWORDS) && !hasMoneyWord(all) && !AMOUNT_WITH_CURRENCY.test(normalized)) ||
     isDeclinedText(normalized);
 }
+
+
 
 // DATA-01: the transaction-state rule of
 // app/lib/engine/parser/transaction_state_cues.dart, over the same lists
@@ -440,14 +452,17 @@ export function deterministicParse(
 
   const currency = extractCurrency(normalized);
   const amountFields = extractCaptureAmount(
-    normalized.replace(UP_TO_AMOUNT, ' '),
+    normalized.replace(UP_TO_AMOUNT, ' ').replace(LABELLED_FIGURE, ' '),
     rules.amountPatterns as string[],
     currency,
   );
   const amount = amountFields.amount;
   const merchant = extractMerchant(normalized);
   const last4 = extractFirstGroup(normalized, rules.last4Patterns as string[]);
-  const direction = detectDirection(lower);
+  // OR-05: a purchase code ("482913 is your code for the purchase of …")
+  // authorises a payment that has not happened: no direction, so never
+  // resolved; the AI candidate validator rejects it as well.
+  const direction = OTP_CODE.test(lower) ? 'unknown' : detectDirection(lower);
   const type = direction === 'credit' ? (isRefundText(lower) ? 'refund' : 'income')
     : direction === 'debit' ? 'payment' : 'unknown';
   const category = type === 'income' ? 'income' : inferCategory(merchant, type);
@@ -661,7 +676,12 @@ function extractMerchant(text: string): string | undefined {
 
 // A maximum ("a refund of up to SAR 50") is an offer, not an amount that
 // moved. Mirrors ParserEngine._upToWords (amount within 16 characters after).
+
 const UP_TO_AMOUNT = /(?:up ?to|يصل إلى|يصل الى|تصل إلى|تصل الى)[^0-9\n]{0,12}[0-9][0-9,]*(?:\.[0-9]+)?/gi;
+
+const CURRENCY_ALT = 'SAR|AED|EGP|QAR|OMR|KWD|BHD|JOD|USD|EUR|GBP|JPY';
+const AMOUNT_WITH_CURRENCY = new RegExp(
+  `(?<![A-Za-z])(?:${CURRENCY_ALT}) ?[0-9]|[0-9] ?(?:${CURRENCY_ALT})(?![A-Za-z])`, 'i');
 
 function extractFirstGroup(text: string, patterns: string[]): string | undefined {
   for (const pattern of patterns) {

@@ -106,7 +106,7 @@ class TransactionStateCues {
     'not been approved', 'not been processed', 'refused', 'could not process',
     'cannot be completed', 'cannot be processed', 'bounced',
     'awaiting confirmation', 'awaiting approval', 'under review',
-    'being processed',
+    'being processed', 'being reviewed',
     'was returned', 'could not be authorised', 'could not be authorized',
     'not posted',
   ];

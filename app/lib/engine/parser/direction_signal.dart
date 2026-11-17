@@ -35,6 +35,11 @@ class DirectionSignal {
     'استلام',
     'مبلغ وارد',
     'حوالة واردة',
+    // OR-04 (O-own P59/P60): an incoming transfer named as such ("تحويل
+    // وارد", "Instant transfer in: SAR …"), as `creditKeywords` on the
+    // server. Not a bare "transfer in" ("transfer initiated").
+    'تحويل وارد',
+    'transfer in:',
     'راتب',
     'deposit',
     'salary',

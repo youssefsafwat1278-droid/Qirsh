@@ -1,7 +1,8 @@
 import { assert, assertEquals, assertNotEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { deterministicParse, isDeclinedText, isResolved, parseSms } from './parse.ts';
 import declinedTable from './declined_cases.json' with { type: 'json' };
-import { isNonTransactionText } from '../_shared/ai_candidate_validator.ts';
+import declinedDeviations from './declined_cases_deviations.json' with { type: 'json' };
+import { amountTokens, isNonTransactionText } from '../_shared/ai_candidate_validator.ts';
 
 const RECEIVED = '2026-09-07T19:30:00.000Z';
 
@@ -513,36 +514,71 @@ Deno.test('declined table: not completed is never confirmed money, on every serv
     completed_withdrawal: ['debit', 'payment'],
     completed_transfer_in: ['credit', 'income'],
   };
-  for (const c of declinedTable.cases as Array<{ text: string; expect: string; server?: string }>) {
+  type Row = {
+    text: string; expect: string; server?: string; device?: string; ai?: string; defect?: string; amount?: number;
+    foreign?: { amount: number; currency: string };
+  };
+  // Round 8 (item 6): the set of deviating rows is pinned by the allowlist.
+  const key = (c: Omit<Row, 'expect'>) => JSON.stringify([c.text, c.device ?? null, c.server ?? null, c.ai ?? null, c.defect ?? null]);
+  const deviating = (declinedTable.cases as Row[]).filter((c) => c.device || c.server || c.ai || c.defect);
+  assertEquals(declinedDeviations.rows.length, declinedDeviations.count);
+  assertEquals(deviating.length, declinedDeviations.count);
+  assertEquals(new Set(deviating.map(key)), new Set((declinedDeviations.rows as Omit<Row, 'expect'>[]).map(key)));
+  // OR-03: a resolved completed row carries the table's amount (or, for a
+  // foreign purchase, the foreign amount in its own currency).
+  const amountOk = (c: Row, p: { amount?: number; currency?: string }) =>
+    Math.abs((p.amount ?? NaN) - c.amount!) < 0.005 ||
+    (!!c.foreign && p.currency === c.foreign.currency && Math.abs((p.amount ?? NaN) - c.foreign.amount) < 0.005);
+  for (const c of declinedTable.cases as Row[]) {
     const text = c.text;
+    if (c.expect.startsWith('completed_')) {
+      assertEquals(typeof c.amount, 'number', `amount: ${text}`);
+      assert(!['ignored', 'dropped'].includes(c.server ?? ''), `never silent: ${text}`);
+    }
     // V1-RES5 (NR-05): expect is the true outcome; server is this side's
     // outcome where it knowingly differs (never a total change).
     const expected = c.server ?? c.expect;
     assertEquals(isDeclinedText(text), expected === 'not_completed', `cue: ${text}`);
     // NR-02: a notice or footer word on a real movement never makes the AI
     // candidate validator call it "not a transaction".
-    if (c.expect.startsWith('completed_')) assertEquals(isNonTransactionText(text), false, `not_a_transaction: ${text}`);
+    // (Round 8: except the pinned `ai` rows, a notice line with no money word.)
+    if (c.expect.startsWith('completed_')) {
+      assertEquals(isNonTransactionText(text), c.ai === 'not_a_transaction', `not_a_transaction: ${text}`);
+    }
     const p = deterministicParse(text, RECEIVED, 180);
     if (expected === 'unresolved') {
       // A known disagreement in the safe direction: the device (with the
       // sender's bank profile) records it; the server leaves it unresolved.
       assertEquals(isResolved(p), false, `server unresolved: ${text}`);
+      // OR-01 / OR-05: a text that is not a completed movement and that the
+      // server leaves to the AI (an account notice naming an amount, a
+      // purchase code) is never accepted from a grounded AI answer.
+      if (!c.expect.startsWith('completed_')) {
+        const token = amountTokens(text)[0] ?? '100.00';
+        for (const [type, direction] of [['payment', 'debit'], ['refund', 'credit']]) {
+          const r = await run(text, true, { ...ai(type, direction), amount: Number(token), amount_text: token });
+          assertEquals(r.accepted, false, `AI ${type}: ${text}`);
+        }
+      }
       continue;
     }
     if (expected in otherCompleted) {
       assert(isResolved(p), `${expected}: ${text}`);
       assertEquals([p.direction, p.type], otherCompleted[expected], text);
+      assert(amountOk(c, p), `amount ${p.amount}: ${text}`);
       continue;
     }
     if (expected === 'completed_payment') {
       assert(isResolved(p), `payment: ${text}`);
       assertEquals([p.direction, p.type], ['debit', 'payment'], text);
+      assert(amountOk(c, p), `amount ${p.amount}: ${text}`);
       continue;
     }
     if (expected === 'completed_credit') {
       // The device types a refund/reversal as `refund`; the server agrees.
       assert(isResolved(p), `credit: ${text}`);
       assertEquals([p.direction, p.type], ['credit', 'refund'], text);
+      assert(amountOk(c, p), `amount ${p.amount}: ${text}`);
       continue;
     }
     assertEquals(isResolved(p), false, `not completed: ${text}`);

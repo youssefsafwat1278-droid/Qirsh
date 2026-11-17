@@ -61,8 +61,12 @@ void main() {
             ...ParserEngine.securityIgnoreWords,
             ...ParserEngine.promotionWords,
             ...ParserEngine.ignoreMarkers,
-            ...ParserEngine.noticeWords,
           });
+    });
+    // OR-01: account notices, which never silence a message that names an
+    // amount with its currency, on either side.
+    test('noticeKeywords', () {
+      expect(strings(server['noticeKeywords']), ParserEngine.noticeWords);
     });
     test('moneyKeywords', () {
       expect(strings(server['moneyKeywords']), ParserEngine.moneyWords);

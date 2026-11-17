@@ -584,6 +584,9 @@ class CaptureImportService {
       direction: p['direction'] is String ? p['direction'] as String : null,
       type: p['type'] is String ? p['type'] as String : null,
       senderId: item.sender,
+      amount: p['amount'] is num
+          ? p['amount'] as num
+          : (p['amount'] is String ? num.tryParse(p['amount'] as String) : null),
     );
   }
 

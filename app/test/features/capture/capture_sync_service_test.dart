@@ -422,6 +422,35 @@ void main() {
   });
 
   test(
+      'OR-03: a processed capture whose amount is not the amount the device '
+      'reads (a credit limit taken for the purchase) is a review row',
+      () async {
+    const text = 'Purchase of SAR 89.50 at Test Mart with card *4521. '
+        'Credit limit: SAR 20,000';
+    final client = _FakeCaptureBackendClient([
+      for (final (id, amount) in [('limit', 20000), ('agreeing', 89.5)])
+        _capture(
+          payloadId: id,
+          status: 'processed',
+          type: 'payment',
+          direction: 'debit',
+          rawMessage: text,
+          amountText: amount == 20000 ? '20000' : '89.50',
+          numericAmount: amount,
+          merchant: null,
+        ),
+    ]);
+    final txRepo = DriftTransactionRepository(db);
+
+    await service(client).sync();
+
+    final stored = await txRepo.getRecent(limit: 10, accountId: null);
+    expect(stored.map((t) => t.amount), [89.5],
+        reason: 'only the capture with the device amount is imported');
+    expect(await DriftSmartInboxRepository(db).getOpen(), hasLength(1));
+  });
+
+  test(
       'LR-04: a processed advert or account notice (credit limit, card '
       'activation) is a review row, not income', () async {
     final client = _FakeCaptureBackendClient([
@@ -555,6 +584,10 @@ void main() {
           type: 'transfer',
           direction: 'debit', // outgoing: stored as a payment, merchant kept
           rawMessage: ipn,
+          // OR-03: the amount the text names (a different one is not
+          // confirmed).
+          amountText: '1.00',
+          numericAmount: 1,
           merchant: '01'),
       _capture(
           payloadId: 'card-hour',

@@ -958,6 +958,7 @@ class CaptureSyncService {
       direction: _string(parsed['direction']),
       type: _string(parsed['type']),
       senderId: _string(parsed['senderId']),
+      amount: _num(parsed['amount']),
     )) {
       await _persistBackendUnprocessableCapture(
           capture, requireCurrentAdmission, committed);

@@ -163,7 +163,11 @@ class ParserEngine {
         engine._extractMerchantAndSource(text.split('\n'), bank: bank)
             .merchant);
     if (!engine._isIgnored(outside, bank) &&
-        !engine._isNotice(lower, outside, bank)) {
+        (!engine._isNotice(lower, outside, bank) ||
+            // OR-01 — an account notice is silent only when it names no
+            // amount at all: one with an amount and currency stays visible
+            // (review, or a Smart Inbox card), whatever words it uses.
+            _amountWithCurrency.hasMatch(lower))) {
       return false;
     }
     // FR-13: an ignore word on a message the parser reads as a transaction
@@ -272,6 +276,23 @@ class ParserEngine {
         !hasMoneyWord(lower);
   }
 
+  /// OR-03 — [amount] is a figure the text gives under a balance or limit
+  /// label ("Credit limit: SAR 20,000", "الرصيد المتاح 1,234.56") and never
+  /// as a transaction amount: an AI answer naming it is not grounded. Mirrors
+  /// `LABELLED_FIGURE` in `_shared/ai_candidate_validator.ts`.
+  static bool isAccountFigure(String rawText, double amount) {
+    final text = Normalizer.separateGluedCurrency(
+        Normalizer.normalizeCurrencyTokens(Normalizer.normalize(rawText)));
+    final candidates = const ParserEngine()
+        ._extractAmounts(text.split('\n'), text: text, bank: null)
+        .candidates;
+    bool same(AmountCandidate c) => (c.value - amount).abs() < 0.005;
+    return candidates
+            .any((c) => c.kind == AmountCandidateKind.balance && same(c)) &&
+        !candidates.any(
+            (c) => c.kind == AmountCandidateKind.transactionAmount && same(c));
+  }
+
   /// FR-13 — a Latin ignore word counts only as a whole word, with an
   /// optional plural/inflection ending ("offers", "promotional"): "Hotpot" is
   /// not an OTP and "Wonder Mall" is not "won". Arabic phrases and URL
@@ -308,7 +329,7 @@ class ParserEngine {
   /// Promotions: an ignore word like the security words and [ignoreMarkers].
   static const List<String> promotionWords = [
     'عرض خاص', 'promo', 'promotion', 'marketing', 'offer', 'coupon', 'prize',
-    'winner', 'won', 'مبروك', 'جائزة', 'اربح',
+    'winner', 'won', 'winning', 'مبروك', 'جائزة', 'اربح',
   ];
 
   /// LR-04 / NR-01 — account notices (a credit limit, a card activation, a
@@ -319,7 +340,6 @@ class ParserEngine {
   /// server's `ignoreKeywords`, are `nonTransactionKeywords` in
   /// `process-ios-sms/parser_rules.json` (drift test).
   static const List<String> noticeWords = [
-    'winning',
     // Limits, card activation / issuance / renewal.
     'credit limit', 'card limit', 'الحد الائتماني', 'حد الائتمان',
     'حد البطاقة', 'activated', 'activation', 'is now active', 'تم تفعيل',
@@ -350,6 +370,14 @@ class ParserEngine {
     'استلام', 'استلمت', 'مبلغ وارد', 'راتب', 'استرداد', 'مسترد', 'رد مبلغ',
     'إعادة مبلغ', 'اعادة مبلغ', 'استرجاع', 'عكس قيد', 'عكس العملية', 'تحويل',
     'حوالة', 'حواله', 'صراف', 'عملية', 'أموال',
+    // OR-01: card authorisations and postings, payroll, direct debits and
+    // standing orders. Not a bare "debit" ("Your debit card is now active"
+    // names a product, like "credit card"), nor "fee"/"charge" ("Card
+    // renewal fee waived", "free of charge" on a card notice); a fee
+    // message stays visible by its amount instead (isIgnoredMessage).
+    'direct debit', 'authorised',
+    'authorized', 'approved', 'posted', 'payroll', 'standing order',
+    'عمولة', 'قيد مبلغ', 'تم قيد', 'أمر مستديم', 'أمر دائم', 'خصم مباشر',
   ];
 
   /// The remaining ignore markers: links, calls to action, cheque books,
@@ -385,9 +413,41 @@ class ParserEngine {
     r'[0-9]{4,8}(?![0-9])'
     // NR-06: "Enter code 482913 to approve …", not "Use code 482913 for your
     // next order" / "Enter code 482913 at the counter".
-    r'|(?:enter|use|input) (?:the |your )?code\s*:?\s*[0-9]{4,8} to '
-    r'(?:confirm|approve|complete|verify|authori[sz]e)',
+    r'|(?:enter|use|input) (?:the |your )?code\s*:?\s*[0-9]{4,8}[^\n.]{0,20}? to '
+    r'(?:pay|confirm|approve|complete|verify|authori[sz]e)'
+    // OR-05: a purchase code named as such, with no "OTP" ("482913 is your
+    // code for the purchase of …", "Code 482913: confirm payment …",
+    // "… purchase code 482913. Valid 5 minutes", "الرمز 482913 لإتمام …");
+    // not "Order 482913 is your code for pickup" or "Approval code 482913".
+    r'|(?<![0-9*x#.,])[0-9]{4,8} is (?:your|the) (?:[a-z]+ ){0,2}code '
+    '$_codePurpose'
+    r'|code(?: is)?\s*:?\s*[0-9]{4,8}(?![0-9])[:,]?\s*'
+    '(?:$_codePurpose|confirm (?:the |your )?(?:payment|purchase|transaction))'
+    r'|code\s*:?\s*[0-9]{4,8}\.?\s+(?:valid|expires)'
+    r'|(?:الرمز|رمزك|رمز|الكود|كود)\s*:?\s*[0-9]{4,8}\s+ل',
   );
+
+  /// OR-03 — labels of an account figure that is not the amount that moved:
+  /// a credit or card limit, what remains or is outstanding, a minimum due.
+  /// Read like a balance label ([AmountCandidateKind.balance]): never the
+  /// transaction amount; on its own in a message, a review row.
+  static const List<String> _limitWords = [
+    'limit', 'payment due', 'remaining', 'outstanding', 'minimum due',
+    'minimum payment', 'minimum amount', 'min due', 'min. due', 'amount due',
+    'due amount', 'الحد', 'حد الائتمان', 'حد ائتماني', 'حد البطاقة',
+    'حد الشراء', 'حد السحب', 'حد التحويل', 'حد العمليات', 'موعد سداد',
+    'المتبقي', 'المستحق',
+  ];
+
+  /// OR-05 — a number that is the subject of a code: "482913 is your code",
+  /// "482913 هو رمز …".
+  static final RegExp _codeSubject = RegExp(
+      r'^[0-9]{4,8} (?:is|هو) [^\n0-9]{0,25}(?:code|رمز|كود|otp|passcode)');
+
+  static const String _codePurpose =
+      r'(?:for (?:the |your |an? )?(?:purchase|payment|online|transaction|'
+      r'sar|usd|aed|egp|eur|gbp)|to (?:pay|confirm|approve|complete|verify|'
+      r'authori[sz]e))';
 
   ParseResult parse(
     String rawText, {
@@ -423,6 +483,13 @@ class ParserEngine {
     if (ignored && _otpCode.hasMatch(lower)) {
       return ParseResult.notTransaction(bankKey: bank?.bankKey);
     }
+    // OR-05 — a purchase code with no security word ("482913 is your code
+    // for the purchase of SAR 250.00") authorises a payment that has not
+    // happened: never recorded, a review row.
+    if (_otpCode.hasMatch(lower)) {
+      return ParseResult.notTransaction(
+          bankKey: bank?.bankKey, amountDetected: true);
+    }
     // DATA-01 — a declined/failed purchase moved no money. It is not ignored
     // like an OTP: it stays transaction-shaped so the capture lands in the
     // Smart Inbox review path instead of vanishing (or being auto-confirmed).
@@ -453,11 +520,18 @@ class ParserEngine {
     final amount = ruleAmount ?? amountExtraction.transactionAmount;
 
     // ليست معاملة مالية واضحة → تُتجاهَل (§24.6).
-    if (amount == null && type == TransactionType.unknown) {
-      return ParseResult.notTransaction(bankKey: bank?.bankKey);
-    }
     if (amount == null) {
-      return ParseResult.notTransaction(bankKey: bank?.bankKey);
+      // OR-03 — the only money figures are set aside (a balance, a limit, a
+      // fee, a minimum due, written with a currency): not a transaction
+      // amount, but never a silent drop either — a review row.
+      return ParseResult.notTransaction(
+          bankKey: bank?.bankKey,
+          amountDetected: !ignored &&
+              amountExtraction.candidates.any((c) =>
+                  (c.kind == AmountCandidateKind.balance ||
+                      c.kind == AmountCandidateKind.referenceNumber) &&
+                  _currency.hasMatch(_window(c.line, c.line.indexOf(c.raw),
+                      before: 12, after: 12))));
     }
     // LR-04 / NR-01 — an account notice that names an amount but no money
     // movement ("Your credit limit is SAR 15,000"): never recorded, never
@@ -698,8 +772,13 @@ class ParserEngine {
       }
     }
 
-    final balanceCandidates =
-        candidates.where((c) => c.kind == AmountCandidateKind.balance);
+    // OR-03: a limit or minimum-due figure is set aside like a balance, but
+    // it is not the balance after the transaction either.
+    final balanceCandidates = candidates.where((c) =>
+        c.kind == AmountCandidateKind.balance &&
+        !_hasNearbyKeyword(c.line.toLowerCase(), c.line.indexOf(c.raw),
+            _limitWords,
+            before: 32, after: 8));
     final balanceCandidate =
         balanceCandidates.isEmpty ? null : balanceCandidates.first;
     // HEURISTIC-ONLY projection; durable balance uses balanceText.
@@ -844,6 +923,7 @@ class ParserEngine {
       'bal',
       'المتاح',
       'الرصيد المتاح',
+      ..._limitWords,
       ...?bank?.balanceRules.map((item) => item.toLowerCase()),
     ];
     final amountWords = [
@@ -883,6 +963,7 @@ class ParserEngine {
       'عملية رقم',
       'otp',
       'رمز',
+      'كود',
       'code',
     ];
     final feeWords = [
@@ -984,6 +1065,8 @@ class ParserEngine {
         _hasNearbyKeyword(
             l.replaceAll('refund', '      '), start, referenceWords,
             before: 24, after: 10) ||
+        // OR-05: "482913 is your code …", "482913 هو رمز …".
+        _codeSubject.hasMatch(l.substring(start)) ||
         _hasNearbyKeyword(l, start, feeWords, before: 24, after: 12) ||
         _hasNearbyKeyword(l, start, totalDueWords, before: 32, after: 12) ||
         _hasNearbyKeyword(l, start, phoneHelpWords, before: 16, after: 6) ||

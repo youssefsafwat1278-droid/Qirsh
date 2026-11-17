@@ -85,6 +85,11 @@ class AiCandidateValidator {
     )) {
       return const AiCandidateValidation.rejected('amount_not_grounded');
     }
+    // OR-03 — a limit, balance or minimum-due figure is never the amount.
+    if (ParserEngine.isAccountFigure(
+        messageText ?? sanitizedText, response.amount)) {
+      return const AiCandidateValidation.rejected('amount_is_account_figure');
+    }
     final currency = response.currency.trim().toUpperCase();
     if (localParsed != null) {
       if (!((response.amount - localParsed.amount).abs() < 0.01)) {
