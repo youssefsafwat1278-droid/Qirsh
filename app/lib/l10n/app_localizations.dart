@@ -2014,7 +2014,7 @@ abstract class AppL10n {
   /// No description provided for @helpAddTransactionBody.
   ///
   /// In ar, this message translates to:
-  /// **'اضغط زر الإضافة في الشاشة الرئيسية، ثم اختر الإضافة اليدوية أو الصق نص رسالة البنك. يقرأ قِرش الرسالة ويستخرج المبلغ والتاجر والتاريخ، وتبقى لك الكلمة الأخيرة قبل الحفظ.'**
+  /// **'اضغط زر الإضافة في الشاشة الرئيسية، ثم اختر الإضافة اليدوية أو الصق نص رسالة البنك. يقرأ قِرش الرسالة ويستخرج المبلغ والتاجر والتاريخ. ما يقرؤه بثقة يُحفظ مباشرةً، وما لا يتأكد منه ينتظر مراجعتك في صندوق الوارد الذكي.'**
   String get helpAddTransactionBody;
 
   /// No description provided for @helpSmartInboxTitle.
@@ -2026,7 +2026,7 @@ abstract class AppL10n {
   /// No description provided for @helpSmartInboxBody.
   ///
   /// In ar, this message translates to:
-  /// **'العمليات التي يلتقطها قِرش من رسائل البنك تصل هنا أولًا. راجعها وأكّدها أو عدّل تصنيفها، فتنتقل بعدها إلى سجل عملياتك.'**
+  /// **'العمليات التي يلتقطها قِرش من رسائل البنك ولا يتأكد منها تنتظرك هنا، أما ما يقرؤه بثقة فيُحفظ مباشرةً. راجعها وأكّدها أو عدّل تصنيفها، فتنتقل بعدها إلى سجل عملياتك.'**
   String get helpSmartInboxBody;
 
   /// No description provided for @helpCategoriesTitle.
@@ -2122,7 +2122,7 @@ abstract class AppL10n {
   /// No description provided for @helpBackupBody.
   ///
   /// In ar, this message translates to:
-  /// **'صدّر نسخة مشفّرة من بياناتك واحتفظ بها، أو استعدها على جهاز آخر. تتم المعاينة على جهازك قبل أي كتابة، ولا تخرج كلمة المرور منه.'**
+  /// **'صدّر نسخة من بياناتك واحتفظ بها، أو استعدها على جهاز آخر. تتم المعاينة على جهازك قبل أي كتابة. ملف ZIP غير محمي بكلمة مرور؛ خزّنه في مكان خاص.'**
   String get helpBackupBody;
 
   /// No description provided for @helpFooter.

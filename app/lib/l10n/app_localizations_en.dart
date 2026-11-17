@@ -1092,14 +1092,14 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get helpAddTransactionBody =>
-      'Tap the add button on the home screen, then choose manual entry or paste your bank message. Qirsh reads the message and extracts the amount, merchant and date — you always confirm before anything is saved.';
+      'Tap the add button on the home screen, then choose manual entry or paste your bank message. Qirsh reads the message and extracts the amount, merchant and date. Messages it reads with confidence are saved directly; anything it is unsure about waits in the Smart Inbox for your review.';
 
   @override
   String get helpSmartInboxTitle => 'Smart Inbox';
 
   @override
   String get helpSmartInboxBody =>
-      'Transactions Qirsh captures from bank messages arrive here first. Review and confirm them, or correct the category, and they move into your transaction history.';
+      'Transactions Qirsh captures from bank messages wait here when it is unsure about them; those it reads with confidence are saved directly. Review and confirm them, or correct the category, and they move into your transaction history.';
 
   @override
   String get helpCategoriesTitle => 'Categories';
@@ -1155,7 +1155,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get helpBackupBody =>
-      'Export an encrypted copy of your data and keep it safe, or restore it on another device. The file is previewed on your device before anything is written, and your passphrase never leaves it.';
+      'Export a copy of your data and keep it safe, or restore it on another device. The file is previewed on your device before anything is written. The ZIP is not password-protected, so store it somewhere private.';
 
   @override
   String get helpFooter => 'Still stuck? Contact us from the settings screen.';
