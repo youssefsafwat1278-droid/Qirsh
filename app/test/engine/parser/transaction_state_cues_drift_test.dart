@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/engine/parser/parser_engine.dart';
 import 'package:money_companion/engine/parser/shared_preview_parser.dart';
 import 'package:money_companion/engine/parser/transaction_state_cues.dart';
 
@@ -37,6 +38,20 @@ void main() {
     for (final e in pairs.entries) {
       test(e.key, () => expect(strings(server[e.key]), e.value));
     }
+
+    // LR-04 / LR-05: the server rejects (no AI) on the same ignore words the
+    // device applies, and its AI candidate validator reads the same advert /
+    // account-notice list.
+    test('ignoreKeywords', () {
+      expect(strings(server['ignoreKeywords']), [
+        ...ParserEngine.securityIgnoreWords,
+        ...ParserEngine.ignoreMarkers,
+      ]);
+    });
+    test('nonTransactionKeywords', () {
+      expect(strings(server['nonTransactionKeywords']),
+          ParserEngine.nonTransactionWords);
+    });
   });
 
   test('preview asset ignores every declined cue', () {

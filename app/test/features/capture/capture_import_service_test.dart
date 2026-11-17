@@ -561,9 +561,14 @@ void main() {
     }
 
     for (final aiPrimary in [false, true]) {
+      // LR-03: a direction conflict means neither reading is trusted. Both
+      // import paths keep the full message in Smart Inbox; neither the
+      // server's debit nor the device's own credit is confirmed (the
+      // non-AI-primary path used to fall through to the local parse and
+      // confirm the device's reading).
       test(
-          'FR-02 (aiPrimary=$aiPrimary): a server debit for a text the device '
-          'reads as a credit is not imported; the path\'s rejected outcome',
+          'FR-02 / LR-03 (aiPrimary=$aiPrimary): a server debit for a text the '
+          'device reads as a credit is not confirmed either way: Smart Inbox',
           () async {
         const credit = 'تم استرجاع مبلغ 100.00 ريال إلى حسابك';
         queue.items.add(item(_id(1), text: credit));
@@ -572,19 +577,87 @@ void main() {
 
         final report = await buildService(aiPrimary: aiPrimary).run();
 
-        expect(report.imported.single.path,
-            aiPrimary ? CaptureImportPath.server : CaptureImportPath.local);
+        expect(report.imported.single.path, CaptureImportPath.server);
+        expect(await db.customSelect('SELECT type FROM transactions;').get(),
+            isEmpty,
+            reason: 'no confirmed money from either reading');
+        expect(
+            await count('smart_inbox_items', "payload_id = '${_id(1)}'"), 1);
+      });
+
+      // LR-03: the repository's IPN credit fixture
+      // (sms_redaction_cases.json `en_ipn_credited_by`). The server's credit
+      // 500 is right; the device used to read it as a payment 500, so the
+      // direction rule replaced a correct credit with a wrong payment on the
+      // non-AI-primary path. Neither path may record spending for it.
+      test(
+          'LR-03 (aiPrimary=$aiPrimary): the IPN credit fixture is never '
+          'recorded as spending', () async {
+        const ipn = 'Your account **1234 was credited by EGP 500.00 from '
+            'AHMED M*** via IPN on 12/05 IPN REF# 123456789';
+        queue.items.add(item(_id(1), text: ipn));
+        server.fetch = CaptureServerFetch(CaptureFetchStatus.ok, {
+          _id(1): ProcessedCaptureDto(
+            payloadId: _id(1),
+            status: 'processed',
+            state: 'processed',
+            parsed: const {
+              'amount': 500.0,
+              'amount_text': '500.00',
+              'currency': 'EGP',
+              'direction': 'credit',
+              'type': 'income',
+              'merchant': 'InstaPay',
+              'rawMessage': 'sanitized',
+              'parserSource': 'deterministic',
+              'confidence': 0.85,
+            },
+            notification: const {},
+          ),
+        });
+
+        await buildService(aiPrimary: aiPrimary).run();
+
         final rows =
             await db.customSelect('SELECT type FROM transactions;').get();
-        if (aiPrimary) {
-          expect(rows, isEmpty, reason: 'no confirmed money');
-          expect(
-              await count('smart_inbox_items', "payload_id = '${_id(1)}'"), 1);
-        } else {
-          // The local parse of the device's own text: a credit, never the
-          // server's debit.
-          expect(rows.map((r) => r.read<String>('type')), ['refund']);
-        }
+        expect(rows.map((r) => r.read<String>('type')), isNot(contains('payment')),
+            reason: 'a credit is never spending');
+        expect(rows.map((r) => r.read<String>('type')), ['income']);
+      });
+
+      // LR-04: a server (one deployed before the fix) that processed a
+      // credit-limit notice as income is not imported: the device drops the
+      // text as not a transaction, so the item is kept for review.
+      test(
+          'LR-04 (aiPrimary=$aiPrimary): a processed credit-limit notice is '
+          'not imported as money: Smart Inbox', () async {
+        const notice = 'Your credit limit has been changed to SAR 15,000.00';
+        queue.items.add(item(_id(1), text: notice));
+        server.fetch = CaptureServerFetch(CaptureFetchStatus.ok, {
+          _id(1): ProcessedCaptureDto(
+            payloadId: _id(1),
+            status: 'processed',
+            state: 'processed',
+            parsed: const {
+              'amount': 15000.0,
+              'amount_text': '15000.00',
+              'currency': 'SAR',
+              'direction': 'credit',
+              'type': 'income',
+              'rawMessage': 'sanitized',
+              'parserSource': 'deterministic',
+              'confidence': 0.7,
+            },
+            notification: const {},
+          ),
+        });
+
+        await buildService(aiPrimary: aiPrimary).run();
+
+        expect(await db.customSelect('SELECT type FROM transactions;').get(),
+            isEmpty);
+        expect(
+            await count('smart_inbox_items', "payload_id = '${_id(1)}'"), 1);
       });
     }
 

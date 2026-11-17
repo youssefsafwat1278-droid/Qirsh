@@ -25,11 +25,14 @@ void main() {
   final preview = SharedPreviewParser.fromJsonString(
       File('assets/catalog/parser_rules.json').readAsStringSync());
 
-  test('the table covers all five outcomes', () {
+  test('the table covers all eight outcomes', () {
     expect(cases.map((c) => c['expect']).toSet(), {
       'not_completed',
       'completed_payment',
       'completed_credit',
+      'completed_income',
+      'completed_withdrawal',
+      'completed_transfer_in',
       'review',
       'ignored',
     });
@@ -73,6 +76,17 @@ void main() {
           // A refund or reversal returns money: the refund type, which nets
           // against spend (never income, never a payment).
           expect(r.transaction!.type, TransactionType.refund);
+        // V1-RES4 (LR-04): a genuine salary/deposit, cash withdrawal or
+        // incoming transfer is still recorded.
+        case 'completed_income':
+          expect(r.isTransaction, isTrue);
+          expect(r.transaction!.type, TransactionType.income);
+        case 'completed_withdrawal':
+          expect(r.isTransaction, isTrue);
+          expect(r.transaction!.type, TransactionType.withdrawal);
+        case 'completed_transfer_in':
+          expect(r.isTransaction, isTrue);
+          expect(r.transaction!.type, TransactionType.transfer);
       }
 
       // Dart notification preview (V1-061): it judges declined cues with
@@ -126,10 +140,18 @@ void main() {
           expect(v.reason, isNot(_notCompleted), reason: 'import $direction');
           // FR-02: a server answer in the opposite direction to the device's
           // own reading is never imported as confirmed (import-path rule).
-          final opposite = expected == 'completed_payment' ? 'credit' : 'debit';
-          // (A text the device cannot read keeps the server result.)
+          // (A text the device cannot read, or reads as a transfer, keeps the
+          // server result.)
+          final local = engine.parse(text);
+          final localDirection = !local.isTransaction
+              ? null
+              : local.transaction!.type.isExpense
+                  ? 'debit'
+                  : local.transaction!.type == TransactionType.transfer
+                      ? null
+                      : 'credit';
           expect(localParseOpposesDirection(text: text, direction: direction),
-              direction == opposite && engine.parse(text).isTransaction,
+              localDirection != null && localDirection != direction,
               reason: 'opposite import $direction');
         }
       }

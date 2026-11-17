@@ -591,5 +591,91 @@
       "merchant": null,
       "occurred_at_kept": false
     }
+  },
+  {
+    "name": "LR-06 OTP 'use NNNN as OTP' is not a transaction",
+    "sanitized_text": "Use 482913 as OTP to complete SAR 100.00 purchase at SHOPX",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 100,
+      "amount_text": "100.00",
+      "currency": "SAR",
+      "merchant": "SHOPX",
+      "type": "payment"
+    },
+    "expected": {
+      "accepted": false,
+      "reason": "not_a_transaction"
+    }
+  },
+  {
+    "name": "LR-06 OTP 'enter code NNNN' is not a transaction",
+    "sanitized_text": "Enter code 482913 to approve the purchase of SAR 100.00 at SHOPX. Do not share this OTP.",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 100,
+      "amount_text": "100.00",
+      "currency": "SAR",
+      "merchant": "SHOPX",
+      "type": "payment"
+    },
+    "expected": {
+      "accepted": false,
+      "reason": "not_a_transaction"
+    }
+  },
+  {
+    "name": "LR-06 credit-limit notice is not a transaction",
+    "sanitized_text": "Your credit limit is SAR 100.00",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 100,
+      "amount_text": "100.00",
+      "currency": "SAR",
+      "type": "payment"
+    },
+    "expected": {
+      "accepted": false,
+      "reason": "not_a_transaction"
+    }
+  },
+  {
+    "name": "LR-06 promotion is not a transaction",
+    "sanitized_text": "Special promotion: spend SAR 100.00 at SHOPX and get cashback",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 100,
+      "amount_text": "100.00",
+      "currency": "SAR",
+      "merchant": "SHOPX",
+      "type": "payment"
+    },
+    "expected": {
+      "accepted": false,
+      "reason": "not_a_transaction"
+    }
+  },
+  {
+    "name": "LR-06 ignore word inside the grounded merchant does not reject",
+    "sanitized_text": "Purchase of SAR 100.00 at Offer Mart card *1234. Never share your OTP",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 100,
+      "amount_text": "100.00",
+      "currency": "SAR",
+      "merchant": "Offer Mart",
+      "type": "payment"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR",
+      "merchant": "Offer Mart",
+      "occurred_at_kept": false
+    }
   }
 ]

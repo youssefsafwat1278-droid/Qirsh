@@ -26,6 +26,30 @@ void main() {
         reason: 'no server direction: nothing to disagree with');
   });
 
+  test('LR-09: the device reads the text with the capture sender', () {
+    // Golden fixture sa_anb_atm_deposit_income: with its sender the device
+    // reads income (a credit), so the server's credit is not opposed.
+    const anbDeposit =
+        'إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47';
+    expect(
+        localParseOpposesDirection(
+            text: anbDeposit, direction: 'credit', senderId: 'anb'),
+        isFalse);
+  });
+
+  test('LR-04: a text the device drops as not a transaction contradicts any '
+      'server result', () {
+    const notice = 'Your credit limit has been changed to SAR 15,000.00';
+    expect(localParseContradictsServer(text: notice, direction: 'credit'),
+        isTrue);
+    expect(localParseContradictsServer(text: credit, direction: 'debit'),
+        isTrue, reason: 'the opposite direction');
+    expect(localParseContradictsServer(text: credit, direction: 'credit'),
+        isFalse);
+    expect(localParseContradictsServer(text: debit, direction: 'debit'),
+        isFalse);
+  });
+
   test('a transfer or an unreadable text never blocks the server result', () {
     expect(
         localParseOpposesDirection(

@@ -422,6 +422,33 @@ void main() {
   });
 
   test(
+      'LR-04: a processed advert or account notice (credit limit, card '
+      'activation) is a review row, not income', () async {
+    final client = _FakeCaptureBackendClient([
+      for (final (id, text) in [
+        ('limit', 'Your credit limit has been changed to SAR 15,000.00'),
+        ('active', 'Your card *1234 is now active. Credit limit SAR 10,000.00'),
+      ])
+        _capture(
+          payloadId: id,
+          status: 'processed',
+          type: 'income',
+          direction: 'credit',
+          rawMessage: text,
+          amountText: id == 'limit' ? '15000.00' : '10000.00',
+          numericAmount: id == 'limit' ? 15000 : 10000,
+          merchant: null,
+        ),
+    ]);
+    final txRepo = DriftTransactionRepository(db);
+
+    await service(client).sync();
+
+    expect(await txRepo.getRecent(limit: 10, accountId: null), isEmpty);
+    expect(await DriftSmartInboxRepository(db).getOpen(), hasLength(2));
+  });
+
+  test(
       'V1-001 residuals: every not_completed case of the shared table, '
       'marked processed by a server as a payment or a refund, changes no total',
       () async {

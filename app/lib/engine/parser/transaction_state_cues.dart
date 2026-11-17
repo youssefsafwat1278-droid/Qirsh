@@ -10,11 +10,13 @@ import 'normalizer.dart';
 /// 1. A cue counts only as a whole token (Arabic: one و/ف/ب/ال clitic, never
 ///    the purpose prefix ل: `لرفض`, `لاسترداد` are instructions).
 /// 2. A cue is not a status when it is part of a name — right after a merchant
-///    introducer (`at`, `from`, `to`, `via`, `merchant:`, `لدى`, `من`, `عند`,
-///    `في`, `إلى`; not "due to"), optionally followed by one
+///    introducer (`at`, `from`, `to`, `via`, `merchant:` — the bare word
+///    `merchant` is not one: "Merchant declined" is a status — `لدى`, `من`,
+///    `عند`, `في`, `إلى`; not "due to"), optionally followed by one
 ///    [merchantNameWords] word ("at The Failed Co", `لدى شركة مرفوض`), but not
 ///    a feminine Arabic cue after an Arabic name word (`من متجر مرفوضة` agrees
-///    with the operation, `شركة مرفوضة` cannot be told apart: a status) — when
+///    with the operation, `شركة مرفوضة` cannot be told apart: a status), and
+///    not a cue that ends its sentence ("…from the merchant declined.") — when
 ///    it qualifies a plural generic noun ("Declined transactions incur no
 ///    fee", `العمليات المرفوضة`), or when the question mark ends its own
 ///    clause ("Unauthorized transaction? Call us"; not "…declined, need
@@ -24,8 +26,9 @@ import 'normalizer.dart';
 ///    spaced dash: "Transaction Report - …") by a hypothetical, future or
 ///    instructional marker ("will be", "if", "call us", `سيتم`, `للاعتراض`)
 ///    is not a status — except a declined cue whose clause has only
-///    [futureMarkers] and names an amount ("Payment of SAR 100 will be
-///    declined due to insufficient funds"). A credit word was not done when
+///    [futureMarkers], names an amount and names no [genericNouns] word
+///    ("Payment of SAR 100 will be declined due to insufficient funds"; not
+///    "Transactions over SAR 100 will be declined"). A credit word was not done when
 ///    it is preceded by a negation (`not`, `لم`), directly followed by a
 ///    declined cue, a marker or a negation ("Refund failed", "Refund will be
 ///    processed"), or followed later in its sentence by a declined status
@@ -38,9 +41,10 @@ import 'normalizer.dart';
 ///    A credit that is only promised or negated, in a message that names a
 ///    declined operation anywhere ("Refund will be processed for failed
 ///    transaction"), is not completed either: no money has moved yet.
-/// 5. A plural generic noun followed by a colon or a count is a status
-///    header, not advice ("Declined transactions: 1. Purchase of …",
-///    `العمليات المرفوضة: ١`).
+/// 5. A plural generic noun followed by a colon, a count or a currency and
+///    amount is a status header, not advice ("Declined transactions: 1.
+///    Purchase of …", "Declined transactions SAR 100", `العمليات المرفوضة: ١`);
+///    the noun after a cue may be Arabic too.
 /// 6. A reversed purchase ("Purchase of SAR 100 at X reversed", `تم عكس عملية
 ///    الشراء`) in a message with no declined cue is ambiguous: the original
 ///    purchase may or may not have been recorded. It goes to review (counted
@@ -77,6 +81,8 @@ class TransactionStateCues {
     'تعذر السحب', 'تعذر سداد', 'لم يتم سداد', 'لم يتم السداد', 'معلقة', 'معلق',
     'قيد المعالجة', 'قيد الانتظار', 'تم حجز', 'مبلغ محجوز', 'تم إيقاف',
     'موقوفة', 'سيتم تنفيذ',
+    // V1-RES4 (review L, LR-02): more not-completed wordings.
+    'لم تتم', 'تم إلغاء', 'قيد التنفيذ',
     // English
     'declined', 'rejected', 'unsuccessful', 'not successful', 'failed',
     'denied', 'not approved', 'cancelled', 'canceled',
@@ -94,6 +100,11 @@ class TransactionStateCues {
     'preauthorisation', 'pre-auth', 'blocked', 'stopped',
     'could not be dispensed', 'not dispensed', 'could not be sent',
     'could not be paid', 'will be processed',
+    'did not go through', "didn't go through", 'not been completed',
+    'not been approved', 'not been processed', 'refused', 'could not process',
+    'cannot be completed', 'cannot be processed', 'bounced',
+    'awaiting confirmation', 'awaiting approval', 'under review',
+    'being processed',
   ];
 
   /// The message's own action returns money (a refund/reversal of the
@@ -106,7 +117,7 @@ class TransactionStateCues {
 
   /// The word right before a cue that makes the cue part of a merchant name.
   static const List<String> merchantIntroducers = [
-    'at', 'from', 'لدى', 'من', 'عند', 'في', 'to', 'إلى', 'merchant', 'via',
+    'at', 'from', 'لدى', 'من', 'عند', 'في', 'to', 'إلى', 'merchant:', 'via',
   ];
 
   /// One of these may sit between the introducer and the cue ("at The Failed
@@ -146,7 +157,8 @@ class TransactionStateCues {
   /// never the status of this one — unless it is a status header (rule 5).
   static const List<String> genericNouns = [
     'transactions', 'purchases', 'payments', 'transfers', 'operations',
-    'attempts', 'use', 'عمليات', 'العمليات', 'معاملات', 'المعاملات',
+    'attempts', 'use', 'cards', 'balance', 'عمليات', 'العمليات', 'معاملات',
+    'المعاملات',
   ];
 
   /// Rule 6: a reversal word in a message naming a [purchaseNouns] word.
@@ -197,6 +209,7 @@ class TransactionStateCues {
     final clause = _clause(text, m.start);
     return _future.hasMatch(clause) &&
         !_notFuture.hasMatch(clause) &&
+        !_genericAny.hasMatch(clause) &&
         RegExp('[0-9]').hasMatch(clause);
   }
 
@@ -243,7 +256,14 @@ class TransactionStateCues {
     final end = _sentenceEnd(text, m.end);
     final ownQuestion = end.question &&
         !_clauseBoundary.hasMatch(text.substring(m.end, end.at));
-    if ((named != null && !feminineAfterName) || generic || ownQuestion) {
+    // A cue that ends its sentence right after an introducer is a status
+    // ("…changed from pending to declined"), not a name.
+    final endsSentence =
+        text.substring(m.end, end.at).trim().replaceAll(RegExp(r'[.,،:)]'), '')
+            .isEmpty;
+    if ((named != null && !feminineAfterName && !endsSentence) ||
+        generic ||
+        ownQuestion) {
       return _Skip.name;
     }
     return _hypothetical.hasMatch(_clause(text, m.start))
@@ -293,8 +313,10 @@ class TransactionStateCues {
   static final RegExp _creditAction = _tokenPattern(creditAction, lam: false);
   static final RegExp _reversal = _tokenPattern(reversalWords, lam: false);
   static final RegExp _purchase = _tokenPattern(purchaseNouns, lam: false);
-  // Right after a generic noun phrase: a colon or a count (rule 5).
-  static final RegExp _header = RegExp(r'^ ?(?::|\(?[0-9٠-٩])');
+  // Right after a generic noun phrase: a colon, a count or an amount
+  // ("Failed payments SAR 100.00 …") (rule 5).
+  static final RegExp _header = RegExp(
+      r'^ ?(?::|\(?[0-9٠-٩]|(?:sar|aed|egp|qar|omr|kwd|bhd|jod|usd|eur|gbp) ?[0-9])');
   static final RegExp _hypothetical =
       _tokenPattern(hypotheticalMarkers, lam: true);
   static final RegExp _negation = _tokenPattern(negationMarkers, lam: false);
@@ -317,8 +339,13 @@ class TransactionStateCues {
       r'^ (?:was |has been |is |been |تم )?(?:'
       '${_alternation([...declined, ...hypotheticalMarkers, ...negationMarkers])}'
       ')(?![a-z$_arabicLetter])');
-  // A noun right after an English cue / right before an Arabic cue.
-  static final RegExp _genericNext = _nounAfter(genericNouns);
+  // A noun right after an English cue / right before an Arabic cue; a generic
+  // noun also right after an Arabic cue (`سيتم تنفيذ العمليات المعلقة`).
+  static final RegExp _genericNext = RegExp(
+      '^ (?:${_alternation(genericNouns)})(?![a-z$_arabicLetter])');
+  // A generic noun anywhere in a clause: a future status about transactions
+  // in general ("Transactions above SAR 5,000 will be declined") is advice.
+  static final RegExp _genericAny = _tokenPattern(genericNouns, lam: false);
   static final RegExp _genericBefore = _nounPreceding(genericNouns);
   static final RegExp _nounNext =
       _nounAfter([...transactionNouns, ...genericNouns]);

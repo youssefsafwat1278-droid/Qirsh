@@ -14,6 +14,7 @@
 //  - the amount and amount_text must each be a whole numeric token of the
 //    text (not part of a date, time, card/account number or larger number).
 import { canonicalMoneyText } from './money_text.ts';
+import rules from '../process-ios-sms/parser_rules.json' with { type: 'json' };
 
 export const CURRENCY_CODES = ['SAR', 'AED', 'EGP', 'QAR', 'OMR', 'KWD', 'BHD', 'JOD', 'USD', 'EUR', 'GBP', 'JPY'];
 
@@ -267,6 +268,70 @@ function inWindow(iso: string | undefined, receivedAt: string): string | null {
   return delta >= -MAX_AGE_MS && delta <= MAX_FUTURE_MS ? new Date(at).toISOString() : null;
 }
 
+// ── Not a money movement (LR-04 / LR-06; port of app ParserEngine) ─────────
+// A Latin ignore word counts only as a whole word with an optional
+// plural/inflection ending ("offers", "promotional"), so "Hotpot" is not an
+// OTP; Arabic phrases and URL prefixes match by substring
+// (ParserEngine.containsIgnoreWord).
+const IGNORE_SUFFIX = '(?:s|es|al|ed|ing)?';
+const ignoreWordPatterns = new Map<string, RegExp>();
+export function containsIgnoreWord(lower: string, keyword: string): boolean {
+  const k = keyword.toLowerCase();
+  if (!/[a-z]/.test(k) || k.includes('://')) return lower.includes(k);
+  let re = ignoreWordPatterns.get(k);
+  if (!re) {
+    re = new RegExp(`(?<![a-z])${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${IGNORE_SUFFIX}(?![a-z])`);
+    ignoreWordPatterns.set(k, re);
+  }
+  return re.test(lower);
+}
+
+/**
+ * [lower] without the merchant span (up to the first card mask, sentence or
+ * clause end): an ignore word inside it is part of a name ("Offer Mart"), not
+ * an advert. Mirrors ParserEngine.outsideMerchant.
+ */
+export function outsideMerchant(lower: string, merchant: string | undefined | null): string {
+  if (typeof merchant !== 'string') return lower;
+  const span = merchant.toLowerCase().split(/[*;!?\n،,]|\.(?=\s|$)/)[0].trim();
+  if (!span) return lower;
+  const at = new RegExp(`(?<![a-z\u0621-\u064a])${span.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`).exec(lower)?.index;
+  return at == null ? lower : lower.slice(0, at) + ' ' + lower.slice(at + span.length);
+}
+
+// An OTP message carries its code ("OTP is 123456", "Use 482913 as OTP",
+// "Enter code 482913", "رمز التحقق: 4821"); a security footer on a purchase
+// ("Never share your OTP") does not. Mirrors ParserEngine._otpCode.
+export const OTP_CODE = new RegExp(
+  '(?:otp|one time password|verification code|security code|passcode|' +
+    'رمز الدخول|رمز التحقق|كود التحقق)' +
+    '(?:[^\n]{0,40}?(?:\\bis\\b|هو))?\\s*:?\\s*[0-9]{4,8}(?![0-9])' +
+    '|(?<![0-9*x#.,])[0-9]{4,8} (?:is|هو) [^\n0-9]{0,25}' +
+    '(?:otp|one time password|verification code|security code|passcode|' +
+    'code|رمز|كود)' +
+    '|(?:otp|one time password|verification code|security code|passcode|' +
+    'رمز الدخول|رمز التحقق|كود التحقق)(?:[^\n.!?]|\\.(?=[0-9])){0,60}?:\\s*' +
+    '[0-9]{4,8}(?![0-9.,])' +
+    '|(?<![0-9*x#.,])[0-9]{4,8} as (?:the |your |an? )?' +
+    '(?:otp|one time password|verification code|security code|passcode|code)' +
+    '|(?:enter|use|input) (?:the |your )?(?:code|otp|passcode)\\s*:?\\s*' +
+    '[0-9]{4,8}(?![0-9])',
+);
+
+export const NON_TRANSACTION_KEYWORDS = rules.nonTransactionKeywords as string[];
+
+/**
+ * The message is not a money movement: an OTP code, or an advert or account
+ * notice (nonTransactionKeywords) outside [merchant]. Mirrors
+ * ParserEngine.isNonTransactionText.
+ */
+export function isNonTransactionText(text: string, merchant?: string | null): boolean {
+  const lower = text.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660)).toLowerCase();
+  if (OTP_CODE.test(lower)) return true;
+  const outside = outsideMerchant(lower, merchant);
+  return NON_TRANSACTION_KEYWORDS.some((w) => containsIgnoreWord(outside, w));
+}
+
 export function validateAiCandidate(input: {
   candidate: AiCandidate;
   sanitizedText: string;
@@ -276,6 +341,11 @@ export function validateAiCandidate(input: {
   const { candidate: c, sanitizedText: text, local } = input;
   const reject = (reason: string): AiCandidateValidation => ({ accepted: false, reason });
 
+  // LR-06 — an OTP or an advert / account notice is never a transaction,
+  // whatever the model says.
+  if (isNonTransactionText(text, merchantGrounded(c.merchant, text) ? c.merchant : null)) {
+    return reject('not_a_transaction');
+  }
   if (!amountGrounded(c.amount, text)) return reject('amount_not_grounded');
   const amount = c.amount as number;
   const currency = (c.currency ?? '').trim().toUpperCase();

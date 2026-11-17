@@ -5,6 +5,7 @@ import '../models/transaction_type.dart';
 import 'amount_candidate.dart';
 import 'bank_profile.dart';
 import 'catalog_rule_matcher.dart';
+import 'direction_signal.dart';
 import 'merchant_sanity.dart';
 import 'normalizer.dart';
 import 'parse_result.dart';
@@ -156,14 +157,70 @@ class ParserEngine {
       senderId: senderId,
       extraProfiles: bankProfiles,
     );
-    if (!const ParserEngine()._isIgnored(text.toLowerCase(), bank)) {
+    const engine = ParserEngine();
+    if (!engine._isIgnored(
+        outsideMerchant(text.toLowerCase(),
+            engine._extractMerchantAndSource(text.split('\n'), bank: bank)
+                .merchant),
+        bank)) {
       return false;
     }
     // FR-13: an ignore word on a message the parser reads as a transaction
     // (and that is not an OTP code) goes to review instead of being dropped.
-    return !const ParserEngine()
+    return !engine
         .parse(rawText, senderId: senderId, bankProfiles: bankProfiles)
         .amountDetected;
+  }
+
+  /// LR-05 — [lower] without the merchant span the parser extracted (up to
+  /// the first card mask, sentence or clause end, starting at a word): an
+  /// ignore word inside it is part of a name ("Offer Mart", "Won Kitchen"),
+  /// not an advert. Mirrors `outsideMerchant` in
+  /// `_shared/ai_candidate_validator.ts`.
+  static String outsideMerchant(String lower, String? merchant) {
+    if (merchant == null) return lower;
+    final span = merchant.toLowerCase().split(_merchantSpanEnd).first.trim();
+    if (span.isEmpty) return lower;
+    final at = RegExp('(?<![a-z\u0621-\u064a])${RegExp.escape(span)}')
+        .firstMatch(lower)
+        ?.start;
+    return at == null ? lower : lower.replaceRange(at, at + span.length, ' ');
+  }
+
+  static final RegExp _merchantSpanEnd = RegExp(r'[*;!?\n،,]|\.(?=\s|$)');
+
+  /// LR-05 — a sentence (or line) of [lower] that reads as a completed
+  /// transaction on its own: a money verb as a whole word ("purchase", not
+  /// "purchases"; Arabic by substring) and an amount with its currency, and
+  /// no ignore word in that sentence ("Purchase of SAR 100 at X. For
+  /// complaints call …"). An advert or OTP whose amount sits in the
+  /// advertising sentence itself has none.
+  static bool _hasTransactionSentence(String lower, BankProfile? bank) =>
+      lower.split(RegExp(r'[\n!?؟;؛]|\.(?![0-9])')).any((sentence) =>
+          _amountWithCurrency.hasMatch(sentence) &&
+          !const ParserEngine()._isIgnored(sentence, bank) &&
+          [
+            ...DirectionSignal.debitWords,
+            ...DirectionSignal.creditWords,
+            'transaction', 'trx', 'pos', 'transfer', 'atm', 'تحويل', 'حوالة',
+          ].any((w) => RegExp('[a-z]').hasMatch(w)
+              ? RegExp('(?<![a-z])${RegExp.escape(w)}(?![a-z])')
+                  .hasMatch(sentence)
+              : sentence.contains(w)));
+
+  static final RegExp _amountWithCurrency = RegExp(
+      '(?<![a-z])(?:$_currencyPattern) ?[0-9]|[0-9] ?(?:$_currencyPattern)(?![a-z])',
+      caseSensitive: false);
+
+  /// LR-04 / LR-06 — the message is not a money movement: an OTP code, or an
+  /// advert or account notice ([nonTransactionWords]) outside [merchant].
+  /// Used by the AI candidate validator; mirrors `isNonTransactionText` in
+  /// `_shared/ai_candidate_validator.ts`.
+  static bool isNonTransactionText(String text, {String? merchant}) {
+    final lower = Normalizer.normalize(text).toLowerCase();
+    if (_otpCode.hasMatch(lower)) return true;
+    final outside = outsideMerchant(lower, merchant);
+    return nonTransactionWords.any((w) => containsIgnoreWord(outside, w));
   }
 
   /// FR-13 — a Latin ignore word counts only as a whole word, with an
@@ -188,7 +245,7 @@ class ParserEngine {
 
   /// The security words among the ignore rules: on a purchase they are
   /// often a footer ("Never share your OTP"), not the message's purpose.
-  static const List<String> _securityIgnoreWords = [
+  static const List<String> securityIgnoreWords = [
     'otp',
     'one time password',
     'verification code',
@@ -197,6 +254,38 @@ class ParserEngine {
     'رمز التحقق',
     'كود التحقق',
     'لا تشاركه',
+  ];
+
+  /// LR-04 — adverts and account notices that are never a money movement,
+  /// even when they name an amount (a credit limit, a card activation, a
+  /// cashback offer). Equal to `nonTransactionKeywords` in
+  /// `process-ios-sms/parser_rules.json` (drift test).
+  static const List<String> nonTransactionWords = [
+    // Promotions.
+    'عرض خاص', 'promo', 'promotion', 'marketing', 'offer', 'coupon', 'prize',
+    'winner', 'won', 'winning', 'مبروك', 'جائزة', 'اربح',
+    // Limits, card activation / issuance / renewal.
+    'credit limit', 'card limit', 'الحد الائتماني', 'حد الائتمان',
+    'حد البطاقة', 'activated', 'activation', 'is now active', 'تم تفعيل',
+    'card has been issued', 'card is ready', 'card has been renewed',
+    'card renewal', 'تم إصدار بطاقتك', 'تم إصدار البطاقة',
+    'تم تجديد بطاقتك', 'تم تجديد البطاقة',
+    // Balance inquiries and statements, PIN, profile and beneficiaries.
+    'balance inquiry', 'balance enquiry', 'statement is ready',
+    'statement is available', 'e-statement', 'استعلام عن الرصيد',
+    'كشف حسابك', 'pin changed', 'pin has been changed', 'pin change',
+    'pin reset', 'تغيير الرقم السري', 'beneficiary added',
+    'beneficiary has been added', 'profile updated', 'profile has been updated',
+    'إضافة مستفيد',
+  ];
+
+  /// The remaining ignore markers: links, calls to action, cheque books,
+  /// complaints, closed or frozen accounts. With [securityIgnoreWords] equal
+  /// to `ignoreKeywords` in `process-ios-sms/parser_rules.json`.
+  static const List<String> ignoreMarkers = [
+    'chequebook', 'cheque book', 'checkbook', 'request will be fulfilled',
+    'اضغط', 'click', 'http://', 'https://', 'تجميد', 'تحديث بياناتك',
+    'تسجيل خروج', 'complaint', 'شكوى', 'has been closed', 'تم إغلاق',
   ];
 
   // An OTP message carries its code ("OTP is 123456", "رمز التحقق: 4821",
@@ -208,7 +297,16 @@ class ParserEngine {
     r'(?:[^\n]{0,40}?(?:\bis\b|هو))?\s*:?\s*[0-9]{4,8}(?![0-9])'
     r'|(?<![0-9*x#.,])[0-9]{4,8} (?:is|هو) [^\n0-9]{0,25}'
     r'(?:otp|one time password|verification code|security code|passcode|'
-    r'رمز|كود)',
+    r'code|رمز|كود)'
+    // "Verification code for … SAR 100.00 at X: 4821" (same sentence).
+    r'|(?:otp|one time password|verification code|security code|passcode|'
+    r'رمز الدخول|رمز التحقق|كود التحقق)(?:[^\n.!?]|\.(?=[0-9])){0,60}?:\s*'
+    r'[0-9]{4,8}(?![0-9.,])'
+    // LR-06: "Use 482913 as OTP", "Enter code 482913 …".
+    r'|(?<![0-9*x#.,])[0-9]{4,8} as (?:the |your |an? )?'
+    r'(?:otp|one time password|verification code|security code|passcode|code)'
+    r'|(?:enter|use|input) (?:the |your )?(?:code|otp|passcode)\s*:?\s*'
+    r'[0-9]{4,8}(?![0-9])',
   );
 
   ParseResult parse(
@@ -234,19 +332,22 @@ class ParserEngine {
     final lines = text.split('\n');
     final lower = text.toLowerCase();
 
-    // FR-13 — an ignore word drops the message silently, except a security
-    // word with no OTP code ("Never share your OTP") on a message the parser
-    // reads as a transaction: that goes to review (amountDetected) instead.
-    final ignored = _isIgnored(lower, bank);
-    if (ignored &&
-        (_otpCode.hasMatch(lower) ||
-            _isIgnored(lower, bank, securityWords: false))) {
+    // FR-13 / LR-05 — an ignore word outside the merchant name. An OTP code
+    // is dropped silently. Otherwise the message is read on: a complete
+    // transaction (an amount and a money verb) that carries an ignore word (a
+    // footer, a link, a complaint line) goes to review (amountDetected),
+    // anything else (an advert, a limit or card notice) is dropped below.
+    final merchantResult = _extractMerchantAndSource(lines, bank: bank);
+    final ignoreText = outsideMerchant(lower, merchantResult.merchant);
+    final ignored = _isIgnored(ignoreText, bank);
+    if (ignored && _otpCode.hasMatch(lower)) {
       return ParseResult.notTransaction(bankKey: bank?.bankKey);
     }
     // DATA-01 — a declined/failed purchase moved no money. It is not ignored
     // like an OTP: it stays transaction-shaped so the capture lands in the
     // Smart Inbox review path instead of vanishing (or being auto-confirmed).
-    if (TransactionStateCues.isNotCompleted(text)) {
+    final notCompleted = TransactionStateCues.isNotCompleted(text);
+    if (notCompleted && !ignored) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
@@ -280,7 +381,6 @@ class ParserEngine {
     }
 
     final source = _detectSource(lower, bank);
-    final merchantResult = _extractMerchantAndSource(lines, bank: bank);
     // F-015 — a rule-captured merchant passes through the SAME cleaner as the
     // heuristic one. All 12 seeded catalog rules capture the merchant greedily
     // to end of line, so accepting the raw capture put the trailing date clause
@@ -343,11 +443,13 @@ class ParserEngine {
             ambiguousAmount: amountExtraction.hasAmbiguity,
             dateAmbiguous: dateResult.ambiguous,
           );
-    if (confidence < pendingThreshold) {
-      return ParseResult.notTransaction(
-          bankKey: bank?.bankKey, amountDetected: !ignored);
-    }
     if (ignored) {
+      return ParseResult.notTransaction(
+          bankKey: bank?.bankKey,
+          amountDetected: _hasTransactionSentence(ignoreText, bank) &&
+              (notCompleted || confidence >= pendingThreshold));
+    }
+    if (confidence < pendingThreshold) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
@@ -358,7 +460,13 @@ class ParserEngine {
           : amountExtraction.transactionAmountText,
       amount: amount,
       currency: currency,
-      type: type == TransactionType.unknown ? TransactionType.payment : type,
+      // An undetected type is spending, unless the wording only says money
+      // came in ("Your account was credited by EGP 500 … via IPN"): income.
+      type: type != TransactionType.unknown
+          ? type
+          : DirectionSignal.detect(_factualClauses(text)) == TxnDirection.credit
+              ? TransactionType.income
+              : TransactionType.payment,
       source: source,
       rawMerchant: MerchantSanity.forMessage(merchant, text),
       cardLast4: last4,
@@ -1112,49 +1220,29 @@ class ParserEngine {
     return afterDateCap.clamp(0.0, 1.0);
   }
 
-  bool _isIgnored(String lower, BankProfile? bank,
-      {bool securityWords = true}) {
-    final ignoreRules = [
-      ...?bank?.ignoreRules.map((item) => item.toLowerCase()),
-      if (securityWords) ..._securityIgnoreWords,
-      'عرض خاص',
-      'promo',
-      'promotion',
-      'marketing',
-      'offer',
-      'coupon',
-      'chequebook',
-      'cheque book',
-      'checkbook',
-      'request will be fulfilled',
-      'prize',
-      'winner',
-      'won',
-      'مبروك',
-      'جائزة',
-      'اربح',
-      'اضغط',
-      'click',
-      'http://',
-      'https://',
-    ];
-    bool any(List<String> words) =>
-        words.any((w) => containsIgnoreWord(lower, w));
-    if (any(ignoreRules)) return true;
-    if (any([
-      'تجميد',
-      'تحديث بياناتك',
-      'تسجيل خروج',
-    ])) {
-      return true;
-    }
-    return any([
-      'complaint',
-      'شكوى',
-      'has been closed',
-      'تم إغلاق',
-    ]);
-  }
+  bool _isIgnored(String lower, BankProfile? bank) =>
+      hasIgnoreWord(lower) ||
+      (bank?.ignoreRules ?? const <String>[])
+          .any((w) => containsIgnoreWord(lower, w.toLowerCase()));
+
+  /// Whether [lower] carries one of the engine's own ignore words (security,
+  /// [nonTransactionWords], [ignoreMarkers]); bank-specific rules aside.
+  /// [text] without the clauses that hold a hypothetical marker ("Disputed
+  /// transactions may be reversed"): a credit word there reports nothing.
+  /// Mirrors `creditWordsOnly` in process-ios-sms/parse.ts.
+  static String _factualClauses(String text) => text
+      .split(RegExp(r'(?=[\n!?؟;؛,،:]|\.(?![0-9]))'))
+      .where((clause) => !_hypotheticalClause
+          .hasMatch(TransactionStateCues.foldForCues(clause)))
+      .join();
+  static final RegExp _hypotheticalClause = RegExp(
+      '(?<![a-z\u0621-\u064a])(?:${TransactionStateCues.hypotheticalMarkers.map((m) => RegExp.escape(TransactionStateCues.foldForCues(m))).join('|')})(?![a-z\u0621-\u064a])');
+
+  static bool hasIgnoreWord(String lower) => [
+        ...securityIgnoreWords,
+        ...nonTransactionWords,
+        ...ignoreMarkers,
+      ].any((w) => containsIgnoreWord(lower, w));
 
   String _applyCurrencyAliases(String text, BankProfile? bank) {
     var output = text;

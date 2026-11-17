@@ -492,7 +492,10 @@ class CaptureImportService {
         return CaptureImportItem(id: id, path: CaptureImportPath.server,
             message: item, committedTransactions: const []);
       }
-      if (result != null && _isProcessed(result) && _validates(result, item)) {
+      if (result != null &&
+          _isProcessed(result) &&
+          _validates(result, item) &&
+          !_localContradicts(result, item)) {
         return _importFromServer(owner, item, id, result, acks);
       }
       if (result?.state == 'processing' || result?.state == 'retryable' ||
@@ -523,7 +526,19 @@ class CaptureImportService {
             (item.failureReason?.trim().isEmpty ?? true));
         if (!local) return null;
       } else if (_isProcessed(result) && _validates(result, item)) {
-        return _importFromServer(owner, item, id, result, acks);
+        if (!_localContradicts(result, item)) {
+          return _importFromServer(owner, item, id, result, acks);
+        }
+        // LR-03 — the device's own reading contradicts the server's (the
+        // opposite direction, or not a transaction): neither is trusted. The
+        // full message goes to Smart Inbox, never a confirmed row from either
+        // reading (the local fallback would confirm the device's).
+        await _sync.persistUnprocessableCapture(item,
+            isOwnerCurrent: () => _stillOwner(owner));
+        await _removeNative(owner, id);
+        acks.add(id);
+        return CaptureImportItem(id: id, path: CaptureImportPath.server,
+            message: item, committedTransactions: const []);
       } else {
         local = true;
       }
@@ -556,11 +571,20 @@ class CaptureImportService {
       text: item.text,
       receivedAt: item.receivedAt ?? dto.createdAt ?? DateTime.now().toUtc(),
     );
-    // FR-02 — the device's own parse of the same text reads the opposite money
-    // direction: not imported as confirmed (the caller's rejected path).
-    return validation.accepted &&
-        !localParseOpposesDirection(
-            text: item.text, direction: validation.capture!.direction);
+    return validation.accepted;
+  }
+
+  /// FR-02 / LR-03 / LR-04 — the device's own reading of the text contradicts
+  /// the validated server result: the caller sends it to Smart Inbox.
+  static bool _localContradicts(
+      ProcessedCaptureDto dto, SharedCapturedMessage item) {
+    final p = dto.parsed;
+    return localParseContradictsServer(
+      text: item.text,
+      direction: p['direction'] is String ? p['direction'] as String : null,
+      type: p['type'] is String ? p['type'] as String : null,
+      senderId: item.sender,
+    );
   }
 
   Future<CaptureImportItem> _importFromServer(

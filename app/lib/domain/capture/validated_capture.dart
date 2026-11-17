@@ -220,23 +220,25 @@ bool _contradicts(TxnDirection wording, TxnDirection other) =>
     other != TxnDirection.unknown &&
     wording != other;
 
-/// FR-02 — true when the device's own deterministic parse of [text] reads a
-/// transaction whose money direction (debit vs credit) is the OPPOSITE of the
-/// server's [direction] (or the one its [type] implies). Only the direction
-/// counts: payment vs transfer is not a disagreement, and a text the local
-/// parser cannot read (or reads as a transfer) never blocks the server result.
-/// An import-path policy applied by the callers, not part of the
-/// ValidatedCapture v1 contract (which the server mirrors).
+/// FR-02 — true when the device's own deterministic parse of [text] (with
+/// the capture's [senderId], LR-09) reads a transaction whose money direction
+/// (debit vs credit) is the OPPOSITE of the server's [direction] (or the one
+/// its [type] implies). Only the direction counts: payment vs transfer is not
+/// a disagreement, and a text the local parser cannot read (or reads as a
+/// transfer) never blocks the server result. An import-path policy applied by
+/// the callers, not part of the ValidatedCapture v1 contract (which the
+/// server mirrors).
 bool localParseOpposesDirection({
   required String text,
   String? direction,
   String? type,
+  String? senderId,
 }) {
   final server = _asDirection(direction) != TxnDirection.unknown
       ? _asDirection(direction)
       : _directionOfType(type);
   if (server == TxnDirection.unknown) return false;
-  final local = const ParserEngine().parse(text);
+  final local = const ParserEngine().parse(text, senderId: senderId);
   if (!local.isTransaction) return false;
   final localType = local.transaction!.type;
   final localDirection = localType.isExpense
@@ -247,6 +249,22 @@ bool localParseOpposesDirection({
           : TxnDirection.unknown;
   return _contradicts(localDirection, server);
 }
+
+/// LR-03 / LR-04 — the device's own reading contradicts a server result for
+/// [text]: the opposite money direction ([localParseOpposesDirection]), or
+/// the device drops the text as not a transaction (an OTP, an advert, an
+/// account notice: [ParserEngine.isIgnoredMessage]). Neither reading is
+/// trusted then: every import path takes its recoverable review outcome
+/// (Smart Inbox), never a confirmed row from either side.
+bool localParseContradictsServer({
+  required String text,
+  String? direction,
+  String? type,
+  String? senderId,
+}) =>
+    ParserEngine.isIgnoredMessage(text, senderId: senderId) ||
+    localParseOpposesDirection(
+        text: text, direction: direction, type: type, senderId: senderId);
 
 DateTime? _inWindow(String? iso, DateTime receivedAt) {
   if (iso == null || iso.trim().isEmpty) return null;

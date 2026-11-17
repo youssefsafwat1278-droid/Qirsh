@@ -117,7 +117,15 @@ class SharedPreviewParser {
     final normalized = _normalize(text);
     final lower = normalized.toLowerCase();
 
-    if (_ignoreKeywords.any((k) => ParserEngine.containsIgnoreWord(lower, k)) ||
+    // LR-05: an ignore word inside the merchant name ("Offer Mart") is part
+    // of the name; the device's own ignore words (links, complaint lines,
+    // account notices) also get the generic preview. (The Swift preview still
+    // matches the asset's list by substring.)
+    final outside =
+        ParserEngine.outsideMerchant(lower, _extractMerchant(normalized));
+    if (_ignoreKeywords
+            .any((k) => ParserEngine.containsIgnoreWord(outside, k)) ||
+        ParserEngine.hasIgnoreWord(outside) ||
         TransactionStateCues.isNotCompleted(text)) {
       return const PreviewResult(outcome: PreviewOutcome.ignored);
     }

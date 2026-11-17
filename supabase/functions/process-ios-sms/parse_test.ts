@@ -505,10 +505,28 @@ Deno.test('refund of a failed purchase is not completed (review, no credit)', ()
 Deno.test('declined table: not completed is never confirmed money, on every server path', async () => {
   const ai = (type: string, direction: string) => ({ is_transaction: true, amount: 100, amount_text: '100.00',
     currency: 'SAR', type, direction, category: 'shopping' });
-  for (const c of declinedTable.cases as Array<{ text: string; expect: string }>) {
+  // V1-RES4 (LR-04): a genuine salary/deposit, cash withdrawal or incoming
+  // transfer is still a resolved server result in the right direction.
+  const otherCompleted: Record<string, [string, string]> = {
+    completed_income: ['credit', 'income'],
+    completed_withdrawal: ['debit', 'payment'],
+    completed_transfer_in: ['credit', 'income'],
+  };
+  for (const c of declinedTable.cases as Array<{ text: string; expect: string; server?: string }>) {
     const text = c.text;
     assertEquals(isDeclinedText(text), c.expect === 'not_completed', `cue: ${text}`);
     const p = deterministicParse(text, RECEIVED, 180);
+    if (c.server === 'unresolved') {
+      // A known disagreement in the safe direction: the device (with the
+      // sender's bank profile) records it; the server leaves it unresolved.
+      assertEquals(isResolved(p), false, `server unresolved: ${text}`);
+      continue;
+    }
+    if (c.expect in otherCompleted) {
+      assert(isResolved(p), `${c.expect}: ${text}`);
+      assertEquals([p.direction, p.type], otherCompleted[c.expect], text);
+      continue;
+    }
     if (c.expect === 'completed_payment') {
       assert(isResolved(p), `payment: ${text}`);
       assertEquals([p.direction, p.type], ['debit', 'payment'], text);

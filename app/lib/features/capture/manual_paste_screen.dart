@@ -34,6 +34,16 @@ import 'manual_paste_splitter.dart';
 import '../common/app_header.dart';
 import '../common/app_status_pill.dart';
 
+/// LR-08 — "nothing was recorded" is shown only when it is true: a declined
+/// message that was kept in Smart Inbox for analysis gets the saved-for-
+/// analysis wording instead.
+@visibleForTesting
+bool pasteSaysNotCompleted({
+  required String message,
+  required bool savedForAnalysis,
+}) =>
+    !savedForAnalysis && TransactionStateCues.isNotCompleted(message);
+
 class ManualPasteScreen extends ConsumerStatefulWidget {
   const ManualPasteScreen({super.key, this.onTransactionAdded});
 
@@ -329,7 +339,8 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
           showTopError(context, context.l10n.pasteSimilarNeedsReview);
         }
       case AddTransactionOutcome.notTransaction:
-        if (TransactionStateCues.isNotCompleted(item.message)) {
+        if (pasteSaysNotCompleted(
+            message: item.message, savedForAnalysis: item.savedForAnalysis)) {
           // A declined or failed payment moved no money: say so rather than
           // inviting the user to add it by hand.
           showTopInfo(context, context.l10n.pasteNotCompleted);

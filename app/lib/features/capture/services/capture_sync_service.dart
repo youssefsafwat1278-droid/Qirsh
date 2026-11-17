@@ -950,12 +950,14 @@ class CaptureSyncService {
       return null;
     }
 
-    // FR-02 — the device's own parse of the same text reads the opposite money
-    // direction (debit vs credit): the same recoverable review path.
-    if (localParseOpposesDirection(
+    // FR-02 / LR-04 — the device's own parse of the same text reads the
+    // opposite money direction (debit vs credit), or drops it as not a
+    // transaction: the same recoverable review path.
+    if (localParseContradictsServer(
       text: _string(parsed['rawMessage']) ?? capture.sanitizedText ?? '',
       direction: _string(parsed['direction']),
       type: _string(parsed['type']),
+      senderId: _string(parsed['senderId']),
     )) {
       await _persistBackendUnprocessableCapture(
           capture, requireCurrentAdmission, committed);

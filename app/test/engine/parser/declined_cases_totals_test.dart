@@ -125,6 +125,29 @@ void main() {
     });
   }
 
+  // V1-RES4 (LR-04): a genuine salary/deposit, cash withdrawal or incoming
+  // transfer is still recorded on device, with the type that moves the right
+  // total.
+  const otherCompleted = {
+    'completed_income': TransactionTypeEntity.income,
+    'completed_withdrawal': TransactionTypeEntity.withdrawal,
+    // The parser reads a transfer; the use case records the incoming one as
+    // income (it moves the income total).
+    'completed_transfer_in': TransactionTypeEntity.income,
+  };
+  for (final c
+      in cases.where((c) => otherCompleted.containsKey(c['expect']))) {
+    final text = c['text'] as String;
+    test('[${c['src']}] ${c['expect']} is recorded: $text', () async {
+      final r = await AddTransactionUseCase(
+        transactionRepository: txRepo,
+        merchantCategoryRepository: DriftMerchantCategoryRepository(db),
+      )(rawMessage: text, senderId: 'AlRajhi', onDeviceOnly: true);
+      expect(r.transaction?.type, otherCompleted[c['expect']],
+          reason: '${r.outcome}');
+    });
+  }
+
   // A completed purchase or refund is still recorded, with the type that moves
   // the right total (never diverted to Smart Inbox by the rule).
   for (final c in cases.where((c) =>

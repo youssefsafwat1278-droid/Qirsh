@@ -4,6 +4,7 @@ import '../parser/capture_money.dart';
 import '../parser/direction_signal.dart';
 import '../parser/merchant_sanity.dart';
 import '../parser/normalizer.dart';
+import '../parser/parser_engine.dart';
 import '../parser/transaction_state_cues.dart';
 import 'ai_parser_client.dart';
 import 'grounding_check.dart';
@@ -68,6 +69,15 @@ class AiCandidateValidator {
     // DATA-01 — a declined/failed purchase moved no money, whatever the AI says.
     if (TransactionStateCues.isNotCompleted(messageText ?? sanitizedText)) {
       return const AiCandidateValidation.rejected('transaction_not_completed');
+    }
+    // LR-06 — an OTP or an advert / account notice is never a transaction,
+    // whatever the AI says (an ignore word inside the grounded merchant name
+    // does not count).
+    if (ParserEngine.isNonTransactionText(messageText ?? sanitizedText,
+        merchant: _merchantGrounded(response.merchantName, sanitizedText)
+            ? response.merchantName
+            : null)) {
+      return const AiCandidateValidation.rejected('not_a_transaction');
     }
     if (!GroundingCheck.verify(
       amount: response.amount,

@@ -107,6 +107,22 @@ void main() {
     });
   }
 
+  // LR-08 — a declined message kept in Smart Inbox for analysis was told
+  // "nothing was recorded"; it gets the saved-for-analysis wording instead.
+  test('a declined message saved to Smart Inbox is not told nothing was '
+      'recorded', () {
+    const declined = 'Purchase of SAR 250.00 at Test Shop was declined.';
+    expect(
+        pasteSaysNotCompleted(message: declined, savedForAnalysis: false),
+        isTrue);
+    expect(pasteSaysNotCompleted(message: declined, savedForAnalysis: true),
+        isFalse);
+    expect(
+        pasteSaysNotCompleted(
+            message: 'Hello from Test Shop 123', savedForAnalysis: false),
+        isFalse);
+  });
+
   test('the not-completed wording does not invite a manual entry', () {
     for (final locale in AppL10n.supportedLocales) {
       final text = lookupAppL10n(locale).pasteNotCompleted;
