@@ -1,0 +1,117 @@
+import 'package:drift/native.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/core/di/app_providers.dart';
+import 'package:money_companion/core/theme/app_theme.dart';
+import 'package:money_companion/data/db/app_database.dart';
+import 'package:money_companion/data/db/database_key_store.dart';
+import 'package:money_companion/domain/entities/captured_message.dart';
+import 'package:money_companion/domain/usecases/add_transaction_usecase.dart';
+import 'package:money_companion/domain/usecases/ingest_captured_message_usecase.dart';
+import 'package:money_companion/engine/parser/parse_result.dart';
+import 'package:money_companion/features/capture/manual_paste_screen.dart';
+import 'package:money_companion/l10n/app_localizations.dart';
+
+// RT-02 — a pasted DECLINED payment used to answer "could not be read — add it
+// manually", inviting the user to record a purchase that never happened.
+
+class _Keys implements DatabaseKeyStore {
+  @override
+  Future<String> readOrCreateKey() async => 'paste-declined-memory-only';
+  @override
+  Future<String?> readStoredKey() async => 'paste-declined-memory-only';
+}
+
+/// Answers "no transaction" for every message, as the real use case does for
+/// a declined payment and for an unreadable one.
+class _NoTransactionIngest implements IngestCapturedMessageUseCase {
+  @override
+  Future<CapturedMessageResult> fromCapturedMessage(
+    CapturedMessage message, {
+    bool onDeviceOnly = false,
+    CaptureCommit? capture,
+    bool forceLocalAutoConfirm = false,
+  }) async {
+    return CapturedMessageResult(
+      disposition: CapturedMessageDisposition.values.first,
+      addTransactionResult: AddTransactionResult.notTransaction(
+        ParseResult.notTransaction(),
+        aiFailureReason: 'on_device_only',
+      ),
+      notificationStableId: 'synthetic',
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+void main() {
+  late AppDatabase db;
+  setUp(() async {
+    db = await AppDatabase.open(
+        executor: NativeDatabase.memory(),
+        keyStore: _Keys(),
+        initialLanguage: 'en');
+  });
+  tearDown(() async => db.close());
+
+  Future<AppL10n> analyse(
+      WidgetTester tester, String language, String text) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        appDatabaseProvider.overrideWithValue(db),
+        ingestCapturedMessageUseCaseProvider
+            .overrideWithValue(_NoTransactionIngest()),
+      ],
+      child: MaterialApp(
+        theme: AppTheme.light,
+        locale: Locale(language),
+        supportedLocales: AppL10n.supportedLocales,
+        localizationsDelegates: AppL10n.localizationsDelegates,
+        home: ManualPasteScreen(onTransactionAdded: (_) {}),
+      ),
+    ));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), text);
+    tester.testTextInput.hide();
+    await tester.pumpAndSettle();
+    final l10n = AppL10n.of(tester.element(find.byType(ManualPasteScreen)));
+    final analyze = find.widgetWithText(FilledButton, l10n.pasteAnalyse);
+    await tester.ensureVisible(analyze);
+    await tester.pumpAndSettle();
+    await tester.tap(analyze);
+    await tester.pump(const Duration(milliseconds: 400));
+    return l10n;
+  }
+
+  for (final language in ['en', 'ar']) {
+    testWidgets('a declined payment says nothing was recorded ($language)',
+        (tester) async {
+      final l10n = await analyse(tester, language,
+          'Purchase of SAR 250.00 at Test Shop was declined.');
+      expect(find.text(l10n.pasteNotCompleted), findsOneWidget);
+      expect(find.text(l10n.pasteNotATransaction), findsNothing);
+      expect(find.text(l10n.pasteUnreadableOnDevice), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('an unreadable message keeps the existing wording ($language)',
+        (tester) async {
+      final l10n = await analyse(tester, language, 'Hello from Test Shop 123');
+      expect(find.text(l10n.pasteNotCompleted), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump(const Duration(seconds: 5));
+    });
+  }
+
+  test('the not-completed wording does not invite a manual entry', () {
+    for (final locale in AppL10n.supportedLocales) {
+      final text = lookupAppL10n(locale).pasteNotCompleted;
+      expect(text.toLowerCase(), isNot(contains('manually')));
+      expect(text, isNot(contains('يدوي')));
+    }
+  });
+}

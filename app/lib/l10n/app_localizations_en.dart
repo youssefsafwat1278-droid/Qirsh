@@ -3212,6 +3212,10 @@ class AppL10nEn extends AppL10n {
       'It could not be read as a transaction — add it manually.';
 
   @override
+  String get pasteNotCompleted =>
+      'This payment was declined or not completed — nothing was recorded.';
+
+  @override
   String get pasteNothingToOpen =>
       'There is no transaction to open for this message.';
 

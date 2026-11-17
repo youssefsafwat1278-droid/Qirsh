@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../engine/parser/transaction_state_cues.dart';
 import '../../core/utils/l10n_ext.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -328,7 +329,11 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
           showTopError(context, context.l10n.pasteSimilarNeedsReview);
         }
       case AddTransactionOutcome.notTransaction:
-        if (item.savedForAnalysis) {
+        if (TransactionStateCues.isNotCompleted(item.message)) {
+          // A declined or failed payment moved no money: say so rather than
+          // inviting the user to add it by hand.
+          showTopInfo(context, context.l10n.pasteNotCompleted);
+        } else if (item.savedForAnalysis) {
           showTopInfo(context, context.l10n.pasteSavedForAnalysis);
         } else if (!SupabaseConfig.isConfigured) {
           showTopError(context, context.l10n.pasteAiOffline);

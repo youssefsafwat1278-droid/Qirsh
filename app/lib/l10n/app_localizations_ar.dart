@@ -511,7 +511,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get otpSentTo =>
-      'اكتب الكود اللي وصلك على البريد ده. راجع الرسائل غير المرغوب فيها كمان.';
+      'اكتب الرمز الذي وصلك على هذا البريد، وتحقّق من مجلد الرسائل غير المرغوب فيها أيضًا.';
 
   @override
   String get verifyCode => 'تأكيد الرمز';
@@ -3213,6 +3213,10 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get pasteNotATransaction => 'تعذّرت قراءتها كعملية — أضِفها يدويًا.';
+
+  @override
+  String get pasteNotCompleted =>
+      'هذه العملية مرفوضة أو لم تكتمل — لم يُسجَّل شيء.';
 
   @override
   String get pasteNothingToOpen => 'لا توجد عملية لفتحها لهذه الرسالة.';

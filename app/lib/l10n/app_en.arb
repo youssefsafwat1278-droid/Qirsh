@@ -1482,6 +1482,7 @@
   "pasteAiOffline": "AI analysis is unavailable. No transaction was added. You can add it manually.",
   "pasteUnreadableOnDevice": "The message could not be read on this device — add it manually.",
   "pasteNotATransaction": "It could not be read as a transaction — add it manually.",
+  "pasteNotCompleted": "This payment was declined or not completed — nothing was recorded.",
   "pasteNothingToOpen": "There is no transaction to open for this message.",
   "pasteHint": "You can paste one message or several — each is analysed on its own.",
   "pasteFromClipboard": "Paste from clipboard",

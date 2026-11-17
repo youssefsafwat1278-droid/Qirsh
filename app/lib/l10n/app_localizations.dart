@@ -1018,7 +1018,7 @@ abstract class AppL10n {
   /// No description provided for @otpSentTo.
   ///
   /// In ar, this message translates to:
-  /// **'اكتب الكود اللي وصلك على البريد ده. راجع الرسائل غير المرغوب فيها كمان.'**
+  /// **'اكتب الرمز الذي وصلك على هذا البريد، وتحقّق من مجلد الرسائل غير المرغوب فيها أيضًا.'**
   String get otpSentTo;
 
   /// No description provided for @verifyCode.
@@ -5502,6 +5502,12 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'تعذّرت قراءتها كعملية — أضِفها يدويًا.'**
   String get pasteNotATransaction;
+
+  /// No description provided for @pasteNotCompleted.
+  ///
+  /// In ar, this message translates to:
+  /// **'هذه العملية مرفوضة أو لم تكتمل — لم يُسجَّل شيء.'**
+  String get pasteNotCompleted;
 
   /// No description provided for @pasteNothingToOpen.
   ///
