@@ -89,6 +89,20 @@ workflows:
             exit 1
           fi
 
+      # REL-06 / V1-012: identical to the step in ios-signed-release (pinned by
+      # supabase/tests/codemagic_ios_store_pipeline_contract_test.mjs).
+      - name: iOS native unit tests (RunnerTests on a simulator) — REQUIRED before signing
+        working_directory: app/ios
+        script: |
+          set -eu
+          pod install
+          SIM_ID="$(xcrun simctl list devices available --json | python3 -c 'import json, sys; devices = json.load(sys.stdin)["devices"]; version = lambda runtime: tuple(int(part) for part in runtime.rsplit("iOS-", 1)[1].split("-")); found = sorted((version(runtime), device["udid"]) for runtime, items in devices.items() if ".SimRuntime.iOS-" in runtime for device in items if device.get("isAvailable", True) and device["name"].startswith("iPhone")); found or sys.exit("no available iPhone simulator"); print(found[-1][1])')"
+          xcodebuild test \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -only-testing:RunnerTests \
+            -destination "platform=iOS Simulator,id=$SIM_ID"
+
       - name: Build unsigned iOS (.app)
         working_directory: app
         script: |
@@ -152,6 +166,14 @@ workflows:
 
   # ---------------------------------------------------------------------------
   # 2) SIGNED IPA via Codemagic code signing (needs Apple Developer Program).
+  #
+  # V1-009: this is the STORE path. It carries the same guarantees as the
+  # internal-only `ios-signed` workflow below (reviewed-revision check,
+  # production backend identity, profile + post-export signing/entitlement
+  # verification, provenance and hashes) but exports a normal App Store build
+  # (no testFlightInternalTestingOnly), so the uploaded build stays eligible for
+  # external TestFlight and App Review. The shared steps are pinned identical by
+  # supabase/tests/codemagic_ios_store_pipeline_contract_test.mjs.
   # ---------------------------------------------------------------------------
   ios-signed-release:
     name: iOS Signed IPA (Ad Hoc / App Store)
@@ -188,6 +210,36 @@ workflows:
         # without changing bytes to this single publication path.
         IOS_RELEASE_IPA: "app/build/ios/ipa/money_companion-signed.ipa"
     scripts:
+      # REL-16 / V1-051: same check as `ios-signed`, but bound to any release/*
+      # branch instead of the personal beta branch. Fail-closed: an unset or
+      # malformed EXPECTED_REVIEWED_CI_SHA, another branch, a different commit,
+      # or a dirty tree aborts before anything is built or signed. The SHA is
+      # still supplied by whoever starts the build (self-attested); binding it to
+      # a protected branch + required review is an owner action in Codemagic.
+      - name: Verify approved immutable CI revision
+        script: |
+          set -eu
+          case "${CM_BRANCH:-}" in
+            release/*) ;;
+            *) echo "ERROR: store builds run only from a release/* branch."; exit 1 ;;
+          esac
+          : "${EXPECTED_REVIEWED_CI_SHA:?Set the independently reviewed full CI commit SHA}"
+          [ "${CM_COMMIT:-}" = "$EXPECTED_REVIEWED_CI_SHA" ]
+          case "$EXPECTED_REVIEWED_CI_SHA" in
+            *[!0-9a-f]*|'') echo "ERROR: invalid reviewed SHA"; exit 1 ;;
+          esac
+          [ "${#EXPECTED_REVIEWED_CI_SHA}" -eq 40 ]
+          [ "$(git rev-parse HEAD)" = "$EXPECTED_REVIEWED_CI_SHA" ]
+          [ -z "$(git status --porcelain --untracked-files=no)" ]
+          python3 - <<'PYCODE'
+          import pathlib, re
+          paths = ['app/lib/main.dart', 'app/lib/core/backend/supabase_config.dart',
+                   'app/lib/features/onboarding/auth_screen.dart', 'app/ios/Runner/Runner.entitlements',
+                   'app/ios/ShareBankMessage/ShareBankMessage.entitlements']
+          for path in paths:
+              assert not re.search(r'f2qa|QaNetworkOverride|qa_email_auth|127\.0\.0\.1:55321', pathlib.Path(path).read_text()), 'isolated QA source rejected'
+          PYCODE
+
       - name: Flutter pub get
         working_directory: app
         script: flutter pub get
@@ -209,19 +261,41 @@ workflows:
             --strict-match-identifier)"
           APP_STORE_APPLE_ID="$(printf '%s' "$APP_JSON" | python3 -c 'import json, sys; payload = json.load(sys.stdin); items = payload if isinstance(payload, list) else payload.get("data", []); ids = [str(item.get("id", "")) for item in items if item.get("id")]; len(ids) == 1 or sys.exit(f"expected exactly one App Store Connect app, found {len(ids)}"); print(ids[0])')"
 
-          LATEST_BUILD_NUMBER="$(app-store-connect get-latest-build-number \
-            --silent --platform IOS --version-string "$MARKETING_VERSION" \
-            "$APP_STORE_APPLE_ID")"
-          case "$LATEST_BUILD_NUMBER" in
+          # REL-18: a marketing version with no uploads yet (e.g. a new 1.0.1)
+          # has no per-version build number, and that lookup fails or prints
+          # nothing. The build number must still exceed every build already in
+          # App Store Connect, so the MANDATORY base is the latest build across
+          # all versions; the per-version lookup may only raise it. If the
+          # all-versions lookup fails or is not numeric, the step fails here.
+          LATEST_ANY_VERSION="$(app-store-connect get-latest-build-number \
+            --silent --platform IOS "$APP_STORE_APPLE_ID")" || {
+            echo "ERROR: could not read the latest build number for the app from App Store Connect."
+            exit 1
+          }
+          case "$LATEST_ANY_VERSION" in
             ''|*[!0-9]*)
-              echo "ERROR: App Store Connect did not return a numeric build number."
+              echo "ERROR: App Store Connect did not return a numeric latest build number for the app."
               exit 1
               ;;
           esac
+          LATEST_FOR_VERSION="$(app-store-connect get-latest-build-number \
+            --silent --platform IOS --version-string "$MARKETING_VERSION" \
+            "$APP_STORE_APPLE_ID")" || LATEST_FOR_VERSION=""
+          case "$LATEST_FOR_VERSION" in
+            '') echo "No App Store Connect build exists yet for $MARKETING_VERSION." ;;
+            *[!0-9]*)
+              echo "ERROR: App Store Connect returned a non-numeric build number for $MARKETING_VERSION."
+              exit 1
+              ;;
+          esac
+          LATEST_BUILD_NUMBER="$LATEST_ANY_VERSION"
+          if [ -n "$LATEST_FOR_VERSION" ] && [ "$LATEST_FOR_VERSION" -gt "$LATEST_BUILD_NUMBER" ]; then
+            LATEST_BUILD_NUMBER="$LATEST_FOR_VERSION"
+          fi
           IOS_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
           printf 'IOS_MARKETING_VERSION=%s\nIOS_BUILD_NUMBER=%s\n' \
             "$MARKETING_VERSION" "$IOS_BUILD_NUMBER" >> "$CM_ENV"
-          echo "App Store Connect preflight: $MARKETING_VERSION ($LATEST_BUILD_NUMBER) exists; building ($IOS_BUILD_NUMBER)."
+          echo "App Store Connect preflight: latest build $LATEST_BUILD_NUMBER; building $MARKETING_VERSION ($IOS_BUILD_NUMBER)."
 
       # Audit H-15: the canonical gate runs BEFORE any signing material is set up
       # or any artifact is built, so a mandatory-gate failure structurally makes
@@ -255,6 +329,23 @@ workflows:
           env -u SUPABASE_URL -u SUPABASE_ANON_KEY -u SUPABASE_SERVICE_ROLE_KEY \
             REQUIRE_ALL_GATES=1 bash tools/ci_gates.sh
 
+      # REL-06 / V1-012: the Swift unit tests (RunnerTests: capture-queue
+      # ownership, consent gating, share extension stores) run on a simulator
+      # BEFORE any signing material is installed, with no opt-in variable. A
+      # failing XCTest aborts the workflow. Simulator builds need no signing
+      # identity. NOT YET EXERCISED ON CODEMAGIC — see the release evidence.
+      - name: iOS native unit tests (RunnerTests on a simulator) — REQUIRED before signing
+        working_directory: app/ios
+        script: |
+          set -eu
+          pod install
+          SIM_ID="$(xcrun simctl list devices available --json | python3 -c 'import json, sys; devices = json.load(sys.stdin)["devices"]; version = lambda runtime: tuple(int(part) for part in runtime.rsplit("iOS-", 1)[1].split("-")); found = sorted((version(runtime), device["udid"]) for runtime, items in devices.items() if ".SimRuntime.iOS-" in runtime for device in items if device.get("isAvailable", True) and device["name"].startswith("iPhone")); found or sys.exit("no available iPhone simulator"); print(found[-1][1])')"
+          xcodebuild test \
+            -workspace Runner.xcworkspace \
+            -scheme Runner \
+            -only-testing:RunnerTests \
+            -destination "platform=iOS Simulator,id=$SIM_ID"
+
       - name: Set up provisioning profiles
         # THREE bundle ids exist in this project, not one:
         #   com.youssefsafwat.mali                    (Runner)
@@ -269,12 +360,45 @@ workflows:
         # for `group.com.youssefsafwat.mali` — the extension and the app share one
         # container, and that is how a shared bank message reaches the app.
         # A missing extension profile fails at export, not at compile.
+        #
+        # Same profile verification as `ios-signed`, but WITHOUT
+        # testFlightInternalTestingOnly: this export is a normal App Store build.
         script: |
+          set -eu
+          python3 - <<'PYCODE'
+          import datetime, pathlib, plistlib, subprocess
+          expected = {'com.youssefsafwat.mali', 'com.youssefsafwat.mali.ShareBankMessage'}
+          found = set()
+          now = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+          for path in (pathlib.Path.home() / 'Library/MobileDevice/Provisioning Profiles').glob('*.mobileprovision'):
+              profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(path)], stderr=subprocess.DEVNULL))
+              ent = profile['Entitlements']
+              appid = ent.get('application-identifier', '')
+              bundle = appid.removeprefix('5TWARK8A23.')
+              if bundle not in expected:
+                  continue
+              assert profile.get('TeamIdentifier') == ['5TWARK8A23'], 'wrong signing team'
+              assert profile['ExpirationDate'] > now, 'expired provisioning profile'
+              assert not profile.get('ProvisionedDevices') and not profile.get('ProvisionsAllDevices'), 'not App Store distribution'
+              assert ent.get('get-task-allow') is False, 'development profile rejected'
+              assert 'group.com.youssefsafwat.mali' in ent.get('com.apple.security.application-groups', []), 'missing shared App Group'
+              assert any(value in ent.get('keychain-access-groups', []) for value in ['5TWARK8A23.*', '5TWARK8A23.com.youssefsafwat.mali.shared']), 'missing shared Keychain permission'
+              if bundle == 'com.youssefsafwat.mali':
+                  assert ent.get('aps-environment') == 'production', 'APNs distribution entitlement missing'
+                  assert ent.get('com.apple.developer.applesignin') == ['Default'], 'Apple sign-in entitlement missing'
+              found.add(bundle)
+          assert found == expected, 'both existing Main and Share App Store profiles must be installed'
+          print('Existing Main + Share App Store profile identity and entitlements verified.')
+          PYCODE
           xcode-project use-profiles
 
       - name: Assert production Supabase config
         script: |
-          set -e
+          set -eu
+          [ "${SUPABASE_URL:-}" = "https://rjwphwsefnuotpbtuycf.supabase.co" ] || {
+            echo "ERROR: production backend identity mismatch."
+            exit 1
+          }
           if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
             echo "ERROR: SUPABASE_URL / SUPABASE_ANON_KEY are empty — a production"
             echo "build must never ship without a real backend (stub-auth risk)."
@@ -352,30 +476,79 @@ workflows:
             exit 1
           }
           bash ../tools/stamp_ios_provenance.sh "$IPA"
-          bash ../tools/verify_ios_release_artifact.sh "$IPA"
+          bash ../tools/verify_ios_release_artifact.sh "$IPA" > "${IPA}.verification.txt"
+          shasum -a 256 "$IPA" > "${IPA}.sha256"
+
+      # Same post-export signing/entitlement verification as `ios-signed`. It is
+      # a separate step so the stamping step above stays free of any codesign
+      # call; this one only reads an extracted copy and first re-checks that the
+      # IPA still matches the hash recorded above.
+      - name: Verify distribution signing and entitlements of the EXACT signed IPA — REQUIRED before upload
+        working_directory: app
+        script: |
+          set -eu
+          PUBLISH_DIR="$(cd "$(dirname "$CM_BUILD_DIR/$IOS_RELEASE_IPA")" && pwd -P)"
+          IPA="$PUBLISH_DIR/$(basename "$IOS_RELEASE_IPA")"
+          shasum -a 256 -c "${IPA}.sha256"
+          python3 - "$IPA" > "${IPA}.signing-verification.txt" <<'PYCODE'
+          import hashlib, os, pathlib, plistlib, subprocess, sys, tempfile, zipfile
+          with tempfile.TemporaryDirectory() as tmp:
+              zipfile.ZipFile(sys.argv[1]).extractall(tmp)
+              apps = list((pathlib.Path(tmp) / 'Payload').glob('*.app'))
+              assert len(apps) == 1
+              main = apps[0]
+              info = plistlib.loads((main / 'Info.plist').read_bytes())
+              assert info['CFBundleShortVersionString'] == os.environ['IOS_MARKETING_VERSION']
+              assert info['CFBundleVersion'] == os.environ['IOS_BUILD_NUMBER']
+              signing_certificates = []
+              for app, bundle in [(main, 'com.youssefsafwat.mali'), (main / 'PlugIns/ShareBankMessage.appex', 'com.youssefsafwat.mali.ShareBankMessage')]:
+                  info = plistlib.loads((app / 'Info.plist').read_bytes())
+                  assert info['CFBundleIdentifier'] == bundle
+                  subprocess.run(['codesign', '--verify', '--deep', '--strict', str(app)], check=True, capture_output=True)
+                  signed = plistlib.loads(subprocess.check_output(['codesign', '-d', '--entitlements', ':-', str(app)], stderr=subprocess.DEVNULL))
+                  profile = plistlib.loads(subprocess.check_output(['security', 'cms', '-D', '-i', str(app / 'embedded.mobileprovision')], stderr=subprocess.DEVNULL))
+                  ent = profile['Entitlements']
+                  assert profile.get('TeamIdentifier') == ['5TWARK8A23']
+                  for data in [signed, ent]:
+                      assert data.get('application-identifier') == '5TWARK8A23.' + bundle
+                      assert data.get('com.apple.developer.team-identifier') == '5TWARK8A23'
+                      assert data.get('get-task-allow') is False
+                      assert 'group.com.youssefsafwat.mali' in data.get('com.apple.security.application-groups', [])
+                      assert any(value in data.get('keychain-access-groups', []) for value in (['5TWARK8A23.com.youssefsafwat.mali.shared'] if data is signed else ['5TWARK8A23.*', '5TWARK8A23.com.youssefsafwat.mali.shared']))
+                      if app == main:
+                          assert data.get('aps-environment') == 'production'
+                          assert data.get('com.apple.developer.applesignin') == ['Default']
+                  assert not profile.get('ProvisionedDevices') and not profile.get('ProvisionsAllDevices')
+                  prefix = pathlib.Path(tmp) / ('certificate-' + bundle)
+                  subprocess.run(['codesign', '-d', '--extract-certificates=' + str(prefix), str(app)], check=True, capture_output=True)
+                  certificate = pathlib.Path(str(prefix) + '0').read_bytes()
+                  assert certificate in profile['DeveloperCertificates'], 'signature certificate not permitted by profile'
+                  signing_certificates.append(hashlib.sha256(certificate).hexdigest())
+                  print(bundle + ': distribution signature, Team, App Group and shared Keychain verified')
+              assert len(set(signing_certificates)) == 1, 'Main and Share must use the same distribution certificate'
+              print('Shared distribution certificate SHA256: ' + signing_certificates[0])
+          PYCODE
     artifacts:
       # App Store Connect receives the only collected .ipa: the exact path above.
       - $IOS_RELEASE_IPA
       - ${IOS_RELEASE_IPA}.provenance
+      - ${IOS_RELEASE_IPA}.verification.txt
+      - ${IOS_RELEASE_IPA}.sha256
+      - ${IOS_RELEASE_IPA}.signing-verification.txt
       - /tmp/xcodebuild_logs/*.log
     publishing:
-      # AUTO-SUBMIT IS ON — 2026-09-26, for the 1.0.0 (41) TestFlight release.
+      # UPLOAD ONLY — nothing is submitted for review by this workflow.
       #
-      # It was turned OFF on 2026-09-04 because submission was not authorised, no
-      # iOS build had been exercised on a physical device, and until 2026-09-03
-      # the app did not compile for iOS at all. That note said to re-enable this
-      # "only when submission is explicitly authorised".
-      #
-      # All three have now changed: the owner authorised TestFlight upload for
-      # this build, 1.0.0 (41) was exercised on a physical iPhone 13 through the
-      # isolated QA instance, and iOS Release builds clean.
-      #
-      # TESTFLIGHT ONLY — this uploads for internal distribution and does NOT
-      # submit for App Review. If a later build is not authorised for upload, set
-      # this back to false rather than relying on the run being noticed.
+      # The verified IPA is uploaded to App Store Connect. `submit_to_testflight`
+      # stays false: in Codemagic it requests EXTERNAL beta review, and
+      # `submit_to_app_store` is absent, so no App Review submission happens
+      # either. External TestFlight and App Store submission are separate,
+      # deliberate owner actions in App Store Connect after the uploaded build is
+      # checked. (Until 2026-11 this flag was on, while the comment here claimed
+      # it uploaded for internal distribution only — REL-03.)
       app_store_connect:
         auth: integration
-        submit_to_testflight: true
+        submit_to_testflight: false
       email:
         recipients:
           - youssefsafwat1278@gmail.com

@@ -111,13 +111,20 @@ void main() {
       });
     }
 
-    test('ios-signed-release: TestFlight submission is gated', () {
+    test('ios-signed-release: the App Store upload is gated and never submits',
+        () {
       final wf = _workflow('ios-signed-release');
-      // The workflow does submit — so the gate ordering matters.
-      final submits = wf.toString().contains('submit_to_testflight: true') ||
-          (wf['publishing']?.toString().contains('testflight') ?? false);
-      expect(submits, isTrue,
-          reason: 'this test guards the submitting workflow specifically');
+      // The workflow uploads to App Store Connect — so the gate ordering
+      // matters — but it never asks for external beta or App Review itself
+      // (REL-03 / V1-009): those are deliberate owner actions.
+      final asc = (wf['publishing'] as YamlMap)['app_store_connect'] as YamlMap?;
+      expect(asc, isNotNull,
+          reason: 'this test guards the uploading workflow specifically');
+      expect(asc!['auth'], 'integration');
+      expect(asc['submit_to_testflight'], isFalse,
+          reason: 'submit_to_testflight requests external beta review');
+      expect(asc.containsKey('submit_to_app_store'), isFalse,
+          reason: 'the pipeline must never submit for App Review by itself');
       final steps = _steps('ios-signed-release');
       expect(_firstStep(steps, 'ci_gates.sh'),
           lessThan(_firstStep(steps, 'Build signed IPA')));
