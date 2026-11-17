@@ -62,6 +62,10 @@ class Device {
     return d;
   }
 
+  /// Wires the same real services over a database the caller already opened
+  /// (e.g. one admitted by the account-fence host). The caller owns closing it.
+  static Device wrap(AppDatabase db) => Device._(db).._wire();
+
   final AppDatabase db;
 
   // ---- injected, mutable per scenario ------------------------------------

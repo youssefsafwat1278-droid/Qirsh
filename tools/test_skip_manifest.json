@@ -224,6 +224,15 @@
         "class": "live-external",
         "reason": "Opt-in end-to-end sync proof against a developer's isolated local Supabase (dart_test.yaml tag local-supabase); skipped unless LOCAL_SUPABASE_URL is set.",
         "finding": "REL-05"
+      },
+      {
+        "file": "integration_local/restore_then_sync_local_supabase_test.dart",
+        "kind": "skip",
+        "contextContains": "LOCAL_SUPABASE_URL not set",
+        "count": 1,
+        "class": "live-external",
+        "reason": "Opt-in restore-then-Cloud reproduction (V1-020) against a developer's isolated local Supabase (tag local-supabase); skipped unless LOCAL_SUPABASE_URL is set.",
+        "finding": "V1-020"
       }
     ]
   }
