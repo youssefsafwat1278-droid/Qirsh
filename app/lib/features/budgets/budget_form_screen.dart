@@ -121,6 +121,7 @@ class _BudgetFormSheet extends StatelessWidget {
                       ),
                       const Spacer(),
                       IconButton(
+                        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                         onPressed: () => Navigator.of(context).pop(),
                         icon: Icon(AppLucideIcons.x, color: c.textMain),
                         style: IconButton.styleFrom(

@@ -101,6 +101,7 @@ class _OnboardingBrandScreenState extends State<OnboardingBrandScreen> {
                       _fadeIn(
                         Text(
                           l10n.brandTagline,
+                          textAlign: TextAlign.center,
                           style: AppTypography.body(_brandAccent),
                         ),
                         reduceMotion: reduceMotion,

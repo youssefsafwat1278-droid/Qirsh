@@ -2746,11 +2746,15 @@ class _CaptureHealthTile extends StatelessWidget {
         ? context.l10n.setNoBankMessageYet
         : context.l10n.setLastCapture(_captureGapLabel(context, status.gap!));
     final apnsFailure = status.apnsRegistrationFailure;
+    final neverCaptured = status.lastCaptureAt == null;
     final (Color bg, Color tone, Color text) = apnsFailure != null
         ? (c.dangerBg, c.danger, c.danger)
         : status.shouldNudge
             ? (c.warningBg, c.warning, c.warningText)
-            : (c.successBg, c.success, c.success);
+            // Nothing captured yet is not a success: neutral info styling.
+            : neverCaptured
+                ? (c.infoBg, c.info, c.actionText)
+                : (c.successBg, c.success, c.success);
     final title = apnsFailure != null
         ? context.l10n.setCaptureEnableFailed
         : status.shouldNudge
@@ -2778,7 +2782,12 @@ class _CaptureHealthTile extends StatelessWidget {
                   color: tone.withValues(alpha: isDark ? 0.22 : 0.18),
                   borderRadius: BorderRadius.circular(AppRadius.control),
                 ),
-                child: Icon(AppLucideIcons.shieldCheck, size: 18, color: text),
+                child: Icon(
+                    apnsFailure == null && !status.shouldNudge && neverCaptured
+                        ? AppLucideIcons.info
+                        : AppLucideIcons.shieldCheck,
+                    size: 18,
+                    color: text),
               ),
               const SizedBox(width: AppSpacing.s3),
               Expanded(

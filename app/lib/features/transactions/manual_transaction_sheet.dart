@@ -19,6 +19,7 @@ import '../../domain/errors/repo_exceptions.dart';
 import '../../domain/finance/money.dart';
 import '../../domain/finance/money_input.dart';
 import '../../domain/entities/account_entity.dart';
+import '../../domain/entities/budget_entity.dart';
 import '../achievements/achievements_providers.dart';
 import '../budgets/budgets_providers.dart';
 import '../cards/mini_card_art.dart';
@@ -334,15 +335,16 @@ class _ManualTransactionSheetState
 
   Widget _buildForm(BuildContext context, CategoryCatalog catalog) {
     final c = context.colors;
+    // The budget-scope sentinel is not a transaction category (same filter
+    // as the change-category sheet), and nothing is pre-selected so the
+    // existing «pick a category» check applies to a new entry.
     final categories = catalog.all.where((category) {
+      if (category.key == BudgetEntity.allExpensesCategoryKey) return false;
       if (_type == TransactionTypeEntity.income) {
         return category.entity.isIncome;
       }
       return !category.entity.isIncome;
     }).toList();
-    if (_categoryKey == null && _categoryId == null && categories.isNotEmpty) {
-      _categoryKey = categories.first.key;
-    }
 
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,

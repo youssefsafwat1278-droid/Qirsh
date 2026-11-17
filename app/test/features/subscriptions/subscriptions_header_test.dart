@@ -98,6 +98,11 @@ void _header(WidgetTester tester, AppL10n l10n) {
   expect(find.byType(BackButton), findsOneWidget);
   expect(find.descendant(of: find.byType(QirshSectionHero), matching: find.byType(CalmHeaderAction)),
       findsOneWidget);
+  // UX-03: the icon-only Add action is announced by name.
+  expect(find.descendant(of: find.byType(CalmHeaderAction),
+      matching: find.byWidgetPredicate((widget) =>
+          widget is Semantics && widget.properties.label == l10n.txnAddSub)),
+      findsOneWidget);
 }
 
 Future<void> _addAndBack(WidgetTester tester, AppL10n l10n) async {

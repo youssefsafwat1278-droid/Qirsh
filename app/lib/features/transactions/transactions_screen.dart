@@ -1415,6 +1415,7 @@ class _AddButton extends StatelessWidget {
     return CalmHeaderAction(
       icon: AppLucideIcons.plus,
       primary: true,
+      semanticLabel: context.l10n.mtAddTransaction,
       onTap: () {
         HapticFeedback.selectionClick();
         onTap();
@@ -1577,8 +1578,8 @@ class _HeroGlassAction extends StatelessWidget {
               customBorder: const CircleBorder(),
               onTap: onTap,
               child: SizedBox(
-                width: 42,
-                height: 42,
+                width: 44,
+                height: 44,
                 child: Icon(icon, size: 20, color: Colors.white),
               ),
             ),

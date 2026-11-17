@@ -756,19 +756,29 @@ class _BudgetsHeader extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: AppSpacing.s4),
-              Row(
-                children: [
-                  for (var i = 0; i < chips.length; i++) ...[
-                    if (i > 0) const SizedBox(width: AppSpacing.s2),
-                    Expanded(
-                      child: _Enter(
-                        delay: AppMotion.stagger * (i + 1),
-                        child: chips[i],
+              // Equal-height chips when a label takes a second line.
+              LayoutBuilder(builder: (context, constraints) {
+                final labelWidth = (constraints.maxWidth -
+                            AppSpacing.s2 * (chips.length - 1)) /
+                        chips.length -
+                    AppSpacing.s1 * 2;
+                return IntrinsicHeight(
+                  child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < chips.length; i++) ...[
+                      if (i > 0) const SizedBox(width: AppSpacing.s2),
+                      Expanded(
+                        child: _Enter(
+                          delay: AppMotion.stagger * (i + 1),
+                          child: chips[i].withLabelWidth(labelWidth),
+                        ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
-              ),
+                ),
+                );
+              }),
             ],
           ),
         ),
@@ -839,12 +849,24 @@ class _SummaryChip extends StatelessWidget {
     required this.label,
     required this.background,
     required this.foreground,
+    this.labelWidth,
   });
 
   final String value;
   final String label;
   final Color background;
   final Color foreground;
+
+  /// Width the label wraps in; set by the row so a word that is wider than
+  /// the chip shrinks instead of breaking mid-word.
+  final double? labelWidth;
+
+  _SummaryChip withLabelWidth(double width) => _SummaryChip(
+      value: value,
+      label: label,
+      background: background,
+      foreground: foreground,
+      labelWidth: width);
 
   @override
   Widget build(BuildContext context) {
@@ -864,11 +886,35 @@ class _SummaryChip extends StatelessWidget {
                 textDirection: TextDirection.ltr,
                 style: AppTypography.amountSmall(foreground)),
           ),
-          Text(label,
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTypography.caption(foreground)),
+          Builder(builder: (context) {
+            // Wrap between words, never inside one: if the longest word is
+            // wider than the chip, shrink the label just enough to fit it.
+            final style = AppTypography.caption(foreground);
+            final scaler = MediaQuery.textScalerOf(context);
+            var widest = 0.0;
+            for (final word in label.split(' ')) {
+              final painter = TextPainter(
+                text: TextSpan(text: word, style: style),
+                textDirection: Directionality.of(context),
+                textScaler: scaler,
+              )..layout();
+              widest = math.max(widest, painter.width);
+              painter.dispose();
+            }
+            final width = labelWidth;
+            final fits = width == null || widest <= width;
+            return Text(label,
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                textScaler: fits
+                    ? scaler
+                    : TextScaler.linear(scaler.scale(style.fontSize!) /
+                        style.fontSize! *
+                        width /
+                        widest),
+                style: style);
+          }),
         ],
       ),
     );

@@ -178,6 +178,7 @@ class _SignInMethodsSheetState extends ConsumerState<SignInMethodsSheet> {
                       child: Text(l.authSignInMethods,
                           style: Theme.of(context).textTheme.titleLarge)),
                   IconButton(
+                      tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                       onPressed: _busy ? null : () => Navigator.pop(context),
                       icon: const Icon(Icons.close))
                 ]),

@@ -195,6 +195,7 @@ class _AddButton extends StatelessWidget {
     return CalmHeaderAction(
       icon: AppLucideIcons.plus,
       primary: true,
+      semanticLabel: context.l10n.txnAddSub,
       onTap: () {
         HapticFeedback.selectionClick();
         onTap();

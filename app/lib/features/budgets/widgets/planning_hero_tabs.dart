@@ -32,9 +32,11 @@ class PlanningHeroTabs extends StatelessWidget {
     final count = tabs.length;
     final x = count < 2 ? 0.0 : -1 + 2 * selectedIndex / (count - 1);
     final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
-    final scaledHeight = MediaQuery.textScalerOf(context).scale(13) * 2 + 12;
+    // Two caption lines (18 pt line height each) plus the 4 pt track
+    // padding, and never under 52 so each tab is a 44 pt target.
+    final scaledHeight = MediaQuery.textScalerOf(context).scale(18) * 2 + 8;
     return Container(
-      height: scaledHeight > 44 ? scaledHeight : 44,
+      height: scaledHeight > 52 ? scaledHeight : 52,
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: .12),

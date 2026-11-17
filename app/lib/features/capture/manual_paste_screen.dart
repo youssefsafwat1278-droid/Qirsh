@@ -104,6 +104,7 @@ class _ManualPasteSheet extends StatelessWidget {
                             style: AppTypography.sectionTitle(c.textPrimary)),
                       ),
                       IconButton(
+                        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                         onPressed: () => Navigator.of(context).pop(),
                         icon: const Icon(AppLucideIcons.x, size: 20),
                         style: IconButton.styleFrom(
@@ -472,7 +473,7 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
                 style: AppTypography.callout(c.textPrimary),
                 decoration: InputDecoration(
                   hintText: context.l10n.pasteFieldHint,
-                  hintStyle: AppTypography.callout(c.textFaint),
+                  hintStyle: AppTypography.callout(c.textMuted),
                   filled: false,
                   isDense: true,
                   contentPadding: const EdgeInsets.fromLTRB(

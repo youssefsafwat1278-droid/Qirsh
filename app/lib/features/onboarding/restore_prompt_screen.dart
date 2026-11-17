@@ -20,6 +20,7 @@ import '../../core/theme/widgets/qirsh_visuals.dart';
 import '../../core/theme/app_shadows.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../backup/backup_error_messages.dart';
+import '../common/motion.dart';
 import '../../core/theme/widgets/glass_dialog.dart';
 
 class RestorePromptScreen extends ConsumerStatefulWidget {
@@ -203,12 +204,16 @@ class _RestorePromptScreenState extends ConsumerState<RestorePromptScreen> {
                     ),
                   ),
                   Center(
-                    child: const QirshIllustration(
-                      name: 'dataTransfer', width: 200, height: 150,
-                    )
-                        .animate()
-                        .fade(duration: 800.ms)
-                        .scale(curve: Curves.easeOutBack),
+                    child: shouldReduceMotion(context)
+                        ? const QirshIllustration(
+                            name: 'dataTransfer', width: 200, height: 150,
+                          )
+                        : const QirshIllustration(
+                            name: 'dataTransfer', width: 200, height: 150,
+                          )
+                            .animate()
+                            .fade(duration: 800.ms)
+                            .scale(curve: Curves.easeOutBack),
                   ),
                   const SizedBox(height: AppSpacing.s4),
                   Row(

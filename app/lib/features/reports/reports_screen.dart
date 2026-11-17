@@ -326,6 +326,16 @@ class _OverviewTab extends StatelessWidget {
           ),
         ),
     ];
+    // Nothing to chart yet: the same tip card the Trends tab shows, so a
+    // new user's Overview is not a blank page.
+    if (cards.isEmpty) {
+      cards.add(_InsightCard(
+        icon: AppLucideIcons.sun,
+        title: context.l10n.rptQuickTip,
+        body: context.l10n.rptAddMoreTx,
+        color: context.colors.actionText,
+      ));
+    }
     return MeltTail(
         startAt: 0,
         child: ListView(

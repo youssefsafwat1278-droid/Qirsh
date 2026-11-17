@@ -146,6 +146,7 @@ class _GoalDetailsSheet extends ConsumerWidget {
                             icon: Icon(AppLucideIcons.pencil, color: c.actionText),
                           ),
                         IconButton(
+                          tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                           onPressed: () => Navigator.of(context).pop(),
                           icon: const Icon(AppLucideIcons.x),
                           style: IconButton.styleFrom(

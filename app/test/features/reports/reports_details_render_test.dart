@@ -89,7 +89,10 @@ void main() {
           lessThan(tester.getTopLeft(find.text(l10n.rptByMerchant)).dy));
       expect(find.textContaining('12.345'), findsWidgets,
           reason: 'a three-decimal currency must retain its exact minor units');
-      expect(find.textContaining('0.345'), findsOneWidget,
+      // Scoped to the Details list: the period summary card above may also
+      // still be built (it shows the section's total refunds).
+      expect(find.descendant(of: find.byType(TabBarView),
+          matching: find.textContaining('0.345')), findsOneWidget,
           reason: 'net category spending still explains its refund input');
       expect(tester.takeException(), isNull);
     });

@@ -953,7 +953,7 @@ class _TintedPill extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(AppRadius.pill),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 36),
+          constraints: const BoxConstraints(minHeight: 44),
           child: Padding(
             padding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.s3, vertical: 6),
@@ -961,7 +961,8 @@ class _TintedPill extends StatelessWidget {
               widthFactor: 1,
               child: Text(
                 label,
-                maxLines: 1,
+                textAlign: TextAlign.center,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.subhead(c.actionText),
               ),

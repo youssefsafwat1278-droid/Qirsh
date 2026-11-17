@@ -437,7 +437,7 @@ void main() {
       await _pump(tester, withData: false, theme: theme);
 
       expect(find.text('أهلاً بك في قِرش'), findsOneWidget);
-      expect(find.text('ابدأ في ٣ خطوات'), findsOneWidget);
+      expect(find.text('ابدأ في 3 خطوات'), findsOneWidget);
       expect(find.text('0/3'), findsOneWidget);
       expect(find.text('مصروف الشهر'), findsNothing);
       expect(find.text('0.00'), findsNothing);

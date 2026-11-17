@@ -84,6 +84,7 @@ class _SmsPermissionScreenState extends State<SmsPermissionScreen> {
                   // other sheet in the app puts close at the END.
                   alignment: AlignmentDirectional.topEnd,
                   child: IconButton(
+                    tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                     onPressed: () => Navigator.of(context).pop(false),
                     icon: const Icon(AppLucideIcons.x, size: 20),
                     constraints:

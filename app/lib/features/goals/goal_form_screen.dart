@@ -118,6 +118,7 @@ class _GoalFormSheet extends StatelessWidget {
                       ),
                       const Spacer(),
                       IconButton(
+                        tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                         onPressed: () => Navigator.of(context).pop(),
                         icon: Icon(AppLucideIcons.x, color: c.textMain),
                         style: IconButton.styleFrom(
@@ -251,7 +252,7 @@ class _GoalFormContentState extends ConsumerState<_GoalFormContent> {
                       ? context.l10n.gfOptional
                       : Formatters.fullDate(_deadline!, context),
                   style: AppTypography.body(
-                      _deadline == null ? c.textFaint : c.textMain),
+                      _deadline == null ? c.textMuted : c.textMain),
                 ),
                 trailing: Icon(AppLucideIcons.calendar,
                     color: c.actionText, size: 20),

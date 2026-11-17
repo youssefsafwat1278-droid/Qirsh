@@ -67,6 +67,7 @@ class MerchantOffersScreen extends ConsumerWidget {
               ),
             ),
             IconButton(
+              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
               onPressed: () => Navigator.of(context).maybePop(),
               icon: const Icon(AppLucideIcons.x),
             ),

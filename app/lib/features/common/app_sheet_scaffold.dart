@@ -139,6 +139,7 @@ class AppSheetScaffold extends StatelessWidget {
                           bottom: 0,
                           child: Center(
                             child: IconButton(
+                              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                               onPressed: () => Navigator.of(context).pop(),
                               icon: const Icon(AppLucideIcons.x),
                               color: c.textSecondary,

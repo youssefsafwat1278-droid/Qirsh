@@ -86,8 +86,8 @@
   "storyContinueCta": "كمّل",
   "storyStartCta": "ابدأ مع قِرش",
   "storySkip": "تخطّي",
-  "storyPageOneSemanticLabel": "الصفحة ١ من ٢",
-  "storyPageTwoSemanticLabel": "الصفحة ٢ من ٢",
+  "storyPageOneSemanticLabel": "الصفحة 1 من 2",
+  "storyPageTwoSemanticLabel": "الصفحة 2 من 2",
   "next": "التالي",
   "skip": "تخطي",
   "registerAndStart": "التسجيل والبدء",
@@ -2027,11 +2027,11 @@
   "homePartnerOffers": "عروض من شركاء قرش",
   "homeAllCoupons": "عرض كل الكوبونات",
   "homeSpentToday": "صرفت اليوم",
-  "homeSevenDayAverage": "متوسط ٧ أيام",
+  "homeSevenDayAverage": "متوسط 7 أيام",
   "homeSetMonthlyBudgetShort": "حدّد ميزانية شهرية",
   "homeAvailableToday": "متاح لليوم",
   "homeTodayTransactions": "عمليات اليوم",
-  "homeTopThreeToday": "أعلى ٣ اليوم",
+  "homeTopThreeToday": "أعلى 3 اليوم",
   "homeUncategorised": "غير مصنّفة",
   "homeNoMonthlyBudget": "لا توجد ميزانية شهرية — حدّدها لتعرف المتاح",
   "homeTopCategories": "أكبر التصنيفات",
@@ -3674,7 +3674,7 @@
       }
     }
   },
-  "homeLastSevenDays": "آخر ٧ أيام",
+  "homeLastSevenDays": "آخر 7 أيام",
   "homeDailyAverage": "المتوسط {amount} يوميًا",
   "@homeDailyAverage": {
     "placeholders": {
@@ -3704,7 +3704,7 @@
   "homeWelcomeTo": "أهلاً بك في قِرش",
   "homeWelcomeTitle": "أضف أول عملية،\nوقِرش يرتّب الباقي",
   "homeWelcomeBody": "صرفك اليومي، المتاح لك، وأين تذهب أموالك. كلها تظهر هنا بعد أول عملية.",
-  "homeStartSteps": "ابدأ في ٣ خطوات",
+  "homeStartSteps": "ابدأ في 3 خطوات",
   "homeStartStepsHint": "أقل من دقيقتين",
   "homeStepAddTitle": "أضف أول عملية",
   "homeStepAddBody": "ألصق رسالة البنك أو أدخلها يدويًا",
@@ -3948,8 +3948,8 @@
   "shortcutStudioBody": "وصلة بسيطة بين رسائل بنكك وقرش. اختار الفلتر، جهّز الربط، وبعدها اختبره.",
   "shortcutRouteMessage": "رسالة",
   "shortcutRouteAutomation": "اختصار",
-  "shortcutStudioCurrency": "١ · عملة الرسائل",
-  "shortcutStudioWord": "٢ · الكلمة المطلوبة",
+  "shortcutStudioCurrency": "1 · عملة الرسائل",
+  "shortcutStudioWord": "2 · الكلمة المطلوبة",
   "shortcutStudioPreview": "فلتر الالتقاط الخاص بك",
   "shortcutStudioBegin": "ربط رسائل «{keyword}»",
   "@shortcutStudioBegin": {

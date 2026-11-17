@@ -99,7 +99,9 @@ Future<void> _openPrice(WidgetTester tester, String currency) async {
   final context = tester.element(find.byType(TransactionDetailsScreen));
   final button = find.text(AppL10n.of(context).txdAddValueIn(
       Currency.label(context, currency)));
-  await tester.ensureVisible(button);
+  // Centre it: the top of the viewport sits under the screen's nav bar.
+  await Scrollable.ensureVisible(tester.element(button), alignment: .5);
+  await tester.pumpAndSettle();
   await tester.tap(button);
   await tester.pumpAndSettle();
 }

@@ -514,13 +514,13 @@ abstract class AppL10n {
   /// No description provided for @storyPageOneSemanticLabel.
   ///
   /// In ar, this message translates to:
-  /// **'الصفحة ١ من ٢'**
+  /// **'الصفحة 1 من 2'**
   String get storyPageOneSemanticLabel;
 
   /// No description provided for @storyPageTwoSemanticLabel.
   ///
   /// In ar, this message translates to:
-  /// **'الصفحة ٢ من ٢'**
+  /// **'الصفحة 2 من 2'**
   String get storyPageTwoSemanticLabel;
 
   /// No description provided for @next.
@@ -6328,7 +6328,7 @@ abstract class AppL10n {
   /// No description provided for @homeSevenDayAverage.
   ///
   /// In ar, this message translates to:
-  /// **'متوسط ٧ أيام'**
+  /// **'متوسط 7 أيام'**
   String get homeSevenDayAverage;
 
   /// No description provided for @homeSetMonthlyBudgetShort.
@@ -6352,7 +6352,7 @@ abstract class AppL10n {
   /// No description provided for @homeTopThreeToday.
   ///
   /// In ar, this message translates to:
-  /// **'أعلى ٣ اليوم'**
+  /// **'أعلى 3 اليوم'**
   String get homeTopThreeToday;
 
   /// No description provided for @homeUncategorised.
@@ -11332,7 +11332,7 @@ abstract class AppL10n {
   /// No description provided for @homeLastSevenDays.
   ///
   /// In ar, this message translates to:
-  /// **'آخر ٧ أيام'**
+  /// **'آخر 7 أيام'**
   String get homeLastSevenDays;
 
   /// No description provided for @homeDailyAverage.
@@ -11410,7 +11410,7 @@ abstract class AppL10n {
   /// No description provided for @homeStartSteps.
   ///
   /// In ar, this message translates to:
-  /// **'ابدأ في ٣ خطوات'**
+  /// **'ابدأ في 3 خطوات'**
   String get homeStartSteps;
 
   /// No description provided for @homeStartStepsHint.
@@ -12148,13 +12148,13 @@ abstract class AppL10n {
   /// No description provided for @shortcutStudioCurrency.
   ///
   /// In ar, this message translates to:
-  /// **'١ · عملة الرسائل'**
+  /// **'1 · عملة الرسائل'**
   String get shortcutStudioCurrency;
 
   /// No description provided for @shortcutStudioWord.
   ///
   /// In ar, this message translates to:
-  /// **'٢ · الكلمة المطلوبة'**
+  /// **'2 · الكلمة المطلوبة'**
   String get shortcutStudioWord;
 
   /// No description provided for @shortcutStudioPreview.

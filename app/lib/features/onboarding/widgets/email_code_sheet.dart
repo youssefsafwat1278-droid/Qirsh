@@ -184,6 +184,7 @@ class _EmailCodeSheetState extends State<EmailCodeSheet> {
                                 _sent ? l.enterOtpCode : l.continueWithEmail,
                                 style: Theme.of(context).textTheme.titleLarge)),
                         IconButton(
+                            tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                             onPressed:
                                 _busy ? null : () => Navigator.pop(context),
                             icon: const Icon(Icons.close))

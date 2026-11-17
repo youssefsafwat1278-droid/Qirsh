@@ -239,10 +239,10 @@ class AppL10nAr extends AppL10n {
   String get storySkip => 'تخطّي';
 
   @override
-  String get storyPageOneSemanticLabel => 'الصفحة ١ من ٢';
+  String get storyPageOneSemanticLabel => 'الصفحة 1 من 2';
 
   @override
-  String get storyPageTwoSemanticLabel => 'الصفحة ٢ من ٢';
+  String get storyPageTwoSemanticLabel => 'الصفحة 2 من 2';
 
   @override
   String get next => 'التالي';
@@ -3834,7 +3834,7 @@ class AppL10nAr extends AppL10n {
   String get homeSpentToday => 'صرفت اليوم';
 
   @override
-  String get homeSevenDayAverage => 'متوسط ٧ أيام';
+  String get homeSevenDayAverage => 'متوسط 7 أيام';
 
   @override
   String get homeSetMonthlyBudgetShort => 'حدّد ميزانية شهرية';
@@ -3846,7 +3846,7 @@ class AppL10nAr extends AppL10n {
   String get homeTodayTransactions => 'عمليات اليوم';
 
   @override
-  String get homeTopThreeToday => 'أعلى ٣ اليوم';
+  String get homeTopThreeToday => 'أعلى 3 اليوم';
 
   @override
   String get homeUncategorised => 'غير مصنّفة';
@@ -6754,7 +6754,7 @@ class AppL10nAr extends AppL10n {
   }
 
   @override
-  String get homeLastSevenDays => 'آخر ٧ أيام';
+  String get homeLastSevenDays => 'آخر 7 أيام';
 
   @override
   String homeDailyAverage(String amount) {
@@ -6798,7 +6798,7 @@ class AppL10nAr extends AppL10n {
       'صرفك اليومي، المتاح لك، وأين تذهب أموالك. كلها تظهر هنا بعد أول عملية.';
 
   @override
-  String get homeStartSteps => 'ابدأ في ٣ خطوات';
+  String get homeStartSteps => 'ابدأ في 3 خطوات';
 
   @override
   String get homeStartStepsHint => 'أقل من دقيقتين';
@@ -7262,10 +7262,10 @@ class AppL10nAr extends AppL10n {
   String get shortcutRouteAutomation => 'اختصار';
 
   @override
-  String get shortcutStudioCurrency => '١ · عملة الرسائل';
+  String get shortcutStudioCurrency => '1 · عملة الرسائل';
 
   @override
-  String get shortcutStudioWord => '٢ · الكلمة المطلوبة';
+  String get shortcutStudioWord => '2 · الكلمة المطلوبة';
 
   @override
   String get shortcutStudioPreview => 'فلتر الالتقاط الخاص بك';

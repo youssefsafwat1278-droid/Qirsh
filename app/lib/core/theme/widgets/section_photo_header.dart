@@ -111,7 +111,10 @@ class QirshSectionHero extends StatelessWidget {
                                     ]
                                   : [
                                       const Color(0x99011341),
-                                      const Color(0x8C011341),
+                                      // Held at 60% to the mid stop so the
+                                      // white subtitle keeps 4.5:1 over a
+                                      // light photo (was 55%).
+                                      const Color(0x99011341),
                                       bottom == null
                                           ? const Color(0x1A011341)
                                           : const Color(0xD9011341),
@@ -200,8 +203,7 @@ class QirshSectionHero extends StatelessWidget {
                                                       ? null
                                                       : TextOverflow.ellipsis,
                                                   style: AppTypography.callout(
-                                                      Colors.white.withValues(
-                                                          alpha: .80))),
+                                                      Colors.white)),
                                             ],
                                           ],
                                         ),

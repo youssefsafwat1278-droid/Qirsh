@@ -209,7 +209,7 @@ class CalmPageHeader extends StatelessWidget {
     );
     if (sectionPhoto != null) {
       return QirshSectionHero(
-        photo: sectionPhoto!, title: title,
+        photo: sectionPhoto!, title: title, fitTitle: true,
         subtitle: showSubtitle ? subtitle : null,
         leading: leading, trailing: trailing, bottom: coverBottom,
         height: sectionHeight, useSafeAreaTop: useSafeAreaTop,
@@ -546,8 +546,8 @@ class CalmHeaderAction extends StatelessWidget {
           customBorder: const CircleBorder(),
           onTap: onTap,
           child: Container(
-            width: 42,
-            height: 42,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               boxShadow: isDark
