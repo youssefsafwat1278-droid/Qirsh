@@ -109,7 +109,10 @@ const _transactionLookup = {
   'query': {
     'select': _transactionSelect,
     'user_id': 'eq.$_uid',
-    'client_request_id': 'eq.backfill_transaction_$_txId',
+    // The backfill first looks for a server row keyed by the local id (the
+    // key the outbox push uses) before its own `backfill_…` key, so a restored
+    // row is bound instead of duplicated. That first lookup is the sentinel.
+    'client_request_id': 'eq.$_txId',
   },
   'body': null,
 };
