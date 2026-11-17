@@ -11,34 +11,41 @@ import 'package:flutter/widgets.dart';
 final ValueNotifier<bool> modalRouteOpen = ValueNotifier<bool>(false);
 
 class ModalRouteObserver extends NavigatorObserver {
-  int _openCount = 0;
+  // Open overlays by identity, not a counter: a route can leave without a
+  // matching pop/remove (replaced, or its navigator torn down by the
+  // account-scope swap, which notifies no observer). Every event drops any
+  // route that is no longer in a live navigator, so the flag cannot stay true
+  // without a live sheet/dialog.
+  final Set<Route<dynamic>> _open = <Route<dynamic>>{};
 
   // Bottom sheets and dialogs are PopupRoutes; full-page navigations
   // (MaterialPageRoute) are not — those swap the whole screen and must not
   // toggle the bar.
   bool _isOverlay(Route<dynamic>? route) => route is PopupRoute;
 
-  void _delta(int d) {
-    _openCount += d;
-    if (_openCount < 0) _openCount = 0;
-    final open = _openCount > 0;
+  void _update({Route<dynamic>? added, Route<dynamic>? removed}) {
+    _open.remove(removed);
+    if (_isOverlay(added)) _open.add(added!);
+    _open.removeWhere((route) => !route.isActive);
+    final open = _open.isNotEmpty;
     if (modalRouteOpen.value != open) modalRouteOpen.value = open;
   }
 
   @override
-  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (_isOverlay(route)) _delta(1);
-  }
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _update(added: route);
 
   @override
-  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (_isOverlay(route)) _delta(-1);
-  }
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _update(removed: route);
 
   @override
-  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
-    if (_isOverlay(route)) _delta(-1);
-  }
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) =>
+      _update(removed: route);
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) =>
+      _update(added: newRoute, removed: oldRoute);
 }
 
 final ModalRouteObserver modalRouteObserver = ModalRouteObserver();
