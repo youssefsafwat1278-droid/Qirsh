@@ -1,11 +1,6 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  images: {
-    remotePatterns: [
-      { protocol: "https", hostname: "*.supabase.co" },
-      { protocol: "https", hostname: "cdn.mali.app" },
-    ],
-  },
-};
+// No remote image hosts: the panel only renders local /brand images through
+// next/image, and /_next/image sits outside the auth middleware.
+const nextConfig = {};
 
 export default nextConfig;

@@ -13,16 +13,15 @@ value into a terminal log, ticket or chat.
 
 ## 0. Before you start
 
-- Check whether `20261116230000_push_broadcast_test_send.sql` (admin
-  test-send) is applied **after** `20261117010000`. Both define
-  `admin_push_broadcast_history`. The SQL rollback in step 5 restores the
-  **20261116160000** body, which has no `is_test`. If 230000 is applied, step 6
-  is mandatory.
-- Save the current definition first, so step 6 has it:
-
-```bash
-psql "$DB" -Atc "select pg_get_functiondef('public.admin_push_broadcast_history(uuid,integer)'::regprocedure)||';'" > history_before_rollback.sql
-```
+- `20261116230000_push_broadcast_test_send.sql` (admin test-send) always
+  precedes `20261117010000` in the migration chain, so it is applied whenever
+  010000 is. Both define `admin_push_broadcast_history`.
+- The SQL rollback in step 5 restores the **20261116230000** history body
+  (with `is_test`, without `next_auto_retry_at`). Its header comment says
+  "20261116160000 bodies"; that is accurate for the claim and finish functions
+  only. No saved copy of the current definition is needed: do **not** save
+  and re-apply the live body, because after 010000 it reads the
+  `next_attempt_at` column that step 5 drops.
 
 ## 1. Stop the schedule (immediate effect)
 
@@ -106,41 +105,51 @@ select count(*) from cron.job where jobname = 'push-broadcast-retry';
 The rollback also unschedules the job, so step 1 is a safety net, not a
 dependency.
 
-## 6. Re-apply the admin history body (only if 230000 is applied)
+## 6. Verify the admin history body
 
-```bash
-psql "$DB" -v ON_ERROR_STOP=1 -f history_before_rollback.sql
-psql "$DB" -c "revoke all on function public.admin_push_broadcast_history(uuid, integer) from public, anon, authenticated;
-               grant execute on function public.admin_push_broadcast_history(uuid, integer) to service_role;"
-```
-
-`history_before_rollback.sql` still names `next_auto_retry_at`, read from the
-dropped `next_attempt_at` column. In that case use the 20261116230000 body
-from the repository instead, which has `is_test` and no retry column. Verify,
-expecting `1`, then load the Admin panel's Push page:
+Nothing to re-apply: step 5 already restored the 20261116230000 body and its
+grants. Verify, expecting `1` and `0`:
 
 ```sql
 select (pg_get_functiondef('public.admin_push_broadcast_history(uuid,integer)'::regprocedure) like '%is_test%')::int;
+select (pg_get_functiondef('public.admin_push_broadcast_history(uuid,integer)'::regprocedure) like '%next_attempt_at%')::int;
 ```
+
+Then load the Admin panel's Push page. The history list should load; test
+sends keep their "تجربة" badge and the "إعادة تلقائية" (auto-retry) badge no
+longer appears. If the second query returns `1`, the history function reads
+the dropped column and every call fails: `/api/push-broadcasts` returns
+`history_unavailable` and the Push page shows an error instead of the list. Re-run step 5 (it is idempotent) to restore the
+correct body; do not re-apply a definition saved before the rollback.
 
 ## Local verification (2026-11-16)
 
-Run against the local dev stack (`127.0.0.1:56422`), which already had
-20261116230000 applied:
+**Not rehearsed against the current rollback file.** The run below used an
+earlier version of the rollback SQL, which restored the 20261116160000
+history body (no `is_test`). The rollback was changed afterwards (merge
+`b6fc0dad`) to restore the 20261116230000 body. The current steps 1, 2, 5
+and 6 have not been run end to end; until they are, treat this procedure as
+unrehearsed. To rehearse it on a local stack: apply 20261117010000, run steps
+1, 2, 5 and 6, then run `push_broadcast_test_send_20261116.sql`, expecting
+all pass.
+
+Earlier run, against the local dev stack (`127.0.0.1:56422`), which already
+had 20261116230000 applied:
 
 | Step | Result |
 |---|---|
-| Apply 200000 | applied; cron job 1, dispatcher 1, `next_attempt_at` 1, test Vault secret 1 |
+| Apply 20261117010000 | applied; cron job 1, dispatcher 1, `next_attempt_at` 1, test Vault secret 1 |
 | SQL proof `push_broadcast_auto_retry_20261117.sql` | 40/40 pass (dev device isolated inside the transaction) |
-| Older proof `admin_push_broadcasts_20261116.sql` with 200000 applied | 34 pass / 0 fail |
+| Older proof `admin_push_broadcasts_20261116.sql` with 20261117010000 applied | 34 pass / 0 fail |
 | 1. Unschedule | `t`; job count 0 |
 | 2. Vault delete | 1 row deleted; count 0 |
-| 5. SQL rollback | applied; retry functions 0, column 0, job 0; a second run is a no-op (NOTICE only) |
-| State diff vs. pre-test snapshot | only `admin_push_broadcast_history` differed (160000 body, `is_test` lost): **this is the step 6 case** |
-| 6. Restore saved body | function hashes, ACLs, cron jobs, Vault count, columns and indexes identical to the pre-test snapshot; `push_broadcast_test_send_20261116.sql` 12 pass / 0 fail |
+| 5. SQL rollback (earlier version) | applied; retry functions 0, column 0, job 0; a second run is a no-op (NOTICE only) |
+| State diff vs. pre-test snapshot | only `admin_push_broadcast_history` differed (160000 body, `is_test` lost); this is the defect the rollback change fixed |
+| Restore body from a snapshot taken **before** 20261117010000 | state identical to the pre-test snapshot; `push_broadcast_test_send_20261116.sql` 12 pass / 0 fail. This snapshot is not what a production operator would have, so it is not part of the procedure |
 
 Steps 3 and 4 (function secret, `verify_jwt`, deploy) act on the hosted
 project and were not run locally. The function's side is covered by the Deno
 tests in `supabase/functions/send-push-broadcast/send_test.ts`: a missing,
 31-character or weak secret never authenticates, and only a JWT-shaped token
-reaches the login check.
+reaches the login check. The code rollback in step 4 (deploying from before
+`75025554`) and the manual-retry check have not been rehearsed.

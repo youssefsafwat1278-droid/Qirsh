@@ -12,7 +12,7 @@
     "build:parser-lab": "dart compile js ../app/tool/parser_lab_entry.dart -O2 -o public/parser_lab.js"
   },
   "dependencies": {
-    "next": "14.2.29",
+    "next": "14.2.35",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "@supabase/supabase-js": "^2.45.4",
@@ -33,6 +33,6 @@
     "postcss": "^8.4.39",
     "autoprefixer": "^10.4.19",
     "eslint": "^8",
-    "eslint-config-next": "14.2.29"
+    "eslint-config-next": "14.2.35"
   }
 }
