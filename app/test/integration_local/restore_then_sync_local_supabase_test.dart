@@ -137,14 +137,19 @@ Future<void> report(String label, Device d, String uid) async {
       '  server all=${await remote.rows('user_transactions', uid, select: 'client_request_id,amount_text:amount::text,status,deleted_at')}');
 }
 
-/// The invariant every candidate restore semantics shares: once Cloud is back
-/// on and sync has settled, the device and the cloud hold the SAME live
-/// transactions with the SAME amounts and no duplicate cloud copies, and the
-/// restored values on the device were not silently replaced. Which rows that
-/// set contains when the cloud holds rows the backup does not (replace vs
-/// merge) is the open product question; divergence is a defect under any.
-Future<void> expectConverged(
-    Device d, String uid, Map<String, String> restored) async {
+/// The V1-020 semantics once Cloud is back on and sync has settled:
+///  * every RESTORED value is kept on the device and becomes the cloud copy
+///    (restored rows win over edits synced after the backup);
+///  * no duplicate cloud copies;
+///  * PENDING OWNER DECISION (replace vs merge) — cloud rows ABSENT from the
+///    backup are kept in the cloud and pulled back to the device (merge, the
+///    non-destructive default until the owner decides);
+///  * a restored row whose cloud copy is a tombstone ([cloudTombstoned]
+///    merchants) is never un-deleted in the cloud: it stays on the device and is
+///    surfaced as a sync conflict for the user (keep-mine re-creates it as new).
+Future<void> expectRestoredWinAndCloudOnlyRowsMergedBack(
+    Device d, String uid, Map<String, String> restored,
+    {Set<String> cloudTombstoned = const {}}) async {
   final local = await localLive(d);
   final server = await serverLive(uid);
   for (final e in restored.entries) {
@@ -154,8 +159,18 @@ Future<void> expectConverged(
   for (final e in server.entries) {
     expect(e.value, hasLength(1), reason: 'duplicate cloud copies of ${e.key}');
   }
-  expect({for (final e in server.entries) e.key: e.value.first}, local,
-      reason: 'device and cloud must agree after Cloud is re-enabled');
+  for (final m in cloudTombstoned) {
+    expect(server.containsKey(m), isFalse,
+        reason: 'a cloud tombstone is never un-deleted by a restore');
+    final status = await d.sql('SELECT sync_status s FROM transactions '
+        "WHERE raw_merchant = '$m'");
+    expect(status.single['s'], 'conflict',
+        reason: '$m must be surfaced as a conflict, not silently diverge');
+  }
+  expect({for (final e in server.entries) e.key: e.value.first},
+      {...local}..removeWhere((k, _) => cloudTombstoned.contains(k)),
+      reason: 'device and cloud must agree, and cloud rows absent from the '
+          'backup must be merged back (pending decision: merge)');
 }
 
 Future<Map<String, dynamic>> takeBackup(Device d) async =>
@@ -247,7 +262,10 @@ void main() {
       await syncCycle(d);
       await syncCycle(d);
       await report('R1 after Cloud on + 2 sync cycles', d, uid);
-      await expectConverged(d, uid, restored);
+      await expectRestoredWinAndCloudOnlyRowsMergedBack(d, uid, restored,
+          cloudTombstoned: {'Synthetic shop r1-C'});
+      expect((await localLive(d))['Synthetic shop r1-D'], '40.000',
+          reason: 'D is absent from the backup: kept and merged back');
     });
 
     test('R2 backup predates rows that exist on the server', () async {
@@ -274,7 +292,9 @@ void main() {
       await syncCycle(d);
       await syncCycle(d);
       await report('R2 after Cloud on + 2 sync cycles', d, uid);
-      await expectConverged(d, uid, restored);
+      await expectRestoredWinAndCloudOnlyRowsMergedBack(d, uid, restored);
+      expect((await localLive(d))['Synthetic shop r2-E'], '50.000',
+          reason: 'E is absent from the backup: kept and merged back');
     });
   });
 }

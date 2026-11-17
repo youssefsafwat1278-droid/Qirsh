@@ -61,7 +61,16 @@ void main() {
   ///
   /// GROUP A — bulk wipes of user data. The only two, both audited above.
   ///   data_wipe_service (2)        the loop + the custom-categories delete
-  ///   restore_backup_usecase (7)   the table loop + journal/staging cleanup
+  ///   restore_backup_usecase (12)  the table loop + journal/staging cleanup (7),
+  ///                                plus the sync-identity rebind added for the
+  ///                                restore-then-sync defect (5): two drops of a
+  ///                                TEMP identity table, the two outbox deletes
+  ///                                for intents recorded BEFORE the restore
+  ///                                (they carry pre-restore values of rows the
+  ///                                restore replaced), and the pull-cursor reset
+  ///                                so cloud-only rows are pulled back. None
+  ///                                deletes a user record; all run inside the
+  ///                                restore transaction and roll back with it.
   ///
   /// GROUP B — schema rebuild, atomic and self-contained.
   ///   app_database (4)             cards_new pre-drop, DROP cards, + 2 repairs
@@ -171,7 +180,7 @@ void main() {
   const inventory = <String, int>{
     // A
     'lib/core/privacy/data_wipe_service.dart': 2,
-    'lib/core/backup/restore_backup_usecase.dart': 7,
+    'lib/core/backup/restore_backup_usecase.dart': 12,
     // B
     'lib/data/db/app_database.dart': 4,
     // Fixed classification regex only; audited above. No new destructive action.

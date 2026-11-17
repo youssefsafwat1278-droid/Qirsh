@@ -8,6 +8,7 @@ import '../../data/db/planning_cutover.dart';
 import '../../data/db/money_v30_backfill.dart';
 import '../../data/db/planning_canonical_invariants.dart';
 import '../../domain/finance/financial_semantics.dart';
+import '../../features/planning_sync/services/planning_outbox_queue.dart';
 import 'backup_service.dart';
 import 'backup_snapshot_builder.dart';
 import 'planning_restore_preflight.dart';
@@ -152,6 +153,10 @@ class RestoreBackupUseCase {
     await _db.customStatement('PRAGMA foreign_keys = OFF;');
     try {
       await _db.transaction(() async {
+        // V1-020: remember which server row each existing local row is, BEFORE
+        // the delete below throws that identity away (the snapshot carries no
+        // sync columns).
+        await _captureSyncIdentity(tables);
         var deletedCount = 0;
         for (final table in _deleteOrder) {
           // Conditional delete: only empty a table the backup actually carries
@@ -179,6 +184,7 @@ class RestoreBackupUseCase {
         // Idempotent no-op for a self-consistent v3 snapshot; heals legacy /
         // cross-catalog dangling references so the committed DB is FK-clean.
         await _sanitizeDanglingReferences();
+        await _rebindSyncIdentity(tables);
         // Postflight INSIDE the txn — a residual violation aborts + rolls back.
         final violations =
             await _db.customSelect('PRAGMA foreign_key_check;').get();
@@ -382,6 +388,132 @@ class RestoreBackupUseCase {
         ],
       );
     }
+  }
+
+  /// V1-020 — the synced tables whose rows carry a server identity
+  /// (`server_id` + base tokens), with the planning-outbox entity type that
+  /// records their intents (null: ledger outbox). Exactly the set
+  /// [PendingSyncReconciler] turns `pending` rows into outbox intents for.
+  static const _syncedTables = <String, String?>{
+    'transactions': null,
+    'accounts': PlanningOutboxQueue.accountsEntityType,
+    'categories': PlanningOutboxQueue.categoriesEntityType,
+    'cards': PlanningOutboxQueue.cardsEntityType,
+    'budgets': PlanningOutboxQueue.budgetsEntityType,
+    'goals': PlanningOutboxQueue.goalsEntityType,
+    'goal_contributions': PlanningOutboxQueue.goalContributionsEntityType,
+    'subscriptions': PlanningOutboxQueue.subscriptionsEntityType,
+    'bill_payments': PlanningOutboxQueue.billPaymentsEntityType,
+    'plans': PlanningOutboxQueue.plansEntityType,
+    'plan_transaction_links': PlanningOutboxQueue.planLinksEntityType,
+    'user_settings': PlanningOutboxQueue.settingsEntityType,
+  };
+
+  static const _immutableChildren = {
+    'goal_contributions',
+    'bill_payments',
+    'plan_transaction_links',
+  };
+
+  // Plan links have no `id`; their sync key is the outbox entity id.
+  static String _syncKey(String table) => table == 'plan_transaction_links'
+      ? "$table.plan_id || ':' || $table.transaction_id"
+      : '$table.id';
+
+  Future<Set<String>> _columnsOf(String table) async => {
+        for (final r
+            in await _db.customSelect('PRAGMA table_info($table);').get())
+          r.read<String>('name'),
+      };
+
+  /// V1-020 — captures `local key -> server identity` for every server-backed
+  /// row of a synced table the restore is about to empty. Kept in a TEMP table
+  /// inside the restore transaction (rolled back with it; dropped at rebind).
+  Future<void> _captureSyncIdentity(Map<String, dynamic> tables) async {
+    await _db.customStatement('DROP TABLE IF EXISTS temp.restore_sync_identity;');
+    await _db.customStatement(
+      'CREATE TEMP TABLE restore_sync_identity('
+      'tbl TEXT NOT NULL, key TEXT NOT NULL, server_id TEXT NOT NULL, '
+      'server_updated_at TEXT, server_revision INTEGER, '
+      'PRIMARY KEY(tbl, key));',
+    );
+    for (final table in _syncedTables.keys) {
+      if (!tables.containsKey(table)) continue; // not emptied: identity kept
+      final cols = await _columnsOf(table);
+      if (!cols.contains('server_id')) continue;
+      final rev =
+          cols.contains('server_revision') ? 'server_revision' : 'NULL';
+      await _db.customStatement(
+        'INSERT OR IGNORE INTO restore_sync_identity '
+        "SELECT '$table', ${_syncKey(table)}, server_id, server_updated_at, "
+        '$rev FROM $table WHERE server_id IS NOT NULL;',
+      );
+    }
+  }
+
+  /// V1-020 — after the snapshot is inserted, makes the RESTORED values the
+  /// cloud copy without losing server identity:
+  ///
+  ///  * a restored row whose local id was bound to a server row gets that
+  ///    identity and its base tokens back and is marked `pending`. The
+  ///    PendingSyncReconciler then records an `update` intent through the normal
+  ///    queue API (a tombstoned row: `delete`), so the restored values are
+  ///    pushed as a guarded write against the last known server version. If the
+  ///    cloud moved on, or holds that row as a TOMBSTONE, the push/pull raise the
+  ///    existing sync conflict (a cloud tombstone is never un-deleted; keep-mine
+  ///    re-creates the record as new where the model supports it). Immutable
+  ///    children are re-bound `synced` (a live child equals its cloud copy);
+  ///    only a restored child tombstone is left `pending` (delete intent).
+  ///  * a restored row the server never had keeps `server_id = NULL`: the
+  ///    startup backfill creates it (keyed on its own id, never duplicated).
+  ///  * queued intents for restored entities describe PRE-restore values and
+  ///    are dropped; the two rules above re-record intent from what was restored.
+  ///  * the pull cursors of the restored domains are reset, so the next pull
+  ///    re-reads the whole cloud history.
+  ///
+  /// PENDING OWNER DECISION — replace vs merge. Cloud rows ABSENT from the
+  /// backup are NOT deleted here (no tombstone intent is recorded for them).
+  /// Until the owner decides, the non-destructive default is MERGE: the cursor
+  /// reset above makes the next pull bring them back to this device. Choosing
+  /// "replace" would mean recording delete intents for those server rows here.
+  Future<void> _rebindSyncIdentity(Map<String, dynamic> tables) async {
+    for (final entry in _syncedTables.entries) {
+      final table = entry.key;
+      if (!tables.containsKey(table)) continue;
+      final cols = await _columnsOf(table);
+      if (!cols.contains('server_id')) continue;
+      final key = _syncKey(table);
+      String captured(String column) =>
+          '(SELECT r.$column FROM restore_sync_identity r '
+          "WHERE r.tbl = '$table' AND r.key = $key)";
+      await _db.customStatement(
+        'UPDATE $table SET server_id = ${captured('server_id')}, '
+        "server_updated_at = ${captured('server_updated_at')}, "
+        '${cols.contains('server_revision') ? "server_revision = ${captured('server_revision')}, " : ''}'
+        // Children (contributions, bill payments, plan links) are immutable:
+        // a live restored child IS the cloud copy, so only a restored deletion
+        // needs an intent.
+        'sync_status = ${_immutableChildren.contains(table) ? "CASE WHEN deleted_at IS NULL THEN 'synced' ELSE 'pending' END" : "'pending'"} '
+        'WHERE $key IN '
+        "(SELECT key FROM restore_sync_identity WHERE tbl = '$table');",
+      );
+      final entityType = entry.value;
+      await _db.customStatement(entityType == null
+          ? 'DELETE FROM ledger_sync_outbox '
+              'WHERE transaction_id IN (SELECT id FROM transactions);'
+          : 'DELETE FROM planning_sync_outbox '
+              "WHERE entity_type = '$entityType' "
+              'AND entity_id IN (SELECT $key FROM $table);');
+    }
+    await _db.customStatement('DROP TABLE IF EXISTS temp.restore_sync_identity;');
+    await _db.customStatement(
+      'DELETE FROM sync_cursors '
+      "WHERE entity IN ('ledger_transactions', 'accounts') "
+      "OR entity LIKE 'planning\\_%' ESCAPE '\\' "
+      "OR entity LIKE 'seq:%:ledger\\_transactions' ESCAPE '\\' "
+      "OR entity LIKE 'seq:%:accounts' "
+      "OR entity LIKE 'seq:%:planning\\_%' ESCAPE '\\';",
+    );
   }
 
   /// FK-safe repair applied inside the restore transaction (with enforcement

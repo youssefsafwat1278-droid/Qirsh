@@ -324,12 +324,36 @@ class TransactionsBackfillService {
         attempted++;
         Map<String, dynamic> serverRow;
         try {
-          final existing = await _getClient()
+          // V1-020: the outbox push keys a server row on client_request_id =
+          // the LOCAL id. A row that already reached the cloud that way (and
+          // lost its server_id locally, e.g. through a backup restore) is bound
+          // to that row and reconciled exactly like a backfill match below
+          // (equal -> synced, money differs -> conflict), never re-inserted
+          // under a second, backfill key — that copy would be double-counted on
+          // every other device. A cloud TOMBSTONE is never un-deleted: a live
+          // local row against it is bound as a conflict for the user.
+          final own = await _getClient()
               .from('user_transactions')
               .select(_transactionMoneySelect)
               .eq('user_id', uid)
-              .eq('client_request_id', clientRequestId)
+              .eq('client_request_id', localId)
               .maybeSingle();
+          if (own != null && own['deleted_at'] != null && !isDeleted) {
+            mismatched.add(localId);
+            await _db.customStatement(
+              "UPDATE transactions SET server_id = ?, sync_status = 'conflict' "
+              'WHERE id = ?;',
+              [own['id'] as String, localId],
+            );
+            continue;
+          }
+          final existing = own ??
+              await _getClient()
+                  .from('user_transactions')
+                  .select(_transactionMoneySelect)
+                  .eq('user_id', uid)
+                  .eq('client_request_id', clientRequestId)
+                  .maybeSingle();
           if (existing != null) {
             serverRow = existing;
             matched++;
