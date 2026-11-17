@@ -23,6 +23,7 @@ import '../../engine/parser/local_validity.dart';
 import '../../engine/parser/parser_engine.dart';
 import '../../engine/parser/parser_isolate.dart';
 import '../../engine/parser/parse_result.dart';
+import '../../engine/parser/transaction_state_cues.dart';
 import '../../engine/parser/transaction_timestamp_extractor.dart';
 import '../../engine/privacy/sms_sanitizer.dart';
 import '../entities/account_entity.dart';
@@ -851,9 +852,16 @@ class AddTransactionUseCase {
 
     // Every egress-eligible capture consults consented AI, even when local
     // parsing succeeded. Local money still constrains the candidate validator.
-    final aiFirstAttempt = wasIgnored || onDeviceOnly
+    // A declined/failed purchase is never sent to AI: the validator would
+    // reject it anyway, and each rejection counts against the sender.
+    final notCompleted = TransactionStateCues.isNotCompleted(rawMessage);
+    final aiFirstAttempt = wasIgnored || onDeviceOnly || notCompleted
         ? _AiFirstAttempt.skipped(
-            wasIgnored ? 'message_ignored' : 'on_device_only',
+            wasIgnored
+                ? 'message_ignored'
+                : onDeviceOnly
+                    ? 'on_device_only'
+                    : 'transaction_not_completed',
           )
         : await _tryAiParseFirst(
             rawMessage: rawMessage,

@@ -100,7 +100,28 @@ export function isResolved(p: ParsedCapture): boolean {
 }
 
 function isIgnoredText(lower: string): boolean {
-  return (rules.ignoreKeywords as string[]).some((keyword) => lower.includes(keyword.toLowerCase()));
+  return (rules.ignoreKeywords as string[]).some((keyword) => lower.includes(keyword.toLowerCase())) ||
+    isDeclinedText(lower);
+}
+
+// DATA-01: whole-token cue match. An Arabic cue may carry one attached clitic
+// prefix but never sits inside a longer word (`رفض` alone would hit
+// `لرفض العملية اتصل بنا` in a completed purchase); a Latin cue is bounded by
+// non-letters. Mirrors app/lib/engine/parser/transaction_state_cues.dart.
+const ARABIC_LETTER = '\\u0621-\\u064A';
+function tokenPattern(cues: string[]): RegExp {
+  const alternation = cues.map((c) => c.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  return new RegExp(
+    `(?<![a-z${ARABIC_LETTER}])(?:وال|بال|فال|لل|ال|و|ف|ب|ل)?(?:${alternation})(?![a-z${ARABIC_LETTER}])`,
+  );
+}
+const DECLINED = tokenPattern(rules.declinedKeywords as string[]);
+const DECLINED_EXEMPT = tokenPattern(rules.declinedExemptKeywords as string[]);
+
+/** A purchase that did not complete (declined/failed/...), unless the message is its refund/reversal. */
+export function isDeclinedText(lower: string): boolean {
+  const text = lower.replace(/\s+/g, ' ');
+  return DECLINED.test(text) && !DECLINED_EXEMPT.test(text);
 }
 
 /**

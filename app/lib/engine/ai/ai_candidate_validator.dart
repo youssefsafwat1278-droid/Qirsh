@@ -4,6 +4,7 @@ import '../parser/capture_money.dart';
 import '../parser/direction_signal.dart';
 import '../parser/merchant_sanity.dart';
 import '../parser/normalizer.dart';
+import '../parser/transaction_state_cues.dart';
 import 'ai_parser_client.dart';
 import 'grounding_check.dart';
 
@@ -64,6 +65,10 @@ class AiCandidateValidator {
     String? messageText,
     TransactionType? normalizedType,
   }) {
+    // DATA-01 — a declined/failed purchase moved no money, whatever the AI says.
+    if (TransactionStateCues.isNotCompleted(messageText ?? sanitizedText)) {
+      return const AiCandidateValidation.rejected('transaction_not_completed');
+    }
     if (!GroundingCheck.verify(
       amount: response.amount,
       sanitizedText: sanitizedText,
@@ -93,6 +98,15 @@ class AiCandidateValidator {
       parseCaptureMoney(amountText, currency);
     } catch (_) {
       return const AiCandidateValidation.rejected('amount_text_not_canonical');
+    }
+    // DATA-03 — the committed value is amountText: it must be the grounded
+    // amount itself, not a fragment of another number in the text.
+    final textAmount = double.tryParse(
+        Normalizer.normalize(amountText).replaceAll(',', ''));
+    if (textAmount == null ||
+        (textAmount - response.amount).abs() >= 0.005 ||
+        !GroundingCheck.verify(amount: textAmount, sanitizedText: sanitizedText)) {
+      return const AiCandidateValidation.rejected('amount_text_not_grounded');
     }
 
     // The AI type must not contradict the message's own direction wording.

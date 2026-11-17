@@ -445,3 +445,55 @@ Deno.test('AM/PM and Arabic ص/م set the right hour; a bare date keeps the rece
   assertEquals(at('Your account was credited with salary EGP 18,500.00 on 29/10/2026'), '2026-10-29T09:30:00.000Z');
   assertEquals(at('Your account was credited with salary EGP 18,500.00 on 25/10/2026'), '2026-10-25T09:00:00.000Z');
 });
+
+// DATA-01: a purchase that did not complete moved no money. Synthetic samples.
+const DECLINED_SMS = [
+  'تم رفض عملية شراء بمبلغ 250.00 ر.س لدى CAFE ONE بطاقة 1234',
+  'Purchase declined: SAR 250.00 at CAFE ONE card ending 1234',
+  'Transaction failed. Purchase of SAR 99.00 at SHOP TWO card ending 1234',
+  'عملية غير ناجحة: شراء بمبلغ ٧٥٫٠٠ ر.س لدى SHOP TWO',
+  'Purchase of SAR 410.00 at SHOP TWO was rejected: insufficient funds',
+  'Purchase of SAR 410.00 at SHOP TWO not processed - credit limit exceeded',
+  'تعذر إتمام عملية شراء بمبلغ 300.00 ر.س لعدم كفاية الرصيد',
+];
+const COMPLETED_WITH_NEGATION_SMS = [
+  'عملية شراء بمبلغ 45.00 ر.س لدى CAFE ONE. إذا لم تقم بهذه العملية اتصل بنا لرفض العملية',
+  'Purchase of SAR 45.00 at CAFE ONE. If you did not make this transaction, call us.',
+];
+const REFUND_OF_FAILED_SMS = [
+  'Refund for failed transaction: SAR 99.00 credited from SHOP TWO',
+  'تم استرداد مبلغ العملية المرفوضة 250.00 ر.س',
+];
+
+Deno.test('DECLINED => rejected with zero AI calls (deterministic and AI-primary)', async () => {
+  for (const text of DECLINED_SMS) {
+    assertEquals(isResolved(deterministicParse(text, RECEIVED, 180)), false, text);
+    for (const allowAi of [true, false]) {
+      const r = await run(text, allowAi, { amount: 250, amount_text: '250.00', currency: 'SAR', type: 'payment', direction: 'debit' });
+      assertEquals([r.calls, r.accepted], [0, false], text);
+    }
+    const stub = stubGemini({ is_transaction: true, amount: 250, amount_text: '250.00', currency: 'SAR',
+      type: 'payment', direction: 'debit', category: 'shopping' });
+    try {
+      const p = await parseSms({ text, rawText: text, sender: 'BANK', receivedAt: RECEIVED,
+        tzOffsetMinutes: 180, locale: 'ar', allowAi: true, aiPrimary: true });
+      assertEquals([stub.calls, p.accepted, p.parsed.parserSource], [0, false, 'ai_ignored'], text);
+    } finally { stub.restore(); }
+  }
+});
+
+Deno.test('completed purchase with an unrelated negation stays RESOLVED debit', () => {
+  for (const text of COMPLETED_WITH_NEGATION_SMS) {
+    const p = deterministicParse(text, RECEIVED, 180);
+    assert(isResolved(p), text);
+    assertEquals([p.amount, p.direction], [45, 'debit'], text);
+  }
+});
+
+Deno.test('refund of a failed purchase stays a RESOLVED credit', () => {
+  for (const text of REFUND_OF_FAILED_SMS) {
+    const p = deterministicParse(text, RECEIVED, 180);
+    assert(isResolved(p), text);
+    assertEquals(p.direction, 'credit', text);
+  }
+});

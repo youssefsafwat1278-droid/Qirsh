@@ -6,10 +6,14 @@ import 'package:money_companion/engine/parser/transaction_timestamp_extractor.da
 /// read at all, and the ISO date path ignored AM/PM.
 void main() {
   const engine = ParserEngine();
-  final year = DateTime.now().year;
+  // Year-less dates resolve against the processing time (DATA-04).
+  const year = 2026;
 
   DateTime? parsedAt(String sms) => engine
-      .parse(sms, senderId: 'IPN', defaultCurrency: 'EGP')
+      .parse(sms,
+          senderId: 'IPN',
+          defaultCurrency: 'EGP',
+          now: DateTime(year, 11, 17))
       .transaction
       ?.occurredAt;
 

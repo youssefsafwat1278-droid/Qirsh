@@ -197,7 +197,10 @@ Amount SAR 50.00
       const sms =
           'IPN transfer sent with amount of EGP 31.43 from 1938 on 15/03 '
           'at 02:18 PM. Ref# 22762b03. For more details call 16607';
-      final result = engine.parse(sms, senderId: 'IPN', defaultCurrency: 'EGP');
+      final result = engine.parse(sms,
+          senderId: 'IPN',
+          defaultCurrency: 'EGP',
+          now: DateTime(2026, 11, 17));
       final tx = result.transaction!;
       final category = Categorizer().categorize(tx);
 
@@ -206,7 +209,7 @@ Amount SAR 50.00
       expect(tx.currency, 'EGP');
       expect(tx.type, TransactionType.transfer);
       expect(tx.rawMerchant, 'InstaPay');
-      expect(tx.occurredAt, DateTime(DateTime.now().year, 3, 15, 14, 18));
+      expect(tx.occurredAt, DateTime(2026, 3, 15, 14, 18));
       expect(category.categoryKey, Categories.transfers.key);
     });
   });

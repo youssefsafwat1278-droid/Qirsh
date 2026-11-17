@@ -8,6 +8,7 @@ import 'catalog_rule_matcher.dart';
 import 'merchant_sanity.dart';
 import 'normalizer.dart';
 import 'parse_result.dart';
+import 'transaction_state_cues.dart';
 import 'transaction_timestamp_extractor.dart';
 
 /// محرّك تحليل رسائل البنك → [ParsedTransaction].
@@ -164,6 +165,7 @@ class ParserEngine {
     List<BankProfile> bankProfiles = const [],
     List<CatalogParserRule> catalogRules = const [],
     String defaultCurrency = 'SAR',
+    DateTime? now,
   }) {
     var text = Normalizer.normalizeCurrencyTokens(
       Normalizer.normalize(rawText),
@@ -182,6 +184,13 @@ class ParserEngine {
 
     if (_isIgnored(lower, bank)) {
       return ParseResult.notTransaction(bankKey: bank?.bankKey);
+    }
+    // DATA-01 — a declined/failed purchase moved no money. It is not ignored
+    // like an OTP: it stays transaction-shaped so the capture lands in the
+    // Smart Inbox review path instead of vanishing (or being auto-confirmed).
+    if (TransactionStateCues.isNotCompleted(text)) {
+      return ParseResult.notTransaction(
+          bankKey: bank?.bankKey, amountDetected: true);
     }
 
     // F-016 — catalog rules are the FIRST authority. The winning rule (sender
@@ -244,7 +253,8 @@ class ParserEngine {
     final accountNumber = _extractAccountNumber(text);
     final ruleBalance = parseCatalogAmount(catalogMatch?.balanceText);
     final balance = ruleBalance ?? amountExtraction.balance;
-    final dateResult = _extractDateResult(text, bank: bank);
+    final dateResult =
+        _extractDateResult(text, bank: bank, now: now ?? DateTime.now());
     final occurredAt = dateResult.date;
 
     // F-016: an explicitly matched catalog rule that captured the amount is a
@@ -896,7 +906,7 @@ class ParserEngine {
   // genuinely ambiguous (day and month both ≤ 12 with no profile disambiguation).
   // Ambiguous = true means the result must stay in pending, not auto-confirm.
   ({DateTime? date, bool ambiguous}) _extractDateResult(String text,
-      {required BankProfile? bank}) {
+      {required BankProfile? bank, required DateTime now}) {
     final m = _dateTime.firstMatch(text);
     if (m != null) {
       final year = int.parse(m.group(1)!);
@@ -966,20 +976,23 @@ class ParserEngine {
         ambiguous: false
       );
     }
-    // DD/MM with no year — use current year.
+    // DD/MM with no year — the processing year, unless that puts the date
+    // in the future (a late-processed `31/12` read in January): then the
+    // previous year. One day of tolerance absorbs timezone skew.
     final dm = _dateDmNoYear.firstMatch(text);
     if (dm != null) {
       final day = int.parse(dm.group(1)!);
       final month = int.parse(dm.group(2)!);
-      final year = DateTime.now().year;
       final hour = dm.group(3) != null
           ? _hourWithMeridiem(int.parse(dm.group(3)!), dm.group(5))
           : 0;
       final minute = dm.group(4) != null ? int.parse(dm.group(4)!) : 0;
-      return (
-        date: _safeDate(year, month, day, hour, minute),
-        ambiguous: false
-      );
+      final thisYear = _safeDate(now.year, month, day, hour, minute);
+      final date = thisYear != null &&
+              thisYear.isAfter(now.add(const Duration(days: 1)))
+          ? _safeDate(now.year - 1, month, day, hour, minute)
+          : thisYear;
+      return (date: date, ambiguous: false);
     }
     final dashDmy = _dateDmyDash.firstMatch(text);
     if (dashDmy == null) return (date: null, ambiguous: false);

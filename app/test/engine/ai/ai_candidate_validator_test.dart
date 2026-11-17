@@ -104,6 +104,69 @@ void main() {
       }
     });
 
+    // DATA-03 — whole numeric tokens only, like the server validator.
+    test('rejects an amount that is only a fragment of a longer number', () {
+      const text =
+          'Purchase of SAR 47.50 at CAFE card ending 1234 balance SAR 8,120.00';
+      for (final amount in [12.0, 23.0, 120.0, 8.0, 7.5, 47.0]) {
+        expect(GroundingCheck.verify(amount: amount, sanitizedText: text),
+            isFalse,
+            reason: '$amount');
+      }
+      expect(GroundingCheck.verify(amount: 47.5, sanitizedText: text), isTrue);
+      expect(GroundingCheck.verify(amount: 8120, sanitizedText: text), isTrue);
+    });
+
+    test('accepts the exact amount with Arabic-Indic digits and separators',
+        () {
+      expect(
+          GroundingCheck.verify(
+              amount: 12500.75, sanitizedText: 'شراء بمبلغ ١٢٬٥٠٠٫٧٥ ريال'),
+          isTrue);
+      expect(
+          GroundingCheck.verify(
+              amount: 12500.75, sanitizedText: 'Purchase SAR 12,500.75'),
+          isTrue);
+      expect(
+          GroundingCheck.verify(
+              amount: 500.75, sanitizedText: 'شراء بمبلغ ١٢٬٥٠٠٫٧٥ ريال'),
+          isFalse);
+    });
+
+    test('validator rejects an AI amount taken from the card number', () {
+      const text = 'Purchase of SAR 47.50 at CAFE card ending 1234';
+      final r = _validator.validate(
+        response: const AiParseResponse(
+            amount: 123,
+            amountText: '123',
+            currency: 'SAR',
+            type: 'payment',
+            direction: 'debit'),
+        sanitizedText: text,
+        localParsed: null,
+        referenceTime: _ref,
+      );
+      expect(r.accepted, isFalse);
+      expect(r.rejectionReason, 'amount_not_grounded');
+    });
+
+    test('validator rejects an amountText that disagrees with the amount', () {
+      const text = 'Purchase of SAR 47.50 at CAFE balance SAR 120.00';
+      final r = _validator.validate(
+        response: const AiParseResponse(
+            amount: 47.5,
+            amountText: '120.00',
+            currency: 'SAR',
+            type: 'payment',
+            direction: 'debit'),
+        sanitizedText: text,
+        localParsed: null,
+        referenceTime: _ref,
+      );
+      expect(r.accepted, isFalse);
+      expect(r.rejectionReason, 'amount_text_not_grounded');
+    });
+
     test('rejects an amount that is not in the text', () {
       expect(
           GroundingCheck.verify(amount: 1250, sanitizedText: 'Amount 999 EGP'),

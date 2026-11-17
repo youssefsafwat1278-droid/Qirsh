@@ -1,76 +1,45 @@
+import '../parser/normalizer.dart';
+
+/// Amount grounding for an AI candidate: the amount must equal a WHOLE numeric
+/// token of the text — never a fragment of a card number, balance or date
+/// (DATA-03). Port of `amountTokens` / `amountGrounded` in
+/// `supabase/functions/_shared/ai_candidate_validator.ts`.
 class GroundingCheck {
   static bool verify({required double amount, required String sanitizedText}) {
     if (amount <= 0) return false;
-    final candidates = _buildCandidates(amount);
-    return candidates.any((c) => sanitizedText.contains(c));
+    return amountTokens(sanitizedText).any((t) => (t - amount).abs() < 0.005);
   }
 
-  static List<String> _buildCandidates(double amount) {
-    final western = [
-      amount.toStringAsFixed(2),
-      amount.toStringAsFixed(3),
-      amount.toStringAsFixed(1),
-      amount.toStringAsFixed(0),
-    ];
-    final all = <String>{...western};
-    all.addAll(western.map(_toArabicIndic));
-    // Thousands-separated forms (1,250.00 / ١٬٢٥٠٫٠٠). Additive only.
-    for (final plain in western) {
-      final grouped = _group(plain);
-      if (grouped == plain) continue;
-      all.add(grouped);
-      final arabic = _toArabicIndic(grouped);
-      all.add(arabic);
-      all.add(arabic.replaceAll(',', '٬'));
-      all.add(arabic.replaceAll(',', '٬').replaceAll('.', '٫'));
-    }
-    return all.toList();
-  }
+  /// A maximal digit run with digit-flanked group/decimal separators (ASCII
+  /// or Arabic), so a longer number never yields a sub-token.
+  static final RegExp _numericToken =
+      RegExp(r'[0-9٠-٩۰-۹]+(?:[,٬.٫][0-9٠-٩۰-۹]+)*');
+  static final RegExp _dateTimeSepBefore = RegExp(r'[0-9٠-٩۰-۹][-/:]$');
+  static final RegExp _dateTimeSepAfter = RegExp(r'^[-/:][0-9٠-٩۰-۹]');
+  static final RegExp _last4Prefix = RegExp(
+    r'(?:[*•xX]|(?:ending|ends|acct|account|a/c|card|بطاقة|حساب|رقم|تنتهي|منتهية)'
+    r'(?:\s+(?:in|with|no\.?|number|#|بـ|ب))?[\s:#.-]*)$',
+    caseSensitive: false,
+  );
+  static final RegExp _canonical =
+      RegExp(r'^(?:0|[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:\.[0-9]+)?$');
 
-  /// Inserts a comma every three integer digits: `1250.00` -> `1,250.00`.
-  static String _group(String plain) {
-    final dot = plain.indexOf('.');
-    final integer = dot < 0 ? plain : plain.substring(0, dot);
-    final fraction = dot < 0 ? '' : plain.substring(dot);
-    if (integer.length <= 3) return plain;
-    final buffer = StringBuffer();
-    for (var i = 0; i < integer.length; i++) {
-      if (i > 0 && (integer.length - i) % 3 == 0) buffer.write(',');
-      buffer.write(integer[i]);
+  /// Values of every standalone numeric token that may be an amount.
+  static List<double> amountTokens(String text) {
+    final out = <double>[];
+    for (final m in _numericToken.allMatches(text)) {
+      if (_dateTimeSepBefore.hasMatch(text.substring(0, m.start)) ||
+          _dateTimeSepAfter.hasMatch(text.substring(m.end))) {
+        continue;
+      }
+      if (_last4Prefix.hasMatch(text.substring(0, m.start))) continue;
+      final ascii = Normalizer.normalizeDigits(m.group(0)!)
+          .replaceAll('٬', ',')
+          .replaceAll('٫', '.');
+      if (!_canonical.hasMatch(ascii)) continue;
+      final value = double.tryParse(ascii.replaceAll(',', ''));
+      if (value != null) out.add(value);
     }
-    return '$buffer$fraction';
-  }
-
-  static const _westernDigits = [
-    '0',
-    '1',
-    '2',
-    '3',
-    '4',
-    '5',
-    '6',
-    '7',
-    '8',
-    '9'
-  ];
-  static const _arabicDigits = [
-    '٠',
-    '١',
-    '٢',
-    '٣',
-    '٤',
-    '٥',
-    '٦',
-    '٧',
-    '٨',
-    '٩'
-  ];
-
-  static String _toArabicIndic(String s) {
-    var r = s;
-    for (var i = 0; i < 10; i++) {
-      r = r.replaceAll(_westernDigits[i], _arabicDigits[i]);
-    }
-    return r;
+    return out;
   }
 }
