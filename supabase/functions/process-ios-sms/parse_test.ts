@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertNotEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { deterministicParse, isResolved, parseSms } from './parse.ts';
+import { deterministicParse, isDeclinedText, isResolved, parseSms } from './parse.ts';
+import declinedTable from './declined_cases.json' with { type: 'json' };
 
 const RECEIVED = '2026-09-07T19:30:00.000Z';
 
@@ -495,5 +496,40 @@ Deno.test('refund of a failed purchase stays a RESOLVED credit', () => {
     const p = deterministicParse(text, RECEIVED, 180);
     assert(isResolved(p), text);
     assertEquals(p.direction, 'credit', text);
+  }
+});
+
+// DATA-01 / REV-01 / REV-02 / REV-04: the SAME table as the Dart
+// app/test/engine/parser/declined_state_cues_table_test.dart.
+Deno.test('declined table: not completed is never confirmed money, on every server path', async () => {
+  const ai = (type: string, direction: string) => ({ is_transaction: true, amount: 100, amount_text: '100.00',
+    currency: 'SAR', type, direction, category: 'shopping' });
+  for (const c of declinedTable.cases as Array<{ text: string; expect: string; serverDirection?: string }>) {
+    const text = c.text;
+    assertEquals(isDeclinedText(text), c.expect === 'review', `cue: ${text}`);
+    const p = deterministicParse(text, RECEIVED, 180);
+    if (c.expect === 'payment') {
+      assert(isResolved(p), `payment: ${text}`);
+      assertEquals(p.direction, 'debit', text);
+      continue;
+    }
+    if (c.expect === 'credit') {
+      // serverDirection: a pre-existing deterministic direction, unchanged here.
+      if (isResolved(p)) assertEquals(p.direction, c.serverDirection ?? 'credit', text);
+      continue;
+    }
+    assertEquals(isResolved(p), false, `review: ${text}`);
+    for (const [type, direction] of [['payment', 'debit'], ['refund', 'credit']]) {
+      for (const allowAi of [true, false]) {
+        const r = await run(text, allowAi, ai(type, direction));
+        assertEquals([r.calls, r.accepted], [0, false], `${type} ${allowAi}: ${text}`);
+      }
+      const stub = stubGemini(ai(type, direction));
+      try {
+        const primary = await parseSms({ text, rawText: text, sender: 'BANK', receivedAt: RECEIVED,
+          tzOffsetMinutes: 180, locale: 'ar', allowAi: true, aiPrimary: true });
+        assertEquals([stub.calls, primary.accepted, primary.parsed.parserSource], [0, false, 'ai_ignored'], text);
+      } finally { stub.restore(); }
+    }
   }
 });

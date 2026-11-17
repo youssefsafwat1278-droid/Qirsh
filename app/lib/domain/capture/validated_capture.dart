@@ -1,5 +1,6 @@
 import '../../engine/parser/direction_signal.dart';
 import '../../engine/parser/normalizer.dart';
+import '../../engine/parser/transaction_state_cues.dart';
 
 /// ValidatedCapture v1, the Dart side of the contract the server enforces in
 /// `supabase/functions/_shared/ai_candidate_validator.ts`. Both sides run the
@@ -238,6 +239,12 @@ CaptureValidation validateCaptureCandidate({
   required DateTime receivedAt,
 }) {
   const reject = CaptureValidation.rejected;
+  // DATA-01 / REV-03 — a declined/failed/cancelled message moved no money,
+  // whatever a server (including one deployed before the fix) concluded. The
+  // caller then takes its existing rejected path (local parse → Smart Inbox).
+  if (TransactionStateCues.isNotCompleted(text)) {
+    return reject('transaction_not_completed');
+  }
   if (!_amountGrounded(candidate.amount, text)) {
     return reject('amount_not_grounded');
   }

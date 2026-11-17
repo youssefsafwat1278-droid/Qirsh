@@ -29,6 +29,7 @@ import '../../../engine/privacy/sms_sanitizer.dart';
 import '../../../engine/parser/capture_money.dart';
 import '../../../engine/parser/merchant_sanity.dart';
 import '../../../engine/parser/parser_engine.dart';
+import '../../../engine/parser/transaction_state_cues.dart';
 import 'capture_backend_client.dart';
 import 'capture_device_registration_service.dart';
 import 'capture_retry_ledger.dart';
@@ -870,6 +871,15 @@ class CaptureSyncService {
     // confirmation stage: it gets the same on-device recovery as `rejected`
     // (valid => confirmed, otherwise Smart Inbox), never a pending row.
     if (capture.status == 'needs_review' && _localRecoveryEnabled()) {
+      await _persistBackendUnprocessableCapture(
+          capture, requireCurrentAdmission, committed);
+      return null;
+    }
+    // A server that predates the declined-transaction rule can still mark a
+    // declined purchase `processed`. It takes the same recoverable review
+    // path as `rejected`, never a confirmed row.
+    if (TransactionStateCues.isNotCompleted(
+        _string(parsed['rawMessage']) ?? capture.sanitizedText ?? '')) {
       await _persistBackendUnprocessableCapture(
           capture, requireCurrentAdmission, committed);
       return null;

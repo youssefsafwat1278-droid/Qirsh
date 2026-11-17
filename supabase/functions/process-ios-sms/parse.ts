@@ -104,24 +104,85 @@ function isIgnoredText(lower: string): boolean {
     isDeclinedText(lower);
 }
 
-// DATA-01: whole-token cue match. An Arabic cue may carry one attached clitic
-// prefix but never sits inside a longer word (`رفض` alone would hit
-// `لرفض العملية اتصل بنا` in a completed purchase); a Latin cue is bounded by
-// non-letters. Mirrors app/lib/engine/parser/transaction_state_cues.dart.
-const ARABIC_LETTER = '\\u0621-\\u064A';
-function tokenPattern(cues: string[]): RegExp {
-  const alternation = cues.map((c) => c.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
-  return new RegExp(
-    `(?<![a-z${ARABIC_LETTER}])(?:وال|بال|فال|لل|ال|و|ف|ب|ل)?(?:${alternation})(?![a-z${ARABIC_LETTER}])`,
-  );
-}
-const DECLINED = tokenPattern(rules.declinedKeywords as string[]);
-const DECLINED_EXEMPT = tokenPattern(rules.declinedExemptKeywords as string[]);
+// DATA-01: the transaction-state rule of
+// app/lib/engine/parser/transaction_state_cues.dart, over the same lists
+// (parser_rules.json; Dart drift test transaction_state_cues_drift_test.dart):
+// 1. whole-token cues (Arabic: one و/ف/ب/ال clitic, never the purpose ل);
+// 2. a cue right after a merchant introducer ("at Failed Ventures") is a name;
+// 3. a cue preceded in its sentence by a hypothetical/future/instructional
+//    marker is not a status; a credit word that is negated, or directly
+//    followed by a declined cue / marker / negation, was not done;
+// 4. not completed = a declined status with no done credit before it, or a
+//    promised/negated credit in a message that names a declined operation.
+const ARABIC_LETTER = '\u0621-\u064A';
+const NO_LETTER_BEFORE = `(?<![a-z${ARABIC_LETTER}])`;
+const NO_LETTER_AFTER = `(?![a-z${ARABIC_LETTER}])`;
 
-/** A purchase that did not complete (declined/failed/...), unless the message is its refund/reversal. */
-export function isDeclinedText(lower: string): boolean {
-  const text = lower.replace(/\s+/g, ' ');
-  return DECLINED.test(text) && !DECLINED_EXEMPT.test(text);
+/** Same as the Dart `TransactionStateCues.foldForCues`. */
+export function foldForCues(input: string): string {
+  return input
+    .replace(/[\u064B-\u0670]/g, '') // tashkeel (Normalizer.stripTashkeel)
+    .replace(/\u0640/g, '') // tatweel
+    .split(/[\r\n]+/).map((line) => line.replace(/[ \t]+/g, ' ').trim()).filter((l) => l.length > 0).join('\n')
+    .toLowerCase()
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/[أإآٱ]/g, 'ا')
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ي')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه');
+}
+
+function alternation(cues: string[]): string {
+  return cues.map((c) => foldForCues(c).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+}
+function tokenPattern(cues: string[], lam: boolean, flags = ''): RegExp {
+  const clitics = lam ? 'وال|بال|فال|لل|ال|و|ف|ب|ل' : 'وال|بال|فال|ال|و|ف|ب';
+  return new RegExp(`${NO_LETTER_BEFORE}(?:${clitics})?(?:${alternation(cues)})${NO_LETTER_AFTER}`, flags);
+}
+const DECLINED_CUES = rules.declinedKeywords as string[];
+const HYPOTHETICAL_CUES = rules.stateCueHypotheticalMarkers as string[];
+const NEGATION_CUES = rules.stateCueNegationMarkers as string[];
+const DECLINED = tokenPattern(DECLINED_CUES, false, 'g');
+const CREDIT_ACTION = tokenPattern(rules.declinedExemptKeywords as string[], false, 'g');
+const HYPOTHETICAL = tokenPattern(HYPOTHETICAL_CUES, true);
+const NEGATION = tokenPattern(NEGATION_CUES, false);
+const AFTER_INTRODUCER = new RegExp(
+  `${NO_LETTER_BEFORE}(?:${alternation(rules.stateCueMerchantIntroducers as string[])})[\\s:]*$`,
+);
+const UNDONE_NEXT = new RegExp(
+  `^ (?:was |has been |is |been |تم )?(?:${alternation([...DECLINED_CUES, ...HYPOTHETICAL_CUES, ...NEGATION_CUES])})${NO_LETTER_AFTER}`,
+);
+const BOUNDARY = /[\n!?؟;؛]|\.(?![0-9])/g;
+
+function sentenceStart(text: string, end: number): number {
+  let start = 0;
+  for (const b of text.slice(0, end).matchAll(BOUNDARY)) start = b.index! + b[0].length;
+  return start;
+}
+
+function firstStatus(cues: RegExp, text: string, negatable: boolean): { at: number | null; undone: boolean } {
+  let undone = false;
+  for (const m of text.matchAll(cues)) {
+    const sentence = text.slice(sentenceStart(text, m.index!), m.index!);
+    if (AFTER_INTRODUCER.test(sentence)) continue;
+    if (HYPOTHETICAL.test(sentence) ||
+      (negatable && (NEGATION.test(sentence) || UNDONE_NEXT.test(text.slice(m.index! + m[0].length))))) {
+      undone = true;
+      continue;
+    }
+    return { at: m.index!, undone };
+  }
+  return { at: null, undone };
+}
+
+/** A transaction that did not complete (declined/failed/cancelled/...), unless the message is its refund/reversal. */
+export function isDeclinedText(raw: string): boolean {
+  const text = foldForCues(raw);
+  const credit = firstStatus(CREDIT_ACTION, text, true);
+  const declinedAt = firstStatus(DECLINED, text, false).at;
+  if (declinedAt !== null) return credit.at === null || declinedAt < credit.at;
+  return credit.at === null && credit.undone && new RegExp(DECLINED.source).test(text);
 }
 
 /**

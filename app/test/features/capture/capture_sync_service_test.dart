@@ -347,6 +347,41 @@ void main() {
   });
 
   test(
+      'a declined purchase the server marked processed is never imported as a confirmed transaction',
+      () async {
+    final client = _FakeCaptureBackendClient([
+      _capture(
+        payloadId: 'declined-capture',
+        status: 'processed',
+        rawMessage: 'Purchase of SAR 42 at Coffee was declined.',
+      ),
+      _capture(payloadId: 'completed-capture', status: 'processed'),
+    ]);
+    final txRepo = DriftTransactionRepository(db);
+    final svc = CaptureSyncService(
+      settingsRepository: settingsRepository,
+      transactionRepository: txRepo,
+      dedupStore: DriftDedupStore(db),
+      smartInboxRepository: DriftSmartInboxRepository(db),
+      suspectedDuplicateRepository: DriftSuspectedDuplicateRepository(db),
+      registrationService: _FakeRegistrationService(),
+      ownershipGuard: _MutableOwnershipGuard('user-A', 'generation-A'),
+      currentUserId: () => 'user-A',
+      accountRepository: DriftAccountRepository(db),
+      client: client,
+      backendConfigured: true,
+      loadInstallId: () async => 'install-id',
+    );
+
+    await svc.sync();
+
+    final stored = await txRepo.getRecent(limit: 10, accountId: null);
+    expect(stored, hasLength(1),
+        reason: 'only the completed purchase becomes a transaction');
+    expect(stored.single.rawMessage, isNot(contains('declined')));
+  });
+
+  test(
       'relay redelivery repairs a missing receipt without blocking newer captures',
       () async {
     final older = _capture(payloadId: 'older-capture', status: 'processed');

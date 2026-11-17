@@ -129,6 +129,9 @@ class _FakeServer implements CaptureServerPort {
 const _raw = 'عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\n'
     'لدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50';
 const _unparseable = 'Your transaction could not be completed. Call us.';
+// REV-03: the same layout as [_raw], but the purchase was declined.
+const _declinedRaw = 'تم رفض عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\n'
+    'لدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50';
 final _received = DateTime.utc(2026, 4, 8, 9, 45);
 String _id(int n) => n.toRadixString(16).padLeft(64, '0');
 
@@ -196,7 +199,7 @@ void main() {
         localOnly: localOnly,
       );
 
-  CaptureImportService buildService() {
+  CaptureImportService buildService({bool aiPrimary = false}) {
     final ingest = IngestCapturedMessageUseCase(AddTransactionUseCase(
       transactionRepository: txRepo,
       merchantCategoryRepository: DriftMerchantCategoryRepository(db),
@@ -224,6 +227,7 @@ void main() {
       sessionUid: () => sessionUid,
       replicaOwnerUid: () async => replicaUid,
       ownershipGuard: _Guard(() => admissionCurrent),
+      aiPrimarySelected: aiPrimary ? () async => true : null,
     );
   }
 
@@ -535,6 +539,26 @@ void main() {
       expect(tx!.amountMoney.minorUnits, 4500,
           reason: 'the local parse of the raw text, not the unverified result');
     });
+
+    for (final aiPrimary in [false, true]) {
+      test(
+          'REV-03 (aiPrimary=$aiPrimary): a server that still returns a '
+          'declined purchase as processed is not imported; Smart Inbox',
+          () async {
+        queue.items.add(item(_id(1), text: _declinedRaw));
+        // What a process-ios-sms deployed before DATA-01 returns.
+        server.fetch = CaptureServerFetch(
+            CaptureFetchStatus.ok, {_id(1): _processed(_id(1))});
+
+        await buildService(aiPrimary: aiPrimary).run();
+
+        expect(await txIds(), isEmpty, reason: 'no confirmed money');
+        expect(await count('smart_inbox_items', "payload_id = '${_id(1)}'"), 1);
+        expect(await sync.isPayloadImported(_id(1)), isTrue);
+        expect(queue.acked, [_id(1)]);
+        expect(ai.calls, 0);
+      });
+    }
 
     for (final entry in {
       'rejected': (String id) => _rejected(id),

@@ -180,6 +180,51 @@ void main() {
           recent.where((t) => t.status == TransactionStatus.confirmed), isEmpty);
     });
 
+    test(
+        'REV-01: "declined … will be refunded" is zero confirmed spend AND '
+        'zero confirmed income, on device and with consented AI', () async {
+      final ai = _SpyAi();
+      final withAi = AddTransactionUseCase(
+        transactionRepository: txRepo,
+        merchantCategoryRepository: DriftMerchantCategoryRepository(db),
+        aiClient: ai,
+        loadAiConsent: () async => true,
+      );
+      const plain = 'Your purchase of SAR 250.00 at Shop X was declined. '
+          'If amount was deducted it will be refunded.';
+      final snb = _snb(
+          'Your purchase was declined. If amount was deducted it will be '
+          'refunded.',
+          250);
+      for (final sms in [plain, snb]) {
+        for (final onDeviceOnly in [true, false]) {
+          final r = await withAi(
+              rawMessage: sms, senderId: 'SNB', onDeviceOnly: onDeviceOnly);
+          expect(r.outcome, AddTransactionOutcome.notTransaction, reason: sms);
+          expect(r.droppedByParser, isTrue, reason: sms);
+        }
+      }
+      expect(ai.requests, isEmpty);
+      final now = DateTime.now();
+      final from = DateTime(now.year, now.month);
+      final to = DateTime(now.year, now.month + 1);
+      expect(
+          (await txRepo.expenseTotalBetween(from: from, to: to, currency: 'SAR'))
+              .isZero,
+          isTrue);
+      expect(
+          (await txRepo.refundTotalBetween(from: from, to: to, currency: 'SAR'))
+              .isZero,
+          isTrue);
+      expect(
+          (await txRepo.incomeTotalBetween(from: from, to: to, currency: 'SAR'))
+              .isZero,
+          isTrue);
+      final recent = await txRepo.getRecent(limit: 10, accountId: null);
+      expect(
+          recent.where((t) => t.status == TransactionStatus.confirmed), isEmpty);
+    });
+
     test('a declined message is never sent to consented AI', () async {
       final ai = _SpyAi();
       final withAi = AddTransactionUseCase(
