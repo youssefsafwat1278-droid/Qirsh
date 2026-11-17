@@ -34,6 +34,9 @@ Every release checklist item that cites a `SRC-APPLE-*` or `SRC-PLAY-*` ID is a 
 - 1.6: appropriate security measures for user information; prevent unauthorized use/disclosure/access.
 - Qirsh: support link in Settings must work; 1.6 is the store-level anchor for the OWASP work in Tier 2
   (RLS, token storage, no PII in logs).
+- Re-checked 2026-11-17: the app's contact address (`support@money-companion.app`, Help and Settings)
+  differs from the privacy policy's (`business@qirsh.site`). One monitored address must be used in the
+  app, the Support URL and the policy. See `docs/releases/version-1/evidence/official-doc-checks.md`.
 
 **SRC-APPLE-2.1** App completeness
 - Final, fully functional build; no placeholder text; tested on device.
@@ -78,6 +81,9 @@ Every release checklist item that cites a `SRC-APPLE-*` or `SRC-PLAY-*` ID is a 
   collection to name + email, allows email hiding, and does not collect interactions for advertising
   without consent (Sign in with Apple satisfies this). Exempt if only the app's own account system is used.
 - Qirsh: if Google sign-in is offered on iOS, Sign in with Apple (or equivalent) is required.
+- Re-checked 2026-11-17: the `ios-signed` workflow builds Apple + Google + email one-time code; Apple is
+  shown on iOS whenever Google is, which satisfies 4.8. Email is a one-time code, not a password, which
+  matters for the reviewer account under 2.1 (no password exists to give App Review).
 
 **SRC-APPLE-5.1.1** Data collection and storage
 - (i) privacy policy linked in App Store Connect **and** in the app; covers what/how/uses, third-party
@@ -124,14 +130,21 @@ system API (no custom review prompts); no manipulative monetization.
 **SRC-APPLE-PRIVACY-MANIFEST** Privacy manifests and required-reason APIs
 - URLs: https://developer.apple.com/documentation/bundleresources/privacy-manifest-files and
   https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api —
-  `PARTIAL` (JS-rendered; only titles retrieved). The upcoming-requirements page (`FETCHED`) confirms
-  that since **2024-05-01** uploads must declare approved reasons for required-reason APIs, including
-  those used by third-party SDKs.
-- From prior knowledge (re-verify): `PrivacyInfo.xcprivacy` keys `NSPrivacyTracking`,
-  `NSPrivacyTrackingDomains`, `NSPrivacyCollectedDataTypes`, `NSPrivacyAccessedAPITypes`; categories
-  include UserDefaults, file timestamp, system boot time, disk space, active keyboards; reason `CA92.1`
-  (app-only UserDefaults) and `1C8F.1` (app-group UserDefaults); listed "commonly used" SDKs must ship
-  signed manifests.
+  `FETCHED` 2026-11-17 through Apple's JSON endpoints
+  (`https://developer.apple.com/tutorials/data/documentation/bundleresources/<path>.json`); the
+  reason codes live on `.../app-privacy-configuration/nsprivacyaccessedapitypes/nsprivacyaccessedapitype`.
+  Since **2024-05-01** App Store Connect does not accept apps that use required-reason APIs without
+  declaring a reason (stated on the required-reason page itself).
+- Confirmed from the primary page: keys `NSPrivacyTracking`, `NSPrivacyTrackingDomains`,
+  `NSPrivacyCollectedDataTypes`, `NSPrivacyAccessedAPITypes`; categories FileTimestamp, SystemBootTime,
+  DiskSpace, ActiveKeyboards, UserDefaults. Reasons used by Qirsh: `CA92.1` (UserDefaults only
+  accessible to the app itself), `1C8F.1` (UserDefaults shared within the same App Group), `C617.1`
+  (metadata of files in the app or app group container), `85F4.1` (display disk space to the person;
+  never sent off-device). `E174.1` requires the app to **behave differently** based on disk space and
+  does not fit Qirsh's diagnostics-only probe. Each executable bundle that calls such an API needs its
+  own manifest entry. An app's manifest need not cover data collected by third-party SDKs (they ship
+  their own); the Xcode Privacy Report aggregates them.
+- Verdicts for the candidate: `docs/releases/version-1/evidence/official-doc-checks.md` §a.
 - Qirsh: the app **and each extension** (share extension, App Intents) that touch app-group
   UserDefaults need correct manifests; Flutter plugins and AdMob/Sentry SDK manifests must be present
   in the archive. Check the App Store Connect upload email for missing-reason warnings.
@@ -146,6 +159,19 @@ system API (no custom review prompts); no manipulative monetization.
 - Qirsh: transactions/budgets → "Other Financial Info" (linked, app functionality); SMS text sent for AI
   parsing → declare; AdMob → Identifiers/Usage/Advertising data; Sentry → Diagnostics. Labels can be
   edited without a new build but must be updated whenever practices change.
+- Re-checked 2026-11-17 (official type names): SMS text → User Content > **Emails or Text Messages**
+  (Apple: text messages include SMS); profile photo → User Content > **Photos or Videos**; account ID →
+  Identifiers > **User ID**; notification/engagement events → Usage Data > **Product Interaction**; ads →
+  Usage Data > **Advertising Data**, Identifiers > **Device ID**, Location > **Coarse Location**,
+  Diagnostics > **Performance Data** (per Google's SDK disclosure, `SRC-GMA-DISCLOSURE`). The first four
+  are missing from the Runner privacy manifest.
+
+**SRC-GMA-DISCLOSURE** Google Mobile Ads SDK — App Store data disclosure
+- URL: https://developers.google.com/admob/ios/privacy/data-disclosure — `FETCHED` 2026-11-17
+- SDK collects Device ID, Advertising Data, Coarse Location (incl. IP-derived), Performance Data,
+  non-user crash logs and product interactions, for third-party advertising and analytics; SDK 11.2.0+
+  ships a privacy manifest; the app developer stays responsible for its disclosures. Nothing on the page
+  covers an app that links the SDK but never initializes it (`UNCONFIRMED`).
 
 **SRC-APPLE-ATT** App Tracking Transparency
 - URL: https://developer.apple.com/app-store/user-privacy-and-data-use/ — `FETCHED`
@@ -163,15 +189,33 @@ system API (no custom review prompts); no manipulative monetization.
 - Internal testers ≤100 (App Store Connect users); external ≤10,000; the first build for external
   testers needs Beta App Review; builds expire after **90 days**; test info (description, what to test,
   feedback email) needed. Guideline 2.2: testers can't be compensated.
+- Export option `testFlightInternalTestingOnly` (`xcodebuild -help`, Xcode 27.2, read 2026-11-17): when
+  enabled the build cannot be distributed via external TestFlight or the App Store.
+
+**SRC-APPLE-SCREENSHOTS** Screenshot specifications
+- URL: https://developer.apple.com/help/app-store-connect/reference/screenshot-specifications — `FETCHED` 2026-11-17
+- Required: at least one iPhone screenshot (Dynamic Island, medium display) and, if the app supports
+  iPadOS, at least one iPad 13-inch screenshot.
+
+**SRC-APPLE-PHASED** Phased release
+- URL: https://developer.apple.com/help/app-store-connect/update-your-app/release-a-version-update-in-phases — `FETCHED` 2026-11-17
+- Version **updates** only: 7 days (1/2/5/10/20/50/100%) to users with automatic updates; pausable for
+  30 days in total; manual downloads unaffected. Not a canary for a first version.
 
 **SRC-APPLE-EXPORT** Export compliance
 - URL: https://developer.apple.com/help/app-store-connect/manage-app-information/overview-of-export-compliance — `FETCHED`
-  (https://developer.apple.com/documentation/security/complying-with-encryption-export-regulations — `PARTIAL`, title only)
+  (https://developer.apple.com/documentation/security/complying-with-encryption-export-regulations — `FETCHED`
+  2026-11-17 via its JSON endpoint; https://developer.apple.com/documentation/bundleresources/information-property-list/itsappusesnonexemptencryption — `FETCHED`)
 - Any use of encryption (including standard/OS crypto) requires an export-compliance determination per
   version; the developer is responsible for the EAR determination; setting the Info.plist key avoids
   re-answering each upload. France has separate import rules (banking apps listed as exempt).
-- Qirsh: if only HTTPS/OS crypto is used, record the determination once and set
-  `ITSAppUsesNonExemptEncryption` accordingly (key name from prior knowledge; verify).
+- `ITSAppUsesNonExemptEncryption` confirmed: `NO` only if the app and its linked libraries use no
+  encryption or only encryption exempt from export-compliance documentation; otherwise `YES`, normally
+  with `ITSEncryptionExportComplianceCode` after Apple reviews the documentation. OS HTTPS is "typically"
+  exempt; exempt use may still need a year-end self-classification report.
+- Qirsh: the app also implements standard algorithms itself (Argon2id + symmetric backup encryption,
+  SQLCipher, CryptoKit AES-GCM queue), so the current `false` needs an export-control determination
+  (not legal advice; V1-026).
 
 ### Google Play
 
@@ -196,6 +240,24 @@ system API (no custom review prompts); no manipulative monetization.
 - Qirsh: highest-risk Android item. Request only the minimal SMS permissions actually used; filter to
   financial senders on-device; never upload non-financial SMS; make the AI-parse upload explicitly
   consented; record a demo video for the declaration; keep app usable when the permission is denied.
+
+**SRC-PLAY-PERMDECL** Permissions Declaration Form
+- URL: https://support.google.com/googleplay/android-developer/answer/9214102 — `FETCHED` 2026-11-17
+- Play Console → App content → Permissions Declaration Form: core use case, reviewer instructions,
+  **required video demonstration**, test credentials if sign-in is needed; releases are blocked until it is
+  handled; review can take several weeks.
+
+**SRC-PLAY-ADID** Advertising ID
+- URL: https://support.google.com/googleplay/android-developer/answer/6048248 — `FETCHED` 2026-11-17
+- Apps targeting Android 13+ need `com.google.android.gms.permission.AD_ID` to read the ID; the Google
+  Mobile Ads SDK declares it and it merges into the app manifest by default. The Play Console "Advertising
+  ID" declaration itself was found only in secondary sources (`UNCONFIRMED`).
+
+**SRC-PLAY-16KB** 16 KB memory page sizes
+- URL: https://developer.android.com/guide/practices/page-sizes — `FETCHED` 2026-11-17
+- Apps targeting Android 15+ must support 16 KB pages on 64-bit devices; from **2027-02-01** updates that
+  don't cannot be released (date as stated on the page). Flutter apps ship native libraries: check the
+  release AAB.
 
 **SRC-PLAY-USERDATA** User Data policy (incl. prominent disclosure)
 - URL: https://support.google.com/googleplay/android-developer/answer/10144311 — `FETCHED`
@@ -432,11 +494,11 @@ Not store-enforced. Adopted in proportion to a small team; deliberately skipped 
 
 ## Tier 3: Could not verify today / open items
 
-1. **Apple privacy-manifest and required-reason pages** are JavaScript-rendered; only titles were
-   retrieved. Key names and reason codes (`CA92.1`, `1C8F.1`) come from prior knowledge. Re-verify in
-   a browser before relying on them.
-2. **Apple export-compliance developer doc** (complying-with-encryption-export-regulations) — title only.
-   The `ITSAppUsesNonExemptEncryption` key name is from prior knowledge.
+1. ~~Apple privacy-manifest and required-reason pages~~ — resolved 2026-11-17: read through Apple's
+   JSON endpoints; codes confirmed (see `SRC-APPLE-PRIVACY-MANIFEST`). Still open: whether a
+   user-initiated clipboard copy of a `85F4.1` value counts as "sent off-device".
+2. ~~Apple export-compliance developer doc~~ — resolved 2026-11-17 (JSON endpoint); key name and
+   semantics confirmed. The App Store Connect questionnaire wording needs an account and was not read.
 3. **OWASP MAS profiles (L1/L2/R/P)** current status could not be read from mas.owasp.org; the MASVS
    landing page did not show a version string (version taken from GitHub release v2.1.0). Whether
    MASVS has a newer version than v2.1.0 in docs not yet tagged: **unknown**.
@@ -459,7 +521,12 @@ Not store-enforced. Adopted in proportion to a small team; deliberately skipped 
     fetched page.
 14. **Apple ATT for non-personalized AdMob**: Apple's page does not address it directly; the Tier 1
     position is an inference.
-15. **Play "AD_ID" permission declaration** for apps using the advertising ID: not re-verified today.
+15. **Play "AD_ID" permission** confirmed 2026-11-17 (`SRC-PLAY-ADID`); the Play Console Advertising ID
+    declaration form's exact location and scope remain unverified from a primary source.
+16. **Apple phased release for a first version**: the help page describes it for updates only and does not
+    say in words that it is unavailable for version 1.0.
+17. **What to disclose for an ads SDK that is linked but never initialized**: neither Apple nor Google
+    addresses it.
 
 Re-verification cadence: re-fetch every `SRC-APPLE-*` and `SRC-PLAY-*` source at the start of each
 release cycle and whenever Apple's guidelines "Last Updated" date or the Play policy center changes.

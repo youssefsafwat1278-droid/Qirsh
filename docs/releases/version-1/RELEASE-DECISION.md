@@ -1,94 +1,128 @@
 # Version 1 — release decision
 
-**Recommendation, 2026-11-17. Not an owner decision.** Prepared by the orchestrating agent (Claude Fable 5.2) under [`docs/release-process/SEVERITY-AND-GATES.md`](../../release-process/SEVERITY-AND-GATES.md). The owner decides; no approval or accepted limitation is recorded here because none was given.
+**Recommendation, 2026-11-17, second round. Not an owner decision.** Prepared by the orchestrating agent (Claude Fable 5.2) under [`docs/release-process/SEVERITY-AND-GATES.md`](../../release-process/SEVERITY-AND-GATES.md).
 
-Candidate: `af675aec` on local branch `release-readiness/v1` (audit baseline `ab5dc10a` plus 12 fix commits). See [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md).
+The owner has accepted no limitation and approved no proposed scope decision. Nothing in this file records an acceptance.
+
+Candidate: `5dae2e2d` on the local branch `release-readiness/v1` (final application code `50957c06` plus one test-only commit) — see [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md) for how it relates to `23499229`, `af675aec` and the records commits.
 
 | Scope | Decision |
 |---|---|
 | iOS | **NOT READY** |
-| Android | **NOT READY** |
+| Android | **NOT READY** — and, by existing project record, outside Version 1 |
 | Backend | **NOT READY** |
 | Combined, for the intended launch | **NOT READY** |
 
-The independent reviewer reached the same four decisions ([`evidence/audits/I-independent-review.md`](evidence/audits/I-independent-review.md)).
+The independent reviews reached NOT READY each time they gave a decision. The count of passing checks in [COVERAGE-MATRIX.md](COVERAGE-MATRIX.md) is informational and does not offset a blocker.
 
-A count of passing checks does not change this: see [COVERAGE-MATRIX.md](COVERAGE-MATRIX.md) for the tally, which is informational.
+## What changed since the first decision
+
+Local engineering closed or narrowed several first-round blockers, and reading production closed one. None of it is released.
+
+| First-round blocker | Now |
+|---|---|
+| V1-001 declined purchases counted as spending | Fixed in code over ten parser rounds; the final commit is independently reviewed with no S1 regression and nothing worse than the baseline on the device or effective path. **Not closed**: open defects remain, and it needs the server and a new build shipped together plus device verification |
+| V1-002 production migration state unknown | **Closed for the ledger** by a read-only check: production has the candidate's 134 migrations. No migration is needed |
+| V1-020 restore versus cloud sync (was suspected) | **Confirmed** on a local stack, then the decision-independent part fixed and verified on that stack. Open: the owner's replace-or-merge decision; device run |
+| V1-009 no store-capable hardened pipeline | Prepared locally; never run on Codemagic |
+| V1-054 data removal untested in a configured build | Covered by tests in the gate |
+
+New blockers found in the second round are listed below.
 
 ## iOS — NOT READY
 
-Open S1 blockers:
+Open S1 items:
 
-| ID | Blocker | What closes it |
+| ID | Blocker | Who can clear it |
 |---|---|---|
-| V1-001 | Declined purchases counted as spending. Fixed in code on this branch only | Deploy `process-ios-sms` (owner), build the candidate through CI, verify on a device with the manual script. The second fix has not been independently reviewed |
-| V1-003 | Store privacy details and the privacy manifest's collected-data list omit data the app sends | Owner corrects App Store Connect privacy answers; engineering updates the manifest's collected-data types once the ads decision (V1-005) is made |
-| V1-007 | Privacy Policy and Terms cannot be opened in-app with Cloud off, including before consenting | Owner decision: allow these two links to open with Cloud off, or show the texts in-app |
-| V1-014 | iPad and landscape enabled with no decision, layout evidence or iPad screenshots | Owner decision: iPhone-only (remove the iPad device family, lock orientation) or support and test iPad |
-| V1-015 | Reviewer notes describe a different app; no reviewer account or way to exercise capture | Owner: reviewer account with seeded fictional data, notes rewritten from the code |
-| V1-020 | Restore then re-enabling Cloud may overwrite restored data or bring back removed rows (suspected; rated by impact) | Run the manual test; fix if confirmed |
+| V1-001 | Bank-message parser. The candidate is measurably safer than build 147 (wrong total-changing outcomes on the final reviewer's 1,758-message set: 509 → 71 on the effective path; declined messages recorded: 174 → 4), but 71 remain, each also wrong at the baseline: notices recorded as money, wrong directions, own-account transfers, foreign-currency figures. Measured on synthetic messages only | Owner decision on shipping with the remaining defects; server deploy with a new build; device run with real messages |
+| V1-078 | A limit or balance figure recorded as the amount. Fixed in code; takes effect only with the new build and server | Deploy and build |
+| V1-072 | Informational notices recorded as money (34 on the reviewer's set). Two attempts to ignore them caused silent losses and were removed | Owner decision on how notices should be handled |
+| V1-003 | Store privacy details and the privacy manifest's collected-data list omit data the app sends | Owner (console) and engineering after the ads decision |
+| V1-005 / V1-063 | **All advertising flags are on in production.** A store build from the release workflow carries the AdMob IDs and would show ads, while the privacy policy, consent text and store declarations do not mention ads | Owner decision |
+| V1-007 | Privacy Policy and Terms cannot be opened in-app with Cloud off, including before consenting | Owner decision |
+| V1-014 | iPad and landscape enabled with no decision, layout evidence or iPad screenshots | Owner decision |
+| V1-015 | No working reviewer access: the app has no password sign-in; reviewer notes drafted but not submitted | Owner |
+| V1-020 | Restore and cloud sync: fixed in code and verified on a local stack; the replace-or-merge rule is undecided; no device run | Owner decision; device |
 
-Gates not met: G4 (no signed artifact of the candidate), G5 (no device verification at all), G6 (store requirements), G9 (owner decision). G1 is met locally: the strict gate passed 15 of 15 on `af675aec` ([TEST-EVIDENCE.md](TEST-EVIDENCE.md)); it has not run in CI.
+Also open and affecting testers today: build 147 hides the tab bar after an email-code sign-in (RT-01). Fixed in the candidate and confirmed on a simulator; testers get it only with a new build.
 
-S2 items open with no exception: V1-005 (ads undisclosed), V1-006 (deletion wording), V1-009 (no hardened store-capable pipeline — the present workflow produces internal-testing builds only), V1-012, V1-016, V1-017, V1-019, V1-026, V1-054, V1-055.
-
-What is in reasonable shape, by code reading and tests only: consent gating of native uploads, account isolation logic, exact money arithmetic, duplicate handling, localization completeness.
+Gates: G1 (automated gates on the candidate) — see [TEST-EVIDENCE.md](TEST-EVIDENCE.md). Not met: G4 (no signed artifact of the candidate), G5 (no physical-device verification of anything), G6 (store requirements), G9 (owner decision). S2 items remain open with no exception record.
 
 ## Android — NOT READY
 
-V1-004: Android's place in Version 1 is undecided and every publishing gate is open. A release build would have no sign-in method; the Play SMS permission declaration and Data safety form are unsubmitted and stale; no release bundle has ever been built; R8 has never run on the app; Kotlin tests run in no CI; nothing has run on a device; SMS received while the app is force-stopped are lost (V1-027). Android could not be built or run in this assessment (no Java, no `adb`).
-
-**Recommendation to the owner: record Android as OUT of Version 1** and plan it as its own release. That turns V1-004 from a blocker into a recorded scope decision and removes Android from the combined decision. This is a proposal; it is not decided.
+Project records already place Android outside Version 1 (Play publication deferred by the owner; see [DECISIONS-NEEDED.md](DECISIONS-NEEDED.md), table A). On that basis Android does not enter the combined decision. On its own it is not releasable: no sign-in method in a release build, the Play SMS declaration and Data safety form unsubmitted and stale, no release bundle ever built, no device run, and it could not be built or run in this assessment.
 
 ## Backend — NOT READY
 
-| ID | Blocker | What closes it |
-|---|---|---|
-| V1-002 | Production migration state unknown for about 32 migrations, including those account deletion depends on | Operator runs the read-only checks in [RELEASE-PLAN.md](RELEASE-PLAN.md) and records the result |
-| V1-001 (server part) | Server still accepts declined purchases until `process-ios-sms` is redeployed | Owner-authorized deploy |
+| Item | State |
+|---|---|
+| Migrations | None needed; production ledger equals the candidate |
+| Functions to deploy | Three, not all: `account-deletion-worker` (the deployed one predates profile-photo erasure, V1-062), `process-ios-sms` and `parse-sms` (parser). The parser functions and the new app build must ship together — the server alone rejects messages that only the new build recovers into review; a new server with build 147 was not measured |
+| Advertising flags | On in production, contrary to the recorded decision |
+| Recovery | Point-in-time recovery is off and no backups are listed. No verified way to restore the database |
+| Monitoring | None for the backend |
+| AI spend | No global ceiling |
 
-Gate G7 not met: production state unknown; backup and point-in-time-recovery status unrecorded (V1-023); no written, rehearsed deploy order (V1-021 — a proposed order is now in the release plan, unrehearsed); no backend monitoring (V1-024); no ceiling on AI spending (V1-022).
-
-The backend code at the candidate differs from what build 147 was built against only in `process-ios-sms`.
+Gate G7 is not met. The single action package for the owner's approval is in [RELEASE-PLAN.md](RELEASE-PLAN.md). Nothing in it has been executed.
 
 ## Combined — NOT READY
 
-The combined decision is the worst of the platforms in scope and the backend they depend on. With Android out of scope it is still NOT READY on iOS and backend.
+With Android outside the scope, the combined decision is still NOT READY on iOS and backend.
 
-## Proposed limitations (not accepted)
+## The five lists the owner asked for
 
-If the owner wishes to ship with any S2 or S3 item open, each needs a signed exception. Candidates the orchestrator would propose once the S1 blockers are closed: V1-025 (admin advisories, with the panel kept off the public internet), V1-031, V1-032, V1-033, V1-040, V1-043, V1-047, V1-050, V1-051, V1-056, V1-057, and the interface items in [KNOWN-LIMITATIONS.md](KNOWN-LIMITATIONS.md). No exception record has been written, because nobody has agreed to anything.
+### 1. Local engineering completed and verified
 
-## Decisions required from the owner
+| Work | Verification |
+|---|---|
+| Parser: declined, failed, pending, reversed and informational messages; limit/balance/code figures never the amount; import-path defences; whole-word ignore rules and currency codes | 1,565 shared cases on device and server; ten rounds; independent review of every commit, the last one (R) with its own harness. Not device, not real traffic |
+| Restore keeps server identity; no divergence or duplicates | Unit tests against a fake backend and a live local Supabase stack: fails before, passes after. Independent review K |
+| Tab bar after sign-in | Tests; simulator, three fresh installs, with a control build reproducing the defect |
+| Data removal through startup in a configured build | Tests in the gate (10/10) |
+| Native iOS tests | 194 passed on a simulator — first valid run |
+| Touch targets, contrast with existing tokens, small-screen layout, labels | Widget tests; part seen on a simulator |
+| Release workflow hardened; version define; skip gate; define-gated suites in the gate | Contract tests; never run on Codemagic |
+| Admin dependency patch and image-optimizer hardening | Build and tests |
+| Help text, paste wording, force-update range, sync timezone | Tests |
+| Production compared read-only; official documentation checked; reviewer notes drafted; decisions tabulated | See `evidence/` |
 
-1. **Android**: in or out of Version 1 (V1-004). Recommendation: out.
-2. **iPad**: iPhone-only or supported (V1-014). Recommendation: iPhone-only for Version 1.
-3. **Ads at launch**: ship with AdMob able to be enabled, and disclose it in the privacy policy, consent text and store declarations; or ship with ads unconfigured and say so (V1-005). Recommendation: no ads at launch, with the store declarations still covering the SDK that is in the binary.
-4. **Account deletion wording**: change the policy to match immediate permanent deletion, or change the app to the 30-day scheme (V1-006). Recommendation: change the policy.
-5. **Policy and Terms with Cloud off** (V1-007). Recommendation: let those two fixed URLs open, or bundle the texts.
-6. **Consent withdrawal**: change the sentence to say both are withdrawn together, or add separate controls (V1-017). Recommendation: change the sentence.
-7. **Countries offered in onboarding** versus the two the bank catalog covers (V1-019).
-8. **Sign-in providers** for the store build and their production variable values (V1-016).
-9. **Export compliance** answer given the app's own backup encryption (V1-026) — may need legal advice.
-10. **Lock-screen detail** in capture notifications (V1-036); **signed-out Shortcut captures** (V1-037); **language preselection** (V1-044); **shared category learning default** (V1-048); **unreachable features** shipped in the binary (V1-042).
-11. **Admin panel**: major Next.js upgrade, or a written constraint that the panel is never internet-exposed (V1-025).
-12. **A store-capable build pipeline**: harden `ios-signed-release`, or re-point `ios-signed` at a release branch with App Store export (V1-009).
-13. **A review list for declined purchases already stored** (V1-056).
+### 2. Local work still outstanding
 
-## Actions required from the owner or operator
+- Parser open defects (RR-01): notices recorded as money; wrong directions for deposit and own-account wordings; foreign-currency figure recorded instead of the charged amount. No further round was made after the final review, by agreement with the owner.
+- The review-volume cost of the stricter parser has no mitigation yet (AI validator rejects more correct candidates).
+- Swift notification preview still matches by substring.
+- Layouts above the 1.25× text cap; touch targets in sheets and secondary screens; date digits in Arabic.
+- Kotlin tests in no CI; backend behavior in no gate; Next.js major upgrade.
+- Disk-space probe still compiled into release builds (privacy manifest declaration kept).
+- RT-03 sign-out sentence when Cloud is off.
 
-In order:
+### 3. Blocked by unavailable access or devices
 
-1. Run the read-only production checks (migration ledger, deployed functions, flags, cron, secrets presence, backup/PITR tier) and record the results. Closes or confirms V1-002 and V1-023.
-2. Make decisions 1–6 above; they unblock the store and policy work.
-3. Review and, if acceptable, push `release-readiness/v1` and merge it into the release branch. Nothing has been pushed.
-4. Authorize the backend steps in the release plan, including the `process-ios-sms` deploy.
-5. Produce a CI build of the merged commit and install it on physical iPhones; run [MANUAL-DEVICE-TESTS.md](MANUAL-DEVICE-TESTS.md), starting with the declined-purchase, consent-revocation, upgrade-from-147 and restore-then-Cloud tests.
-6. Confirm the privacy-manifest reason codes against Apple's required-reason API list.
-7. Correct App Store Connect: privacy details, review notes, reviewer account, screenshots, export compliance.
-8. Fill the blanks in the release plan: incident owner, contact path, observation windows, thresholds.
-9. Re-run this decision when the above is done. Evidence gathered now expires for any code that changes.
+- Every physical-device check: capture by Shortcuts and share extension, locked and background behavior, push, upgrade from 147, real bank messages, VoiceOver, full accessibility text sizes, the live app switcher.
+- A Codemagic build of the candidate and its signed artifact.
+- Android build and run.
+- Store consoles: privacy answers, screenshots, export compliance, reviewer access.
+- Production items not readable: Auth hook, Vault, cron history, Codemagic variables, admin exposure.
+- The AI path against a real model.
 
-## Actions not performed in this assessment
+### 4. Product decisions needed from the owner
 
-No push, merge, production deploy, production configuration or data change, migration, function deploy, TestFlight upload, App Store or Play submission, console change, purchase, or account creation. Nothing was written to any external system. External reads were `git fetch`, GitHub check-run and event queries, package downloads, public web pages for the standards research, and one Codemagic build log opened with the owner's sign-in.
+The full table (question → options → recommendation → consequences → work blocked) is [DECISIONS-NEEDED.md](DECISIONS-NEEDED.md). The ones that block the most:
+
+1. Ship the candidate parser, given it is safer than build 147 by measurement but leaves open defects and sends more messages to review.
+2. Advertising: flags are on in production — confirm ads at launch (then disclose everywhere) or turn them off.
+3. Restore: replace or merge for cloud rows absent from the backup.
+4. iPad: iPhone-only or supported.
+5. Policy and Terms reachable with Cloud off.
+6. Account-deletion wording in the policy versus immediate deletion in the app.
+7. Reviewer access method.
+8. How notices (bills due, expected salary) should be treated.
+
+### 5. Production actions proposed for later authorization
+
+One package, in [RELEASE-PLAN.md](RELEASE-PLAN.md): deploy `account-deletion-worker`; deploy `process-ios-sms` and `parse-sms` together with a new internal build; a read-only count of orphaned profile photos; and, depending on the owner's decisions, the advertising flags and a grants clean-up. No migration. Nothing has been executed, and the package is approved or edited as a whole.
+
+## Not performed
+
+No push, merge, production deploy, production configuration or data change, migration, function deploy, flag change, TestFlight upload, store submission, console change, purchase or account creation on any hosted service. Production was only read.

@@ -1,253 +1,236 @@
-# Version 1 — release plan (rollout and recovery)
+# Version 1 — release plan (deployment, rollout and recovery)
 
-Assessed at: `23499229` (HEAD of local branch `release-readiness/v1`; not pushed, built by CI, deployed or submitted). The candidate is `af675aec`; its only difference from `23499229` is one updated test expectation.
+Rewritten 2026-11-17 (round 2) by a documentation agent (Claude Opus 5.5) from [`evidence/ROUND2-FACTS.md`](evidence/ROUND2-FACTS.md), [`evidence/production-comparison.md`](evidence/production-comparison.md), the final independent review [`evidence/audits/K-final-independent-review.md`](evidence/audits/K-final-independent-review.md) (§H, §J, FR-04, FR-05, FR-07, FR-10), reviews L, N, O, P, Q and R (R is the review of the final parser commit, [`evidence/audits/R-review-of-tenth-parser-commit.md`](evidence/audits/R-review-of-tenth-parser-commit.md)), the backend audit F, and a code check of the three functions named below. Updated the same day for the final candidate.
 
-This plan follows the stages of [`docs/release-process/RELEASE-RUNBOOK.md`](../../release-process/RELEASE-RUNBOOK.md) and the capabilities table in [`INCIDENT-AND-RECOVERY.md`](../../release-process/INCIDENT-AND-RECOVERY.md). It is written for this release only.
+**Candidate.** "The final candidate" in this plan means the final candidate commit recorded in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md) (`50957c06` at the time of writing). The final parser commit was reviewed by reviewer R: **accept with follow-up**, no S1, nothing worse than the audit baseline on the device or the effective iOS-Cloud path, with open defects carried from the baseline (RR-01) and more correct messages sent to review (RR-02, RR-03). The parser commit before it was rejected by review Q. A review is by an AI agent and is not an approval. The owner has not chosen a release commit; whether to ship this parser is decision B28.
 
-Ground rules for reading it:
-- **Every step marked OWNER-AUTHORIZED ACTION touches production or a store. None of them has been performed.** Each needs the owner's explicit authorization at the time; an earlier authorization does not carry over.
-- Nothing here has been rehearsed unless the text says so. "Rollback" always names the method and whether it was rehearsed.
-- The production state is unknown until section (a) is done (V1-002, V1-023). Several later steps cannot be finalised before then; they say so.
-- Facts: audit baseline `ab5dc10a`; final local commit `23499229` (11 fix commits after the baseline, listed in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md)); last TestFlight build 1.0.0 (147) from `b6fc0dad` (internal testing only), which contains none of the fixes. Backend and admin code at `ab5dc10a` were byte-identical to `b6fc0dad` (audit F §1). Since then, two backend/admin areas changed: `supabase/functions/process-ios-sms/` (`parse.ts`, `parser_rules.json`, new `declined_cases.json`; commits `d35fc044`, `668f4d64`) and `admin/` (Next.js 14.2.35, remote image hosts removed, image optimization off; `f9c5be75`, `f6dc5076`). No migration was added. The frozen release commit is not chosen yet; re-check this plan against it.
-- Gate: `tools/ci_gates.sh` gained a mandatory stage (4d) that runs the six define-gated Flutter suites with synthetic defines (`29cb1819`). The release workflows run `REQUIRE_ALL_GATES=1 bash tools/ci_gates.sh` before signing, so a release build now also needs that stage to pass. The strict run on `23499229`: see TEST-EVIDENCE.md.
+**Nothing in this plan has been executed.** No function was deployed, no flag changed, no grant revoked, no build uploaded. The owner has accepted no limitation and approved no scope proposal; every recommendation below is a proposal.
+
+How production changes are approved: production mutations are collected into **one action package** (section d). The owner approves or edits that package as a whole when it is ready. Approval covers the listed steps, in order, within the package's stated stop conditions; anything listed as excluded is not covered. Read-only checks already authorized remain valid within their scope.
 
 ---
 
-## (a) Read-only production comparison — run first
+## (a) Deployed state versus the candidate
 
-Purpose: close or confirm **V1-002** (migration state unknown for about 32 migrations, including those account deletion depends on) and **V1-023** (backup / point-in-time-recovery status not recorded). Gate G7 and MASTER-CHECKLIST DEPLOY-01 / OPS-06 depend on it.
+Source: [`evidence/production-comparison.md`](evidence/production-comparison.md) (read-only, 2026-11-17; functions compared against `af675aec`, then database facts read through the attached connector). Nothing below was re-queried for this rewrite.
 
-**OWNER-AUTHORIZED ACTION** (read-only, but it uses production credentials). Run with a read-only role where possible.
-
-Recording rules:
-- Save every output to `docs/releases/version-1/evidence/production/` with the date and the operator's initials.
-- **Redact secrets**: never paste secret values, keys, tokens, connection strings or the database password. Secret checks are presence-only.
-- Do not copy user data. Row counts and object names only.
-- Then update `docs/project/MIGRATION_LEDGER.md` with the production max version, the exact unapplied list and the date.
-
-The checks below are copied from audit F §5 ([`evidence/audits/F-backend-ops.md`](evidence/audits/F-backend-ops.md)) without change.
-
-> No production access was used. Run these against the production project (SQL editor or `psql` with a read-only role) and record results in `docs/project/MIGRATION_LEDGER.md`.
->
-> **A. Migration ledger**
-> ```sql
-> select version, name from supabase_migrations.schema_migrations order by version;
-> -- expected repo set: 0001..0117 and 17 versions 20261105122315..20261117010000; 0118 must be ABSENT
-> select version from supabase_migrations.schema_migrations where version = '0118';  -- 0 rows
-> ```
-> A2. Lock-size inputs: `select relname, n_live_tup from pg_stat_user_tables where relname in ('user_transactions','user_accounts','user_categories','coupons','push_broadcast_deliveries') order by 2 desc;`
->
-> A3. 0117 preconditions (only if 0117 is unapplied): row count of the legacy purge queue table named in `0117…sql:94` = 0; `select jobname, schedule, command from cron.job where jobname = 'purge-scheduled-deletions-job';`
->
-> A4. Then, from a workstation with the DB password: `supabase db push --linked --dry-run` — the proposed list must equal A's gap.
->
-> **B. Functions**: `supabase functions list --project-ref <ref>` — compare names/updated times with the 34 directories; confirm `verify_jwt` false only for the 10 listed in `config.toml:415-502` (Dashboard → Edge Functions → each function's "Enforce JWT").
->
-> **C. Secrets / Vault (presence only, never values)**: `supabase secrets list --project-ref <ref>` (names in BE-02); `select name from vault.secrets order by name;`.
->
-> **D. Auth config**: Dashboard → Auth → Hooks (is `before_user_created` set, and to which `qirsh_auth_hooks` function?); Providers → Email: sign-ups allowed? confirmations required?; anonymous sign-ins off.
->
-> **E. Cron and worker health**
-> ```sql
-> select jobid, jobname, schedule, active, command from cron.job order by jobname;
-> select j.jobname, d.status, count(*), max(d.start_time) from cron.job_run_details d join cron.job j using (jobid)
->  where d.start_time > now() - interval '24 hours' group by 1,2 order by 1,2;
-> select status, count(*) from public.push_broadcast_deliveries group by 1;   -- if table exists
-> select count(*) from public.notification_retry_queue where next_attempt_at < now() - interval '1 hour';
-> ```
->
-> **F. Flags and backups**: `select key, is_active, rollout_percent, value from public.feature_flags order by key;` (compare with intended V1 activation matrix); Dashboard → Database → Backups: plan tier, PITR enabled, retention, last successful backup.
->
-> Also not verifiable here: deployed function revisions vs repository; whether the admin panel is loopback-only; Google Cloud budget alerts; real APNs behaviour of auto-retry.
-
-Notes on these checks:
-- Check B: the repository has 33 function directories under `supabase/functions/` (34 including `_shared`, which is not a function). Compare against 33.
-- Check B, `process-ios-sms`: record its deployed update time. The repository version changed in `d35fc044` and `668f4d64`; the deployed revision is unknown, so whether the deployed function contains any declined-message handling is unknown.
-- A4 (`db push --dry-run`) applies nothing, but it needs the database password; treat the password as a secret.
-- `cron.job.command` (checks A3, E) may contain function URLs; check that no secret is embedded before saving the output.
-- The `--project-ref` value is not a secret but should not be published.
-
-Additional read-only checks from audit E §5 (security state; same recording rules):
-- Tables without row-level security in `public` and `account_fence` (expect 0 rows); SECURITY DEFINER functions executable by `anon`/`authenticated` (review each); SECURITY DEFINER functions without a pinned `search_path` (expect 0); `storage.buckets` (`backups` and `profile-photos` must be `public=false`). The exact SQL is in audit E §5 item 1.
-- Owner: Google Cloud billing tier for the project that holds `GEMINI_API_KEY` (policy claims a paid tier), and whether a budget alert exists (V1-022).
-- Owner: Codemagic — whether the `admob` group or `ADMOB_*` values are attached to the workflow that will build the store artifact (in `codemagic.yaml`, `ios-signed` attaches only `supabase`; `ios-signed-release` and `android-release` also attach `admob`); the resolved `QIRSH_GOOGLE_AUTH_ENABLED` / `QIRSH_EMAIL_AUTH_ENABLED` values (V1-016); whether `SENTRY_DSN` is set.
-- Owner: App Store Connect processing email for build 147 (ITMS-91053, V1-008). The missing declarations were added locally in `d70ba396`; build 147 does not contain them.
-
-Outcome to record:
-
-| Question | Answer (fill in) | Closes |
-|---|---|---|
-| Production max migration version; exact list of unapplied migrations | | V1-002 |
-| Is `0118` absent? | | V1-002 |
-| Are `0117_account_deletion_fence` and `20261110124809_deletion_provider_proofs` applied? | | V1-002 |
-| Deployed function list vs the 33 function directories; `verify_jwt` settings | | V1-002, V1-021 |
-| Deployed `process-ios-sms` update time (before the step 3a deploy) | | V1-001 |
-| Secrets and Vault names present / missing | | V1-021 |
-| Auth hook state; email sign-up and confirmation settings | | V1-021, V1-022 |
-| Cron jobs and 24-hour run status | | V1-024 baseline |
-| Production flag values | | ARCH-04 |
-| Plan tier, PITR on/off, retention, last successful backup | | V1-023 |
-
----
-
-## (b) Backend deploy order — database → secrets/Vault → functions → Auth hook → admin → mobile
-
-Source: audit F BE-02, which proposed this order. No CI or Codemagic step deploys migrations or functions; every step is manual. **Every step below is an OWNER-AUTHORIZED ACTION.** Stop at the first failed verification and go to section (h); do not continue past a failed step.
-
-### Step 0 — Before anything changes
-1. Section (a) complete and recorded.
-2. Take a logical dump of production (`pg_dump`) and test-restore it into a scratch project. This is the only recovery point this plan can count on until PITR status is known (V1-023). Record dump time, size and restore result. Not yet done; never rehearsed.
-3. Rehearse the full migration set from the production max version onward on a local stack or a restored copy — never on production data. Not yet done.
-4. Choose a quiet window (migration 0104 locks 17 tables, see step 1).
-
-### Step 1 — Database migrations
-- What is involved, as far as the audit established: the repository holds `0001`–`0117` plus 17 timestamped migrations `20261105122315` … `20261117010000`. The ledger records production as applied through `0092` (verified 2026-09-02); `supabase/deferred/README.md:56` says `0100`–`0102` were applied on 2026-10-02, which contradicts the ledger. No document records `0103`–`0117` or any 2026-11 migration as applied. **The exact list is unknown until (a)-A and A4.**
-- Order: filename order (`supabase db push --linked`, after the dry run matches the gap). Do **not** move `supabase/deferred/0118`.
-- Known hazards (audit F):
-  - `0117_account_deletion_fence` aborts unless the legacy purge queue is empty (QD096) and deployed function bodies equal the migration text (QD097); its header says applying it to production requires the owner's explicit approval. Check A3 first.
-  - `0104_sync_seq_columns` adds columns, builds non-concurrent indexes and backfills 17 tables inside one transaction with strong locks; sync and writes block for its duration. Use A2 row counts to estimate (V1-050).
-  - `0115` revokes DELETE on synced tables; older clients that hard-delete would get permission errors (not verified which builds do; see (c)).
-  - No destructive DDL in `0100`–`0117` or the 2026-11 set (audit F §2).
-- Verification after each migration: `select version from supabase_migrations.schema_migrations order by version desc limit 5;` shows it; the migration's own checks passed (several raise errors on precondition failure); for capability-adding migrations, `select qirsh_server_capabilities();` shows the new key. After the set: `bash supabase/tools/check_migrations.sh` locally is unaffected; re-run (a)-E for cron jobs created by `0117` (`account-deletion-worker` every 5 min, `account-deletion-purge-expired`).
-
-### Step 2 — Secrets and Vault entries
-- Function secrets required and not created by any migration (audit F BE-02): `ACCOUNT_DELETION_SEALER_KEY`, `ACCOUNT_DELETION_WORKER_SECRET`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID`, `APPLE_PRIVATE_KEY_P8`, `APNS_*`, `GEMINI_API_KEY`, `GOOGLE_MAPS_API_KEY`, `PUSH_BROADCAST_WORKER_SECRET`, `NOTIFICATION_RETRY_WORKER_SECRET`, `ENGAGEMENT_WORKER_SECRET`, `REMINDERS_WORKER_SECRET`, `PURGE_WORKER_SECRET`, `AFFILIATE_WORKER_SECRET`.
-- Vault names: `project_url`, `account_deletion_worker_secret`, `push_broadcast_worker_secret`, `engagement_worker_secret`, `notification_retry_worker_secret`, `reminders_worker_secret`, `purge_worker_secret`, `affiliate_worker_secret`.
-- Set only those for workers that should run in V1. An absent worker secret leaves that worker inert, which is safe (audit F). Owner decisions: leave `engagement_worker_secret` unset unless engagement webhooks are wanted (V1-050: two HTTP calls per transaction write); affiliate secrets only if affiliate links are enabled (they are flagged off).
-- Verification: presence-only listing ((a)-C); `select name from vault.secrets order by name;`.
-- Which of these already exist: **unknown until (a)-C.**
-
-### Step 3 — Edge Functions
-- Deploy all functions from the frozen commit so `supabase/config.toml` `verify_jwt` settings apply. Ordering constraints (audit F BE-02):
-  - `delete-account-immediate` and `account-deletion-worker` only after `0117` and `20261110124809`.
-  - `send-push-broadcast` after `20261117010000`.
-  - `merchant-category-contribution` after `20261116150000` / `20261116220000`.
-  - `google-enrollment` before any Auth hook (step 4).
-- Before deploying: record the currently deployed list and updated times ((a)-B). Which repository commit each deployed function came from is **unknown**; without it, redeploying "the previous version" is not possible (see (h)).
-- Verification per function: smoke test with a non-production test account (runbook Stage 4.2); for workers, `cron.job_run_details` shows success within one schedule interval; `verify_jwt` false only for the ten worker functions listed in `config.toml`.
-
-### Step 3a — Deploy `process-ios-sms` for V1-001 (declined purchases) — OWNER-AUTHORIZED ACTION
-- Reason: V1-001 (S1). The server parser in the repository rejects a declined, failed, rejected or cancelled purchase (`d35fc044`, `668f4d64`); the deployed function does not have this code unless it was deployed from these commits, which it was not (nothing on this branch has been deployed). Until this step, the server keeps returning such a message as a `processed` payment. V1-001 cannot be closed without this step, a new app build and device verification.
-- Position: after step 1 (the function at the frozen commit may rely on migrations) and as part of, or right after, step 3. It does not depend on the app build and does not need to wait for it. It must be done before the release candidate is offered beyond internal TestFlight. If the owner wants the candidate's behaviour against the old server recorded (MDT-IOS-07b, "before the deploy"), install the candidate on internal TestFlight and run that test before this step.
-- What it deploys: the whole `process-ios-sms` directory at the frozen commit, not only the declined change. The deployed revision is unknown ((a)-B), so other differences between it and the frozen commit are unknown too.
-- What each client gets:
-  - Builds containing `668f4d64`: protected before and after this step, because both client import paths re-check a server `processed` result and send a declined capture to Smart Inbox. After this step the server also rejects it.
-  - **TestFlight 147 and every older build: no protection from this step.** Before the deploy they import the server's `processed` payment. After it, they receive a rejection, re-parse the capture locally with the old parser (`forceLocalAutoConfirm: true` in `capture_import_service.dart`) and confirm it. Either way the declined purchase is saved as a confirmed payment and counted as spending (REV-03). Only installing a build that contains the fix changes this.
-  - Cloud-off users of any build: the server is not involved; only a build containing the fix protects them (local parser).
-  - Rows already stored from declined messages stay counted on every build (V1-056).
-- Verification (test account; on production only with the owner's authorization for this step):
-  1. Run `deno test --allow-all process-ios-sms/` at the frozen commit (125 passed at `668f4d64`, Mac-T).
-  2. Deploy; confirm the function's update time changed ((a)-B) and its logs show no errors for 15 minutes of normal traffic.
-  3. On an iPhone with a build containing the fix, Cloud on, run MDT-IOS-07b: S04 and S19 through the Shortcut automation → operator confirms (read-only) the server capture record is rejected, not processed; the app shows the item in Smart Inbox; month spend unchanged. S01 and S21 still become confirmed purchases.
-  4. Record which notification, if any, the server sends for the rejected capture.
-  5. Optional, to document the known gap: repeat S04 on build 147; expected per REV-03: it is still confirmed.
-- Rollback: redeploy the previous version from its commit. That commit is unknown today ((h) "Failed function deploy"), so the practical fallback is a forward fix. Not rehearsed.
-
-### Step 4 — Auth hook (owner decision)
-- `20261110070552_restrict_new_google_accounts` and `20261110124811_explicit_google_enrollment` create hook functions, but nothing wires them; `config.toml` has `[auth.hook.before_user_created]` commented out, and no document says which hook production should use.
-- Enable `require_google_enrollment_intent` only after step 3, and only if every installed client that offers Google sign-up calls `google-enrollment`. Whether build 147 or older builds offer Google sign-up is unknown (V1-016). Enabling it too early blocks every Google sign-up; never enabling it leaves the restriction inert.
-- Verification: audit F device step 2 — Google "Create an account" succeeds; "Sign in" with an unknown Google account is refused with the hook message.
-
-### Step 5 — Admin panel
-- Build from the frozen commit (push, shared-learning and flag pages call RPCs from `20261116150000`–`20261117010000` and `0101`). The branch moves the admin to Next.js 14.2.35, removes the remote image hosts and turns image optimization off (`f9c5be75`, `f6dc5076`); admin tests 191 pass and `next build` succeeds (Mac-T). At 14.2.35, `npm audit --omit=dev` still lists 25 advisories on `next` (3 critical, 9 high) with no fix on 14.x (REV-07, V1-025). A major upgrade is an owner decision. Keep the admin on loopback only (workspace notes say it runs bound to 127.0.0.1; not verified).
-- Verification: sign in; a non-admin is refused; open one restricted route; `/_next/image` does not decode images (optimization off); `npm audit --omit=dev` result recorded.
-
-### Step 6 — Mobile
-- Before building: freeze a candidate commit and run `REQUIRE_ALL_GATES=1 bash tools/ci_gates.sh` on it, including stage 4d (define-gated suites). Then build it through the release workflow (V1-009) and run MANUAL-DEVICE-TESTS on that artifact (V1-055).
-- Submit only after steps 1–5 (including 3a) are verified and the observation window in (e) for the backend has passed.
-
----
-
-## (c) Compatibility window
-
-What installed builds need from the backend:
-
-| Client | Needs | Evidence | Unknown |
+| Area | Production | Candidate | Consequence for this release |
 |---|---|---|---|
-| TestFlight 147 and older TestFlight builds (44…146) | Whatever production has today; they work against it now (no reports in the repository either way). New migrations are additive (capabilities re-declared with all prior keys; new columns nullable; `transaction_category_source` records `unknown` for writers without a token). | Audit F §2 (code inspection). | Whether older builds hard-delete synced rows and break under `0115` (audit F device step 7, not run). Which older builds testers still have (TestFlight builds expire after 90 days). |
-| Any build, `process-ios-sms` after step 3a | The server rejects declined purchases. Builds containing `668f4d64` send them to Smart Inbox before and after the deploy. Build 147 and older re-parse a rejected capture locally with the old parser and still confirm it, so they get no protection (see step 3a). | `capture_import_service.dart` (`forceLocalAutoConfirm: true`); REV-03 (code inspection). | Not run on any device. |
-| Release candidate | `0117` + `20261110124809` + deletion functions + `APPLE_*` / `ACCOUNT_DELETION_*` secrets for in-app account deletion (an App Store requirement, SRC-APPLE-5.1.1v). Capabilities `merchant_rules_sync`, `profile_photo_backup`, `transaction_category_source` for those features; when absent the client does not use the feature (by design, `server_capabilities.dart`). `GEMINI_API_KEY` for AI parsing (absent → retryable error, local parse fallback). APNs secrets for push. | Audit F BE-01/BE-02, §2. | Everything production actually has: (a). |
+| Migrations | Ledger lists 134: `0001`–`0117` and 17 timestamped through `20261117010000`; deferred `0118` absent | Same 134 files | **No migration is needed.** V1-002 closed for the ledger. The ledger holds names, not content (see unknowns) |
+| Edge Functions deployed | 28 of the 33 in the repository | 33 | The 5 not deployed are the 4 affiliate functions and `parser-test` (decision D-14). Not proposed for deployment |
+| Identical functions | 22 (list in the comparison §1) | — | Not proposed. **Except `parse-sms`**: identical at `af675aec`, changed since (see next row) |
+| Changed after the comparison | — | `parse-sms` (`money.ts` amount grounding, `0de54a2b`) and `process-ios-sms` (`parse.ts`, `parser_rules.json`) changed again after `af675aec`, as did `_shared/ai_candidate_validator.ts` | Code check (import closure of every function under `supabase/functions/`): only `parse-sms` and `process-ios-sms` import `_shared/ai_candidate_validator.ts` or `process-ios-sms/parser_rules.json`. No other function is affected by the later parser commits |
+| `process-ios-sms` | v27, deployed 2026-11-16 08:25 UTC; differs in `parse.ts`, `parser_rules.json` | Declined/failed/reversed handling (V1-001) and later parser rounds | In the deployment set |
+| `account-deletion-worker` | v5, deployed 2026-11-15 07:55 UTC; its `_shared/storage_erasure.ts` erases only the `backups` bucket | Erases `backups` and `profile-photos` (`9e19c3e4`, 2026-11-16) | In the deployment set (V1-062, FR-04) |
+| `evaluate-budgets`, `evaluate-gamification`, `evaluate-goals`, `process-notification-retries` | Deployed before the push-sender refactor `79a063d8` | `_shared/apns.ts` refactored to `sendApnsAlert` | **Not proposed**: intended as behavior-preserving; no behavior need established (equivalence also not proven) |
+| Secrets (names only) | 23 set, including `GEMINI_API_KEY`, `APNS_*`, `APPLE_*`, `ACCOUNT_DELETION_SEALER_KEY`, `ACCOUNT_DELETION_WORKER_SECRET` | — | Every secret the three proposed functions read is set (checked against their import closures, below). `GEMINI_SMS_MODEL`, `GEMINI_MODEL`, `GEMINI_SHADOW_API_KEY`, `GOOGLE_MAPS_API_KEY` are unset; defaults apply. Nothing proposed |
+| Feature flags | **All 8 advertising flags ON at 100%**; `local_auto_confirm_v2`, `capture_ai_fallback_enabled` off | Client defaults seed every ad flag off (D-19) | Configuration item, decision-dependent (section c) |
+| Scheduled jobs | `account-deletion-worker` every 5 minutes, active; 8 others listed in the comparison §4.2 | Same schedule (`0117`, line 6634) | See note on Vault below |
+| Backups | `pitr_enabled: false`, `backups: []` | — | **No verified way to restore the database** (V1-023). Section (c) |
+| Storage buckets | `backups` (private), `profile-photos` (private), `coupon-assets` (public) | Same | — |
+| Advisor | 2 `SECURITY DEFINER` trigger functions executable by `anon`; 26 functions with mutable `search_path`; leaked-password protection off | — | Section (c) |
 
-Forced update — what exists and its limits:
-- A `force_update` announcement severity with version targeting exists (`catalog-announcements`).
-- It compares only `major.minor.patch`. TestFlight 147 and a release 1.0.0 build both send `X-App-Version: 1.0.0`, so 147 cannot be targeted separately from the release build (V1-040). Owner option from audit F: ship the store build as 1.0.1, or add a build-number header.
-- Catalog and announcements are fetched only by clients with Cloud consent on (`consent_authority.dart`, `EgressClass.catalog` → cloud). **Users with Cloud off never receive a force-update notice or any flag change** (V1-045).
-- A cached force-update row is now re-checked against its version range on device (`7597bb42`, V1-039 fixed locally; not in any distributed build). A malformed bound such as `v1.0.1` now fails open: it stops blocking (REV-10). Validate the version format when entering a force-update notice.
-- No server-enforced minimum client exists (`min_client_build` capability hard-coded false).
-- Conclusion: there is no verified way to move all installed clients off a build. Backend changes must stay compatible with every installed build.
+Note on the deletion worker. The cron job calls `public.run_account_deletion_worker()`, which posts to the worker **only if Vault holds `project_url` and `account_deletion_worker_secret`**; otherwise it logs "worker secret not configured" and returns (`0117_account_deletion_fence.sql`, the function above line 6630). Vault contents are unknown, and cron run history was not queried. So "the outdated worker runs every 5 minutes" is established for the schedule, not for actual worker runs.
 
----
+### Still unknown
 
-## (d) Rollout stages
-
-Each stage is an **OWNER-AUTHORIZED ACTION**. Stop conditions in (e) are checked before widening.
-
-### iOS
-1. **Internal TestFlight.** The current `ios-signed` workflow produces internal-testing-only builds (`testFlightInternalTestingOnly: true`) and only runs on the branch `release/ios-beta1-personal-20261013`; it would refuse the release branch (V1-009). Engineering must change the workflow (or the owner must build from that branch) before a candidate build exists at all. Run `MANUAL-DEVICE-TESTS.md` on this build (gate G5). Observation window: see (e).
-2. **External TestFlight.** Requires a build that is **not** exported internal-only, plus Beta App Review for the first external build (SRC-APPLE-TESTFLIGHT). `ios-signed-release` can produce such a build but lacks the `ios-signed` checks (V1-009). Its empty `APP_VERSION` was fixed locally in `64e571e5` (V1-010); no CI build has run with the fix. Limited cohort; owner chooses size.
-3. **App Store.** Options to limit the first audience, each **unconfirmed** against SOURCES.md (not covered there; check in App Store Connect):
-   - Manual release after approval, so the owner chooses the day.
-   - Phased release: as generally understood it throttles automatic updates for existing users; for a first release with no existing App Store users it may give no throttling.
-   - Availability territories limited to the decided markets (V1-019).
-   - Pausing a phased release stops new automatic updates only; users who have the build keep it.
-
-### Android (only if the owner puts Android in V1, V1-004)
-1. Play internal track (exempt from Data safety). Requires a release AAB, which has never been built, a sign-in method in the build (V1-004), and an increasing versionCode (fixed at 44 today).
-2. Closed testing; if the developer account is personal and created after 2023-11-13, 12 testers for 14 continuous days before production can be requested (SRC-PLAY-TESTING-TRACK; account type unknown).
-3. Production. Staged rollout percentages apply to updates only, not the first publish (SRC-PLAY-STAGED-ROLLOUT). Halting stops new users receiving it; installed users keep it.
+| Item | Why it matters here | How it can be learned (read-only) |
+|---|---|---|
+| Vault entries (`project_url`, `account_deletion_worker_secret`, other worker secrets) | Whether the deletion worker and other dispatchers actually run | `select name from vault.secrets order by name;` (names only) |
+| Auth hook wiring, email sign-up and confirmation settings | Google sign-up restriction (V1-016), cost of new accounts (BE-03, BE-09) | Dashboard → Auth → Hooks; Providers → Email |
+| Cron run history and failures | Whether workers succeed; baseline for monitoring | `cron.job_run_details` for the last 24 hours (query in audit F §5 check E) |
+| Whether applied migration content equals the files | The ledger holds names only | A schema-only comparison. Note: the comparison avoided the CLI's database commands because they create a temporary login role in production |
+| Codemagic variable values (AdMob IDs, sign-in switches, `SENTRY_DSN`) | Whether a release build would render ads; which providers ship | Codemagic UI, by the owner |
+| Admin panel deployment and exposure | V1-025: Next.js 14.2.35 still carries advisories | Owner |
+| Provider-side daily backups beyond what the API lists | V1-023 | Dashboard → Database → Backups |
+| Which commit each deployed function was built from | Undo of a deploy (section b, "undo") | Repeat the normalized bundle comparison against the proposed undo source (package step P0) |
 
 ---
 
-## (e) Monitoring, thresholds, stop conditions, observation windows
+## (b) Smallest justified deployment set
 
-### Signals that exist today
+Three Edge Functions. No migration, no secret change, no other function. Each row was checked against the code: import closure, environment variables read, `supabase/config.toml`, and what installed clients call.
+
+| | `account-deletion-worker` | `process-ios-sms` | `parse-sms` |
+|---|---|---|---|
+| **Why** | V1-062 / FR-04 (S2): the deployed worker does not erase `profile-photos` | V1-001 (S1), server side: the deployed function accepts declined/failed purchases as `processed` payments and takes limit or balance figures as amounts (V1-078); ten parser rounds since (R: server wrong total-changing outcomes 375 → 63 on 1,758 synthetic messages) | V1-060: the AI fallback can return an AI amount not found in the text; the candidate drops an ungrounded amount and falls back to the text amount (`parse-sms/money.ts` `groundedModelAmount`) |
+| **Evidence production differs** | Comparison §1: deployed v5 differs in `_shared/storage_erasure.ts` | Comparison §1: v27 differs in `parse.ts`, `parser_rules.json`; candidate changed again after the comparison (FR-07) | Identical at `af675aec`; changed after (`0de54a2b`, and `_shared/ai_candidate_validator.ts` in later commits) — K §H, FR-07 |
+| **Depends on — migrations** | None. `profile-photos` bucket (`20261116210000`) and the deletion schema (`0117`, `20261110124809`) are in the production ledger | None | None |
+| **Depends on — secrets (names)** | `ACCOUNT_DELETION_WORKER_SECRET`, `ACCOUNT_DELETION_SEALER_KEY`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID`, `APPLE_PRIVATE_KEY_P8`, platform `SUPABASE_*` — all listed as set. Vault `project_url`, `account_deletion_worker_secret` — **unknown**; without them the worker is never called | `GEMINI_API_KEY`, `APNS_BUNDLE_ID`, `APNS_KEY_ID`, `APNS_PRIVATE_KEY`, `APNS_TEAM_ID`, `ENGAGEMENT_WORKER_SECRET`, platform `SUPABASE_*` — set. `GEMINI_SMS_MODEL` unset (default model applies, unchanged by the deploy) | `GEMINI_API_KEY`, platform `SUPABASE_*` — set. `GEMINI_SMS_MODEL`, `GEMINI_SHADOW_API_KEY` unset (defaults; unchanged) |
+| **Depends on — other functions** | None. The same `storage_erasure.ts` already runs in production inside `delete-account-immediate` and `purge-scheduled-deletions` (both identical to the candidate) | None at deploy time. Deploy from the same commit as `parse-sms` so both bundle the same validator and rules (consistency, not a hard dependency) | As left |
+| **Depends on — code state** | None: unchanged since `9e19c3e4`, so it does not wait for the parser work | **Review condition met in part:** review R of the final parser commit `50957c06` exists and found no S1 regression. **Still required:** (1) the strict gate at the final candidate (FR-07; still pending in TEST-EVIDENCE.md); (2) the owner's decision on the remaining RR-01 defects and on the review-volume cost (DECISIONS-NEEDED B28–B30); (3) **ship together with the new app build** (V1-087): R measured the server alone rejecting 21 completed messages (V1-088) and reading `Cashback reversal … deducted` as a refund (V1-089); only the new device build recovers those into review | Same commit as `process-ios-sms`, same timing |
+| **`verify_jwt`** | `false` in `config.toml` (cron-only, own secret); deploying from the repository applies it | Default (gateway JWT on) | Default (gateway JWT on) |
+| **Compatibility — build 147 and older** | Not called by any client (pg_cron only). No effect | Build 147 handles `type: refund` (K §A3). After the deploy, build 147 receives the stricter rejections (declined, failed, informational, and the 21 completed messages the final server rejects with no AI), then **re-parses locally with its old rules and confirms** (`forceLocalAutoConfirm: true`; code inspection). Its outcome for those messages therefore becomes its own old local parse: a declined purchase is still counted as spending (as before the deploy, REV-03), and each of the 21 completed messages gets whatever the baseline device parser gives it. **A new server with build 147 was NOT measured** (R measured only matched pairs); which of the 21 the old parser records correctly, records wrongly or drops is NOT TESTED. A server result build 147 does accept now carries the final server's reading (for example `Cashback reversal … deducted` as `refund`). Refund wording arrives as `refund` instead of `income` for future captures (nets against spend; no stored row rewritten) | Response shape unchanged (K §H). An ungrounded AI amount is replaced by the text amount. Build 147 calls `parse-sms` only with AI consent on |
+| **Compatibility — the candidate** | No client interaction | Designed for it. Before the deploy, the candidate re-checks server results on both import paths and does not confirm a server result whose direction contradicts its own parse; refund wording from the old server arrives as `income` (temporary path difference, K §A3, S3) | Compatible; the candidate also validates AI output itself |
+| **Verification after** | (1) `supabase functions list`: new version, new update time. (2) Function logs: no errors over the next two cron intervals. (3) Read-only: `cron.job_run_details` for `account-deletion-worker` succeeded since the deploy. (4) Read-only orphan count (below) repeated 24 hours later: does not grow. (5) If the package includes it: delete a disposable synthetic test account that has a synthetic profile photo, then a read-only count of objects under that account's `<uid>/` prefix in both buckets returns 0 (this exercises the inline path; the worker-only path cannot be forced without fault injection) | (1) Version and update time changed. (2) Logs: no new error class for 30 minutes of normal traffic. (3) Synthetic test account on a candidate build, Cloud on: S04 and S19 (MANUAL-DEVICE-TESTS 0.4) → server status `rejected`, item in Smart Inbox, spend unchanged; S21 and a purchase carrying an "available limit" line → `processed` and recorded (MDT-IOS-07b, -07d). Read-only query of that test account's capture statuses only | (1) Version changed. (2) Logs: no new error class. (3) Synthetic test account, AI consent on: paste a synthetic purchase; the recorded amount equals the amount in the text |
+| **How to undo; rehearsed?** | Redeploy the previous source: believed to be `9e19c3e4^` (the deployed v5 differs from the candidate only in `storage_erasure.ts`). Confirm in P0 by repeating the normalized comparison of the downloaded v5 bundle against that commit. Undoing re-opens the photo gap. **Not rehearsed** | Redeploy the previous source: believed to be the audit baseline `ab5dc10a` (backend identical to `b6fc0dad`, the source of build 147; v27 was deployed 08:25 UTC on 2026-11-16, a few minutes after commit `d3a6d539`, the last change to its files before `b6fc0dad`). Confirm in P0 by the same comparison. **Not rehearsed** | Redeploy `af675aec`'s `parse-sms` (the comparison found the deployed function identical to it). **Not rehearsed** |
+| **If not done** | A deletion whose storage step the worker performs (the inline run in `delete-account-immediate` failed, timed out or scheduled a retry before `storage_sweep` finished) leaves the user's profile photo in `profile-photos/<uid>/avatar` after the account is gone — provided Vault lets the worker run | The server keeps returning declined purchases as payments. Candidate builds hold them in the Smart Inbox through their own import re-check; build 147 is unprotected either way. Server-side parser fixes (FR-01/02/13, LR-04 limit notices) do not reach any client that relies on the server result. V1-001 cannot be closed | The server AI fallback can still return an ungrounded amount; the candidate re-grounds it on the device, so urgency is lower |
+
+### Profile photos possibly already left behind (FR-04)
+
+Code trace (candidate and deployed share the saga; only the bucket list differs):
+- `delete-account-immediate` (already deployed with both buckets) accepts the request and runs the job inline (`handler.ts:176-180`), swallowing errors because "the job is durable and will be resumed".
+- The job's stages are `apple_revoke → storage_sweep → sql_purge → auth_delete → terminal_storage` (`_shared/account_deletion_coordinator.ts:126-132`). Both storage stages call `eraseBackupObjects`, which iterates `ERASURE_BUCKETS`.
+- If the inline run stops before `storage_sweep` completes, the cron-driven worker resumes the job with its old `['backups']` list: both of its storage stages finish without touching `profile-photos`, the job completes, and the photo stays. If the inline run completed `storage_sweep`, the photo was already removed.
+- Completed jobs keep no `uid` (`deletion_job_uid_shape`), so an affected account cannot be traced from the job table; a photo whose owner no longer exists in `auth.users` can be counted.
+
+Proposed **read-only** check (counts only; no object names, no download, no cleanup):
+
+```sql
+-- objects in profile-photos whose owner folder has no auth user
+select count(*) as orphaned_profile_photos
+from storage.objects o
+where o.bucket_id = 'profile-photos'
+  and not exists (select 1 from auth.users u where u.id::text = split_part(o.name, '/', 1));
+-- same for backups, for comparison
+select count(*) as orphaned_backups
+from storage.objects o
+where o.bucket_id = 'backups'
+  and not exists (select 1 from auth.users u where u.id::text = split_part(o.name, '/', 1));
+-- deletion jobs by state; open jobs whose storage sweep is still to run
+select state, count(*) from account_fence.deletion_job group by state;
+select count(*) from account_fence.deletion_job
+where state <> 'completed' and not ('storage_sweep' = any(completed_steps));
+```
+
+A non-zero orphan count can also have other causes (for example a user removed outside the deletion flow); the count does not prove the worker caused it. **Removing any orphaned object is not part of this plan and needs a separate approval.**
+
+### Not proposed, and why
+
+| Functions | Reason |
+|---|---|
+| `evaluate-budgets`, `evaluate-gamification`, `evaluate-goals`, `process-notification-retries` | Differ only by the push-sender refactor `79a063d8`; no behavior need established. Deploy only if a later finding needs it |
+| The other 21 identical functions (22 minus `parse-sms`) | Identical at `af675aec` (code check above), and no commit up to `50957c06` touches their import closures (`af675aec..50957c06` changes only `_shared/ai_candidate_validator.ts` and its fixture, `parse-sms` and `process-ios-sms`) |
+| `affiliate-click-status`, `affiliate-postback`, `affiliate-sync`, `prepare-affiliate-click`, `parser-test` | Not deployed in production, consistent with decision D-14 (affiliate gateway unwired until a network exists); `parser-test` is a test tool |
+| "Deploy every function from the frozen commit" (earlier plan) | Withdrawn: it would change 4 functions with no established need and 22 with no difference, and every extra deploy is an extra undo path that has never been rehearsed |
+
+---
+
+## (c) Configuration items that are not code deploys
+
+Each is a separate, decision-dependent item. None is a prerequisite of the three function deploys unless stated.
+
+| Item | Fact | Options | Proposal | Production mutation? |
+|---|---|---|---|---|
+| **Advertising flags** (`enable_banner_ads`, `enable_banner_dashboard`, `enable_banner_transactions_list`, `enable_banner_reports`, `enable_banner_goals`, `enable_banner_subscriptions`, `enable_banner_achievements`, `enable_report_ads`) | All ON at 100% in production. The recorded decision D-19 seeds every ad flag off and calls activation "a separate owner action"; no record of an activation decision was found. A banner renders only when its flag is on, Cloud consent is on, the build carries compiled `ADMOB_*` defines, the entitlement is inactive and UMP allows requests (K §H). `ios-signed` (build 147) attaches no AdMob group, so 147 cannot show ads; `ios-signed-release` and `android-release` attach the `admob` group. Final review FR-05 rates this S1 for any store build carrying AdMob IDs: ads would render while the privacy policy, consent text, privacy manifest and store answers do not mention them | (1) Turn all eight off before any build with AdMob IDs reaches users. (2) Keep them on and first complete the disclosures (policy, consent line, App privacy details, report-an-ad UI). (3) Build store artifacts without the `admob` group values | Owner decides (DECISIONS-NEEDED B1). Turning flags off reaches every user who could see an ad, because ads already require Cloud consent and flags reach Cloud-on clients (after their next catalog fetch). A read-only look at `public.feature_flag_admin_audit` (flag key, field, new value, date — not the actor) would show when the flags were turned on | Yes. Change through the admin Flags page so `feature_flag_admin_audit` records it |
+| **Point-in-time recovery / backup before a change** | PITR off; the API lists no backups (V1-023) | (1) Enable PITR or confirm provider daily backups (plan/cost question for the owner; cost not checked). (2) A logical `pg_dump` before a change. (3) Nothing for this package | The three function deploys change no schema and no stored data by themselves, and their undo is a redeploy, so a dump is **not** proposed for this package. Before any future migration, a restorable recovery point is needed. **A `pg_dump` contains production user data**: if one is taken it stays in protected, access-limited storage, is never loaded into a development or test environment, and is deleted when no longer needed. Rehearsals use synthetic data (section e) | Enabling PITR is a plan change; a dump is a read that creates a copy of user data |
+| **Revoke `EXECUTE` from `anon`** on `create_profile_on_signup()` and `feature_flag_audit_append_only()` | Both return `trigger`; PostgreSQL refuses to call a trigger function outside a trigger, so they cannot be invoked through `/rpc` (K §H, FR-09, S4) | (1) Revoke now in production. (2) Revoke in a migration in a later release | Hygiene only. If done now: rehearse on the local stack first (revoke, then create a synthetic user and change a flag on the local stack to confirm both triggers still fire), revoke from `public` as well as `anon` (functions are executable by `public` by default), and add a matching migration file afterwards so the ledger and the files stay equal | Yes |
+| **Leaked-password protection** | Advisor reports it off | — | **Not applicable**: the app has no password sign-in (email uses a one-time code) | — |
+
+---
+
+## (d) Action package for approval
+
+**Status: NOT EXECUTED. Nothing in this package has been run.** It becomes ready when the preconditions in P0 hold. The owner approves or edits it as a whole. Approval covers steps P0–P7 below, in this order, within the stop conditions; it does not cover anything under "Excluded".
+
+Operator: `______` (owner fills). Window: `______`. Expected duration (estimate, not measured): about 1–2 hours of operator time for P0–P6 and the first post-checks, then the observation window in P7.
+
+**Preconditions (all must hold; none is a production action)**
+1. The final candidate commit is recorded in RELEASE-MANIFEST.md, and the strict gate (`REQUIRE_ALL_GATES=1 bash tools/ci_gates.sh`) passed at it, recorded in TEST-EVIDENCE.md (FR-07).
+2. Parser conditions, required for P3–P4 only (P1–P2 do not depend on them): (a) an independent review of the final parser commit with no S1 regression — **met by review R of `50957c06`** (not an approval); (b) the owner's decision to ship this parser given the remaining RR-01 defects and the review-volume cost (DECISIONS-NEEDED B28, B29, B30) — **open**; (c) a new app build from the same commit is ready to reach testers in the same window (V1-087), because the server alone rejects 21 completed messages that only the new build keeps for review — **open** (no build exists).
+3. A clean checkout of the final candidate commit on the operator's machine; the Supabase CLI linked to the production project (`<production ref>`, not published here).
+4. The owner has filled in the ads choice for P5 and the include/exclude choice for P6.
+
+| Step | Action | Exact command or dashboard action | Pre-check | Post-check | Stop if |
+|---|---|---|---|---|---|
+| **P0** | Read-only pre-checks | `supabase functions list --project-ref <ref>` (record versions: `process-ios-sms` v27, `account-deletion-worker` v5, `parse-sms`); `supabase secrets list --project-ref <ref>` (names only); SQL: `select name from vault.secrets order by name;` (names only); the orphan and deletion-job counts in (b); `cron.job_run_details` for `account-deletion-worker`, last 24 hours; download the three deployed bundles to a scratch folder and repeat the normalized comparison against the final candidate **and** against the proposed undo sources (`9e19c3e4^`, `ab5dc10a`, `af675aec`) | — | Results recorded in `evidence/` with no secret values, no user data, counts only | Deployed versions differ from those in the comparison (someone deployed meanwhile); a required secret name is missing; the deployed bundle matches neither the candidate's predecessor nor the proposed undo source (then the undo source is unknown — decide before continuing) |
+| **P1** | Deploy `account-deletion-worker` | From the repository root at the final candidate: `supabase functions deploy account-deletion-worker --project-ref <ref>` (`config.toml` sets `verify_jwt = false` for it) | P0 done | Verification row in (b) items 1–3 within 15 minutes | Deploy error; worker errors in logs; a `failed` run in `cron.job_run_details` for this job |
+| **P2** | Read-only orphan count, second reading | The (b) queries again, 24 hours after P1 | — | Count recorded; compared with P0 | Count grows (then the gap is not closed; investigate before anything else) |
+| **P3** | Deploy `process-ios-sms` | `supabase functions deploy process-ios-sms --project-ref <ref>` | Preconditions 1–2 hold | Verification row in (b); MDT-IOS-07b and -07d on a candidate build signed into a synthetic test account | Deploy error; a new error class in logs; any synthetic completed purchase (S01, S21, the limit-line sample) neither recorded nor in the Smart Inbox; any synthetic declined sample recorded as spending on the candidate build; the new build cannot be made available to testers in the same window (precondition 2c) |
+| **P4** | Deploy `parse-sms` | `supabase functions deploy parse-sms --project-ref <ref>` | P3 verified | Verification row in (b) | Deploy error; a new error class; the synthetic paste records an amount not in the text |
+| **P5** | Advertising flags — **only the option the owner selects** | Option A: in the admin Flags page set the eight ad flags off (reason recorded in the audit field). Option B: no action; the owner records that ads stay on and that disclosures must be complete before any build with AdMob IDs ships. Option C: no flag action; store builds are made without `admob` values | Owner's ads decision (DECISIONS-NEEDED B1) | Read-only: `select key, value, rollout_percent, is_active from public.feature_flags where key like 'enable_banner%' or key = 'enable_report_ads';` | Any other flag changed |
+| **P6** | Revoke `EXECUTE` — **only if the owner includes it** | SQL editor: `revoke execute on function public.create_profile_on_signup() from public, anon;` `revoke execute on function public.feature_flag_audit_append_only() from public, anon;` | Rehearsed on the local stack as described in (c) | Advisor no longer lists them for `anon`; a new sign-up still gets a profile (observed on the next real or synthetic sign-up) | Any error; any sign-up without a profile → undo with `grant execute … to anon` |
+| **P7** | Observe | Daily: function logs for the three functions; `cron.job_run_details` for the deletion worker; the orphan count | — | Recorded daily during the window `______` (proposed: 7 days) | Any stop condition in section (g) |
+
+Undo for P1, P3, P4: redeploy the undo source named in (b) with the same command from a checkout of that commit. None of these undos has been rehearsed.
+
+**Excluded from this package (not approved by approving it):**
+- Any migration (none is needed).
+- The four push-sender functions, the 21 identical functions, the five undeployed functions.
+- Any secret or Vault change; Auth hook wiring; email provider settings.
+- Enabling PITR or changing the plan; taking a `pg_dump`.
+- Cleanup of orphaned profile photos or backups (separate approval after P0/P2 counts).
+- Admin panel deployment (exposure unknown; DECISIONS-NEEDED, Next.js row).
+- Any Codemagic run, TestFlight upload, external testing, App Store Connect or Play Console action (a separate package when a release build exists; section f).
+- Any change to stored user transactions (historical review is a proposal only, `HISTORICAL-REVIEW-PROPOSAL.md`).
+
+---
+
+## (e) Rehearsal
+
+**Rehearsed, with synthetic data only, on the local stack `qirsh_v1_verify`** ([`evidence/local-stack.md`](evidence/local-stack.md); a disposable stack built from a scratch copy of `supabase/`):
+- All 134 migrations apply cleanly to a fresh database, including `0117_account_deletion_fence.sql`.
+- Restore followed by cloud sync (V1-020): `restore_then_sync_local_supabase_test.dart` failed on both scenarios with the old code and passed with `0f90003f`, with and without a configured build. The test creates and deletes its own throw-away synthetic users.
+- Signed-in simulator runs (files J and M) used the synthetic account `qa+v1@example.test` against this stack.
+- No Auth hook or Vault entries are configured on the local stack, so anything that depends on them was not exercised.
+
+**Not rehearsed anywhere:** any function deploy or redeploy (including the undo of P1, P3, P4); any migration rollback SQL; the grant revoke (P6); any flag change; any production step; a database restore.
+
+**Rehearsal data rule (owner's instruction):** rehearsals use synthetic data, or data that is properly protected and sanitized. Production user data is not copied into development or test environments. If production shape is needed, use a schema-only description plus synthetic rows. A production dump, if one is ever taken, stays in protected storage and is never loaded into a development environment.
+
+---
+
+## (f) Mobile
+
+**Build workflow.** `ios-signed-release` was hardened locally in `4fc2ecd6` (V1-009, V1-012): it runs only on a `release/*` branch; it requires `EXPECTED_REVIEWED_CI_SHA` to be a full 40-character SHA equal to `CM_COMMIT` and `HEAD` on a clean tree; it runs the strict gate, then the native XCTest step, then signing, build, IPA verification, and **uploads without submitting** (`submit_to_testflight: false`, no `submit_to_app_store`). It exports for `app_store` distribution, so its build can go to internal and external TestFlight and App Store review (unlike `ios-signed`, whose builds are internal-testing-only). **It has never run on Codemagic.** The native XCTests (194, 0 failures) ran once locally on a simulator at `d830855e`; the XCTest step has never run on Codemagic and can fail for environmental reasons (FR-10). `xcode: latest` is not pinned.
+
+**Codemagic settings the owner must check (names only; values are not recorded here):** group `supabase` (`SUPABASE_URL`, `SUPABASE_ANON_KEY`); group `admob` (`ADMOB_APP_ID_IOS`, `ADMOB_BANNER_IOS`, `ADMOB_INTERSTITIAL_IOS`) — whether it carries values decides whether the build can render ads (section c); `EXPECTED_REVIEWED_CI_SHA`; `SENTRY_DSN`; `LEGAL_BASE_URL`; `GOOGLE_SERVER_CLIENT_ID`; `QIRSH_GOOGLE_AUTH_ENABLED`, `QIRSH_EMAIL_AUTH_ENABLED` (both default `false` in this workflow), `QIRSH_ALTERNATE_SIGNUP_ENABLED` (defaults `true`); App Store Connect integration `codemagic_asc_api_key`; signing for `com.youssefsafwat.mali` and the share extension; a protected `release/*` branch.
+
+**Stages** (each a store action, not part of the package in (d)):
+1. Internal TestFlight from an `ios-signed-release` build of the final candidate. Run MANUAL-DEVICE-TESTS on it (gate G5).
+2. External TestFlight: the first build in an external group goes to Beta App Review. Limited cohort; size `______`.
+3. App Store: manual release after approval. Phased release applies to **version updates** (official-doc-checks §c); a first version has no existing users to phase, so it is not a canary for V1. Territories as decided (V1-019).
+
+**RT-01 (tab bar).** Build 147, now in testers' hands, hides the native tab bar after email one-time-code sign-in; `ios-signed` (which built 147) enables email sign-in. Fixed in `45ea901a`; confirmed **on a simulator only** (file M: three fresh installs plus a control build that reproduces the defect). A new internal build from the final candidate replaces 147 for testers. Apple and Google sign-in, the app-lock path and physical devices were not tested (MDT-IOS-30).
+
+**Version identity.** Build 147 and a 1.0.0 release build both send `X-App-Version: 1.0.0`; a force-update notice cannot target 147 alone (V1-040). Cloud-off users never receive notices or flags (V1-045). There is no verified way to move installed clients off a build, so backend changes must stay compatible with every installed build (as the rows in (b) are).
+
+**Android.** Out of V1 per the project records (DECISIONS-NEEDED A1); the owner may reopen it. If reopened: no release AAB has ever been built; `android-release` attaches the `admob` group.
+
+---
+
+## (g) Monitoring, thresholds, stop conditions, ownership
+
+### Signals that exist
 
 | Signal | Where | Limits |
 |---|---|---|
-| App crash and error reports (Sentry) | Flutter app only | Sent only while Cloud consent is on and the gate permits; scrubbed. Whether `SENTRY_DSN` is set for the release workflow is unknown. Cloud-off users are invisible. |
-| TestFlight crash reports and tester feedback; App Store Connect crash data | Apple | Platform feature; depends on users sharing diagnostics. Not checked in this assessment. |
-| Edge Function logs and invocation counts | Supabase dashboard | No alerting configured; someone must look. |
-| Cron job run history | `cron.job_run_details` (query (a)-E) | Manual query. |
-| Push delivery state | `public.push_broadcast_deliveries`, admin Push history | Manual. |
-| Notification retry backlog | `public.notification_retry_queue` (query (a)-E) | Manual. |
-| AI provider spend | Google Cloud billing console | Budget alert existence unknown (V1-022). |
-| User reports | The contact path in (f) | Not yet named. |
+| App crash and error reports (Sentry) | Flutter app | Only with Cloud consent on; whether `SENTRY_DSN` is set for the release workflow is unknown |
+| TestFlight / App Store Connect crash data and feedback | Apple | Depends on users sharing diagnostics; not checked in this assessment |
+| Edge Function logs and invocation counts | Supabase dashboard | No alerting; someone must look |
+| Cron run history | `cron.job_run_details` | Manual query; never queried so far |
+| Push delivery and retry backlog | `public.push_broadcast_deliveries`, `public.notification_retry_queue` | Manual |
+| AI provider spend | Google Cloud billing | Budget alert existence unknown (V1-022) |
+| Orphaned storage objects | Read-only count in (b) | Manual |
+| User reports | Support path below | Path not confirmed |
 
-### Signals that do not exist (V1-024)
-- Any alerting (function 5xx rate, cron failures, queue backlog, AI error rate). Dispatchers fail with `raise log` / `console.log` only.
-- Server-side error tracking (no Sentry in `supabase/functions` or `admin/`).
-- Uptime or health checks.
-- A project-wide AI spend ceiling (V1-022).
-- Build-level version identity from clients (V1-040).
-- A pre-release baseline for function error rates: there is none, so "clearly above baseline" cannot be judged until one is recorded.
+**Signals review R asked for, which do not exist today:**
 
-### What to do about it for this release
-1. During internal TestFlight, the operator runs the (a)-E query pack and reviews function logs **daily** and records the numbers. These become the baseline.
-2. Owner sets a Google Cloud budget alert before external testing (OWNER-AUTHORIZED ACTION).
+| Signal | Why | State |
+|---|---|---|
+| Smart Inbox volume (share of captures that wait for review) | R measured up to about 15% of correct completed probe messages going to review (0% on the repository corpus); real traffic is unknown (V1-085) | **No monitoring exists.** Smart Inbox items live on the device; no backend metric or report counts them. A manual read-only count of server capture statuses (`rejected` / unresolved) for consenting Cloud users is the nearest proxy and covers the server side only. Not defined or run |
+| AI `not_a_transaction` rejection rate | R measured 353 of 1,306 correct AI candidates rejected on each side (V1-086) | **No monitoring exists.** Rejection reasons are not recorded server-side in a queryable form known to this assessment (V1-058); device rejections are not reported. Not defined or run |
 
-### Thresholds and stop conditions
-From SEVERITY-AND-GATES and the runbook; this release does not loosen them. Stop widening and assess on any of:
-- A report of lost, duplicated or wrong financial data (zero tolerance). Note V1-001: declined purchases are counted as spending on every installed build, including 147, and stay counted where already stored (V1-056). The fix exists only in code on this branch; it needs step 3a, a new build and device verification. That alone is an S1.
-- A report of one account seeing another's data.
-- Evidence of transmission without consent.
-- Crash-free sessions below 99% in the observation window (where measurable; Sentry sees only Cloud-on users).
-- Any cron job in `failed` status for account deletion, notification retries or push retry for more than one day.
-- Function error rate or AI/push failure rate above the recorded baseline by a margin the owner sets before rollout: `______`.
-- AI spend above `______` per day (owner sets).
+**Not available (V1-024):** alerting of any kind; server-side error tracking; uptime checks; a project-wide AI spend ceiling; build-level client identity; a recorded pre-release baseline of function error rates (so "above baseline" cannot be judged until P0/P7 numbers are recorded).
+
+### Stop conditions
+Stop widening, and assess, on any of:
+- A report of lost, duplicated or wrong financial data, including a completed movement not recorded (NR-01 class), a declined/failed one counted, or an outgoing payment recorded as income (QR-01, RR-01 class 2).
+- Smart Inbox volume or AI rejections that users report as burdensome (no metric exists; user reports only, V1-085, V1-086).
+- One account seeing another's data; transmission without consent.
+- A `failed` run of the deletion worker, notification retry or push retry jobs lasting more than one day; an orphan count that grows after P1.
+- Crash-free sessions below the SEVERITY-AND-GATES threshold (where measurable).
+- Function error rate above the recorded baseline by `______` (owner sets); AI spend above `______` per day (owner sets).
 - A store rejection or policy notice.
 
-### Observation windows (proposed; owner confirms or changes before rollout)
-- Backend deploy (steps 1–5) before any mobile step: `______` (proposed: 48 hours with the daily query pack).
-- Internal TestFlight: `______` (proposed: at least 7 days, daily checks).
-- External TestFlight: `______` (proposed: at least 7 days).
-- After store release: `______` (proposed: 14 days, daily checks).
-- Hours actually covered by a person during each window: `______`.
+Known before any rollout: declined purchases are still counted on build 147 and older, and rows already stored stay counted (V1-056); at the final candidate 71 wrong total-changing outcomes remain on R's synthetic set (RR-01) — this is why V1-001 stays S1 OPEN until an owner decision, P3 with a new build, and a device run with real bank messages (MDT-IOS-07f).
 
----
+### Observation windows (owner sets)
+- After P1–P4: `______` (proposed 7 days with daily checks).
+- Internal TestFlight: `______`. External TestFlight: `______`. After App Store release: `______`.
+- Hours actually covered by a person in each window: `______`.
 
-## (f) Incident ownership and user support
-
-To be filled by the owner. These were deliberately left blank; do not invent names.
+### Incident ownership and support (owner fills; deliberately blank)
 
 | Role | Name | Contact | Hours covered |
 |---|---|---|---|
@@ -255,88 +238,29 @@ To be filled by the owner. These were deliberately left blank; do not invent nam
 | Backup contact | ______ | ______ | ______ |
 | Operator with production database access | ______ | ______ | ______ |
 | Person with App Store Connect access | ______ | ______ | ______ |
-| Person with Play Console access (if Android) | ______ | ______ | ______ |
 
-User support path:
-- Public support page: `https://qirsh.site/support` (returned 200 on 2026-11-17, audit H).
-- The privacy policy §9 lists a contact address for questions and data requests (`docs/legal/PRIVACY_POLICY.md:348-350`).
-- In-app support or contact link: not located by any audit; to be confirmed: ______.
+- Public support page `https://qirsh.site/support` (returned 200, audit H). The app shows `support@money-companion.app`; the privacy policy shows `business@qirsh.site` — one monitored address must be chosen (Guideline 1.5).
 - Who reads the support inbox and how often: ______.
 - Rule (INCIDENT-AND-RECOVERY): record affected accounts by identifier only; never copy user financial data into tickets or chats.
 
-Incident severity and first steps: INCIDENT-AND-RECOVERY.md (SEV-1 immediate; SEV-2 same day; SEV-3 next working day — targets, not commitments).
-
----
-
-## (g) Safe feature disablement
-
-Only levers the audits showed are actually read by code. **None has been tested in the off (or changed) position on a device or against production.** A lever that was never tested is not a verified recovery mechanism (INCIDENT-AND-RECOVERY).
-
-### Remote flags (admin Flags page; changes are audited in `feature_flag_admin_audit`) — OWNER-AUTHORIZED ACTION to change
-Read by code (audit A §2.4):
-
-| Flag | Default | Effect of turning it off | Tested off? |
-|---|---|---|---|
-| `enable_banner_ads` + 6 placement flags | false | Banner ads hidden | No |
-| `enable_report_ads` | false | Report-export interstitial off | No |
-| `enable_coupons` | false | Savings corner and coupon catalog hidden | No |
-| `enable_offers_merchants` | false | Merchant pages and personalization toggle hidden | No |
-| `enable_affiliate_links` | false | Tracked affiliate click-through off | No |
-| `enable_referrals` | false | "Invite friends" hidden | No |
-| `capture_ai_fallback_enabled`, `android_capture_ai_enabled` (default **true**), `capture_import_v3`, `capture_notify_v2`, `local_auto_confirm_v2`, `ai_sender_mapping_auto` | mostly false | Capture pipeline switches; changing them changes how messages are parsed, confirmed and notified | No — changing these during an incident is itself a risk |
-
-Limits that apply to every flag:
-- Flags reach only clients with **Cloud consent on**; Cloud-off users keep their bundled or cached values (V1-045).
-- They take effect after the client's next catalog fetch and cache expiry (interval not established by the audits).
-- `enable_proof_autocommit` is blocked from being armed server-side (`0101`); it is not a lever.
-
-**Not levers — read by no code (V1-043):** `enable_goals`, `enable_announcements`, `enable_savings_claims`, `enable_offers_personalization`, `ledger_dual_write`, `ledger_pull_sync`, `ledger_push_sync`, `smart_inbox_pull_sync`, the five `planning_*_sync` flags, `capture_direct_ledger_write`, `capture_notify_shared_ids`. Turning them off does nothing; sync is compiled on and gated by consent and capability.
-
-### Server-side levers — OWNER-AUTHORIZED ACTION
-- **Unset `GEMINI_API_KEY`**: `parse-sms` returns `upstream_unavailable` (retryable) before any spend; clients fall back to local parsing (audit F, code inspection `parse-sms/index.ts:337-340`). Not tested (audit F device step 5 proposes testing on staging). Effect on `bank-discovery` and the `process-ios-sms` AI path was not established.
-- **Unset `GOOGLE_MAPS_API_KEY`**: intended to stop Places enrichment; behaviour not established by the audits.
-- **Remove a worker's Vault secret**: the dispatcher makes no call and fails closed (audit F, push broadcast and engagement dispatchers). Tested only by Deno unit tests for push broadcast (weak/missing secret never authenticates).
-- **Deactivate a cron job** (`cron.job.active`): available in Postgres; not rehearsed.
-- **Disable the Auth hook**: reverts Google sign-up restriction; not rehearsed.
-- There is no server-side kill switch for the capture endpoints (BE-13); the remaining option is undeploying a function, which breaks every client that calls it.
+### Levers (none tested in the changed position)
+- Remote flags reach only Cloud-on clients after their next catalog fetch (V1-045). Flags read by no code are not levers (V1-043: for example `enable_goals`, `enable_announcements`, the `ledger_*` and `planning_*_sync` flags).
+- Unset `GEMINI_API_KEY`: `parse-sms` returns a retryable `upstream_unavailable` before any spend; clients fall back to local parsing (audit F, code inspection; not tested). This is a secret change, i.e. a production mutation.
+- Remove a worker's Vault secret: its dispatcher makes no call. Deactivate a cron job (`cron.job.active`). Neither rehearsed.
+- There is no server-side kill switch for the capture endpoints other than undeploying a function, which breaks every client that calls it (BE-13).
 
 ---
 
 ## (h) Recovery
 
-General facts (INCIDENT-AND-RECOVERY): installed apps cannot be recalled; device databases migrate forward only (local schema is v43 since build 147); the fix for a bad build is a new build with a higher build number, tested as an upgrade from the bad build.
+General facts (INCIDENT-AND-RECOVERY): installed apps cannot be recalled; device databases migrate forward only; the fix for a bad build is a new build with a higher build number, tested as an upgrade from the bad build.
 
-### Failed migration
-- During apply: stop at the first failure. Precondition aborts in `0117` (QD096/QD097) leave nothing applied. Whether a failed migration leaves partial state depends on whether it ran in one transaction; `0104` uses an explicit `BEGIN … COMMIT`. Check `schema_migrations` and the object the migration creates before doing anything else.
-- After apply, if it is wrong:
-  - **Rollback files exist** for every migration from `0084` on, including all 2026-11 migrations (`supabase/rollback/`; lint: 0 missing, 1 deferred). Method: run the matching `*_rollback.sql` in reverse order, **OWNER-AUTHORIZED ACTION**.
-  - **None has been rehearsed** against production-shaped data. The only recorded local verification is for the push auto-retry rollback (2026-11-16). Its runbook contradicted the rollback SQL; `f9c5be75` corrected the runbook on this branch to match the SQL (V1-049, document only). The rollback itself is still unrehearsed.
-  - Some are not reversible in practice: the `0102` rollback refuses while awaiting-FX rows exist; the `0104` backfill cannot be meaningfully undone. Any data written in the new shape since apply may block or be lost by a rollback.
-  - Preferred path: a **forward-fix migration**, rehearsed on a local stack first.
-- Whole-database restore: from the step-0 `pg_dump` (if taken and test-restored) or from platform backups/PITR. **PITR availability is UNKNOWN until (a)-F is checked.** Workspace notes outside the repository say platform backups/PITR were off on 2026-10-02; not verified. Any whole-database restore loses everything written after the restore point; last resort, OWNER-AUTHORIZED ACTION.
-
-### Failed function deploy
-- Method: redeploy the previous version from its commit (`supabase functions deploy <name>` from that checkout), OWNER-AUTHORIZED ACTION.
-- Feasible only if (1) the previous source commit is known — today it is not; (a)-B records names and update times only — and (2) the database shape the old version expects still exists.
-- Not rehearsed.
-- Alternative: deploy a forward fix; or, for AI functions, unset `GEMINI_API_KEY` (section g).
-
-### Failed Auth hook
-- Method: remove the hook in Dashboard → Auth → Hooks, OWNER-AUTHORIZED ACTION. Sign-ups blocked in the meantime are not recovered automatically; affected users retry. Not rehearsed.
-
-### Failed admin deploy
-- Method: redeploy the previous build from its commit. The admin runs as a local build (not verified); recovery is rebuilding the previous commit on that machine. Not rehearsed.
-
-### Bad mobile build
-- **Internal or external TestFlight:** expire the build in App Store Connect (stops new installs and eventually stops it launching for testers; does not repair data), then ship a forward-fix build. OWNER-AUTHORIZED ACTION.
-- **App Store:** pause phased release if one is running (affects automatic updates only); remove the version from sale if needed (stops new downloads, does not affect installed copies; App Store Connect feature, not covered by SOURCES.md — unconfirmed); ship a forward-fix build through review. OWNER-AUTHORIZED ACTION.
-- **Play (if Android):** halt the staged rollout; ship a higher versionCode (requires fixing the fixed versionCode first). OWNER-AUTHORIZED ACTION.
-- Remote flags help only for flag-gated features, only for Cloud-on users, and were never tested off (section g).
-- A device-database problem can only be fixed by a new build with a further migration; never ship a build that lowers the schema version or build number.
-- Forward fix time: build, TestFlight processing, and for App Store users, App Review. No measured duration exists.
-
-### Data already sent to a third party
-- Cannot be recalled. Contain (stop the egress path first, e.g. unset `GEMINI_API_KEY`), then follow INCIDENT-AND-RECOVERY response steps. Legal and store notification duties are for the owner to decide with advice.
+- **Failed function deploy:** redeploy the undo source named in (b) from its commit. Feasible because none of the three changes the database shape the old version expects. Not rehearsed. For AI functions, unsetting `GEMINI_API_KEY` is the other containment.
+- **Database:** this release applies no migration. Point-in-time recovery is off and no backups are listed (V1-023): **there is no verified way to restore the database.** A whole-database restore would also lose everything written after its point. Rollback files exist for migrations from `0084` on; none has been rehearsed against production-shaped data.
+- **Flag change gone wrong:** revert in the admin Flags page; reaches Cloud-on clients only, after their next fetch.
+- **Grant revoke gone wrong:** `grant execute on function … to anon` restores the previous state.
+- **Bad mobile build:** expire it in TestFlight; pause phased release (updates only); remove from sale if needed (stops new downloads only); ship a forward fix. Remote flags help only for flag-gated features and Cloud-on users.
+- **Data already sent to a third party:** cannot be recalled; contain first (for example unset `GEMINI_API_KEY`), then follow INCIDENT-AND-RECOVERY.
 
 ---
 
@@ -344,12 +268,15 @@ General facts (INCIDENT-AND-RECOVERY): installed apps cannot be recalled; device
 
 | Item | State |
 |---|---|
-| (a) production comparison | Not run |
-| Step 0 dump and rehearsal | Not done |
-| Steps 1–6 deploy | Not done |
-| Step 3a `process-ios-sms` deploy (V1-001) | Not done |
-| Strict gate on a frozen candidate, release-workflow build | Not done (strict run on `23499229`: see TEST-EVIDENCE.md; no CI or signed build) |
-| Observation windows and thresholds marked `______` | Owner to set |
-| (f) owners and contacts | Owner to fill |
-| Any lever in (g) tested | No |
-| Any recovery in (h) rehearsed | No |
+| Read-only production comparison | Done 2026-11-17 for migrations, functions (against `af675aec`), secrets names, flags, cron schedule, buckets, advisor, backups API. Unknowns listed in (a) |
+| Function comparison against the final candidate | Not done (P0) |
+| Deployment set P1–P4 | Not executed |
+| Ads flag choice P5, revoke P6 | Owner decision; not executed |
+| Orphaned-photo count | Not run |
+| Strict gate at the final candidate | Not recorded (see TEST-EVIDENCE.md) |
+| Independent review of the final parser commit | Done: review R of `50957c06`, accept with follow-up, no S1 (an AI review; not an approval). `75dab61a` was rejected by Q and `1be44623` by N |
+| Owner decision to ship the candidate parser (B28–B30) | Open |
+| New app build to ship with P3–P4 | Not made |
+| Release-workflow build, Codemagic XCTest step | Never run |
+| Any undo or recovery rehearsed | No |
+| Observation windows, thresholds, owners | Owner to fill |

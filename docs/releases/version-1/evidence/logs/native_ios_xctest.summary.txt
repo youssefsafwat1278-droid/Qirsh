@@ -1,0 +1,11 @@
+# Native iOS XCTest run — summary (full log not kept)
+Commit: d830855e (no change under app/ios between this commit and the candidate)
+Environment: iPhone 17 simulator, iOS 26.5, Xcode 27.2, Debug, parallel testing off, machine otherwise lightly loaded
+Command: xcodebuild test -workspace Runner.xcworkspace -scheme Runner -destination id=<simulator> -configuration Debug -parallel-testing-enabled NO
+	 Executed 192 tests, with 0 failures (0 unexpected) in 218.374 (218.466) seconds
+	 Executed 194 tests, with 0 failures (0 unexpected) in 219.084 (219.185) seconds
+	 Executed 194 tests, with 0 failures (0 unexpected) in 219.084 (219.186) seconds
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.710 (0.711) seconds
+** TEST SUCCEEDED **
+
+An earlier run on the same commit reported 182 passed / 7 failed while the disk was full and the test host crashed; that run is not evidence.

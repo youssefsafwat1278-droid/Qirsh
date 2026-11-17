@@ -82,3 +82,24 @@ The second declined-transaction fix has **not** been independently reviewed. Its
 - Apple's required-reason API pages could not be fetched; reason codes are from model knowledge.
 - Journeys past onboarding were not exercised on a running app, because a build without backend configuration cannot complete onboarding.
 - All review was done by AI agents. This is not a certification and makes no compliance claim.
+
+## Second round (after the owner's review of the first records)
+
+The owner rejected treating money errors as limitations, asked for the restore defect to be reproduced, for the final code to be independently reviewed, for production to be compared before any deploy was proposed, and for the records to be reconciled. What happened:
+
+| Work | Who | Result |
+|---|---|---|
+| Parser rounds 3–10 | Fix agents (`claude-opus-5-5`), orchestrator review of each diff and commit | Ten rounds in total. Five rounds introduced a regression that a later independent review caught; two commits were rejected outright and corrected. The final round only removes |
+| Independent reviews K, L, N, O, P, Q, R | Separate agents (`claude-opus-5-5`), each with its own probes | Every code commit up to the candidate is covered. R, on the final commit: accept with follow-up, no S1 regression, nothing worse than the baseline on the device or effective path; open defects carried from the baseline |
+| Restore versus cloud sync | Investigation and fix agents; orchestrator ran the live local-stack test before and after | Defect confirmed and its decision-independent part fixed |
+| Signed-in app on simulators | Runtime agents | 44 items seen, 5 not reached; found the hidden tab bar, since fixed and confirmed with a control build |
+| Native iOS tests | Orchestrator | 194 passed on a simulator |
+| Production | Orchestrator, read-only | Migration ledger equals the candidate; three functions justify a deploy; advertising flags on; point-in-time recovery off |
+| Official documentation | Research agent | Privacy-manifest reason codes confirmed from Apple's documentation; reviewer access and export compliance gaps |
+| UI round 2, release workflow, removal tests | Fix agents | See [CHANGELOG.md](CHANGELOG.md) |
+
+Two things the first round got wrong, stated plainly: it reported V1-001 as "fixed locally" after two parser rounds when it was not, and it recorded the admin advisories as "2" when that was the count of affected packages, not advisories. Both were corrected after independent review.
+
+What the second round found that no audit had: a limit or balance figure recorded as the transaction amount; ignore words dropping real purchases; the tab bar hidden after an email-code sign-in in the distributed build; restore duplicating rows in the cloud in a configured build; all advertising flags on in production; the deployed deletion worker predating profile-photo erasure.
+
+The closure of every review finding is in [REVIEW-CLOSURE.md](REVIEW-CLOSURE.md). The limits listed above still apply: no physical device, no Android, no CI or signed build of the candidate, no store console, AI path not run against a real model, all parser measurements on synthetic messages.

@@ -38,14 +38,29 @@ Resume from here after an interruption. Newest entries at the bottom.
 | 11-17 07:10 | Records refreshed to the final commits; RELEASE-MANIFEST, CHANGELOG, KNOWN-LIMITATIONS, AUDIT-REPORT, RELEASE-DECISION, README, TEST-EVIDENCE written | done |
 | 11-17 07:10 | Full strict gate on `af675aec` | see TEST-EVIDENCE.md |
 
+## Round 2 (after the owner's review)
+
+| What | State |
+|---|---|
+| Candidate | `5dae2e2d` = final application code `50957c06` (15 round-2 code commits on top of `d830855e`) + one test-only commit; records commits on top |
+| Parser rounds 3–10 and reviews K, L, N, O, P, Q, R | done; final review R accepts with follow-up; no further round by agreement with the owner |
+| Restore versus sync: reproduced on a local stack, fixed, re-verified | done; replace-or-merge is the owner's decision |
+| Signed-in simulator run, tab-bar fix and its simulator check | done |
+| Native iOS tests on a simulator | done (194 passed) |
+| Production read-only comparison | done; `evidence/production-comparison.md` |
+| Release workflow hardening, removal tests in a configured build, UI round 2 | done |
+| Records reconciled; REVIEW-CLOSURE, DECISIONS-NEEDED, action package in RELEASE-PLAN | done |
+| Strict gate on `50957c06` | see TEST-EVIDENCE.md |
+
+Local stack `qirsh_v1_verify` (Docker, ports 56321–56330, synthetic data): see `evidence/local-stack.md`. Stop it with the command recorded there when it is no longer needed. The other Docker stacks on the machine were not created by this work.
+
 ## Next (for whoever resumes)
 
-1. Owner decisions and operator checks listed in RELEASE-DECISION.md.
+1. Owner decisions in DECISIONS-NEEDED.md and the action package in RELEASE-PLAN.md.
 2. Push and merge `release-readiness/v1` only when the owner authorizes it.
 3. CI build of the merged commit → physical-device run of MANUAL-DEVICE-TESTS.md.
-4. Independent review of the second declined-transaction fix (`668f4d64`), which has not had one.
-5. Verify the two suspected gaps V1-060 and V1-061.
-6. Remove the temporary worktree `.claude/worktrees/v1-ui-audit` when no longer needed (it holds only build output).
+4. Device run with real bank messages before any wide release (parser measurements are on synthetic messages only).
+5. Open parser defects RR-01 — only after the owner decides how notices and ambiguous credits should be treated.
 
 ## Not done, by design
 

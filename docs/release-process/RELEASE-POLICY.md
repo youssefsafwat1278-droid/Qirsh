@@ -6,7 +6,7 @@ Project-specific rules. Where a rule comes from a store or a standard, [SOURCES.
 
 | Role | Who | Authority |
 |---|---|---|
-| Owner | The product owner | The only person who accepts limitations, changes scope, privacy commitments or consent rules, and authorizes pushes, production deploys, production configuration changes, and store submissions. |
+| Owner | The product owner | The only person who accepts limitations, changes scope, privacy commitments or consent rules, and authorizes pushes, production deploys, production configuration changes, and store submissions. Authorization covers the scope it was given for and remains valid within that scope; production changes are presented as one reviewable action package rather than step-by-step requests. |
 | Release lead | Whoever runs the release (a person or an orchestrating agent) | Runs this process, integrates fixes, writes the decision *recommendation*. |
 | Specialist reviewers | People or agents per area | Produce evidence and findings. Agreement between reviewers is not proof. |
 | Independent reviewer | Someone who did not write the fixes | Challenges the result before the decision. |
@@ -51,6 +51,7 @@ A release is not READY while any of these is open, regardless of how many other 
 
 - Database, functions, admin, and mobile are separately deployed and separately versioned. The release plan states the order and the compatibility window; see [RELEASE-RUNBOOK.md](RELEASE-RUNBOOK.md).
 - Backend changes must work with every client version still installed (expand, then migrate, then contract). A migration that breaks an installed client is a blocker unless a forced update exists and has been verified.
+- Rehearsals use synthetic data, or production data that is properly protected and sanitized. Production user data is not copied into development environments.
 - Migrations are forward-only on the device (Drift) and treated as forward-only in production unless a specific rollback file has been rehearsed. Do not write "roll back" in a plan without saying how and whether it was tested.
 - Mobile releases go to internal testers first, then a limited audience, then wider, where the store supports it.
 

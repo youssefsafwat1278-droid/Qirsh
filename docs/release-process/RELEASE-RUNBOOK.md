@@ -1,6 +1,6 @@
 # Release runbook
 
-The procedure for taking a Qirsh candidate from "frozen" to "observed in production". Steps marked **OWNER** need the owner's explicit authorization each time; a previous authorization does not carry over.
+The procedure for taking a Qirsh candidate from "frozen" to "observed in production". Steps marked **OWNER** are production or store actions that need the owner's authorization. Authorization is given once for a concrete, written action package (the steps, their order, pre-checks, post-checks and stop conditions) and stays valid for everything inside that package; it is not re-requested step by step. A step that is not in the package, or a package whose contents changed, needs a new approval.
 
 Qirsh ships four separately deployed parts: the Postgres schema (`supabase/migrations`), Edge Functions (`supabase/functions`), the admin panel (`admin/`), and the mobile apps. Installed mobile apps cannot be recalled, and device databases migrate forward only, so order and compatibility matter more than speed.
 
@@ -41,7 +41,9 @@ Check: gates G2, G3.
 
 Check: gate G7.
 
-## Stage 4 — Deploy backend (OWNER, each step)
+## Stage 4 — Deploy backend (OWNER — one approved action package)
+
+Before proposing anything, compare the deployed state with the candidate (migration ledger, deployed function sources, flags, scheduled jobs, backup status) and deploy only what differs and is needed — the smallest justified set, with its dependencies and client compatibility stated. Do not deploy every function by default.
 
 Order: **database → functions → admin → mobile**. Each step is additive first (expand), with removal of old shapes deferred to a later release (contract).
 
