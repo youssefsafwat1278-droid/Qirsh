@@ -33,6 +33,12 @@ import 'package:money_companion/data/db/replica_store.dart';
 import 'package:money_companion/features/capture/services/native_capture_bridge.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:money_companion/core/auth/auth_coordinator.dart';
+import 'package:money_companion/core/auth/refresh_transport.dart';
+import 'package:money_companion/core/auth/session_files.dart';
+import 'package:money_companion/core/auth/session_store.dart';
+
+import '../auth/store_fakes.dart';
 import '../session/f2_fixture.dart';
 import '../session/recording_secure_storage.dart';
 
@@ -784,5 +790,525 @@ void _senderBootstrapConfigured() {
         }
       });
     }
+    // V1-054: the removal journeys of 'original removal integration controls',
+    // nested here so they share this group's single define-gated skip site.
+    _configuredRemovalJourneys();
   }, skip: !exactConfig ? 'Requires exact synthetic local/example/anon defines; no configured coverage otherwise.' : false);
+}
+
+/// A live (unexpired) SDK session of [uid] as the SDK persists it, issued by
+/// [_configuredUrl] so the coordinated session store accepts it.
+String _configuredSession(String uid) => jsonEncode(_configuredSessionJson(uid));
+
+Map<String, Object> _configuredSessionJson(String uid) {
+  String b64(Object o) =>
+      base64Url.encode(utf8.encode(jsonEncode(o))).replaceAll('=', '');
+  final exp = DateTime.now().millisecondsSinceEpoch ~/ 1000 + 3600;
+  return {
+    'access_token':
+        '${b64({'alg': 'none'})}.${b64({'sub': uid, 'exp': exp, 'iss': '$_configuredUrl/auth/v1'})}.s',
+    'token_type': 'bearer',
+    'expires_in': 3600,
+    'refresh_token': 'refresh-$uid',
+    'user': {
+      'id': uid,
+      'email': '$uid@example.com',
+      'app_metadata': <String, Object>{},
+      'user_metadata': <String, Object>{},
+      'aud': 'authenticated',
+      'created_at': '2026-10-01T00:00:00Z',
+    },
+    'expires_at': exp,
+  };
+}
+
+const _configuredUrl = 'https://example.supabase.co';
+
+class _ConfiguredNoRefresh implements RefreshChannel {
+  @override
+  bool get sent => false;
+  @override
+  Future<void> open() async => throw StateError('no network in this test');
+  @override
+  Future<RefreshHttpResult> send(String refreshToken) =>
+      throw StateError('no network in this test');
+  @override
+  void cancel() {}
+  @override
+  void close() {}
+  @override
+  Future<void> quiesced() async {}
+}
+
+/// The configured-build port (V1-054) of the journeys in 'original removal
+/// integration controls'. Startup runs the REAL `Supabase.initialize` and the
+/// production coordinated (ASR) session path: an [AuthCoordinator] over a
+/// [SessionStore] whose Keychain is an in-memory fake (the native Keychain
+/// channel cannot run in a host test). The stale session of X is the SDK
+/// session the app persisted before (imported once, then re-served from the
+/// store on every restart). Every restart is a new process: the SDK and the
+/// coordinator of the previous one are disposed.
+void _configuredRemovalJourneys() {
+  group('removal journeys', () {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    late Directory support;
+    late RecordingSecureStorage storage;
+    late _Queue queue;
+    late FakeKeychain keychain;
+    late FakeLegacy legacy;
+    final session = AppSession.instance;
+    final runners = <BootstrapRunner>[];
+    final coordinators = <AuthCoordinator>[];
+    final exchanges = <String>[];
+    String? exchangeUid;
+    Timer? frames;
+
+    Future<void> endProcess() async {
+      for (final c in coordinators) {
+        c.dispose();
+      }
+      coordinators.clear();
+      AuthCoordinator.active = null;
+      try {
+        if (Supabase.instance.isInitialized) await Supabase.instance.dispose();
+      } catch (_) {}
+      BootstrapRunner.debugResetSdkInitializationLatch();
+    }
+
+    setUp(() async {
+      support = Directory.systemTemp.createTempSync('bootstrap_cfg_it_');
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(
+        const MethodChannel('plugins.flutter.io/path_provider'),
+        (call) async => support.path,
+      );
+      storage = RecordingSecureStorage().install();
+      FlutterLocalNotificationsPlatform.instance = _NoNotifications();
+      SharedPreferences.setMockInitialValues({});
+      CloudEgressGate.instance = CloudEgressGate();
+      queue = _Queue();
+      keychain = FakeKeychain();
+      legacy = FakeLegacy();
+      exchanges.clear();
+      exchangeUid = null;
+      await endProcess();
+      session.debugResetAdmissionState();
+      session.configureRemoveData(null);
+      session.configureAccountScope(null);
+      await session.wipeAndReset();
+      final binding = TestWidgetsFlutterBinding.instance;
+      frames = Timer.periodic(const Duration(milliseconds: 20), (_) {
+        binding.scheduleFrame();
+        binding.handleBeginFrame(Duration.zero);
+        binding.handleDrawFrame();
+      });
+    });
+
+    tearDown(() async {
+      for (final r in [...runners]) {
+        try {
+          await r.accountScope.lock();
+          r.accountScope.dispose();
+        } catch (_) {}
+      }
+      frames?.cancel();
+      runners.clear();
+      await endProcess();
+      CloudEgressGate.instance = CloudEgressGate();
+      session.configureRemoveData(null);
+      session.configureAccountScope(null);
+      session.configureCaptureOwnerClear(null);
+      support.deleteSync(recursive: true);
+    });
+
+    BootstrapSdkTestConfig sdk() => BootstrapSdkTestConfig(
+          url: _configuredUrl,
+          // No backend: the explicit provider exchange returns a fresh session
+          // of [exchangeUid]; every other request is answered locally, empty.
+          innerHttp: MockClient((request) async {
+            if (request.url.path == '/auth/v1/token' &&
+                request.url.queryParameters['grant_type'] == 'id_token') {
+              exchanges.add(exchangeUid!);
+              return http.Response(jsonEncode(_configuredSessionJson(exchangeUid!)), 200,
+                  headers: {'content-type': 'application/json'});
+            }
+            return http.Response('[]', 200,
+                headers: {'content-type': 'application/json'});
+          }),
+          authCoordinator: () async {
+            final c = AuthCoordinator(
+                store: SessionStore(
+                  keychain: keychain,
+                  files: SessionFiles(support),
+                  origin: Uri.parse(_configuredUrl),
+                  legacy: legacy,
+                  localInstallDataPresent: () async => true,
+                ),
+                gate: CloudEgressGate.instance,
+                channelFactory: _ConfiguredNoRefresh.new);
+            coordinators.add(c);
+            return c;
+          },
+        );
+
+    /// A new process. [staleSessionOf]: the SDK session of that uid is
+    /// persisted (imported on the first launch; re-served by the store after).
+    Future<BootstrapRunner> boot({String? staleSessionOf}) async {
+      await endProcess();
+      if (staleSessionOf != null && keychain.items.isEmpty) {
+        legacy.value = _configuredSession(staleSessionOf);
+      }
+      final runner = BootstrapRunner(debugSdk: sdk())..captureQueue = queue;
+      runners.add(runner);
+      await runner.run();
+      if (staleSessionOf != null) {
+        expect(Supabase.instance.client.auth.currentSession?.user.id,
+            staleSessionOf,
+            reason: 'the configured SDK holds the persisted session');
+      }
+      return runner;
+    }
+
+    Directory replicas() => Directory(p.join(support.path, 'replicas'));
+    List<String> replicaDirs() => replicas().existsSync()
+        ? [
+            for (final e in replicas().listSync())
+              if (e is Directory && !p.basename(e.path).startsWith('_'))
+                p.basename(e.path),
+          ]
+        : [];
+    List<String> keyWrites(int from) => [
+          for (final a in storage.attempts.skip(from))
+            if (a.startsWith('write:qirsh.db_key.')) a,
+        ];
+    List<String> admissionWrites(int from) => [
+          for (final a in storage.attempts.skip(from))
+            if (a.startsWith('write:$kMarkerKey=') ||
+                a.startsWith('write:$kGenerationKey=') ||
+                a.startsWith('write:qirsh.db_key.') ||
+                (a.startsWith('write:qirsh.replicas.v1=') &&
+                    a != 'write:qirsh.replicas.v1={}'))
+              a,
+        ];
+
+    /// An explicit sign-in through the production configured path: attempt
+    /// zone -> gate account control -> coordinator exchange -> admission.
+    Future<void> signIn(String uid) async {
+      final client = Supabase.instance.client;
+      final attempt = session.beginAuthAttempt();
+      final coord = AuthCoordinator.active!;
+      exchangeUid = uid;
+      await AuthAttemptZone.run(
+          attempt.intent,
+          () => CloudEgressGate.instance.runAccountControl(
+              AccountControlOp.signIn,
+              () => coord.explicitExchange(
+                  attempt.intent,
+                  () => client.auth.signInWithIdToken(
+                      provider: OAuthProvider.google,
+                      idToken: 'google-id-token')),
+              attempt: true));
+      expect(exchanges.last, uid);
+      await session.setIdentity(
+        method: 'google',
+        email: '$uid@example.com',
+        userId: uid,
+        attempt: attempt,
+        sessionCurrent: () =>
+            client.auth.currentSession?.user.id == uid &&
+            !(client.auth.currentSession?.isExpired ?? true),
+      );
+      await session.finishOnboarding();
+    }
+
+    test(
+        'O-H1: one inert coordinator exists before any recovery or opener and '
+        'is reused by retries and later runners', () async {
+      // A fresh process: the configured group's earlier tests ran in this
+      // isolate and left the process-retained coordinator behind.
+      DatabaseAccessBroker.debugResetForTest();
+      final events = <String>[];
+      String? stepAtCreation = 'unset';
+      late BootstrapRunner first;
+      first = BootstrapRunner(
+          debugSdk: sdk(),
+          debugCoordinatorEvent: (event) {
+            events.add(event);
+            if (event == 'coordinator') stepAtCreation = first.lastStep;
+          })
+        ..captureQueue = queue;
+      runners.add(first);
+      await first.run();
+      expect(events.first, 'coordinator',
+          reason: 'before the first recovery, session load or Drift opener');
+      expect(stepAtCreation, isNull, reason: 'no bootstrap step had started');
+      final coordinator = first.debugCoordinator;
+      expect(coordinator, isNotNull);
+      expect(coordinator!.isInert, isTrue);
+      expect(coordinator.mode, DatabaseAccessMode.closed);
+      expect(coordinator.client.isHostIssued, isFalse);
+      expect(DatabaseAccessBroker.discover(), isNotNull);
+
+      // Retry of the retained runner: no replacement registration.
+      await first.run();
+      expect(identical(first.debugCoordinator, coordinator), isTrue);
+      expect(events.where((e) => e == 'coordinator'), hasLength(1));
+
+      // A rebuilt runner reuses the process-retained coordinator.
+      await first.accountScope.lock();
+      final second =
+          BootstrapRunner(debugSdk: sdk(), debugCoordinatorEvent: events.add)
+            ..captureQueue = queue;
+      runners.add(second);
+      await second.run();
+      expect(identical(second.debugCoordinator, coordinator), isTrue);
+      expect(events.where((e) => e == 'coordinator'), hasLength(1));
+      expect(events.where((e) => e == 'coordinator-reused'), hasLength(1));
+      expect(coordinator.mode, DatabaseAccessMode.closed,
+          reason: 'creating it granted nothing');
+      expect(coordinator.client.isHostIssued, isFalse);
+    });
+
+    test(
+        'O-H3: the real cold launch reserves its primary open as a '
+        'launch-specific private reservation that grants nothing', () async {
+      final first = await boot(staleSessionOf: 'uid-launch');
+      await signIn('uid-launch');
+      await first.accountScope.detach(); // the process dies while `active`
+      session.debugResetAdmissionState();
+      session.configureRemoveData(null);
+      session.configureAccountScope(null);
+      final restarted = await boot(staleSessionOf: 'uid-launch');
+      expect(restarted.accountScope.activeUid, 'uid-launch',
+          reason: 'the existing replica was opened at launch');
+      final coordinator = restarted.debugCoordinator!;
+      final reservation = session.debugDatabaseOpenReservation;
+      expect(reservation, isNotNull);
+      expect(reservation!.kind, DatabaseReservationKind.coldLaunchPrimary);
+      expect(reservation.uid, 'uid-launch');
+      expect(reservation.hasOpened, isTrue);
+      expect(
+          reservation.ownsDatabase(restarted.accountScope.current!.database),
+          isTrue,
+          reason: 'the real primary handle is the tracked one');
+      expect(coordinator.pendingOpens, 0);
+      expect(coordinator.openHolders, greaterThanOrEqualTo(1));
+      expect(coordinator.mode, DatabaseAccessMode.closed);
+      expect(coordinator.client.isHostIssued, isFalse);
+      expect(reservation.isPromoted, isFalse);
+    });
+
+    test(
+        'Stage2 real ended child lease permits pending removal on actual '
+        'restart', () async {
+      final first = await boot(staleSessionOf: 'uid-x');
+      await signIn('uid-x');
+      final replicasStore = ReplicaStore(appSupportDirectory: support.path);
+      final location = await replicasStore.locationFor('uid-x');
+      final hash = await replicasStore.uidHash('uid-x');
+      await first.accountScope.lock();
+      AppDatabase.dropProcessLiveness(location);
+      final helper = File(p.join(support.path, 'ended_helper.dart'))
+        ..writeAsStringSync(r'''import 'dart:io';
+void main(List<String> a) {
+  final lock = File(a[0]).openSync(mode: FileMode.write);
+  lock.lockSync(FileLock.exclusive);
+  Directory(a[1]).createSync();
+  File('${a[1]}/ended.lease').writeAsStringSync('child-token\n$pid\nchild-instance');
+  exit(0);
+}
+''');
+      final child = await Process.run(
+          'dart', [helper.path, location.plockPath, location.leaseDir]);
+      expect(child.exitCode, 0, reason: '${child.stderr}');
+      expect(
+          File(p.join(location.leaseDir, 'ended.lease')).existsSync(), isTrue);
+      storage.data[RemoveDataFlow.barrierKey] =
+          jsonEncode({'uid': 'uid-x', 'uidHash': hash, 'revoke': true});
+      session.debugResetAdmissionState();
+      session.configureRemoveData(null);
+      session.configureAccountScope(null);
+      final from = storage.attempts.length;
+      final restarted = await boot(staleSessionOf: 'uid-x');
+      expect(storage.data.containsKey(RemoveDataFlow.barrierKey), isFalse);
+      expect(storage.data[RemoveDataFlow.revokedKey], contains('uid-x'));
+      expect(Directory(location.directory).existsSync(), isFalse);
+      expect(storage.data.containsKey(location.keyName), isFalse);
+      expect(restarted.accountScope.activeUid, isNull);
+      expect(session.status, isNot(SessionStatus.authenticated));
+      expect(keyWrites(from), isEmpty);
+    });
+
+    test(
+        'Stage1 uncleared revoked marker blocks actual bootstrap legacy '
+        'adoption', () async {
+      storage.data[RemoveDataFlow.revokedKey] = '["uid-x"]';
+      storage.data[kMarkerKey] = 'uid-x';
+      final legacyDb = File(p.join(support.path, 'money_companion.sqlite'))
+        ..writeAsBytesSync(List<int>.filled(64, 7));
+      storage.gate = (op, key) async {
+        if (op == 'read' && key == kMarkerKey) {
+          storage.data[kMarkerKey] = 'uid-x';
+        }
+      };
+      final from = storage.attempts.length;
+      final runner = await boot();
+      storage.gate = null;
+      expect(legacyDb.existsSync(), isTrue);
+      expect(replicaDirs(), isEmpty);
+      expect(keyWrites(from), isEmpty);
+      expect(
+          storage.attempts
+              .skip(from)
+              .where((a) => a.startsWith('write:qirsh.replicas.v1=')),
+          isEmpty);
+      expect(runner.accountScope.activeUid, isNull);
+      expect(session.status, isNot(SessionStatus.authenticated));
+      expect(
+          queue.calls
+              .where((c) => c.startsWith('begin') || c.startsWith('finish')),
+          isEmpty);
+    });
+
+    test(
+        'R2-7 Remove data from an authenticated user through the real '
+        'startup: revalidation and auth events during the removal attempt '
+        'NOTHING for X; a restart with the stale session stays signed out; a '
+        'fresh explicit login creates exactly one replica', () async {
+      var runner = await boot(staleSessionOf: 'uid-x');
+      await signIn('uid-x');
+      expect(session.status, SessionStatus.authenticated);
+      expect(replicaDirs(), hasLength(1));
+      expect(runner.accountScope.activeUid, 'uid-x');
+
+      // Pause the removal after the scope swap, while the stale session is live.
+      final hold = storage.holdOnce((op, key) =>
+          op == 'delete' && key.startsWith(kConsentAskedKeyPrefix));
+      final from = storage.attempts.length;
+      final removal = session.removeDataFromDevice();
+      await hold.reached.future;
+      expect(runner.accountScope.activeUid, isNull,
+          reason: 'the signed-out scope is published: the root remounts');
+      // The configured SDK client is the one AppSession bound at startup.
+      final client = Supabase.instance.client;
+      expect(client.auth.currentSession?.user.id, 'uid-x',
+          reason: 'the stale session of X is still live in the SDK');
+      expect(await session.revalidateForShell(client), isFalse);
+      await session.revalidateSupabaseSessionOnResume(client);
+      // The SDK's own refresh of X on the bound client (with a coordinator it
+      // is routed to ASR, which has no network here).
+      try {
+        await client.auth.refreshSession();
+      } catch (_) {}
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      hold.release.complete();
+      await removal;
+      await session.drainAdmissions();
+
+      expect(admissionWrites(from), isEmpty,
+          reason: 'ZERO attempted marker/generation/key/registry writes');
+      expect(replicaDirs(), isEmpty);
+      expect(storage.data.keys.where((k) => k.startsWith('qirsh.db_key.')),
+          isEmpty);
+      expect(storage.data.containsKey(kMarkerKey), isFalse);
+      expect(session.status, isNot(SessionStatus.authenticated));
+      expect(queue.calls, containsAllInOrder(['begin:uid-x', 'finish:uid-x']));
+
+      // Restart with the stale persisted Supabase session of X.
+      for (final r in [...runners]) {
+        await r.accountScope.lock();
+      }
+      session.debugResetAdmissionState();
+      session.configureRemoveData(null);
+      session.configureAccountScope(null);
+      final afterRemoval = storage.attempts.length;
+      runner = await boot(staleSessionOf: 'uid-x');
+      await session.revalidateSupabaseSessionOnResume(Supabase.instance.client);
+      await session.drainAdmissions();
+      expect(admissionWrites(afterRemoval), isEmpty);
+      expect(replicaDirs(), isEmpty);
+      expect(runner.accountScope.activeUid, isNull);
+      expect(session.status, isNot(SessionStatus.authenticated));
+
+      // A fresh explicit login succeeds exactly once and creates one replica.
+      final beforeLogin = storage.attempts.length;
+      await signIn('uid-x');
+      expect(replicaDirs(), hasLength(1));
+      expect(keyWrites(beforeLogin), hasLength(1));
+      expect(runner.accountScope.activeUid, 'uid-x');
+      expect(storage.data.containsKey(RemoveDataFlow.revokedKey), isFalse,
+          reason: 'the explicit admission committed and lifted the revocation');
+    });
+
+    for (final (label, read) in [
+      ('a native barrier of unknown uid', _present),
+      ('a MALFORMED native barrier answer', _malformed),
+    ]) {
+      test(
+          'R2-7 $label blocks the real launch: no legacy adoption, no auth '
+          'bind/reconcile, no replica opened, nothing routed authenticated',
+          () async {
+        var runner = await boot(staleSessionOf: 'uid-y');
+        await signIn('uid-y');
+        expect(session.status, SessionStatus.authenticated);
+        final hashDirs = replicaDirs();
+        final yLocation = await runner.accountScope.store.locationFor('uid-y');
+        final yKey = storage.data[yLocation.keyName];
+        // A legacy database appears, and the native barrier becomes unreadable.
+        final legacyDb = File(p.join(support.path, 'money_companion.sqlite'))
+          ..writeAsBytesSync(List<int>.filled(64, 7));
+        queue.barrier = read();
+        for (final r in [...runners]) {
+          await r.accountScope.lock();
+        }
+        session.debugResetAdmissionState();
+        session.configureRemoveData(null);
+        session.configureAccountScope(null);
+        final from = storage.attempts.length;
+        queue.calls.clear();
+
+        runner = await boot(staleSessionOf: 'uid-y');
+        await session
+            .revalidateSupabaseSessionOnResume(Supabase.instance.client);
+        await session.drainAdmissions();
+
+        expect(legacyDb.existsSync(), isTrue,
+            reason: 'the legacy file was neither adopted nor quarantined');
+        expect(Directory(p.join(replicas().path, '_quarantine')).existsSync(),
+            isFalse);
+        expect(runner.accountScope.activeUid, isNull,
+            reason: 'only the signed-out scope is opened');
+        expect(replicaDirs(), hashDirs, reason: 'no replica created or removed');
+        expect(session.status, isNot(SessionStatus.authenticated));
+        expect(admissionWrites(from), isEmpty);
+        expect(
+            queue.calls
+                .where((c) => c.startsWith('begin') || c.startsWith('finish')),
+            isEmpty,
+            reason: 'no uid is guessed from the barrier');
+        expect(storage.data[kMarkerKey], 'uid-y',
+            reason: 'the marker is left alone, just not opened');
+
+        // Control: once the barrier reads cleanly the same launch proceeds.
+        queue.barrier = const CaptureRemovalBarrierRead.absent();
+        for (final r in [...runners]) {
+          await r.accountScope.lock();
+        }
+        session.debugResetAdmissionState();
+        session.configureRemoveData(null);
+        session.configureAccountScope(null);
+        await runners.last.accountScope.store
+            .setState('uid-y', ReplicaState.active);
+        runner = await boot(staleSessionOf: 'uid-y');
+        expect(legacyDb.existsSync(), isTrue,
+            reason:
+                'active non-adoptPending Y retains unrelated legacy leftover');
+        expect(replicaDirs(), hashDirs);
+        expect(File(yLocation.dbPath).existsSync(), isTrue);
+        expect(storage.data[yLocation.keyName], yKey);
+        expect(runner.accountScope.activeUid, 'uid-y');
+      });
+    }
+  });
 }
