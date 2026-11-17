@@ -363,9 +363,9 @@ export const LABELLED_FIGURE = new RegExp(
 // PR-03: a labelled figure is the transaction amount when a completed
 // movement in the same clause acts on it: a verb before the label ("تم سداد
 // المبلغ المستحق 500", "Debited from your balance SAR 75"), an English verb
-// between the label and the figure ("Outstanding amount settled SAR 1,200")
-// or right after the figure ("Minimum payment SAR 115.00 has been paid"),
-// with no other number in between. Mirrors
+// between the label and the figure ("Outstanding amount settled SAR 1,200"),
+// with no other number in between (QR-02: not a verb after the figure,
+// "Available limit SAR 5,000 debited SAR 50"). Mirrors
 // ParserEngine.movementActsOnFigure.
 const CLAUSE_CUT = /[\n;!?؟؛،]|, |\.(?![0-9])/g;
 const MOVEMENT_LATIN = [
@@ -380,16 +380,13 @@ const MOVEMENT_ARABIC = [
 function latinVerb(s: string): boolean {
   return MOVEMENT_LATIN.some((v) => new RegExp(`(?<![a-z])${v}(?![a-z])`).test(s));
 }
-export function movementActsOnFigure(l: string, labelAt: number, start: number, end: number): boolean {
+export function movementActsOnFigure(l: string, labelAt: number, start: number): boolean {
   let cs = 0;
-  let ce = l.length;
   for (const m of l.matchAll(CLAUSE_CUT)) {
-    const ms = m.index!, me = ms + m[0].length;
+    const me = m.index! + m[0].length;
     if (me <= start) cs = me;
-    if (ms >= end && ce === l.length) ce = ms;
   }
   if (labelAt < cs) labelAt = cs;
-  if (latinVerb(l.slice(end, ce).split(/[0-9]/)[0])) return true;
   const head = l.slice(cs, start);
   const lastDigit = head.search(/[0-9][^0-9]*$/);
   const free = lastDigit < 0 ? cs : cs + lastDigit + 1;
@@ -410,7 +407,7 @@ export function maskAccountFigures(text: string): string {
   const lower = text.toLowerCase();
   return text.replace(LABELLED_FIGURE, (m: string, offset: number) => {
     const numAt = offset + m.search(/[0-9][0-9,]*(?:\.[0-9]+)?$/);
-    return movementActsOnFigure(lower, offset, numAt, offset + m.length) ? m : ' ';
+    return movementActsOnFigure(lower, offset, numAt) ? m : ' ';
   });
 }
 

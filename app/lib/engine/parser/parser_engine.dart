@@ -370,14 +370,10 @@ class ParserEngine {
     'استلام', 'استلمت', 'مبلغ وارد', 'راتب', 'استرداد', 'مسترد', 'رد مبلغ',
     'إعادة مبلغ', 'اعادة مبلغ', 'استرجاع', 'عكس قيد', 'عكس العملية', 'تحويل',
     'حوالة', 'حواله', 'صراف', 'عملية', 'أموال',
-    // OR-01: card authorisations and postings, payroll, direct debits and
-    // standing orders. Not a bare "debit" ("Your debit card is now active"
-    // names a product, like "credit card"), nor "fee"/"charge" ("Card
-    // renewal fee waived", "free of charge" on a card notice); a fee
-    // message stays visible by its amount instead (isIgnoredMessage).
-    'direct debit', 'authorised',
-    'authorized', 'approved', 'posted', 'payroll', 'standing order',
-    'عمولة', 'قيد مبلغ', 'تم قيد', 'أمر مستديم', 'أمر دائم', 'خصم مباشر',
+    // Round 10 (PR-01): the OR-01 additions (authorisations, postings,
+    // payroll, "قيد مبلغ", direct debits, standing orders) are gone: next to
+    // a limit line they made incoming credits recorded payments. Visibility
+    // no longer needs them (PR-02: a notice word never silences a message).
   ];
 
   /// The remaining ignore markers: links, calls to action, cheque books,
@@ -427,31 +423,6 @@ class ParserEngine {
     r'|(?:الرمز|رمزك|رمز|الكود|كود)\s*:?\s*[0-9]{4,8}\s+ل',
   );
 
-  /// The sentence of [lower] that holds the transaction [amount] (the whole
-  /// message when it cannot be found).
-  static String _amountSentence(
-      String lower, _AmountExtraction extraction, double amount) {
-    for (final c in extraction.candidates) {
-      if (c.kind != AmountCandidateKind.transactionAmount ||
-          (c.value - amount).abs() >= 0.005) {
-        continue;
-      }
-      final line = c.line.toLowerCase();
-      final at = line.indexOf(c.raw.toLowerCase());
-      if (at < 0) break;
-      var from = 0;
-      var to = line.length;
-      for (final m in _sentenceCut.allMatches(line)) {
-        if (m.end <= at) from = m.end;
-        if (m.start >= at + c.raw.length && to == line.length) to = m.start;
-      }
-      return line.substring(from, to);
-    }
-    return lower;
-  }
-
-  static final RegExp _sentenceCut = RegExp(r'[!?؟;؛]|\.(?![0-9])');
-
   /// OR-05 / PR-05 — [lower] holds a code that authorises a payment
   /// ([_otpCode]) that is not merely mentioned after a completed transaction
   /// sentence ("Purchase SAR 250.00 at SHOPX. Pickup code 4829. Valid until
@@ -478,6 +449,27 @@ class ParserEngine {
     'due amount', 'الحد', 'حد الائتمان', 'حد ائتماني', 'حد البطاقة',
     'حد الشراء', 'حد السحب', 'حد التحويل', 'حد العمليات', 'موعد سداد',
     'المتبقي', 'المستحق',
+  ];
+
+  /// The [_limitWords] that name an amount owed, not a limit.
+  static const List<String> _dueWords = [
+    'payment due', 'remaining', 'outstanding', 'minimum due',
+    'minimum payment', 'minimum amount', 'min due', 'min. due', 'amount due',
+    'due amount', 'موعد سداد', 'المتبقي', 'المستحق',
+  ];
+
+  /// Round 10 (PR-01) — the round-9 inflow wordings no longer decide a
+  /// direction. On a message with no type (or a transfer) and no outgoing
+  /// marker they only keep it from being pre-filled as a payment: a review
+  /// row.
+  static const List<String> _inflowHints = [
+    'payroll', 'wages', 'cashback', 'posted to your account',
+    'posted to account', 'into your account', 'added to your account',
+    'landed in your account', 'arrived in account', 'arrived in your account',
+    'topped up', 'you got', 'sent to you by', 'أودع', 'لحسابك', 'وصلك',
+  ];
+  static const List<String> _outgoingMarkers = [
+    'from your account', 'من حسابك', 'fee', 'charge', 'رسوم',
   ];
 
   /// OR-05 — a number that is the subject of a code: "482913 is your code",
@@ -577,16 +569,22 @@ class ParserEngine {
     // LR-04 / NR-01 — an account notice that names an amount but no money
     // movement ("Your credit limit is SAR 15,000"): never recorded, never
     // dropped silently — a review row.
-    // PR-02: only a notice word in the sentence that carries the amount
-    // counts ("Card *4521 used for SAR 45 at Test Diner. Card activated" is
-    // a purchase).
-    if (!ignored &&
-        catalogMatch == null &&
-        _isNotice(
-            lower,
-            outsideMerchant(_amountSentence(lower, amountExtraction, amount),
-                merchantResult.merchant),
-            bank)) {
+    if (!ignored && catalogMatch == null && _isNotice(lower, ignoreText, bank)) {
+      return ParseResult.notTransaction(
+          bankKey: bank?.bankKey, amountDetected: true);
+    }
+    // QR-03 — an amount due written with its currency was set aside, and the
+    // figure left over carries no currency ("Outstanding SAR 2,000 to be paid
+    // by 5 Dec"): not the amount that moved — a review row.
+    if (ruleAmount == null &&
+        !_hasOwnCurrency(lines, amount) &&
+        amountExtraction.candidates.any((c) {
+          final at = c.line.indexOf(c.raw);
+          return c.kind == AmountCandidateKind.balance &&
+              _hasNearbyKeyword(c.line.toLowerCase(), at, _dueWords,
+                  before: 32, after: 8) &&
+              _currency.hasMatch(_window(c.line, at, before: 12, after: 12));
+        })) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
@@ -664,10 +662,14 @@ class ParserEngine {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
-    // PR-08 — no type, and the wording names money both in and out: a
-    // review row, never a pre-filled payment.
-    if (type == TransactionType.unknown &&
-        DirectionSignal.isMixed(_factualClauses(text))) {
+    // (A transfer the wording does not place is booked as spending by the
+    // use case, so the same holds for it.)
+    if ((type == TransactionType.unknown ||
+            type == TransactionType.transfer) &&
+        DirectionSignal.detect(_factualClauses(text)) == TxnDirection.unknown &&
+        !DirectionSignal.debitWords.any(lower.contains) &&
+        _containsAny(lower, _inflowHints) &&
+        !_containsAny(lower, _outgoingMarkers)) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
@@ -745,10 +747,12 @@ class ParserEngine {
     ])) {
       return TransactionType.refund;
     }
-    // PR-08 — a deposit at an ATM ("إيداع ATM", "Cash deposit … via ATM") is
-    // money in; only a withdrawal word makes an ATM message a withdrawal.
+    // PR-08 / QR-02 — only an explicit cash deposit at an ATM ("إيداع ATM",
+    // "Cash deposit … via ATM") is money in; any other deposit wording is
+    // typed as before.
     if (_containsAny(lower, ['إيداع', 'ايداع', 'deposit']) &&
-        !_containsAny(lower, ['سحب', 'withdraw'])) {
+        _containsAny(lower, ['atm', 'صراف']) &&
+        !_containsAny(lower, ['سحب', 'withdraw', 'تحويل', 'transfer'])) {
       return TransactionType.income;
     }
     if (_containsAny(lower, ['سحب', 'صراف', 'atm'])) {
@@ -776,8 +780,8 @@ class ParserEngine {
     ])) {
       return TransactionType.payment;
     }
-    // "POS" as a word: "posted to your account" is not a card payment.
-    if (RegExp(r'(?<![a-z])pos(?![a-z])|posted(?! to (?:your )?account)').hasMatch(lower)) {
+    // "POS" as a word: "posted to your account" names no card payment.
+    if (RegExp(r'(?<![a-z])pos(?![a-z])').hasMatch(lower)) {
       return TransactionType.payment;
     }
     return TransactionType.unknown;
@@ -1135,7 +1139,7 @@ class ParserEngine {
         _codeSubject.hasMatch(l.substring(start)) ||
         _hasNearbyKeyword(l, start, feeWords, before: 24, after: 12) ||
         (_hasNearbyKeyword(l, start, totalDueWords, before: 32, after: 12) &&
-            !movementActsOnFigure(l, start, end, totalDueWords)) ||
+            !movementActsOnFigure(l, start, totalDueWords)) ||
         _hasNearbyKeyword(l, start, phoneHelpWords, before: 16, after: 6) ||
         _hasNearbyKeyword(l, start, fxWords, before: 12, after: 4) ||
         // A maximum ("a refund of up to SAR 50") is an offer, not an amount
@@ -1150,7 +1154,7 @@ class ParserEngine {
       );
     }
     if (_hasNearbyKeyword(l, start, balanceWords, before: 32, after: 8) &&
-        !movementActsOnFigure(l, start, end, balanceWords)) {
+        !movementActsOnFigure(l, start, balanceWords)) {
       return AmountCandidate(
         value: value,
         raw: raw,
@@ -1556,19 +1560,17 @@ class ParserEngine {
   /// transaction amount when a completed movement in the same clause acts on
   /// it: a verb before the label ("تم سداد المبلغ المستحق 500", "Debited from
   /// your balance SAR 75"), an English verb between the label and the figure
-  /// ("Outstanding amount settled SAR 1,200") or right after the figure
-  /// ("Minimum payment SAR 115.00 has been paid"), with no other number in
-  /// between. A clause that only states the figure ("Available balance SAR
+  /// ("Outstanding amount settled SAR 1,200"), with no other number in
+  /// between. (QR-02: a verb after the figure does not count — "Available
+  /// limit SAR 5,000 debited SAR 50".) A clause that only states the figure ("Available balance SAR
   /// 900", "Minimum due SAR 115 by 5 Dec", "Purchase SAR 100 at X available
   /// balance SAR 900") is not. Mirrors `maskAccountFigures` in
   /// `_shared/ai_candidate_validator.ts`.
   static bool movementActsOnFigure(
-      String l, int start, int end, List<String> labels) {
+      String l, int start, List<String> labels) {
     var cs = 0;
-    var ce = l.length;
     for (final m in _clauseCut.allMatches(l)) {
       if (m.end <= start) cs = m.end;
-      if (m.start >= end && ce == l.length) ce = m.start;
     }
     var labelAt = start;
     final from = (start - 32).clamp(cs, start).toInt();
@@ -1578,11 +1580,6 @@ class ParserEngine {
     }
     bool latin(String s, List<String> verbs) => verbs.any((v) =>
         RegExp('(?<![a-z])${RegExp.escape(v)}(?![a-z])').hasMatch(s));
-    // (a) An English verb right after the figure.
-    if (latin(l.substring(end, ce).split(RegExp('[0-9]')).first,
-        _movementVerbsLatin)) {
-      return true;
-    }
     final head = l.substring(cs, start);
     final lastDigit = head.lastIndexOf(RegExp('[0-9]'));
     final free = lastDigit < 0 ? cs : cs + lastDigit + 1;
@@ -1628,6 +1625,26 @@ class ParserEngine {
     final to = (start + after).clamp(0, lowerLine.length).toInt();
     final context = lowerLine.substring(from, to);
     return needles.any((needle) => context.contains(needle.toLowerCase()));
+  }
+
+  /// Whether [amount] is written next to a currency somewhere in [lines]
+  /// ("SAR 115", "115 SAR"), not only near one.
+  bool _hasOwnCurrency(List<String> lines, double amount) {
+    for (final line in lines) {
+      for (final m in _plainNumber.allMatches(line)) {
+        double? v;
+        try {
+          v = double.tryParse(normalizeLocalizedDecimal(m.group(1)!));
+        } on Exception {
+          continue;
+        }
+        if (v == null || (v - amount).abs() >= 0.005) continue;
+        final from = (m.start - 5).clamp(0, line.length).toInt();
+        final to = (m.end + 5).clamp(0, line.length).toInt();
+        if (_currency.hasMatch(line.substring(from, to))) return true;
+      }
+    }
+    return false;
   }
 
   String _window(

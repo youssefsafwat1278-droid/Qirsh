@@ -743,10 +743,9 @@ function isRefundText(lower: string): boolean {
 function earliest(lower: string, keywords: string[]): number | null {
   let result: number | null = null;
   for (const keyword of keywords) {
-    // "POS" as a word: "posted to your account" is not a card payment.
-    const index = keyword === 'pos'
-      ? lower.search(/(?<![a-z])pos(?![a-z])|posted(?! to (?:your )?account)/)
-      : lower.indexOf(keyword.toLowerCase());
+    // "POS" as a word, as on the device: "deposited", "posted to your
+    // account" name no card payment.
+    const index = keyword === 'pos' ? lower.search(/(?<![a-z])pos(?![a-z])/) : lower.indexOf(keyword.toLowerCase());
     if (index >= 0 && (result == null || index < result)) result = index;
   }
   return result;

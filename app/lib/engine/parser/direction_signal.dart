@@ -40,27 +40,6 @@ class DirectionSignal {
     // server. Not a bare "transfer in" ("transfer initiated").
     'تحويل وارد',
     'transfer in:',
-    // PR-01 / PR-08: incoming money worded with the money words added in
-    // OR-01 (payroll, a posting to your account) or with no listed credit
-    // word ("أودع", "قيد … لحسابك", "topped up", "You got", "وصلك"). Mirrored
-    // in `creditKeywords` (process-ios-sms/parser_rules.json).
-    'payroll',
-    'wages',
-    'cashback',
-    'posted to your account',
-    'posted to account',
-    'into your account',
-    'into account',
-    'added to your account',
-    'landed in your account',
-    'arrived in account',
-    'arrived in your account',
-    'topped up',
-    'you got',
-    'sent to you',
-    'أودع',
-    'لحسابك',
-    'وصلك',
     'راتب',
     'deposit',
     'salary',
@@ -129,12 +108,6 @@ class DirectionSignal {
   /// Additive only: `detect`/`ofType`/`contradicts` are unchanged.
   static List<String> get creditWords => _creditWords;
   static List<String> get debitWords => _debitWords;
-
-  /// PR-08 — [text] names money both in and out (a word of each family).
-  static bool isMixed(String text) {
-    final lower = text.toLowerCase();
-    return _creditWords.any(lower.contains) && _debitWords.any(lower.contains);
-  }
 
   static TxnDirection detect(String text) {
     final lower = text.toLowerCase();
