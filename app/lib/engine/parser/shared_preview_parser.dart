@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'transaction_state_cues.dart';
+
 /// المرآة الـ Dart لقواعد المعاينة المشتركة `assets/catalog/parser_rules.json`.
 ///
 /// نفس الخوارزمية منفَّذة حرفياً في Swift داخل
@@ -78,7 +80,13 @@ class SharedPreviewParser {
       decimalMarks: strings(normalization['decimalMarks']),
       thousandsMarks: strings(normalization['thousandsMarks']),
       currencyPattern: ci(json['currencyPattern'] as String),
-      ignoreKeywords: strings(json['ignoreKeywords']),
+      // V1-061: declined cues are judged by [TransactionStateCues] (whole
+      // tokens, folded, names and advice excluded), not by substring; the
+      // asset keeps them for the Swift preview.
+      ignoreKeywords: strings(json['ignoreKeywords'])
+          .where((k) =>
+              !_declinedCues.contains(TransactionStateCues.foldForCues(k)))
+          .toList(),
       debitKeywords: strings(json['debitKeywords']),
       creditKeywords: strings(json['creditKeywords']),
       amountPatterns: patterns(json['amountPatterns']),
@@ -87,6 +95,10 @@ class SharedPreviewParser {
       last4Patterns: patterns(json['last4Patterns']),
     );
   }
+
+  static final Set<String> _declinedCues = TransactionStateCues.declined
+      .map(TransactionStateCues.foldForCues)
+      .toSet();
 
   final List<({RegExp pattern, String replacement})> _currencyReplacements;
   final List<String> _decimalMarks;
@@ -104,7 +116,8 @@ class SharedPreviewParser {
     final normalized = _normalize(text);
     final lower = normalized.toLowerCase();
 
-    if (_ignoreKeywords.any(lower.contains)) {
+    if (_ignoreKeywords.any(lower.contains) ||
+        TransactionStateCues.isNotCompleted(text)) {
       return const PreviewResult(outcome: PreviewOutcome.ignored);
     }
 

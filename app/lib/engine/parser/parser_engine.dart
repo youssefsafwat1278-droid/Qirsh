@@ -721,12 +721,19 @@ class ParserEngine {
         score: 1,
       );
     }
+    // `ref` must not match inside "refund" ("Refund SAR 99.00 from …" was
+    // read as a reference number, so a plain refund had no amount).
     if (_isParenthesized(line, start, end) ||
-        _hasNearbyKeyword(l, start, referenceWords, before: 24, after: 10) ||
+        _hasNearbyKeyword(
+            l.replaceAll('refund', '      '), start, referenceWords,
+            before: 24, after: 10) ||
         _hasNearbyKeyword(l, start, feeWords, before: 24, after: 12) ||
         _hasNearbyKeyword(l, start, totalDueWords, before: 32, after: 12) ||
         _hasNearbyKeyword(l, start, phoneHelpWords, before: 16, after: 6) ||
-        _hasNearbyKeyword(l, start, fxWords, before: 12, after: 4)) {
+        _hasNearbyKeyword(l, start, fxWords, before: 12, after: 4) ||
+        // A maximum ("a refund of up to SAR 50") is an offer, not an amount
+        // that moved.
+        _hasNearbyKeyword(l, start, _upToWords, before: 16, after: 0)) {
       return AmountCandidate(
         value: value,
         raw: raw,
@@ -1104,6 +1111,10 @@ class ParserEngine {
   }
 
   static final RegExp _fourDigits = RegExp(r'^[0-9]{4}$');
+  // Mirrored by UP_TO_AMOUNT in supabase/functions/process-ios-sms/parse.ts.
+  static const _upToWords = [
+    'up to', 'upto', 'يصل إلى', 'يصل الى', 'تصل إلى', 'تصل الى',
+  ];
   static final RegExp _maskMarkerBefore = RegExp(
     r'(?:[*xX•]|ending|ends\s+with|تنتهي\s*بـ?|رقم)\s*:?\s*$',
     caseSensitive: false,

@@ -118,7 +118,11 @@ function isIgnoredText(lower: string): boolean {
 //    by a declined status ("Refund of SAR 99 failed") was not done — unless
 //    that cue describes a transaction noun ("Refund for failed transaction");
 // 4. not completed = a declined status with no done credit before it, or a
-//    promised/negated credit in a message that names a declined operation.
+//    promised/negated credit in a message that names a declined operation;
+// 5. a generic noun followed by a colon or a count is a status header
+//    ("Declined transactions: 1. Purchase of …"), not advice;
+// 6. a reversed purchase ("Purchase of SAR 100 at X reversed") in a message
+//    with no declined cue is ambiguous: review, no total change.
 const ARABIC_LETTER = 'ء-ي';
 const NO_LETTER_BEFORE = `(?<![a-z${ARABIC_LETTER}])`;
 const NO_LETTER_AFTER = `(?![a-z${ARABIC_LETTER}])`;
@@ -154,6 +158,10 @@ const GENERIC_NOUNS = rules.stateCueGenericNouns as string[];
 const ALL_NOUNS = [...(rules.stateCueTransactionNouns as string[]), ...GENERIC_NOUNS];
 const DECLINED = tokenPattern(DECLINED_CUES, false, 'g');
 const CREDIT_ACTION = tokenPattern(rules.declinedExemptKeywords as string[], false, 'g');
+const REVERSAL = tokenPattern(rules.stateCueReversalWords as string[], false, 'g');
+const PURCHASE = tokenPattern(rules.stateCuePurchaseNouns as string[], false);
+// Right after a generic noun phrase: a colon or a count (rule 5).
+const HEADER = /^ ?(?::|\(?[0-9٠-٩])/;
 const HYPOTHETICAL = tokenPattern(HYPOTHETICAL_CUES, true);
 const NEGATION = tokenPattern(NEGATION_CUES, false);
 const AFTER_INTRODUCER = new RegExp(
@@ -189,7 +197,12 @@ type Cue = { start: number; end: number };
 function notStatus(text: string, m: Cue): 'name' | 'hypothetical' | null {
   const sentence = text.slice(lastBoundary(text, m.start, BOUNDARY), m.start);
   if (AFTER_INTRODUCER.test(sentence)) return 'name';
-  if (GENERIC_NEXT.test(text.slice(m.end)) || GENERIC_BEFORE.test(sentence)) return 'name';
+  const after = text.slice(m.end);
+  const genericAfter = GENERIC_NEXT.exec(after);
+  const generic = genericAfter
+    ? !HEADER.test(after.slice(genericAfter[0].length))
+    : GENERIC_BEFORE.test(sentence) && !HEADER.test(after);
+  if (generic) return 'name';
   if (/[?؟]/.test(sentenceEnd(text, m.end).mark)) return 'name';
   const clause = text.slice(lastBoundary(text, m.start, CLAUSE_BOUNDARY), m.start);
   return HYPOTHETICAL.test(clause) ? 'hypothetical' : null;
@@ -212,11 +225,9 @@ export function isDeclinedText(raw: string): boolean {
   let creditAt: number | null = null;
   let undone = false;
   for (const m of cues(CREDIT_ACTION, text)) {
-    const why = notStatus(text, m);
-    if (why === 'name') continue;
-    const clause = text.slice(lastBoundary(text, m.start, CLAUSE_BOUNDARY), m.start);
-    if (why === 'hypothetical' || NEGATION.test(clause) || UNDONE_NEXT.test(text.slice(m.end)) ||
-      failsLater(text, m)) {
+    const done = creditDone(text, m);
+    if (done === null) continue;
+    if (!done) {
       undone = true;
       continue;
     }
@@ -225,7 +236,21 @@ export function isDeclinedText(raw: string): boolean {
   }
   const declinedAt = cues(DECLINED, text).find((d) => notStatus(text, d) === null)?.start ?? null;
   if (declinedAt !== null) return creditAt === null || declinedAt < creditAt;
-  return creditAt === null && undone && new RegExp(DECLINED.source).test(text);
+  const anyDeclined = new RegExp(DECLINED.source).test(text);
+  if (!anyDeclined && PURCHASE.test(text) &&
+    cues(REVERSAL, text).some((m) => creditDone(text, m) === true)) {
+    return true;
+  }
+  return creditAt === null && undone && anyDeclined;
+}
+
+/** Whether the credit word [m] reports money returned: null = not a status, false = promised/negated/failed. */
+function creditDone(text: string, m: Cue): boolean | null {
+  const why = notStatus(text, m);
+  if (why === 'name') return null;
+  const clause = text.slice(lastBoundary(text, m.start, CLAUSE_BOUNDARY), m.start);
+  return !(why === 'hypothetical' || NEGATION.test(clause) || UNDONE_NEXT.test(text.slice(m.end)) ||
+    failsLater(text, m));
 }
 
 /**
@@ -353,7 +378,11 @@ export function deterministicParse(
   }
 
   const currency = extractCurrency(normalized);
-  const amountFields = extractCaptureAmount(normalized, rules.amountPatterns as string[], currency);
+  const amountFields = extractCaptureAmount(
+    normalized.replace(UP_TO_AMOUNT, ' '),
+    rules.amountPatterns as string[],
+    currency,
+  );
   const amount = amountFields.amount;
   const merchant = extractMerchant(normalized);
   const last4 = extractFirstGroup(normalized, rules.last4Patterns as string[]);
@@ -568,6 +597,10 @@ function extractMerchant(text: string): string | undefined {
   if (!merchant || NUMERIC_ONLY.test(merchant) || REDACTION_PLACEHOLDER.test(merchant)) return undefined;
   return merchant;
 }
+
+// A maximum ("a refund of up to SAR 50") is an offer, not an amount that
+// moved. Mirrors ParserEngine._upToWords (amount within 16 characters after).
+const UP_TO_AMOUNT = /(?:up ?to|يصل إلى|يصل الى|تصل إلى|تصل الى)[^0-9\n]{0,12}[0-9][0-9,]*(?:\.[0-9]+)?/gi;
 
 function extractFirstGroup(text: string, patterns: string[]): string | undefined {
   for (const pattern of patterns) {

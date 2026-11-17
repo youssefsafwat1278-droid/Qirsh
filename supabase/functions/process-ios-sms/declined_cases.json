@@ -1,5 +1,5 @@
 {
-  "_readme": "DATA-01 / REV-01 / REV-02 / REV-04 / V1-001 residuals: one synthetic table read by BOTH app/test/engine/parser/declined_state_cues_table_test.dart and process-ios-sms/parse_test.ts. expect: not_completed = the message reports no completed money movement (never confirmed money in either direction and no total changes; the on-device capture lands in Smart Inbox review, the server rejects it); completed_payment = a completed purchase that must keep parsing as spending; completed_credit = a genuine refund/reversal that must keep parsing as a refund (device type refund; server direction credit, type refund). src V1-RES = the residuals the release owner reopened.",
+  "_readme": "DATA-01 / REV-01 / REV-02 / REV-04 / V1-001 residuals: one synthetic table read by BOTH app/test/engine/parser/declined_state_cues_table_test.dart and process-ios-sms/parse_test.ts. expect: not_completed = the message reports no completed money movement (never confirmed money in either direction and no total changes; the on-device capture lands in Smart Inbox review, the server rejects it); completed_payment = a completed purchase that must keep parsing as spending; completed_credit = a genuine refund/reversal that must keep parsing as a refund (device type refund; server direction credit, type refund). src V1-RES = the residuals the release owner reopened. src V1-RES2 = the fourth round: a reversed purchase (ambiguous: the original may or may not have been recorded) and a status header ('Declined transactions: 1. …') are not_completed, i.e. review with no total change; 'Your card expired on …' and 'approved. Previous attempt declined.' next to a purchase are kept in review on purpose (not decidable by the clause rule); a cue followed by 'use' ('For unauthorized use call …') is advice.",
   "cases": [
     { "src": "DATA-01", "expect": "not_completed", "text": "تم رفض عملية شراء بمبلغ 250.00 ريال لدى CAFE ONE بطاقة مدى **1234" },
     { "src": "DATA-01", "expect": "not_completed", "text": "Purchase declined: SAR 250.00 at CAFE ONE card **1234" },
@@ -104,6 +104,29 @@
     { "src": "V1-RES", "expect": "completed_payment", "text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Unauthorized transaction? Call 8001234" },
     { "src": "V1-RES", "expect": "completed_credit", "text": "Refund transaction of SAR 99.00 from SHOP TWO credited to your card" },
     { "src": "V1-RES", "expect": "completed_credit", "text": "تم استرجاع مبلغ ١٩٩٫٠٠ ريال من SHOP TWO" },
-    { "src": "V1-RES", "expect": "completed_credit", "text": "Reversal of SAR 99.00 at SHOP TWO" }
+    { "src": "V1-RES", "expect": "completed_credit", "text": "Reversal of SAR 99.00 at SHOP TWO" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "Purchase of SAR 100.00 at SHOP X reversed" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "Your purchase of SAR 100.00 at SHOP X has been reversed" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "Payment of SAR 100.00 to SHOP X reversed" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "تم عكس عملية الشراء بمبلغ 100.00 ريال لدى SHOP X" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "عملية الشراء بمبلغ ١٠٠٫٠٠ ريال لدى SHOP X معكوسة" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "Purchase of SAR 100.00 at SHOP X reversed and credited to your account" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "Declined transactions: 1. Purchase of SAR 100.00 at SHOP X" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "Failed transactions (1): purchase of SAR 100.00 at SHOP X" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "العمليات المرفوضة: ١. شراء بمبلغ 100.00 ريال لدى SHOP X" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "Purchase of SAR 100.00 at CAFE ONE. Your card expired on 30/11/2026" },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "Purchase of SAR 100.00 at CAFE ONE approved. Previous attempt declined." },
+    { "src": "V1-RES2", "expect": "not_completed", "text": "عملية شراء مَرْفُوضَة بمبلغ ١٠٠٫٠٠ ريال لدى CAFE ONE" },
+    { "src": "V1-RES2", "expect": "completed_credit", "text": "Reversal of SAR 100.00 credited to your account" },
+    { "src": "V1-RES2", "expect": "completed_credit", "text": "تم استرجاع مبلغ 100.00 ريال إلى حسابك" },
+    { "src": "V1-RES2", "expect": "completed_credit", "text": "Refund for failed transaction: SAR 99.00" },
+    { "src": "V1-RES2", "expect": "completed_credit", "text": "Refund SAR 99.00 from SHOP TWO" },
+    { "src": "V1-RES2", "expect": "completed_credit", "text": "Refund of SAR 99.00 from SHOP TWO" },
+    { "src": "V1-RES2", "expect": "completed_credit", "text": "استرداد مبلغ ٩٩٫٠٠ ريال من SHOP TWO" },
+    { "src": "V1-RES2", "expect": "completed_payment", "text": "Purchase of SAR 100.00 at CAFE ONE card **1234. For unauthorized use call 8001234" },
+    { "src": "V1-RES2", "expect": "completed_payment", "text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Declined transactions incur no fee" },
+    { "src": "V1-RES2", "expect": "completed_payment", "text": "Purchase of SAR 100.00 at FAILED BURGER card **1234" },
+    { "src": "V1-RES2", "expect": "completed_payment", "text": "عملية شراء بمبلغ ١٠٠٫٠٠ ريال لدى مطعم مرفوض بطاقة **1234" },
+    { "src": "V1-RES2", "expect": "completed_payment", "text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Disputed purchases may be reversed" }
   ]
 }

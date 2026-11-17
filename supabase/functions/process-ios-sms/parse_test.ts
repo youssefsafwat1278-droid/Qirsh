@@ -534,3 +534,18 @@ Deno.test('declined table: not completed is never confirmed money, on every serv
     }
   }
 });
+
+// V1-001 residuals, round 4: a promotional maximum is not an amount that
+// moved (mirrors ParserEngine._upToWords); a real refund that says "up to N
+// days" keeps its amount.
+Deno.test('a refund offer "up to SAR 50" is not a resolved credit', () => {
+  for (const text of [
+    'Get a refund of up to SAR 50 on your next purchase',
+    'احصل على استرداد يصل إلى 50 ريال على مشترياتك',
+  ]) {
+    const p = deterministicParse(text, RECEIVED, 180);
+    assertEquals([isResolved(p), p.amount], [false, undefined], text);
+  }
+  const real = deterministicParse('Refund of SAR 99.00 from SHOP TWO. It may take up to 5 days', RECEIVED, 180);
+  assertEquals([isResolved(real), real.amount, real.type], [true, 99, 'refund']);
+});

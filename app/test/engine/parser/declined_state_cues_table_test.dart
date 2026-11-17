@@ -58,15 +58,17 @@ void main() {
           expect(r.transaction!.type, TransactionType.refund);
       }
 
-      // Notification preview (the same asset the Swift preview reads): a
-      // message that did not complete never gets the detailed "purchase
-      // detected" notification with an amount.
-      // The preview matches its list as plain substrings without folding:
-      // vowel-marked (tashkeel) and tatweel-stretched forms are a documented
-      // gap (KNOWN-LIMITATIONS, cosmetic: the transaction itself is correct).
-      if (review && !RegExp('[\u064B-\u0652\u0640]').hasMatch(text)) {
-        expect(preview.parse(text).isHighConfidence, isFalse,
-            reason: 'preview');
+      // Dart notification preview (V1-061): it judges declined cues with
+      // [TransactionStateCues], so a message that did not complete never
+      // gets the detailed "purchase detected" notification (tashkeel and
+      // tatweel forms included), and a completed one whose merchant name or
+      // advice contains a cue word is not reduced to the generic one.
+      // (The Swift preview still matches the asset's list by substring.)
+      final p = preview.parse(text);
+      if (review) {
+        expect(p.isHighConfidence, isFalse, reason: 'preview');
+      } else {
+        expect(p.outcome, isNot(PreviewOutcome.ignored), reason: 'preview');
       }
 
       // AI-validated and AI-primary candidates, in either direction.

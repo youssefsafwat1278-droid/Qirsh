@@ -40,7 +40,7 @@
     "prize",
     "winner"
   ],
-  "_declinedReadme": "DATA-01: transaction-state cues, identical to app/lib/engine/parser/transaction_state_cues.dart (drift test: app/test/engine/parser/transaction_state_cues_drift_test.dart) and applied by the same rule in parse.ts isDeclinedText: whole-token match after folding tashkeel/tatweel/hamza/ta marbuta/alef maqsura; a cue right after a stateCueMerchantIntroducers word (except after 'due'/'owing'), optionally followed by one stateCueMerchantNameWords word, is part of a name; a cue next to a stateCueGenericNouns plural (English after it, Arabic before it) or in a question is not a status; a cue preceded in its clause (sentence, or after a comma/colon) by a stateCueHypotheticalMarkers entry is not a status; a declinedExemptKeywords credit counts only when not negated, promised, or followed later in its sentence by a declined status that is not attributive (next to a stateCueTransactionNouns/stateCueGenericNouns word), and when it comes before the first declined status. A not-completed message is treated like ignoreKeywords (rejected, no AI).",
+  "_declinedReadme": "DATA-01: transaction-state cues, identical to app/lib/engine/parser/transaction_state_cues.dart (drift test: app/test/engine/parser/transaction_state_cues_drift_test.dart) and applied by the same rule in parse.ts isDeclinedText: whole-token match after folding tashkeel/tatweel/hamza/ta marbuta/alef maqsura; a cue right after a stateCueMerchantIntroducers word (except after 'due'/'owing'), optionally followed by one stateCueMerchantNameWords word, is part of a name; a cue next to a stateCueGenericNouns plural (English after it, Arabic before it) or in a question is not a status, unless the noun is followed by a colon or a count (a status header: 'Declined transactions: 1. …'); a cue preceded in its clause (sentence, or after a comma/colon) by a stateCueHypotheticalMarkers entry is not a status; a declinedExemptKeywords credit counts only when not negated, promised, or followed later in its sentence by a declined status that is not attributive (next to a stateCueTransactionNouns/stateCueGenericNouns word), and when it comes before the first declined status. A stateCueReversalWords status in a message naming a stateCuePurchaseNouns word, with no declined cue ('Purchase of SAR 100 at X reversed'), is ambiguous and also not completed (review, no total change). A not-completed message is treated like ignoreKeywords (rejected, no AI).",
   "declinedKeywords": [
     "مرفوضة",
     "مرفوض",
@@ -216,10 +216,23 @@
     "transfers",
     "operations",
     "attempts",
+    "use",
     "عمليات",
     "العمليات",
     "معاملات",
     "المعاملات"
+  ],
+  "stateCueReversalWords": [
+    "reversal",
+    "reversed",
+    "عكس",
+    "معكوس",
+    "معكوسة"
+  ],
+  "stateCuePurchaseNouns": [
+    "purchase",
+    "payment",
+    "شراء"
   ],
   "debitKeywords": [
     "عملية شراء",

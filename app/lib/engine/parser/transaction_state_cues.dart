@@ -29,6 +29,15 @@ import 'normalizer.dart';
 ///    A credit that is only promised or negated, in a message that names a
 ///    declined operation anywhere ("Refund will be processed for failed
 ///    transaction"), is not completed either: no money has moved yet.
+/// 5. A plural generic noun followed by a colon or a count is a status
+///    header, not advice ("Declined transactions: 1. Purchase of …",
+///    `العمليات المرفوضة: ١`).
+/// 6. A reversed purchase ("Purchase of SAR 100 at X reversed", `تم عكس عملية
+///    الشراء`) in a message with no declined cue is ambiguous: the original
+///    purchase may or may not have been recorded. It goes to review (counted
+///    here as not completed) and changes no total. A reversal or refund that
+///    names no purchase ("Reversal of SAR 100 credited to your account",
+///    `تم استرجاع مبلغ 100 ريال`) or reverses a declined one stays a credit.
 ///
 /// Matching folds tashkeel, tatweel, hamza forms, ة/ه and ى/ي on both sides.
 /// Mirrored by `supabase/functions/process-ios-sms/parse.ts`; the lists below
@@ -106,12 +115,21 @@ class TransactionStateCues {
     'عملية', 'العملية', 'معاملة', 'المعاملة', 'حوالة', 'الحوالة',
   ];
 
-  /// Plural generic nouns: a cue next to one of these is advice about
-  /// transactions in general, never the status of this one.
+  /// Plural generic nouns (and "use", as in "For unauthorized use call …"):
+  /// a cue next to one of these is advice about transactions in general,
+  /// never the status of this one — unless it is a status header (rule 5).
   static const List<String> genericNouns = [
     'transactions', 'purchases', 'payments', 'transfers', 'operations',
-    'attempts', 'عمليات', 'العمليات', 'معاملات', 'المعاملات',
+    'attempts', 'use', 'عمليات', 'العمليات', 'معاملات', 'المعاملات',
   ];
+
+  /// Rule 6: a reversal word in a message naming a [purchaseNouns] word.
+  static const List<String> reversalWords = [
+    'reversal', 'reversed', 'عكس', 'معكوس', 'معكوسة',
+  ];
+
+  /// The debit operations a reversal word can apply to (rule 6).
+  static const List<String> purchaseNouns = ['purchase', 'payment', 'شراء'];
 
   /// True when [rawText] reports a transaction that did not complete.
   static bool isNotCompleted(String rawText) {
@@ -119,12 +137,9 @@ class TransactionStateCues {
     int? creditAt;
     var undone = false;
     for (final m in _creditAction.allMatches(text)) {
-      final why = _notStatus(text, m);
-      if (why == _Skip.name) continue;
-      if (why == _Skip.hypothetical ||
-          _negation.hasMatch(_clause(text, m.start)) ||
-          _undoneNext.hasMatch(text.substring(m.end)) ||
-          _failsLater(text, m)) {
+      final done = _creditDone(text, m);
+      if (done == null) continue;
+      if (!done) {
         undone = true;
         continue;
       }
@@ -139,7 +154,23 @@ class TransactionStateCues {
       }
     }
     if (declinedAt != null) return creditAt == null || declinedAt < creditAt;
+    if (!_declined.hasMatch(text) &&
+        _purchase.hasMatch(text) &&
+        _reversal.allMatches(text).any((m) => _creditDone(text, m) == true)) {
+      return true;
+    }
     return creditAt == null && undone && _declined.hasMatch(text);
+  }
+
+  /// Whether the credit word [m] reports money returned: null when it is not
+  /// a status at all, false when it is promised, negated or failed.
+  static bool? _creditDone(String text, Match m) {
+    final why = _notStatus(text, m);
+    if (why == _Skip.name) return null;
+    return !(why == _Skip.hypothetical ||
+        _negation.hasMatch(_clause(text, m.start)) ||
+        _undoneNext.hasMatch(text.substring(m.end)) ||
+        _failsLater(text, m));
   }
 
   /// The cue-matching form: [Normalizer.normalize] (tashkeel, tatweel,
@@ -159,9 +190,13 @@ class TransactionStateCues {
   static _Skip? _notStatus(String text, Match m) {
     final sentence = text.substring(_lastBoundary(text, m.start, _boundary),
         m.start);
+    final after = text.substring(m.end);
+    final genericAfter = _genericNext.firstMatch(after);
+    final generic = genericAfter != null
+        ? !_header.hasMatch(after.substring(genericAfter.end))
+        : _genericBefore.hasMatch(sentence) && !_header.hasMatch(after);
     if (_afterIntroducer.hasMatch(sentence) ||
-        _genericNext.hasMatch(text.substring(m.end)) ||
-        _genericBefore.hasMatch(sentence) ||
+        generic ||
         _sentenceEnd(text, m.end).question) {
       return _Skip.name;
     }
@@ -209,6 +244,10 @@ class TransactionStateCues {
   static final RegExp _clauseBoundary = RegExp(r'[\n!?؟;؛]|[.,،:](?![0-9])');
   static final RegExp _declined = _tokenPattern(declined, lam: false);
   static final RegExp _creditAction = _tokenPattern(creditAction, lam: false);
+  static final RegExp _reversal = _tokenPattern(reversalWords, lam: false);
+  static final RegExp _purchase = _tokenPattern(purchaseNouns, lam: false);
+  // Right after a generic noun phrase: a colon or a count (rule 5).
+  static final RegExp _header = RegExp(r'^ ?(?::|\(?[0-9٠-٩])');
   static final RegExp _hypothetical =
       _tokenPattern(hypotheticalMarkers, lam: true);
   static final RegExp _negation = _tokenPattern(negationMarkers, lam: false);

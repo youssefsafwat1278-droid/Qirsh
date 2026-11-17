@@ -30,6 +30,8 @@ void main() {
       'stateCueMerchantNameWords': TransactionStateCues.merchantNameWords,
       'stateCueTransactionNouns': TransactionStateCues.transactionNouns,
       'stateCueGenericNouns': TransactionStateCues.genericNouns,
+      'stateCueReversalWords': TransactionStateCues.reversalWords,
+      'stateCuePurchaseNouns': TransactionStateCues.purchaseNouns,
     };
     for (final e in pairs.entries) {
       test(e.key, () => expect(strings(server[e.key]), e.value));
