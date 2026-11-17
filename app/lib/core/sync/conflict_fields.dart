@@ -153,7 +153,12 @@ String? _norm(Object? v, ConflictFieldKind kind) {
     case ConflictFieldKind.date:
       final d = DateTime.tryParse(v.toString());
       if (d == null) return v.toString();
-      final u = d.toUtc();
+      // Every writer stores UTC (`dateTimeToSql`, `Z` suffix), so a zone-less
+      // value means UTC, not device-local time. Explicit offsets are kept.
+      final u = d.isUtc
+          ? d
+          : DateTime.utc(d.year, d.month, d.day, d.hour, d.minute, d.second,
+              d.millisecond, d.microsecond);
       String two(int x) => x.toString().padLeft(2, '0');
       return '${u.year}-${two(u.month)}-${two(u.day)}'
           '${u.hour == 0 && u.minute == 0 && u.second == 0 ? '' : ' ${two(u.hour)}:${two(u.minute)}'}';

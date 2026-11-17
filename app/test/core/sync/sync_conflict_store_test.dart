@@ -61,6 +61,18 @@ void main() {
       expect(differences.map((field) => field.key), [ConflictFieldKey.date]);
     });
 
+    // DATA-07 / REL-09: a zone-less value means UTC (every writer emits `Z`),
+    // so it must not become a false date conflict outside UTC. Run under
+    // TZ=Africa/Cairo or TZ=Asia/Riyadh to exercise it.
+    test('a zone-less timestamp is read as UTC, in any device time zone', () {
+      final differences = diffConflictFields(
+        ConflictEntities.transaction,
+        {'occurred_at': '2026-01-01 10:00:00'},
+        {'occurred_at': '2026-01-01T10:00:00Z'},
+      );
+      expect(differences, isEmpty);
+    });
+
     test('a missing snapshot or an entity without a list shows no fields', () {
       expect(diffConflictFields(ConflictEntities.goal, null, {'name': 'x'}), isEmpty);
       expect(diffConflictFields(ConflictEntities.settings, {'a': 1}, {'a': 2}), isEmpty);
