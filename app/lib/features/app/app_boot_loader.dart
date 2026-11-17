@@ -19,6 +19,18 @@ import '../../core/theme/app_colors.dart';
 /// defaults behind a second loader.
 final ValueNotifier<bool> appDataRestoring = ValueNotifier<bool>(false);
 
+/// True from a cold start until the consent re-ask has decided whether to
+/// present its sheet. Keeps the same root loader up while that decision reads
+/// the account's server choice, so the app is never shown first and then
+/// covered by the sheet a moment later. Released right before the sheet opens
+/// (it then rises over the fully built screen), on any other outcome, and by a
+/// safety timeout.
+final ValueNotifier<bool> consentReaskPending = ValueNotifier<bool>(false);
+
+/// How long the root loader takes to leave once released (ring completion plus
+/// the exit motion of [AppBootLoaderReveal]).
+const Duration kBootLoaderRevealDuration = Duration(milliseconds: 780);
+
 /// B2-C — the explicit "first usable local financial state" milestone. Flipped
 /// true by the bootstrap the moment the SAFETY-CRITICAL phase is done: DB key +
 /// encrypted DB open + required migration/repair + process/owner liveness +

@@ -95,6 +95,8 @@ enum ReaskOutcome {
 /// [AppSession]; [readChoice] defaults to the account's server choice.
 /// [isForeground] is rechecked after the server read, right before the sheet
 /// is presented: a sheet is never opened while the app is in the background.
+/// [beforePresent] runs once the sheet is certain to open, just before it does
+/// (the shell lifts its startup loader there); every check is repeated after it.
 Future<ReaskOutcome> maybeReaskConsent(
   BuildContext context,
   WidgetRef ref, {
@@ -102,6 +104,7 @@ Future<ReaskOutcome> maybeReaskConsent(
   Future<void> Function()? markSeen,
   Future<AccountCloudChoice> Function()? readChoice,
   bool Function()? isForeground,
+  Future<void> Function()? beforePresent,
 }) async {
   final work = ref.read(consentLocalWorkProvider)();
   if (work == null) return ReaskOutcome.stale;
@@ -151,6 +154,11 @@ Future<ReaskOutcome> maybeReaskConsent(
     return ReaskOutcome.stale;
   }
   if (isForeground != null && !isForeground()) return ReaskOutcome.deferred;
+  if (beforePresent != null) {
+    await beforePresent();
+    if (!context.mounted || !work.current) return ReaskOutcome.stale;
+    if (isForeground != null && !isForeground()) return ReaskOutcome.deferred;
+  }
   await showSmartAnalysisConsentSheet(
     context,
     ref,
@@ -201,11 +209,13 @@ class ConsentLocalWork {
 
 /// The shell's re-ask entry point (a seam for the AppShell lifecycle test).
 typedef ReaskConsent = Future<ReaskOutcome> Function(
-    BuildContext context, WidgetRef ref, {bool Function()? isForeground});
+    BuildContext context, WidgetRef ref,
+    {bool Function()? isForeground, Future<void> Function()? beforePresent});
 
 final reaskConsentProvider = Provider<ReaskConsent>(
-  (ref) => (context, ref, {isForeground}) =>
-      maybeReaskConsent(context, ref, isForeground: isForeground),
+  (ref) => (context, ref, {isForeground, beforePresent}) => maybeReaskConsent(
+      context, ref,
+      isForeground: isForeground, beforePresent: beforePresent),
 );
 
 /// Seam for widget tests with fake repositories (no authenticated session).

@@ -57,9 +57,12 @@ class _FakeAsk {
   bool Function()? isForeground;
   int get calls => pending.length;
 
+  Future<void> Function()? beforePresent;
+
   Future<ReaskOutcome> call(BuildContext context, WidgetRef ref,
-      {bool Function()? isForeground}) {
+      {bool Function()? isForeground, Future<void> Function()? beforePresent}) {
     this.isForeground = isForeground;
+    this.beforePresent = beforePresent;
     foregroundAtCall.add(isForeground!());
     final c = Completer<ReaskOutcome>();
     pending.add(c);
@@ -166,6 +169,7 @@ Future<_FakeAsk> _mount(WidgetTester tester) async {
     await tester.pump();
     container.dispose();
     appDataRestoring.value = false;
+    consentReaskPending.value = false;
     await _bg(tester, fixture.dispose);
     await tester.pump(const Duration(seconds: 30));
   });
@@ -219,6 +223,54 @@ void main() {
     await _resume(tester);
     await tester.pump(const Duration(seconds: 1));
     expect(ask.calls, 2, reason: 'one ask at a time');
+  });
+
+  testWidgets(
+      'cold start keeps the root loader up until the re-ask decides; it lifts '
+      'when nothing is shown', (tester) async {
+    final ask = await _mount(tester);
+    await _until(tester, () => ask.calls == 1);
+    expect(consentReaskPending.value, isTrue,
+        reason: 'the server read must not show the app first');
+    ask.complete(ReaskOutcome.notNeeded);
+    await _settle(tester);
+    expect(consentReaskPending.value, isFalse);
+    await tester.pump(const Duration(seconds: 2)); // let post-ask work settle
+  });
+
+  testWidgets(
+      'the loader leaves before the sheet opens, and a resume never raises it',
+      (tester) async {
+    final ask = await _mount(tester);
+    await _until(tester, () => ask.calls == 1);
+    expect(consentReaskPending.value, isTrue);
+    var revealed = false;
+    unawaited(ask.beforePresent!().then((_) => revealed = true));
+    await tester.pump();
+    expect(consentReaskPending.value, isFalse,
+        reason: 'released at once, so the sheet never opens under the logo');
+    expect(revealed, isFalse, reason: 'waits for the loader exit motion');
+    await tester.pump(kBootLoaderRevealDuration);
+    expect(revealed, isTrue);
+    ask.complete(ReaskOutcome.shown);
+    await _settle(tester);
+
+    await _background(tester);
+    await _resume(tester);
+    await _until(tester, () => ask.calls == 2);
+    expect(consentReaskPending.value, isFalse,
+        reason: 'only a cold start holds the loader');
+    await tester.pump(const Duration(seconds: 2)); // let post-ask work settle
+  });
+
+  testWidgets('a hung re-ask never traps the user behind the loader',
+      (tester) async {
+    final ask = await _mount(tester);
+    await _until(tester, () => ask.calls == 1);
+    expect(consentReaskPending.value, isTrue);
+    await tester.pump(const Duration(seconds: 9));
+    expect(consentReaskPending.value, isFalse);
+    expect(ask.pending.single.isCompleted, isFalse);
   });
 
   testWidgets(

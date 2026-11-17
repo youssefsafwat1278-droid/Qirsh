@@ -80,13 +80,15 @@ class MoneyApp extends ConsumerWidget {
                     listenable: Listenable.merge([
                       appDataRestoring,
                       AutomaticSessionRecovery.restoringSession,
+                      consentReaskPending,
                     ]),
                     // The loader leaves with its exit motion over the app
                     // (already built behind it); the condition is unchanged.
                     builder: (context, _) => Positioned.fill(
                       child: AppBootLoaderReveal(
                         loading: appDataRestoring.value ||
-                            AutomaticSessionRecovery.restoringSession.value,
+                            AutomaticSessionRecovery.restoringSession.value ||
+                            consentReaskPending.value,
                       ),
                     ),
                   ),

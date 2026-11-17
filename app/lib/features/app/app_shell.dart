@@ -236,6 +236,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && AppSession.instance.status == SessionStatus.authenticated) {
+        _holdLoaderForConsent();
         _consentReask.start();
       }
       if (mounted) unawaited(_whatsNew.start());
@@ -379,11 +380,52 @@ class _AppShellState extends ConsumerState<AppShell> {
   late final ConsentReaskTrigger _consentReask = ConsentReaskTrigger(
     restoring: appDataRestoring,
     isForeground: _isForeground,
-    ask: () async => mounted
-        ? await ref.read(reaskConsentProvider)(context, ref,
-            isForeground: _isForeground)
-        : ReaskOutcome.stale,
+    ask: () async {
+      if (!mounted) return ReaskOutcome.stale;
+      if (consentReaskPending.value) {
+        _consentHoldTimeout?.cancel();
+        _consentHoldTimeout = Timer(_consentAskCap, _releaseConsentHold);
+      }
+      try {
+        return await ref.read(reaskConsentProvider)(context, ref,
+            isForeground: _isForeground,
+            beforePresent: _revealBeforeConsentSheet);
+      } finally {
+        _releaseConsentHold();
+      }
+    },
   );
+
+  /// Cold start only: the root loader stays up until the first re-ask has
+  /// decided (see [consentReaskPending]), so a returning account on a new
+  /// device sees the logo, then the loaded app with the sheet rising over it,
+  /// never the app flashing in and being covered a moment later. Capped twice:
+  /// overall ([_consentHoldCap], it may wait behind the restore loader) and per
+  /// ask ([_consentAskCap], the server read itself times out after 5s).
+  static const _consentHoldCap = Duration(seconds: 30);
+  static const _consentAskCap = Duration(seconds: 8);
+  Timer? _consentHoldTimeout;
+
+  void _holdLoaderForConsent() {
+    if (!_isForeground()) return;
+    consentReaskPending.value = true;
+    _consentHoldTimeout?.cancel();
+    _consentHoldTimeout = Timer(_consentHoldCap, _releaseConsentHold);
+  }
+
+  void _releaseConsentHold() {
+    _consentHoldTimeout?.cancel();
+    _consentHoldTimeout = null;
+    if (consentReaskPending.value) consentReaskPending.value = false;
+  }
+
+  /// The sheet is about to open: lift the loader and let it finish leaving, so
+  /// the sheet rises over the already-built screen instead of under the logo.
+  Future<void> _revealBeforeConsentSheet() async {
+    if (!consentReaskPending.value) return;
+    _releaseConsentHold();
+    await Future<void>.delayed(kBootLoaderRevealDuration);
+  }
 
   /// One-time What's new sheet after an update: only once the shell is idle
   /// (no restore loader, no consent re-ask, no other sheet or dialog open).
@@ -403,6 +445,7 @@ class _AppShellState extends ConsumerState<AppShell> {
   @override
   void dispose() {
     _consentReask.dispose();
+    _releaseConsentHold(); // never leave the root loader stuck up
     _whatsNew.dispose();
     AppSession.instance.removeListener(_handleSessionStatusChange);
     AppSession.instance.configureSignOutFlush(null);
@@ -476,6 +519,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     if (now == SessionStatus.authenticated && !wasAuthenticated && mounted) {
       _consentReask.onAuthenticated();
     } else if (now != SessionStatus.authenticated) {
+      _releaseConsentHold();
       _consentReask.onSignedOut();
     }
     if (wasAuthenticated && now != SessionStatus.authenticated) {
