@@ -1,0 +1,109 @@
+# Summary extracted from round2_final_ci_gates.log (full log not kept in the repository)
+Tue Nov 17 18:02:57 EET 2026
+50957c06c2a1bf037eabdb73b3e224452caa32a1
+══ migration lint ══
+  ✓ migrations
+══ catalog asset drift ══
+  ✓ catalog asset in sync
+══ deno edge-function tests + lint ══
+  ✓ deno tests (all functions)
+  ✓ deno lint
+══ flutter analyze ══
+  ✓ analyze
+══ flutter test (bulk — parallel; crypto and deletion replica I/O excluded) ══
+29:35 +14019 ~44 -1: Some tests failed.
+  ✗ flutter test (bulk)
+══ flutter test (crypto — serialized production-cost Argon2, --concurrency=1) ══
+00:18 +24: All tests passed!
+  ✓ flutter test (crypto serialized)
+══ flutter test (deletion replica I/O — serialized, --concurrency=1) ══
+00:52 +79: All tests passed!
+  ✓ flutter test (deletion replica I/O serialized)
+══ flutter test (synthetic-define suites — serialized, --concurrency=1) ══
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+══════════════ DUPLICATE TRANSACTION TRACE ══════════════
+═════════════════════════════════════════════════════════
+01:38 +139 -1: Some tests failed.
+00:26 +10: All tests passed!
+  ✗ flutter test (synthetic-define serialized)
+══ node contract tests ══
+  ✓ node contract
+══ skip/ignore manifest enforcement ══
+  ✓ skip/ignore manifest satisfied
+  ✓ skip/ignore manifest
+══ admin authorization tests ══
+  ✓ admin auth
+══ l10n freshness (flutter gen-l10n) ══
+  ✓ l10n freshness
+══ MALI-034 architecture guard (retired Supabase-primary authority stays gone) ══
+══ MALI-034 architecture guard ══
+  ✓ schema pinned at 43
+  ✓ app/CLAUDE.md documents schema 43
+  ✓ no *_supabase_primary flag selectors
+  ✓ no FinancialCacheRepairService wiring
+  ✓ no legacy Supabase financial repo wiring
+  ✓ no vestigial Routed* repository wrappers
+  ✓ no Drift multi-db warning suppression (MALI-040)
+  ✓ no money SUM cast to REAL (exact integer minor totals)
+  ✓ arch guard
+══ MALI-037 dependency policy (offline: reproducibility + no git/rogue-path deps) ══
+══ MALI-037 dependency policy (offline) ══
+  ✓ pubspec.lock present (reproducible resolution)
+  ✓ no git: dependencies
+  ✓ path dependencies limited to the allowlist (packages/native_glass_navbar ../third_party/file_picker)
+  ✓ deps policy
+══ iOS packaging inventory (built Runner.app — PROVENANCE-GATED; source contract in flutter test) ══
+  ~ ios packaging (no built Runner.app; static Info.plist/privacy SOURCE contract runs in flutter test stage 4a) — ARTIFACT-DEPENDENT (deferred to a mandatory post-build check)
+══ truthful summary ══
+CI_GATES_EXIT=1
+
+## Failing tests
+test/architecture/head_completeness_test.dart: the gate result describes HEAD, not a working tree under REQUIRE_PRISTINE_TREE, no tracked file differs from HEAD [E]
+test/features/planning_sync/startup_reconcile_default_rpc_refusal_test.dart: matched positive: default RPC accepted reaches the transaction sentinel [E]
+
+══ truthful summary ══
+  mandatory gates passed : 13
+  mandatory gates failed : 2
+  tools unavailable      : 0  (strict: FATAL)
+  caller-skipped tests   : 0  (strict: FATAL) — a bypassed mandatory test is NOT evidence
+  artifact-dependent     : 1  (deferred to a mandatory POST-BUILD check; never a pass, never strict-fatal)
+  node tests skipped     : 89  (credentials absent — see manifest)
+  deno tests ignored     : 2  (live-Postgres — see manifest)
+  flutter skip sites     : 39  (static skip:/@Skip/markTestSkipped in app/test — see manifest; NOT counted as passed)
+  skip/ignore manifest   : satisfied
+  external verification  : pending (device / live Supabase / native timing — see PHASE_6 checklist)
+  retained lint exceptions: 7 deno-lint-ignore (no-explicit-any; loosely-typed Supabase Edge client — see PHASE_7 doc)
+CI_GATES_JSON {"passed":13,"failed":2,"tool_missing":0,"caller_skipped":0,"artifact_pending":1,"strict":1,"node_skipped":"89","deno_ignored":"2","flutter_skip_sites":"39","manifest":"satisfied","lint_exceptions":7}

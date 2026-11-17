@@ -17,7 +17,7 @@ Checklist results (Part A) for every item in [`MASTER-CHECKLIST.md`](../../relea
 3. An item linked to an open behavior defect or unmet requirement is **FAIL**. Where the linked issue is only a verification gap (a missing test or fixture), the item is NOT TESTED and the cell says `gap:`. An issue marked FIXED on this branch is not open, but its fix still needs the verification the criteria name.
 4. NOT TESTED cells name what is missing (device, production access, console access, a deploy, a signed build, a log).
 5. Anything whose criteria need a device, a production change, a store console, a deploy or a signed artifact cannot be PASS here: none of those exists for `50957c06`. Simulator evidence is method R and is labelled simulator; it is not device evidence.
-6. Full-gate items refer to the strict gate. The last full gate ran at `af675aec`; items that depend on it are NOT TESTED at the final candidate and carry the marker `GATE-PENDING` until TEST-EVIDENCE.md records a gate on the final candidate.
+6. Full-gate items refer to the strict gate. The strict gate was re-run on the final candidate: strict gate passed 15 of 15 at `c82f9a89` (application and test code of the candidate `5dae2e2d`; clean tree; machine otherwise idle; local run, not CI) — TEST-EVIDENCE.md §1.
 
 Legends used in the table:
 
@@ -26,7 +26,7 @@ Legends used in the table:
 - **Reviewer**: `AI:A` … `AI:H` = "AI agent: <specialist role>, claude-opus-5-5" as stated in each report header (A product scope, B data integrity, C iOS, D Android, E security & privacy, F backend & ops, G UI/UX, H tests/artifact/store) · `AI:I`, `AI:K`, `AI:L`, `AI:N`, `AI:O`, `AI:P`, `AI:Q`, `AI:R` = independent reviewers, claude-opus-5-5 · `AI:J`, `AI:M` = runtime verifiers on simulators · `AI:FIX` = verification runs made by the fixer, as recorded in the commit messages, UI-UX-REVIEW.md and TEST-EVIDENCE.md · `AI:RC` = AI agent: release-records compiler/editor, claude-opus-5-5 · `AI:ORCH` = orchestrator (gate runs, XCTest run, local stack, production read).
 - **Linked issue**: `V1-nnn` from ISSUES.md. `G UX-nn` is finding nn in UI-UX-REVIEW.md / audit G, not the checklist row with the same number.
 - Round-1 runs cited below (all Mac-T, no device): Flutter engine/domain/capture suites 3061 pass; UI-related suites 1102 pass; announcements/onboarding 159 pass; `deno test process-ios-sms` 125 pass; admin tests 191 pass and `next build`; Node contract tests 297 pass / 89 skipped for missing credentials; the six define-gated suites 143 pass with synthetic defines.
-- Round-2 runs cited below: reviewer runs K (+804 Flutter, 135 Deno, 39 Node at `0f90003f`), L (+679 Flutter, 694 Deno at `0095a239`), N (+821 Flutter, 699 Deno at `1be44623`), P (+1710 Flutter, 690 Deno at `5583cbea`), Q (+2619 Flutter, 691 Deno at `75dab61a`), R (+3065 Flutter on three parser test files, 692 Deno at `50957c06`); 1,565 shared cases at `50957c06`; review R's own harness on 1,758 de-duplicated synthetic messages; native XCTests 194/194 on a simulator (orchestrator); local-stack restore test (orchestrator, K); removal journeys 10/10 in a configured harness (orchestrator, K +10). Strict gate: last full pass at `af675aec`; on the final candidate see TEST-EVIDENCE.md (GATE-PENDING).
+- Round-2 runs cited below: reviewer runs K (+804 Flutter, 135 Deno, 39 Node at `0f90003f`), L (+679 Flutter, 694 Deno at `0095a239`), N (+821 Flutter, 699 Deno at `1be44623`), P (+1710 Flutter, 690 Deno at `5583cbea`), Q (+2619 Flutter, 691 Deno at `75dab61a`), R (+3065 Flutter on three parser test files, 692 Deno at `50957c06`); 1,565 shared cases at `50957c06`; review R's own harness on 1,758 de-duplicated synthetic messages; native XCTests 194/194 on a simulator (orchestrator); local-stack restore test (orchestrator, K); removal journeys 10/10 in a configured harness (orchestrator, K +10). Strict gate: last full pass at `af675aec`; on the final candidate see TEST-EVIDENCE.md.
 - Evidence date is 2026-11-17 for every row. Commit is `ab5dc10a` unless the row names another.
 
 ## Part A — checklist results
@@ -48,7 +48,7 @@ Legends used in the table:
 |---|---|---|---|---|---|---|---|---|---|---|
 | ARCH-01 | APPLICABLE | H | I | NOT TESTED | [SYSTEM-MAP.md](SYSTEM-MAP.md) was compiled from the audits and updated for the later commits, the reviews and the read-only production facts. It has not been reviewed as a whole by a second reviewer, and it marks unknowns: Vault, Auth hook, admin exposure, Android push transport, some dependency failure behavior. | 2026-11-17 | 50957c06 | Mac-I | AI:RC | — |
 | ARCH-02 | APPLICABLE | H | I | NOT TESTED | SYSTEM-MAP §6. Established by I for Gemini (F §2), APNs (F §2) and the iOS upload timeout (C §2). Unknown for Google Places, Sentry, AdMob, Apple revocation and the UI under a Supabase outage. No automated failure tests are cited. | 2026-11-17 | ab5dc10a | Mac-I | AI:C, AI:F, AI:RC | — |
-| ARCH-03 | APPLICABLE | M | A | NOT TESTED | GATE-PENDING — re-run pending on the final candidate — see TEST-EVIDENCE.md. The last pass was the strict gate on an earlier commit, `af675aec` (arch guard PASS, exit 0, `evidence/logs/final_ci_gates_run2.summary.txt`); 15 code commits followed it. | 2026-11-17 | 50957c06 | Mac-T | AI:ORCH | — |
+| ARCH-03 | APPLICABLE | M | A | PASS | Arch guard PASS in the strict gate passed 15 of 15 at `c82f9a89` (application and test code of the candidate `5dae2e2d`; clean tree; machine otherwise idle; local run, not CI) — TEST-EVIDENCE.md §1 (`evidence/logs/round2_final_ci_gates_run2.summary.txt`). A first run at `50957c06` failed two tests: a pinned request sequence changed by the restore fix (corrected in `5dae2e2d`) and the clean-tree check (records were uncommitted). | 2026-11-17 | `5dae2e2d` | Mac-T | AI:ORCH | — |
 | ARCH-04 | APPLICABLE | H | I, P | FAIL | A §2.4 gives the default and the reader for each flag. Production values are now known (P, read-only): every advertising flag ON at 100% (contrary to D-19), `local_auto_confirm_v2`, `capture_ai_fallback_enabled` and the `ledger_*`/`planning_*` flags off. 13+ remote flags have no reader. What switching each flag off does was not tested. | 2026-11-17 | 50957c06 | Mac-I, Prod-R | AI:A, AI:ORCH | V1-043, V1-063 |
 
 ### 3. Core functionality
@@ -162,7 +162,7 @@ Source: [UI-UX-REVIEW.md](UI-UX-REVIEW.md), audit G and the signed-in simulator 
 
 | ID | Applicability | Risk | Method used | Status | Evidence | Evidence date | Commit | Environment | Reviewer | Linked issue |
 |---|---|---|---|---|---|---|---|---|---|---|
-| BUILD-01 | APPLICABLE | C | A | NOT TESTED | GATE-PENDING — re-run pending on the final candidate — see TEST-EVIDENCE.md. The last pass was on an earlier commit, `af675aec`: 15 mandatory gates passed, 0 failed, exit 0, including the define-gated stage (`evidence/logs/final_ci_gates_run2.summary.txt`). 15 code commits followed it (parser, server functions, CI, restore, UI, removal port). Local run, not CI. | 2026-11-17 | 50957c06 | Mac-T | AI:ORCH | V1-055 |
+| BUILD-01 | APPLICABLE | C | A | PASS | All mandatory gates: strict gate passed 15 of 15 at `c82f9a89` (application and test code of the candidate `5dae2e2d`; clean tree; machine otherwise idle; local run, not CI) — TEST-EVIDENCE.md §1 (`evidence/logs/round2_final_ci_gates_run2.summary.txt`). A first run at `50957c06` failed two tests: a pinned request sequence changed by the restore fix (corrected in `5dae2e2d`) and the clean-tree check (records were uncommitted). | 2026-11-17 | `5dae2e2d` | Mac-T | AI:ORCH | V1-055 |
 | BUILD-02 | APPLICABLE | H | I, A | FAIL | Flutter skip sites are matched against the manifest (`64e571e5`); the define-gated suites run in a mandatory stage (`29cb1819`); the removal journeys are ported to the configured group the stage selects (`837d0881`; K +10, orchestrator 10/10; not yet inside a strict gate). Native XCTests: 194/194 once on a simulator; the XCTest step is in `ios-unsigned-sideload` and `ios-signed-release` (`4fc2ecd6`), never run on Codemagic. 1,565 shared declined/not-completed cases. Still: skip-gate bypasses (FR-11); Kotlin tests never run; no backend behavior gate. | 2026-11-17 | 50957c06 | Mac-T, Sim | AI:H, AI:B, AI:I, AI:K, AI:ORCH, AI:FIX | V1-011, V1-012, V1-013 |
 | BUILD-03 | APPLICABLE | H | I, A | FAIL | Lockfiles committed, no git deps, vendored `file_picker` documented (H §2); PROGRESS records the deps-policy gate as PASS. A dev pre-release dependency ships (`liquid_glass_renderer 0.2.0-dev.4`, H REL-19c), and Edge Functions import `esm.sh/@supabase/supabase-js@2` unpinned in 11 files (F BE-12, S4). | 2026-11-17 | ab5dc10a | Mac-T | AI:H, AI:F | V1-052 |
 | BUILD-04 | APPLICABLE | H | A | FAIL | Admin moved to `next@14.2.35` (`f9c5be75`), remote image hosts removed, image optimization off (`f6dc5076`); admin tests 191 pass and the build succeeds. `npm audit --omit=dev` at 14.2.35 still lists 25 advisories on `next` (3 critical, 9 high), none fixed on 14.x, plus a high on `postcss` (REV-07). No advisory scan exists for pub packages (H REL-19c). | 2026-11-17 | f6dc5076 | Mac-T | AI:F, AI:H, AI:I, AI:FIX | V1-025 |
@@ -282,7 +282,7 @@ Built from the audits' section 4 coverage rows, deduplicated and grouped, and ex
 | Queued owner (drain) | Android | Drain sees only the active owner's items | `DurableCaptureQueue.kt:213-214` | I + Dart model test | NOT TESTED | D §4; H REL-06 calls the test a model of the code | gap: V1-012 |
 | Reinstall | iOS | Keychain survives reinstall; different user sees none of A's data | `repairActiveOwnerGeneration` | I consistent | NOT TESTED | C §4 | — |
 | Signed-out capture | iOS | Shortcut captures while signed out | `BankMessageShortcuts.swift:68-73` | I | FAIL | C IOS-06: silent drop, against the zero-silent-loss threshold; owner decision | V1-037 |
-| Data removal through startup (configured build) | All | Remove data completes in a configured build with the real SDK and native session keychain | `bootstrap_runner.dart` | A (configured harness, fake session keychain) | NOT TESTED | The seven removal journeys were ported to the configured group with every original assertion kept (`837d0881`; K checked parity, +10 pass; orchestrator 10/10 with the gate's command). The native session keychain is faked and not exercised; not yet run inside a strict gate (GATE-PENDING); device MDT owed | V1-054 |
+| Data removal through startup (configured build) | All | Remove data completes in a configured build with the real SDK and native session keychain | `bootstrap_runner.dart` | A (configured harness, fake session keychain) | NOT TESTED | The seven removal journeys were ported to the configured group with every original assertion kept (`837d0881`; K checked parity, +10 pass; orchestrator 10/10 with the gate's command). The native session keychain is faked and not exercised; not yet run inside a strict gate (ran inside the strict gate at the candidate (synthetic-define stage 140 + 10 passed)); device MDT owed | V1-054 |
 | Reconnect | All | Reconnect resumes without duplicates or loss | sync, capture replay | — | NOT TESTED | no audit | — |
 
 ### B5. Duplicates and distinct messages
@@ -374,15 +374,15 @@ Counted from the rows above (102 Part A rows) at the time of writing, after the 
 
 | Status | Count |
 |---|---|
-| PASS | 4 (SCOPE-02, SEC-09, PRIV-01, DEPLOY-02) |
+| PASS | 6 (SCOPE-02, SEC-09, PRIV-01, DEPLOY-02, ARCH-03, BUILD-01) |
 | FAIL | 48 |
-| NOT TESTED | 49 (includes ARCH-03 and BUILD-01, GATE-PENDING) |
+| NOT TESTED | 47 |
 | NOT APPLICABLE | 1 (STORE-03 — Android is out of V1 by project record, not by this assessment) |
 | **Total** | **102** |
 
 Changes since the round-1 tally (5 / 51 / 46 / 0):
 
-- ARCH-03, BUILD-01 PASS → NOT TESTED: the strict gate passed at `af675aec`, not on the final candidate; re-run pending on the final candidate — see TEST-EVIDENCE.md (GATE-PENDING).
+- ARCH-03, BUILD-01: PASS again — the strict gate passed 15 of 15 at `c82f9a89` (application and test code of the candidate `5dae2e2d`; clean tree; machine otherwise idle; local run, not CI) — TEST-EVIDENCE.md §1.
 - DEPLOY-02 FAIL → PASS: production already holds all 134 migrations and no migration changed after `af675aec`.
 - STORE-03 FAIL → NOT APPLICABLE: Android is out of V1 by project record; returns to FAIL if Android is reopened.
 - COMP-03 FAIL → NOT TESTED: its remaining failure was Android-only; the iOS criterion needs a device.

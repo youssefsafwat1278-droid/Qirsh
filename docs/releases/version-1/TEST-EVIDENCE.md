@@ -63,3 +63,34 @@ Standing facts in every run: 89 node tests skipped (credentials absent), 2 Deno 
 ## 5. Evidence that expired
 
 Audits A–F and H describe `ab5dc10a`. For code changed afterwards — the parser and AI validator, capture import paths, `process-ios-sms`, the privacy manifests, `AppDelegate`/`SceneDelegate`, `conflict_fields.dart`, the force-update gate, Help strings, the manual transaction sheet and the listed widgets, `codemagic.yaml`, `tools/ci_gates.sh`, the admin dependencies — the audit statements about those files no longer apply; the rows above are the current evidence. Audit statements about untouched code still describe the candidate.
+
+## 6. Second round (after the owner's review)
+
+Same machine and toolchain. Docker Desktop 29.7.2 with a local Supabase stack (`qirsh_v1_verify`, synthetic data) for the rows that say "local stack". The disk filled once during this round; the runs made then are listed as discarded.
+
+### 6.1 Canonical gate — `REQUIRE_ALL_GATES=1 bash tools/ci_gates.sh`
+
+| Run | Commit | Result | Notes |
+|---|---|---|---|
+| Round 2, run 1 | `50957c06` (records uncommitted) | 13 passed, 2 failed | `flutter test` bulk: 14,019 passed, 44 skipped, 1 failed — the clean-tree check, because the records were not committed. Synthetic-define stage: 139 passed, 1 failed — `startup_reconcile_default_rpc_refusal_test` pinned a request sequence that the restore fix (`0f90003f`) changed on purpose; this suite only runs in that stage, so no targeted run had seen it. Corrected in `5dae2e2d` (test only) |
+| Round 2, run 2 | `c82f9a89` — application and test code of the candidate `5dae2e2d`, records committed, clean tree | **15 passed, 0 failed** (exit 0) | Machine otherwise idle. `flutter test` bulk 14,020 passed, 44 skipped; crypto 24; deletion replica 79; synthetic-define 140 + 10; analyze clean; deno tests and lint; node contract; skip manifest (39 Flutter skip sites counted); admin auth; l10n freshness; arch guard; deps policy; migration lint; catalog drift. 1 artifact-dependent check deferred (needs a built `Runner.app`). Local run, not CI |
+
+### 6.2 Other runs
+
+| What | Where | Commit | Result |
+|---|---|---|---|
+| Restore then cloud sync, scenarios R1 and R2 | Live local stack, real client services | parent of `0f90003f` → `0f90003f` | Both failed with the old code and passed with the fix, with and without a configured build (orchestrator) |
+| Restore identity, 12 entity types, backfill, guest restore | Unit tests against an in-memory fake backend | `0f90003f` | Pass; fail before the fix |
+| Backup, sync, capture, planning-sync, architecture suites | Flutter | `0f90003f` | 3,220 passed |
+| Native iOS XCTests | iPhone 17 simulator, iOS 26.5, parallel testing off | `d830855e` (no `app/ios` change since) | 194 passed, 0 failed. First valid run |
+| Native iOS XCTests, earlier attempt | same | same | DISCARDED — disk full, test host crashed (182 passed / 7 failed is not evidence) |
+| Signed-in app shell | iPhone 17 and SE simulators, local stack, synthetic account, real email-code sign-in UI | `8e953d14` | 44 items seen, 5 not reached; report J |
+| Tab-bar fix | iPhone 17 simulator, three fresh installs, plus a control build with the old observer | `0095a239` | Fixed build: bar visible each time. Control: defect reproduced. Report M |
+| Removal journeys in a configured build | Gate command with synthetic defines | `837d0881` | 10 of 10 |
+| Parser shared cases | Dart and Deno | `50957c06` | 1,565 cases; Flutter engine/domain/capture/transactions 6,268 passed; Deno 701 passed (orchestrator re-run of each round before committing) |
+| Parser, independent measurements | Reviewer's own harness, 1,758 hand-labelled messages | `50957c06` vs `ab5dc10a` | Report R: wrong total-changing outcomes 509 → 71 on the effective path with a bank sender; nothing worse than the baseline on the device or effective path |
+| UI round 2 | Widget tests | `34ccc9e9` | 97 new cases; related suites 1,823 passed |
+| Release workflow contract tests | Node, including real execution of the revision-check and build-number scripts | `4fc2ecd6` | 13 of 13; never run on Codemagic |
+| Production | Read-only: CLI and the connector the owner attached | 2026-11-17 | `evidence/production-comparison.md` |
+
+Still not run anywhere: a physical device; Android; a CI or signed build of the candidate; the AI path against a real model; real bank messages.

@@ -94,7 +94,7 @@ The silent-loss regression of rounds 6–8 (V1-077) is fixed in code: reviewers 
 
 - **Simulator only, no device.** All runtime evidence is from iOS 26.5 simulators, debug builds: the signed-in shell (J, at `8e953d14`), the RT-01 fix (M, at `0095a239`), the app-switcher snapshot, the native XCTests (194 passed at `d830855e`). Not exercised anywhere: a physical device, a CI or signed build, VoiceOver focus order, push, Shortcuts, the share extension, the live app switcher, error/offline and permission-denied states, the delete-account confirmation dialog, Apple and Google sign-in, full accessibility text sizes.
 - **Runtime evidence predates the last parser commits.** J ran before the last six parser commits (`42a0fd0c` … `50957c06`); its paste results describe the parser at `8e953d14`. Reviews O, P, Q and R ran the parser code in their own harnesses, not the app.
-- **Strict gate.** The last full strict gate passed at `af675aec`. A gate on the final candidate is recorded in TEST-EVIDENCE.md when run (GATE-PENDING at the time of writing).
+- **Strict gate.** The last full strict gate passed at `af675aec`. On the final candidate the strict gate passed 15 of 15 at `c82f9a89` (application and test code of the candidate `5dae2e2d`; clean tree; machine otherwise idle; local run, not CI) — TEST-EVIDENCE.md §1.
 - **Production** was read, never changed. The function comparison was made against `af675aec`; `process-ios-sms`, `parse-sms` and `_shared/ai_candidate_validator.ts` changed since. The migration ledger holds names, not content. Vault, Auth hook, Codemagic values, admin exposure and cron history are unknown.
 - **Backups.** Point-in-time recovery is off and the API lists no backups (V1-023): no verified way to restore the production database.
 
