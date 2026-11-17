@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/domain/capture/validated_capture.dart';
+import 'package:money_companion/engine/parser/parser_engine.dart';
 
 /// FR-02 — a server-processed capture is not imported as confirmed when the
 /// device's own deterministic parse of the same text reads the opposite money
@@ -48,6 +49,29 @@ void main() {
         isFalse);
     expect(localParseContradictsServer(text: debit, direction: 'debit'),
         isFalse);
+  });
+
+  test('NR-01: a purchase carrying a limit or activation line keeps the '
+      'server result; a notice with an amount does not', () {
+    for (final text in [
+      'Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n'
+          'Available Credit Limit: SAR 9,000.00',
+      'Purchase of SAR 100.00 at SHOPX on your newly activated card *1234',
+    ]) {
+      expect(
+          localParseContradictsServer(
+              text: text, direction: 'debit', senderId: 'AlRajhi'),
+          isFalse,
+          reason: text);
+    }
+    // Kept for review on device (never silently dropped), never confirmed
+    // from the server.
+    const notice = 'Your credit limit is SAR 15,000';
+    expect(ParserEngine.isIgnoredMessage(notice, senderId: 'AlRajhi'), isFalse);
+    expect(
+        localParseContradictsServer(
+            text: notice, direction: 'credit', senderId: 'AlRajhi'),
+        isTrue);
   });
 
   test('a transfer or an unreadable text never blocks the server result', () {

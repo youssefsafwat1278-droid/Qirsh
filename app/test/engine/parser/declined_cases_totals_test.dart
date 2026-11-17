@@ -98,12 +98,28 @@ void main() {
   // OTP/promotion is dropped, a purchase with a security footer is a review
   // row (with consented AI it is AI-read like any review-shaped message, so
   // only the on-device path is asserted for `review`).
-  for (final c in cases.where((c) =>
-      const ['not_completed', 'review', 'ignored'].contains(c['expect']))) {
+  // V1-RES5 (NR-05): `device` is the on-device outcome where it knowingly
+  // differs from the true outcome `expect` (no total change on device).
+  String onDevice(Map<String, dynamic> c) =>
+      (c['device'] ?? c['expect']) as String;
+  for (final c in cases.where((c) => const [
+        'not_completed',
+        'review',
+        'ignored',
+        'dropped',
+      ].contains(onDevice(c)))) {
     final text = c['text'] as String;
-    final withAi = c['expect'] != 'review';
-    test('[${c['src']}] ${c['expect']}: totals unchanged: $text', () async {
-      for (final sms in [text, _snb(text)]) {
+    // A real movement kept in review on device is AI-read like any review
+    // row: only the on-device path is asserted for it.
+    final completed = (c['expect'] as String).startsWith('completed_');
+    final withAi = onDevice(c) != 'review' && !completed;
+    test('[${c['src']}] ${onDevice(c)}: totals unchanged: $text', () async {
+      // The bank layout appended to a real movement, or to a notice whose
+      // own words name a transfer, is a second movement (NR-01).
+      for (final sms in [
+        text,
+        if (!completed && onDevice(c) != 'dropped') _snb(text),
+      ]) {
         for (final sender in ['SNB', 'AlRajhi']) {
           await AddTransactionUseCase(
             transactionRepository: txRepo,
@@ -135,8 +151,7 @@ void main() {
     // income (it moves the income total).
     'completed_transfer_in': TransactionTypeEntity.income,
   };
-  for (final c
-      in cases.where((c) => otherCompleted.containsKey(c['expect']))) {
+  for (final c in cases.where((c) => otherCompleted.containsKey(onDevice(c)))) {
     final text = c['text'] as String;
     test('[${c['src']}] ${c['expect']} is recorded: $text', () async {
       final r = await AddTransactionUseCase(
@@ -151,7 +166,7 @@ void main() {
   // A completed purchase or refund is still recorded, with the type that moves
   // the right total (never diverted to Smart Inbox by the rule).
   for (final c in cases.where((c) =>
-      const ['completed_payment', 'completed_credit'].contains(c['expect']))) {
+      const ['completed_payment', 'completed_credit'].contains(onDevice(c)))) {
     final text = c['text'] as String;
     final payment = c['expect'] == 'completed_payment';
     test('[${c['src']}] ${c['expect']} is recorded: $text', () async {

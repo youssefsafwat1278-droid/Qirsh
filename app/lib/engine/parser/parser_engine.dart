@@ -158,19 +158,65 @@ class ParserEngine {
       extraProfiles: bankProfiles,
     );
     const engine = ParserEngine();
-    if (!engine._isIgnored(
-        outsideMerchant(text.toLowerCase(),
-            engine._extractMerchantAndSource(text.split('\n'), bank: bank)
-                .merchant),
-        bank)) {
+    final lower = text.toLowerCase();
+    final outside = outsideMerchant(lower,
+        engine._extractMerchantAndSource(text.split('\n'), bank: bank)
+            .merchant);
+    if (!engine._isIgnored(outside, bank) &&
+        !engine._isNotice(lower, outside, bank)) {
       return false;
     }
     // FR-13: an ignore word on a message the parser reads as a transaction
-    // (and that is not an OTP code) goes to review instead of being dropped.
+    // (and that is not an OTP code) goes to review instead of being dropped;
+    // so does an account notice that names an amount (NR-01).
     return !engine
         .parse(rawText, senderId: senderId, bankProfiles: bankProfiles)
         .amountDetected;
   }
+
+  /// NR-01 — [rawText] is an account notice ([noticeWords]: a credit limit,
+  /// a card activation, a statement, a PIN change) that names no money
+  /// movement anywhere ([moneyWords]). The device never records one; with an
+  /// amount it is a review row. Used by the import paths to distrust a
+  /// server result for such a text.
+  static bool isNoticeMessage(
+    String rawText, {
+    String? senderId,
+    List<BankProfile> bankProfiles = const [],
+  }) {
+    final text = Normalizer.normalizeCurrencyTokens(
+      Normalizer.normalize(rawText),
+    );
+    final bank = BankProfiles.detect(
+      text,
+      senderId: senderId,
+      extraProfiles: bankProfiles,
+    );
+    const engine = ParserEngine();
+    final lower = text.toLowerCase();
+    return engine._isNotice(
+        lower,
+        outsideMerchant(lower,
+            engine._extractMerchantAndSource(text.split('\n'), bank: bank)
+                .merchant),
+        bank);
+  }
+
+  /// NR-01 — a [noticeWords] phrase outside the merchant name ([outside]) in
+  /// a message ([lower]) with no [moneyWords] word and no transaction type.
+  /// A notice word next to a money movement ("Purchase … Available credit
+  /// limit …", "Card renewal fee … deducted") never counts.
+  bool _isNotice(String lower, String outside, BankProfile? bank) =>
+      noticeWords.any((w) => containsIgnoreWord(outside, w)) &&
+      !hasMoneyWord(lower) &&
+      _detectType(lower, bank) == TransactionType.unknown;
+
+  /// Whether [lower] names a money movement anywhere: a [moneyWords] word (a
+  /// Latin word as a whole word, an Arabic one by substring).
+  static bool hasMoneyWord(String lower) => moneyWords.any((w) =>
+      RegExp('[a-z]').hasMatch(w)
+          ? RegExp('(?<![a-z])${RegExp.escape(w)}(?![a-z])').hasMatch(lower)
+          : lower.contains(w));
 
   /// LR-05 — [lower] without the merchant span the parser extracted (up to
   /// the first card mask, sentence or clause end, starting at a word): an
@@ -212,15 +258,18 @@ class ParserEngine {
       '(?<![a-z])(?:$_currencyPattern) ?[0-9]|[0-9] ?(?:$_currencyPattern)(?![a-z])',
       caseSensitive: false);
 
-  /// LR-04 / LR-06 — the message is not a money movement: an OTP code, or an
-  /// advert or account notice ([nonTransactionWords]) outside [merchant].
-  /// Used by the AI candidate validator; mirrors `isNonTransactionText` in
-  /// `_shared/ai_candidate_validator.ts`.
+  /// LR-04 / LR-06 / NR-02 — the message is not a money movement: an OTP
+  /// code, or an ignore word or account notice ([hasIgnoreWord],
+  /// [noticeWords]) outside [merchant] in a message that names no money
+  /// movement anywhere ([hasMoneyWord]). Used by the AI candidate validator;
+  /// mirrors `isNonTransactionText` in `_shared/ai_candidate_validator.ts`.
   static bool isNonTransactionText(String text, {String? merchant}) {
     final lower = Normalizer.normalize(text).toLowerCase();
     if (_otpCode.hasMatch(lower)) return true;
     final outside = outsideMerchant(lower, merchant);
-    return nonTransactionWords.any((w) => containsIgnoreWord(outside, w));
+    return (hasIgnoreWord(outside) ||
+            noticeWords.any((w) => containsIgnoreWord(outside, w))) &&
+        !hasMoneyWord(lower);
   }
 
   /// FR-13 — a Latin ignore word counts only as a whole word, with an
@@ -256,14 +305,21 @@ class ParserEngine {
     'لا تشاركه',
   ];
 
-  /// LR-04 — adverts and account notices that are never a money movement,
-  /// even when they name an amount (a credit limit, a card activation, a
-  /// cashback offer). Equal to `nonTransactionKeywords` in
-  /// `process-ios-sms/parser_rules.json` (drift test).
-  static const List<String> nonTransactionWords = [
-    // Promotions.
+  /// Promotions: an ignore word like the security words and [ignoreMarkers].
+  static const List<String> promotionWords = [
     'عرض خاص', 'promo', 'promotion', 'marketing', 'offer', 'coupon', 'prize',
-    'winner', 'won', 'winning', 'مبروك', 'جائزة', 'اربح',
+    'winner', 'won', 'مبروك', 'جائزة', 'اربح',
+  ];
+
+  /// LR-04 / NR-01 — account notices (a credit limit, a card activation, a
+  /// statement, a PIN change). Unlike an ignore word, one counts only in a
+  /// message that names no money movement anywhere ([hasMoneyWord]): bank
+  /// SMS put "Available credit limit …" or "card activated for …" on real
+  /// purchases. [promotionWords], [ignoreMarkers] and these, less the
+  /// server's `ignoreKeywords`, are `nonTransactionKeywords` in
+  /// `process-ios-sms/parser_rules.json` (drift test).
+  static const List<String> noticeWords = [
+    'winning',
     // Limits, card activation / issuance / renewal.
     'credit limit', 'card limit', 'الحد الائتماني', 'حد الائتمان',
     'حد البطاقة', 'activated', 'activation', 'is now active', 'تم تفعيل',
@@ -277,6 +333,23 @@ class ParserEngine {
     'pin reset', 'تغيير الرقم السري', 'beneficiary added',
     'beneficiary has been added', 'profile updated', 'profile has been updated',
     'إضافة مستفيد',
+  ];
+
+  /// NR-01 — words that name a money movement: a message holding one is
+  /// never an account notice ([noticeWords]). Latin words match as whole
+  /// words, Arabic ones by substring. Equal to `moneyKeywords` in
+  /// `process-ios-sms/parser_rules.json` (drift test).
+  static const List<String> moneyWords = [
+    'purchase', 'purchased', 'payment', 'paid', 'debited', 'deducted',
+    'charged', 'withdrawn', 'withdrawal', 'spent', 'credited', 'received',
+    'incoming', 'deposit', 'deposited', 'salary', 'refund', 'refunded',
+    'reversal', 'reversed', 'transfer', 'transferred', 'pos', 'atm',
+    'transaction', 'trx',
+    'خصم', 'خُصم', 'شراء', 'مشتريات', 'دفع', 'مدفوعات', 'سحب', 'صادر',
+    'نقاط بيع', 'سداد', 'رسوم', 'إيداع', 'ايداع', 'أضيف', 'أُضيف', 'اضيف',
+    'استلام', 'استلمت', 'مبلغ وارد', 'راتب', 'استرداد', 'مسترد', 'رد مبلغ',
+    'إعادة مبلغ', 'اعادة مبلغ', 'استرجاع', 'عكس قيد', 'عكس العملية', 'تحويل',
+    'حوالة', 'حواله', 'صراف', 'عملية', 'أموال',
   ];
 
   /// The remaining ignore markers: links, calls to action, cheque books,
@@ -297,7 +370,10 @@ class ParserEngine {
     r'(?:[^\n]{0,40}?(?:\bis\b|هو))?\s*:?\s*[0-9]{4,8}(?![0-9])'
     r'|(?<![0-9*x#.,])[0-9]{4,8} (?:is|هو) [^\n0-9]{0,25}'
     r'(?:otp|one time password|verification code|security code|passcode|'
-    r'code|رمز|كود)'
+    r'رمز|كود|'
+    // NR-06: a bare "code" only with a purpose ("is the code to confirm your
+    // purchase"), never "is the auth code" / "is your code for pickup".
+    r'code to (?:confirm|approve|complete|verify|authori[sz]e))'
     // "Verification code for … SAR 100.00 at X: 4821" (same sentence).
     r'|(?:otp|one time password|verification code|security code|passcode|'
     r'رمز الدخول|رمز التحقق|كود التحقق)(?:[^\n.!?]|\.(?=[0-9])){0,60}?:\s*'
@@ -305,8 +381,12 @@ class ParserEngine {
     // LR-06: "Use 482913 as OTP", "Enter code 482913 …".
     r'|(?<![0-9*x#.,])[0-9]{4,8} as (?:the |your |an? )?'
     r'(?:otp|one time password|verification code|security code|passcode|code)'
-    r'|(?:enter|use|input) (?:the |your )?(?:code|otp|passcode)\s*:?\s*'
-    r'[0-9]{4,8}(?![0-9])',
+    r'|(?:enter|use|input) (?:the |your )?(?:otp|passcode)\s*:?\s*'
+    r'[0-9]{4,8}(?![0-9])'
+    // NR-06: "Enter code 482913 to approve …", not "Use code 482913 for your
+    // next order" / "Enter code 482913 at the counter".
+    r'|(?:enter|use|input) (?:the |your )?code\s*:?\s*[0-9]{4,8} to '
+    r'(?:confirm|approve|complete|verify|authori[sz]e)',
   );
 
   ParseResult parse(
@@ -378,6 +458,13 @@ class ParserEngine {
     }
     if (amount == null) {
       return ParseResult.notTransaction(bankKey: bank?.bankKey);
+    }
+    // LR-04 / NR-01 — an account notice that names an amount but no money
+    // movement ("Your credit limit is SAR 15,000"): never recorded, never
+    // dropped silently — a review row.
+    if (!ignored && catalogMatch == null && _isNotice(lower, ignoreText, bank)) {
+      return ParseResult.notTransaction(
+          bankKey: bank?.bankKey, amountDetected: true);
     }
 
     final source = _detectSource(lower, bank);
@@ -1226,7 +1313,7 @@ class ParserEngine {
           .any((w) => containsIgnoreWord(lower, w.toLowerCase()));
 
   /// Whether [lower] carries one of the engine's own ignore words (security,
-  /// [nonTransactionWords], [ignoreMarkers]); bank-specific rules aside.
+  /// [promotionWords], [ignoreMarkers]); bank-specific rules aside.
   /// [text] without the clauses that hold a hypothetical marker ("Disputed
   /// transactions may be reversed"): a credit word there reports nothing.
   /// Mirrors `creditWordsOnly` in process-ios-sms/parse.ts.
@@ -1240,7 +1327,7 @@ class ParserEngine {
 
   static bool hasIgnoreWord(String lower) => [
         ...securityIgnoreWords,
-        ...nonTransactionWords,
+        ...promotionWords,
         ...ignoreMarkers,
       ].any((w) => containsIgnoreWord(lower, w));
 

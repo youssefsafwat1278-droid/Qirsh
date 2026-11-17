@@ -83,6 +83,8 @@ class TransactionStateCues {
     'موقوفة', 'سيتم تنفيذ',
     // V1-RES4 (review L, LR-02): more not-completed wordings.
     'لم تتم', 'تم إلغاء', 'قيد التنفيذ',
+    // NR-03 (review N): more not-completed wordings.
+    'تعذرت', 'بانتظار الموافقة',
     // English
     'declined', 'rejected', 'unsuccessful', 'not successful', 'failed',
     'denied', 'not approved', 'cancelled', 'canceled',
@@ -105,6 +107,8 @@ class TransactionStateCues {
     'cannot be completed', 'cannot be processed', 'bounced',
     'awaiting confirmation', 'awaiting approval', 'under review',
     'being processed',
+    'was returned', 'could not be authorised', 'could not be authorized',
+    'not posted',
   ];
 
   /// The message's own action returns money (a refund/reversal of the

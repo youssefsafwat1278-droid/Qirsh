@@ -176,6 +176,9 @@
     "تم إلغاء",
     "تم الغاء",
     "قيد التنفيذ",
+    "تعذرت",
+    "بانتظار الموافقة",
+    "بانتظار الموافقه",
     "pending",
     "on hold",
     "hold of",
@@ -206,7 +209,11 @@
     "awaiting confirmation",
     "awaiting approval",
     "under review",
-    "being processed"
+    "being processed",
+    "was returned",
+    "could not be authorised",
+    "could not be authorized",
+    "not posted"
   ],
   "debitKeywords": [
     "عملية شراء",

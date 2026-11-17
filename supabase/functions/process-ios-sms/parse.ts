@@ -6,6 +6,7 @@ import {
   type AiCandidate,
   containsIgnoreWord,
   CURRENCY_CODES,
+  hasMoneyWord,
   last4Grounded,
   type LocalCandidate,
   merchantGrounded,
@@ -106,14 +107,19 @@ export function isResolved(p: ParsedCapture): boolean {
 // optional plural/inflection ending ("offers", "promotional"), so "Hotpot" is
 // not an OTP; Arabic phrases and URL prefixes keep substring matching. A word
 // inside the merchant span ("Offer Mart", "Won Kitchen") is part of a name.
-// Any other ignore word rejects the message with no AI: the device keeps a
-// complete transaction carrying one (a footer) as a review row and drops an
-// advert or account notice. Mirrors ParserEngine._isIgnored.
-const IGNORE_WORDS = [...(rules.ignoreKeywords as string[]), ...NON_TRANSACTION_KEYWORDS];
-
+// An ignoreKeywords word rejects the message with no AI. NR-01: a
+// nonTransactionKeywords word (a link, a complaint line, an account notice:
+// credit limit, card activation, statement, PIN) rejects it only when the
+// message names no money movement anywhere (no moneyKeywords word):
+// "Purchase … Available credit limit …" and "Card
+// renewal fee … deducted" are read as transactions. Mirrors
+// ParserEngine._isIgnored / _isNotice.
 function isIgnoredText(normalized: string): boolean {
-  const lower = outsideMerchant(normalized.toLowerCase(), extractMerchant(normalized));
-  return IGNORE_WORDS.some((w) => containsIgnoreWord(lower, w)) || isDeclinedText(normalized);
+  const all = normalized.toLowerCase();
+  const lower = outsideMerchant(all, extractMerchant(normalized));
+  return (rules.ignoreKeywords as string[]).some((w) => containsIgnoreWord(lower, w)) ||
+    (NON_TRANSACTION_KEYWORDS.some((w) => containsIgnoreWord(lower, w)) && !hasMoneyWord(all)) ||
+    isDeclinedText(normalized);
 }
 
 // DATA-01: the transaction-state rule of

@@ -25,7 +25,9 @@ void main() {
   final preview = SharedPreviewParser.fromJsonString(
       File('assets/catalog/parser_rules.json').readAsStringSync());
 
-  test('the table covers all eight outcomes', () {
+  test('the table covers all outcomes', () {
+    // V1-RES5 (NR-05): `expect` is the true outcome of the text; `device`
+    // is the on-device outcome where it knowingly differs (no total change).
     expect(cases.map((c) => c['expect']).toSet(), {
       'not_completed',
       'completed_payment',
@@ -33,17 +35,18 @@ void main() {
       'completed_income',
       'completed_withdrawal',
       'completed_transfer_in',
-      'review',
       'ignored',
     });
+    expect(cases.map((c) => c['device']).whereType<String>().toSet(),
+        {'review', 'not_completed', 'dropped', 'transfer'});
   });
 
   for (final c in cases) {
     final text = c['text'] as String;
-    final expected = c['expect'] as String;
+    final expected = (c['device'] ?? c['expect']) as String;
     final review = expected == 'not_completed';
 
-    test('[${c['src']}] $expected: $text', () {
+    test('[${c['src']}] ${c['expect']}/$expected: $text', () {
       expect(TransactionStateCues.isNotCompleted(text), review,
           reason: 'cue verdict');
 
@@ -85,8 +88,17 @@ void main() {
           expect(r.isTransaction, isTrue);
           expect(r.transaction!.type, TransactionType.withdrawal);
         case 'completed_transfer_in':
+        case 'transfer':
           expect(r.isTransaction, isTrue);
           expect(r.transaction!.type, TransactionType.transfer);
+        // NR-01: no amount read (a fee line the extractor does not take):
+        // not recorded, but never silently ignored — a bank sender's
+        // capture becomes a Smart Inbox card.
+        case 'dropped':
+          expect(r.isTransaction, isFalse);
+          expect(r.amountDetected, isFalse);
+          expect(ParserEngine.isIgnoredMessage(text, senderId: 'AlRajhi'),
+              isFalse);
       }
 
       // Dart notification preview (V1-061): it judges declined cues with
@@ -119,6 +131,12 @@ void main() {
           expect(v.rejectionReason, _notCompleted, reason: 'AI $type');
         } else {
           expect(v.rejectionReason, isNot(_notCompleted), reason: 'AI $type');
+        }
+        // NR-02: a notice or footer word on a real movement never makes the
+        // validator call it "not a transaction".
+        if ((c['expect'] as String).startsWith('completed_')) {
+          expect(v.rejectionReason, isNot('not_a_transaction'),
+              reason: 'AI $type');
         }
       }
 

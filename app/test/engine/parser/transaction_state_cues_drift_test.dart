@@ -39,18 +39,33 @@ void main() {
       test(e.key, () => expect(strings(server[e.key]), e.value));
     }
 
-    // LR-04 / LR-05: the server rejects (no AI) on the same ignore words the
-    // device applies, and its AI candidate validator reads the same advert /
-    // account-notice list.
+    // LR-04 / LR-05 / NR-01: the server rejects (no AI) on the device's
+    // ignore words; its other words, like the device's notice words, count
+    // only in a message that names no money movement (moneyKeywords). The
+    // two runtimes and both AI candidate validators read the same words.
     test('ignoreKeywords', () {
-      expect(strings(server['ignoreKeywords']), [
-        ...ParserEngine.securityIgnoreWords,
-        ...ParserEngine.ignoreMarkers,
-      ]);
+      expect(strings(server['ignoreKeywords']).toSet(),
+          containsAll(ParserEngine.securityIgnoreWords));
+      expect(
+          ParserEngine.promotionWords,
+          containsAll(strings(server['ignoreKeywords'])
+              .where((w) => !ParserEngine.securityIgnoreWords.contains(w))));
     });
     test('nonTransactionKeywords', () {
-      expect(strings(server['nonTransactionKeywords']),
-          ParserEngine.nonTransactionWords);
+      expect(
+          {
+            ...strings(server['ignoreKeywords']),
+            ...strings(server['nonTransactionKeywords']),
+          },
+          {
+            ...ParserEngine.securityIgnoreWords,
+            ...ParserEngine.promotionWords,
+            ...ParserEngine.ignoreMarkers,
+            ...ParserEngine.noticeWords,
+          });
+    });
+    test('moneyKeywords', () {
+      expect(strings(server['moneyKeywords']), ParserEngine.moneyWords);
     });
   });
 

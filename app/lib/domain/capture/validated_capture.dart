@@ -253,7 +253,8 @@ bool localParseOpposesDirection({
 /// LR-03 / LR-04 — the device's own reading contradicts a server result for
 /// [text]: the opposite money direction ([localParseOpposesDirection]), or
 /// the device drops the text as not a transaction (an OTP, an advert, an
-/// account notice: [ParserEngine.isIgnoredMessage]). Neither reading is
+/// account notice: [ParserEngine.isIgnoredMessage], or a notice the device
+/// keeps for review: [ParserEngine.isNoticeMessage]). Neither reading is
 /// trusted then: every import path takes its recoverable review outcome
 /// (Smart Inbox), never a confirmed row from either side.
 bool localParseContradictsServer({
@@ -263,6 +264,7 @@ bool localParseContradictsServer({
   String? senderId,
 }) =>
     ParserEngine.isIgnoredMessage(text, senderId: senderId) ||
+    ParserEngine.isNoticeMessage(text, senderId: senderId) ||
     localParseOpposesDirection(
         text: text, direction: direction, type: type, senderId: senderId);
 

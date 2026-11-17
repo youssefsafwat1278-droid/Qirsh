@@ -308,28 +308,48 @@ export const OTP_CODE = new RegExp(
     '(?:[^\n]{0,40}?(?:\\bis\\b|هو))?\\s*:?\\s*[0-9]{4,8}(?![0-9])' +
     '|(?<![0-9*x#.,])[0-9]{4,8} (?:is|هو) [^\n0-9]{0,25}' +
     '(?:otp|one time password|verification code|security code|passcode|' +
-    'code|رمز|كود)' +
+    'رمز|كود|code to (?:confirm|approve|complete|verify|authori[sz]e))' +
     '|(?:otp|one time password|verification code|security code|passcode|' +
     'رمز الدخول|رمز التحقق|كود التحقق)(?:[^\n.!?]|\\.(?=[0-9])){0,60}?:\\s*' +
     '[0-9]{4,8}(?![0-9.,])' +
     '|(?<![0-9*x#.,])[0-9]{4,8} as (?:the |your |an? )?' +
     '(?:otp|one time password|verification code|security code|passcode|code)' +
-    '|(?:enter|use|input) (?:the |your )?(?:code|otp|passcode)\\s*:?\\s*' +
-    '[0-9]{4,8}(?![0-9])',
+    '|(?:enter|use|input) (?:the |your )?(?:otp|passcode)\\s*:?\\s*' +
+    '[0-9]{4,8}(?![0-9])' +
+    // NR-06: "Enter code 482913 to approve …", not "Use code 482913 for your
+    // next order" / "Enter code 482913 at the counter".
+    '|(?:enter|use|input) (?:the |your )?code\\s*:?\\s*[0-9]{4,8} to ' +
+    '(?:confirm|approve|complete|verify|authori[sz]e)',
 );
 
 export const NON_TRANSACTION_KEYWORDS = rules.nonTransactionKeywords as string[];
+const MONEY_KEYWORDS = (rules.moneyKeywords as string[]).map((w) =>
+  /[a-z]/.test(w)
+    ? ((lower: string) => new RegExp(`(?<![a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z])`).test(lower))
+    : ((lower: string) => lower.includes(w))
+);
 
 /**
- * The message is not a money movement: an OTP code, or an advert or account
- * notice (nonTransactionKeywords) outside [merchant]. Mirrors
+ * NR-01: [lower] names a money movement anywhere (a moneyKeywords word: Latin
+ * as a whole word, Arabic by substring). Mirrors ParserEngine.hasMoneyWord.
+ */
+export function hasMoneyWord(lower: string): boolean {
+  return MONEY_KEYWORDS.some((matches) => matches(lower));
+}
+
+/**
+ * The message is not a money movement: an OTP code, or an ignore word or
+ * account notice (ignoreKeywords, nonTransactionKeywords) outside [merchant]
+ * in a message that names no money movement anywhere (NR-02: "Available
+ * credit limit" on a purchase does not count). Mirrors
  * ParserEngine.isNonTransactionText.
  */
 export function isNonTransactionText(text: string, merchant?: string | null): boolean {
   const lower = text.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660)).toLowerCase();
   if (OTP_CODE.test(lower)) return true;
   const outside = outsideMerchant(lower, merchant);
-  return NON_TRANSACTION_KEYWORDS.some((w) => containsIgnoreWord(outside, w));
+  return [...(rules.ignoreKeywords as string[]), ...NON_TRANSACTION_KEYWORDS]
+    .some((w) => containsIgnoreWord(outside, w)) && !hasMoneyWord(lower);
 }
 
 export function validateAiCandidate(input: {

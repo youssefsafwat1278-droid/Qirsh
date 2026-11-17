@@ -1,6 +1,7 @@
 import { assert, assertEquals, assertNotEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { deterministicParse, isDeclinedText, isResolved, parseSms } from './parse.ts';
 import declinedTable from './declined_cases.json' with { type: 'json' };
+import { isNonTransactionText } from '../_shared/ai_candidate_validator.ts';
 
 const RECEIVED = '2026-09-07T19:30:00.000Z';
 
@@ -514,25 +515,31 @@ Deno.test('declined table: not completed is never confirmed money, on every serv
   };
   for (const c of declinedTable.cases as Array<{ text: string; expect: string; server?: string }>) {
     const text = c.text;
-    assertEquals(isDeclinedText(text), c.expect === 'not_completed', `cue: ${text}`);
+    // V1-RES5 (NR-05): expect is the true outcome; server is this side's
+    // outcome where it knowingly differs (never a total change).
+    const expected = c.server ?? c.expect;
+    assertEquals(isDeclinedText(text), expected === 'not_completed', `cue: ${text}`);
+    // NR-02: a notice or footer word on a real movement never makes the AI
+    // candidate validator call it "not a transaction".
+    if (c.expect.startsWith('completed_')) assertEquals(isNonTransactionText(text), false, `not_a_transaction: ${text}`);
     const p = deterministicParse(text, RECEIVED, 180);
-    if (c.server === 'unresolved') {
+    if (expected === 'unresolved') {
       // A known disagreement in the safe direction: the device (with the
       // sender's bank profile) records it; the server leaves it unresolved.
       assertEquals(isResolved(p), false, `server unresolved: ${text}`);
       continue;
     }
-    if (c.expect in otherCompleted) {
-      assert(isResolved(p), `${c.expect}: ${text}`);
-      assertEquals([p.direction, p.type], otherCompleted[c.expect], text);
+    if (expected in otherCompleted) {
+      assert(isResolved(p), `${expected}: ${text}`);
+      assertEquals([p.direction, p.type], otherCompleted[expected], text);
       continue;
     }
-    if (c.expect === 'completed_payment') {
+    if (expected === 'completed_payment') {
       assert(isResolved(p), `payment: ${text}`);
       assertEquals([p.direction, p.type], ['debit', 'payment'], text);
       continue;
     }
-    if (c.expect === 'completed_credit') {
+    if (expected === 'completed_credit') {
       // The device types a refund/reversal as `refund`; the server agrees.
       assert(isResolved(p), `credit: ${text}`);
       assertEquals([p.direction, p.type], ['credit', 'refund'], text);
