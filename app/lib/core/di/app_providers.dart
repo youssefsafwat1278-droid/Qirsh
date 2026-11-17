@@ -1,3 +1,4 @@
+import '../backend/app_version.dart';
 import '../session/admission_authority.dart';
 import 'account_access_mode.dart';
 import '../session/account_scope.dart' show AccountAccessMode, AccountScopeHost;
@@ -375,7 +376,11 @@ final activeDashboardCampaignsProvider =
 
 final hasForceUpdateProvider = FutureProvider<bool>((ref) async {
   final announcements = await ref.watch(activeAnnouncementsProvider.future);
-  return announcements.any((a) => a.isForceUpdate);
+  // A cached row must not keep blocking a build it no longer targets. An
+  // unknown running version still blocks, as before.
+  return announcements.any((a) =>
+      a.isForceUpdate &&
+      (kAppVersion.isEmpty || a.targetsVersion(kAppVersion)));
 });
 
 FeatureFlagService? _featureFlagInstance;

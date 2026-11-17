@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/backend/app_version.dart';
 import '../../core/privacy/gated_url_launcher.dart';
 
 import '../../core/di/app_providers.dart';
@@ -21,7 +22,9 @@ class ForceUpdateScreen extends ConsumerWidget {
     final c = Theme.of(context).extension<AppColors>()!;
     final announcementsAsync = ref.watch(activeAnnouncementsProvider);
     final announcement = announcementsAsync.valueOrNull
-        ?.where((a) => a.isForceUpdate)
+        ?.where((a) =>
+            a.isForceUpdate &&
+            (kAppVersion.isEmpty || a.targetsVersion(kAppVersion)))
         .firstOrNull;
 
     // The announcement's own language, not always Arabic. This screen blocks
