@@ -330,6 +330,21 @@ export const OTP_CODE = new RegExp(
     '|(?:الرمز|رمزك|رمز|الكود|كود)\\s*:?\\s*[0-9]{4,8}\\s+ل',
 );
 
+// PR-05: a code that authorises a payment (OTP_CODE), unless it is only
+// mentioned after a completed transaction sentence ("Purchase SAR 250.00 at
+// SHOPX. Pickup code 4829. Valid until 18:00"): a sentence before the code
+// with an amount and a money word. Mirrors ParserEngine.isPurchaseCode.
+export function isPurchaseCode(lower: string): boolean {
+  const m = OTP_CODE.exec(lower);
+  if (!m) return false;
+  const prefix = lower.slice(0, m.index);
+  const cuts = [...prefix.matchAll(/[\n!?؟]|\.(?![0-9])/g)];
+  if (cuts.length === 0) return true;
+  const last = cuts[cuts.length - 1];
+  const done = prefix.slice(0, last.index! + last[0].length);
+  return !(/[0-9]/.test(done) && hasMoneyWord(done));
+}
+
 // OR-03: a figure introduced by a limit, balance, remaining, outstanding or
 // minimum-due label (English and Arabic) is never the transaction amount
 // (mirrors the balance / limit labels of ParserEngine._classifyAmountCandidate).
@@ -344,6 +359,60 @@ export const LABELLED_FIGURE = new RegExp(
     '(?:(?!مبلغ|بقيمة|amount|amt|debited|credited|deducted|paid|transfer|خصم|تحويل|إيداع|ايداع)[^0-9\n|;]){0,32}[0-9][0-9,]*(?:\\.[0-9]+)?',
   'gi',
 );
+
+// PR-03: a labelled figure is the transaction amount when a completed
+// movement in the same clause acts on it: a verb before the label ("تم سداد
+// المبلغ المستحق 500", "Debited from your balance SAR 75"), an English verb
+// between the label and the figure ("Outstanding amount settled SAR 1,200")
+// or right after the figure ("Minimum payment SAR 115.00 has been paid"),
+// with no other number in between. Mirrors
+// ParserEngine.movementActsOnFigure.
+const CLAUSE_CUT = /[\n;!?؟؛،]|, |\.(?![0-9])/g;
+const MOVEMENT_LATIN = [
+  'paid', 'settled', 'received', 'debited', 'deducted', 'charged',
+  'transferred', 'credited', 'withdrawn', 'collected', 'recharged',
+  'recharge', 'top up', 'topped up',
+];
+const MOVEMENT_ARABIC = [
+  'سداد', 'سدد', 'خصم', 'خُصم', 'شراء', 'شحن', 'دفع', 'تحويل', 'قيد',
+  'إيداع', 'ايداع', 'استلام', 'سحب',
+];
+function latinVerb(s: string): boolean {
+  return MOVEMENT_LATIN.some((v) => new RegExp(`(?<![a-z])${v}(?![a-z])`).test(s));
+}
+export function movementActsOnFigure(l: string, labelAt: number, start: number, end: number): boolean {
+  let cs = 0;
+  let ce = l.length;
+  for (const m of l.matchAll(CLAUSE_CUT)) {
+    const ms = m.index!, me = ms + m[0].length;
+    if (me <= start) cs = me;
+    if (ms >= end && ce === l.length) ce = ms;
+  }
+  if (labelAt < cs) labelAt = cs;
+  if (latinVerb(l.slice(end, ce).split(/[0-9]/)[0])) return true;
+  const head = l.slice(cs, start);
+  const lastDigit = head.search(/[0-9][^0-9]*$/);
+  const free = lastDigit < 0 ? cs : cs + lastDigit + 1;
+  if (labelAt >= free && latinVerb(l.slice(labelAt, start))) return true;
+  // "after <Arabic verb>" ("رصيدك بعد إيداع 1,000"), not "موعد سداد".
+  if (labelAt >= free) {
+    const mid = l.slice(labelAt, start);
+    if (MOVEMENT_ARABIC.some((v) => mid.includes(`بعد ${v}`))) return true;
+  }
+  if (labelAt <= free) return false;
+  const before = l.slice(free, labelAt);
+  return latinVerb(before) || MOVEMENT_ARABIC.some((v) => before.includes(v));
+}
+
+/** [text] with every labelled account figure (LABELLED_FIGURE) that no
+ * completed movement acts on (movementActsOnFigure) blanked out. */
+export function maskAccountFigures(text: string): string {
+  const lower = text.toLowerCase();
+  return text.replace(LABELLED_FIGURE, (m: string, offset: number) => {
+    const numAt = offset + m.search(/[0-9][0-9,]*(?:\.[0-9]+)?$/);
+    return movementActsOnFigure(lower, offset, numAt, offset + m.length) ? m : ' ';
+  });
+}
 
 export const NON_TRANSACTION_KEYWORDS = rules.nonTransactionKeywords as string[];
 export const NOTICE_KEYWORDS = rules.noticeKeywords as string[];
@@ -394,7 +463,7 @@ export function validateAiCandidate(input: {
   if (!amountGrounded(c.amount, text)) return reject('amount_not_grounded');
   // OR-03 — a limit, balance or minimum-due figure is never the amount.
   const ascii = text.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660));
-  if (!amountGrounded(c.amount, ascii.replace(LABELLED_FIGURE, ' '))) return reject('amount_is_account_figure');
+  if (!amountGrounded(c.amount, maskAccountFigures(ascii))) return reject('amount_is_account_figure');
   const amount = c.amount as number;
   const currency = (c.currency ?? '').trim().toUpperCase();
   if (local) {

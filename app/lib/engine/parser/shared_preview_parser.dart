@@ -122,14 +122,17 @@ class SharedPreviewParser {
     // account notices with no money movement: NR-01) also get the generic
     // preview, and so does a purchase code (OR-05) — but not a purchase that
     // names its amount next to a notice line (OR-03). (The Swift preview
-    // still matches the asset's list by substring.)
+    // still matches the asset's list by substring.) Round 9: a message the
+    // device records anyway (a purchase with a receipt code or a notice
+    // footer) keeps the detailed preview.
     final merchant = _extractMerchant(normalized);
     final outside = ParserEngine.outsideMerchant(lower, merchant);
-    if (_ignoreKeywords
-            .any((k) => ParserEngine.containsIgnoreWord(outside, k)) ||
-        ParserEngine.hasIgnoreWord(outside) ||
-        ParserEngine.isNonTransactionText(text, merchant: merchant) ||
-        TransactionStateCues.isNotCompleted(text)) {
+    if (TransactionStateCues.isNotCompleted(text) ||
+        ((_ignoreKeywords
+                    .any((k) => ParserEngine.containsIgnoreWord(outside, k)) ||
+                ParserEngine.hasIgnoreWord(outside) ||
+                ParserEngine.isNonTransactionText(text, merchant: merchant)) &&
+            !const ParserEngine().parse(text).isTransaction)) {
       return const PreviewResult(outcome: PreviewOutcome.ignored);
     }
 

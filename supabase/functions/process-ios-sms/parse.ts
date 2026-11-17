@@ -10,10 +10,10 @@ import {
   last4Grounded,
   type LocalCandidate,
   merchantGrounded,
-  LABELLED_FIGURE,
+  maskAccountFigures,
   NON_TRANSACTION_KEYWORDS,
   NOTICE_KEYWORDS,
-  OTP_CODE,
+  isPurchaseCode,
   outsideMerchant,
   REDACTION_PLACEHOLDER,
   validateAiCandidate,
@@ -110,26 +110,44 @@ export function isResolved(p: ParsedCapture): boolean {
 // optional plural/inflection ending ("offers", "promotional"), so "Hotpot" is
 // not an OTP; Arabic phrases and URL prefixes keep substring matching. A word
 // inside the merchant span ("Offer Mart", "Won Kitchen") is part of a name.
-// An ignoreKeywords word rejects the message with no AI. NR-01: a
-// nonTransactionKeywords word (a link, a complaint line, an account notice:
-// credit limit, card activation, statement, PIN) rejects it only when the
-// message names no money movement anywhere (no moneyKeywords word):
-// "Purchase … Available credit limit …" and "Card
-// renewal fee … deducted" are read as transactions. Mirrors
-// ParserEngine._isIgnored / _isNotice.
-// OR-01: a noticeKeywords word (an account notice) never rejects a message
-// that names an amount with its currency: that one goes on to the
-// deterministic parse and, unresolved, to the AI and its validator (as
-// before NR-01), so a completed fee or posting with a notice line is never
-// dropped with no AI. Mirrors ParserEngine.isIgnoredMessage.
+// An ignoreKeywords word rejects the message with no AI. Mirrors
+// ParserEngine._isIgnored.
+// PR-02: no other word makes a message IGNORED. A nonTransactionKeywords or
+// noticeKeywords word (a link, a complaint line, an account notice) in a
+// message that names no money movement (no moneyKeywords word) only leaves it
+// unresolved (isNonTransactionShaped): the AI and its validator, then the
+// device on its own path.
 function isIgnoredText(normalized: string): boolean {
-  const all = normalized.toLowerCase();
-  const lower = outsideMerchant(all, extractMerchant(normalized));
-  const has = (words: string[]) => words.some((w) => containsIgnoreWord(lower, w));
-  return has(rules.ignoreKeywords as string[]) ||
-    (has(NON_TRANSACTION_KEYWORDS) && !hasMoneyWord(all)) ||
-    (has(NOTICE_KEYWORDS) && !hasMoneyWord(all) && !AMOUNT_WITH_CURRENCY.test(normalized)) ||
+  const lower = outsideMerchant(normalized.toLowerCase(), extractMerchant(normalized));
+  return (rules.ignoreKeywords as string[]).some((w) => containsIgnoreWord(lower, w)) ||
     isDeclinedText(normalized);
+}
+
+// Only a word in the sentence that carries the amount counts ("Card *4521
+// used for SAR 45 at Test Diner. Card activated" is a purchase). Mirrors
+// ParserEngine._amountSentence.
+function isNonTransactionShaped(normalized: string, scope: string): boolean {
+  const all = normalized.toLowerCase();
+  const lower = outsideMerchant(scope.toLowerCase(), extractMerchant(normalized));
+  return [...NON_TRANSACTION_KEYWORDS, ...NOTICE_KEYWORDS].some((w) => containsIgnoreWord(lower, w)) &&
+    !hasMoneyWord(all);
+}
+
+function amountSentence(masked: string): string {
+  for (const pattern of rules.amountPatterns as string[]) {
+    const m = new RegExp(pattern, 'i').exec(masked);
+    if (!m?.[1]) continue;
+    const at = m.index + m[0].indexOf(m[1]);
+    let from = 0;
+    let to = masked.length;
+    for (const c of masked.matchAll(/[\n!?؟;؛]|\.(?![0-9])/g)) {
+      const cs = c.index!, ce = cs + c[0].length;
+      if (ce <= at) from = ce;
+      if (cs >= at + m[1].length && to === masked.length) to = cs;
+    }
+    return masked.slice(from, to);
+  }
+  return masked;
 }
 
 
@@ -451,18 +469,18 @@ export function deterministicParse(
   }
 
   const currency = extractCurrency(normalized);
-  const amountFields = extractCaptureAmount(
-    normalized.replace(UP_TO_AMOUNT, ' ').replace(LABELLED_FIGURE, ' '),
-    rules.amountPatterns as string[],
-    currency,
-  );
+  const masked = maskAccountFigures(normalized.replace(UP_TO_AMOUNT, ' '));
+  const amountFields = extractCaptureAmount(masked, rules.amountPatterns as string[], currency);
   const amount = amountFields.amount;
   const merchant = extractMerchant(normalized);
   const last4 = extractFirstGroup(normalized, rules.last4Patterns as string[]);
   // OR-05: a purchase code ("482913 is your code for the purchase of …")
   // authorises a payment that has not happened: no direction, so never
-  // resolved; the AI candidate validator rejects it as well.
-  const direction = OTP_CODE.test(lower) ? 'unknown' : detectDirection(lower);
+  // resolved; the AI candidate validator rejects it as well. PR-02: so is
+  // an account notice or marker with no money word (never IGNORED).
+  const direction = isPurchaseCode(lower) || isNonTransactionShaped(normalized, amountSentence(masked))
+    ? 'unknown'
+    : detectDirection(lower);
   const type = direction === 'credit' ? (isRefundText(lower) ? 'refund' : 'income')
     : direction === 'debit' ? 'payment' : 'unknown';
   const category = type === 'income' ? 'income' : inferCategory(merchant, type);
@@ -679,10 +697,6 @@ function extractMerchant(text: string): string | undefined {
 
 const UP_TO_AMOUNT = /(?:up ?to|يصل إلى|يصل الى|تصل إلى|تصل الى)[^0-9\n]{0,12}[0-9][0-9,]*(?:\.[0-9]+)?/gi;
 
-const CURRENCY_ALT = 'SAR|AED|EGP|QAR|OMR|KWD|BHD|JOD|USD|EUR|GBP|JPY';
-const AMOUNT_WITH_CURRENCY = new RegExp(
-  `(?<![A-Za-z])(?:${CURRENCY_ALT}) ?[0-9]|[0-9] ?(?:${CURRENCY_ALT})(?![A-Za-z])`, 'i');
-
 function extractFirstGroup(text: string, patterns: string[]): string | undefined {
   for (const pattern of patterns) {
     const match = new RegExp(pattern, 'i').exec(text);
@@ -702,10 +716,18 @@ function creditWordsOnly(lower: string): string {
     .map((clause) => hypothetical.test(foldForCues(clause)) ? ' '.repeat(clause.length) : clause).join('');
 }
 
+// PR-04: a standing order names the instrument, not the side: "Standing
+// order SAR 1,000.00 received from Ali" is a credit. It reads as a debit only
+// when nothing else in the message names a direction. "Direct debit refund"
+// likewise names the instrument of a credit.
+const INSTRUMENT_DEBIT = ['standing order', 'أمر مستديم', 'direct debit'];
 function detectDirection(lower: string): 'credit' | 'debit' | 'unknown' {
-  const debit = earliest(lower, rules.debitKeywords as string[]);
+  const debit = earliest(
+    lower.replaceAll('direct debit', ' '.repeat('direct debit'.length)),
+    (rules.debitKeywords as string[]).filter((k) => !INSTRUMENT_DEBIT.includes(k)),
+  );
   const credit = earliest(creditWordsOnly(lower), rules.creditKeywords as string[]);
-  if (debit == null && credit == null) return 'unknown';
+  if (debit == null && credit == null) return earliest(lower, INSTRUMENT_DEBIT) == null ? 'unknown' : 'debit';
   if (credit == null) return 'debit';
   if (debit == null) return 'credit';
   return debit <= credit ? 'debit' : 'credit';
@@ -721,7 +743,10 @@ function isRefundText(lower: string): boolean {
 function earliest(lower: string, keywords: string[]): number | null {
   let result: number | null = null;
   for (const keyword of keywords) {
-    const index = lower.indexOf(keyword.toLowerCase());
+    // "POS" as a word: "posted to your account" is not a card payment.
+    const index = keyword === 'pos'
+      ? lower.search(/(?<![a-z])pos(?![a-z])|posted(?! to (?:your )?account)/)
+      : lower.indexOf(keyword.toLowerCase());
     if (index >= 0 && (result == null || index < result)) result = index;
   }
   return result;

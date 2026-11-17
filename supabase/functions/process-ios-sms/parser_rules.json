@@ -40,7 +40,7 @@
     "prize",
     "winner"
   ],
-  "_nonTransactionReadme": "LR-04/LR-05/NR-01: words that make a message not a money movement ONLY when it names no money movement anywhere (no moneyKeywords word and no debit/credit direction): links, calls to action, complaint lines, further promotions, and account notices (credit limit, card activation/renewal, statements, PIN, beneficiary). A bank SMS puts these on real purchases, salaries and fees, so they never reject a message that does name one (isIgnoredText) and never make the AI candidate validator reject it. A word inside the merchant span ('Offer Mart') does not count. With ignoreKeywords equal, as a set, to the device's securityIgnoreWords + promotionWords + ignoreMarkers (drift test transaction_state_cues_drift_test.dart); the account notices are noticeKeywords (OR-01).",
+  "_nonTransactionReadme": "LR-04/LR-05/NR-01: words that make a message not a money movement ONLY when it names no money movement anywhere (no moneyKeywords word and no debit/credit direction): links, calls to action, complaint lines, further promotions, and account notices (credit limit, card activation/renewal, statements, PIN, beneficiary). A bank SMS puts these on real purchases, salaries and fees, so they never make the AI candidate validator reject a message that does name one. PR-02: they never make a message IGNORED either: with no money word the message is left unresolved (deterministicParse), for the AI and its validator. A word inside the merchant span ('Offer Mart') does not count. With ignoreKeywords equal, as a set, to the device's securityIgnoreWords + promotionWords + ignoreMarkers (drift test transaction_state_cues_drift_test.dart); the account notices are noticeKeywords (OR-01).",
   "nonTransactionKeywords": [
     "chequebook",
     "cheque book",
@@ -59,11 +59,11 @@
     "تم إغلاق",
     "offer",
     "won",
-    "winning",
     "اربح"
   ],
-  "_noticeReadme": "OR-01: account notices (credit limit, card activation/renewal, statements, PIN, beneficiary), equal to the device's ParserEngine.noticeWords (drift test). Like nonTransactionKeywords they count only in a message with no moneyKeywords word, and in addition only when the message names no amount with its currency: a notice that names an amount is never rejected with no AI (isIgnoredText), it goes on to the deterministic parse and the AI candidate validator.",
+  "_noticeReadme": "OR-01: account notices (credit limit, card activation/renewal, statements, PIN, beneficiary), equal to the device's ParserEngine.noticeWords (drift test). Like nonTransactionKeywords they count only in a message with no moneyKeywords word, and never make it IGNORED (PR-02): such a message is left unresolved, for the AI and its validator.",
   "noticeKeywords": [
+    "winning",
     "credit limit",
     "card limit",
     "الحد الائتماني",
@@ -479,7 +479,25 @@
     "refund",
     "salary",
     "reversal",
-    "reversed"
+    "reversed",
+    "transfer in:",
+    "payroll",
+    "wages",
+    "cashback",
+    "posted to your account",
+    "posted to account",
+    "into your account",
+    "into account",
+    "added to your account",
+    "landed in your account",
+    "arrived in account",
+    "arrived in your account",
+    "topped up",
+    "you got",
+    "sent to you",
+    "أودع",
+    "لحسابك",
+    "وصلك"
   ],
   "amountPatterns": [
     "(?:بمبلغ|بقيمة|مبلغ|قيمة)[\\s:]*([0-9][0-9,]*(?:\\.[0-9]+)?)",

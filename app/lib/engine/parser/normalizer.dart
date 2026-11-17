@@ -42,6 +42,11 @@ class Normalizer {
   /// fallback, and `دينار كويتي`/`دينار بحريني` before any bare `دينار`.
   static String normalizeCurrencyTokens(String input) {
     return input
+        // Round 9: "Saudi Riyals" (once read as AUD, a substring of "Saudi").
+        .replaceAll(
+            RegExp(r'(?<![A-Za-z])saudi riyals?(?![A-Za-z])',
+                caseSensitive: false),
+            'SAR')
         .replaceAll(RegExp(r'ر\.س\.?', caseSensitive: false), 'SAR')
         .replaceAll(RegExp(r'ر\.ع\.?', caseSensitive: false), 'OMR')
         .replaceAll(RegExp(r'ر\.ق\.?', caseSensitive: false), 'QAR')

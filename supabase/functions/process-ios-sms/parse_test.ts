@@ -516,7 +516,7 @@ Deno.test('declined table: not completed is never confirmed money, on every serv
   };
   type Row = {
     text: string; expect: string; server?: string; device?: string; ai?: string; defect?: string; amount?: number;
-    foreign?: { amount: number; currency: string };
+    currency?: string; foreign?: { amount: number; currency: string };
   };
   // Round 8 (item 6): the set of deviating rows is pinned by the allowlist.
   const key = (c: Omit<Row, 'expect'>) => JSON.stringify([c.text, c.device ?? null, c.server ?? null, c.ai ?? null, c.defect ?? null]);
@@ -526,15 +526,23 @@ Deno.test('declined table: not completed is never confirmed money, on every serv
   assertEquals(new Set(deviating.map(key)), new Set((declinedDeviations.rows as Omit<Row, 'expect'>[]).map(key)));
   // OR-03: a resolved completed row carries the table's amount (or, for a
   // foreign purchase, the foreign amount in its own currency).
+  // Round 9: and the currency the text names.
   const amountOk = (c: Row, p: { amount?: number; currency?: string }) =>
-    Math.abs((p.amount ?? NaN) - c.amount!) < 0.005 ||
+    (Math.abs((p.amount ?? NaN) - c.amount!) < 0.005 && (!c.currency || !!c.foreign || p.currency === c.currency)) ||
     (!!c.foreign && p.currency === c.foreign.currency && Math.abs((p.amount ?? NaN) - c.foreign.amount) < 0.005);
   for (const c of declinedTable.cases as Row[]) {
     const text = c.text;
     if (c.expect.startsWith('completed_')) {
       assertEquals(typeof c.amount, 'number', `amount: ${text}`);
       assert(!['ignored', 'dropped'].includes(c.server ?? ''), `never silent: ${text}`);
+      // Round 9: never ignored on device, and never the opposite direction.
+      assert(c.device !== 'ignored', `device never silent: ${text}`);
+      const credit = ['completed_credit', 'completed_income', 'completed_transfer_in'];
+      if (c.device?.startsWith('completed_')) {
+        assertEquals(credit.includes(c.device), credit.includes(c.expect), `device direction: ${text}`);
+      }
     }
+    assertEquals(c.defect, undefined, `no open defect: ${text}`);
     // V1-RES5 (NR-05): expect is the true outcome; server is this side's
     // outcome where it knowingly differs (never a total change).
     const expected = c.server ?? c.expect;
@@ -610,4 +618,34 @@ Deno.test('a refund offer "up to SAR 50" is not a resolved credit', () => {
   }
   const real = deterministicParse('Refund of SAR 99.00 from SHOP TWO. It may take up to 5 days', RECEIVED, 180);
   assertEquals([isResolved(real), real.amount, real.type], [true, 99, 'refund']);
+});
+
+// Round 9 regressions (PR-01..PR-05), synthetic text.
+Deno.test('round 9: notice words are never ignored; credits are credits; labelled figures a verb acts on', () => {
+  const r = (t: string) => deterministicParse(t, RECEIVED, 180);
+  // PR-02: a notice word leaves the text to the AI (unresolved), never IGNORED.
+  for (const t of ['Congratulations, you are the winning customer of SAR 1,000']) {
+    const p = r(t);
+    assert(!(p.confidence === 0 && p.amount === undefined && p.type === undefined), t);
+    assertEquals(isResolved(p), false, t);
+  }
+  // PR-01 / PR-04: incoming money, a standing order received, a direct debit refund.
+  for (const [t, amount] of [
+    ['Payroll SAR 12,000.00 to account *5678 from Test Corp', 12000],
+    ['SAR 300.00 posted to your account *5678 from Ali', 300],
+    ['وصلك مبلغ 750 ريال من علي', 750],
+    ['Standing order SAR 1,000.00 received from Ali', 1000],
+    ['Direct debit refund SAR 89.00 to account *5678', 89],
+  ] as const) {
+    const p = r(t);
+    assertEquals([p.direction, p.amount], ['credit', amount], t);
+  }
+  // A card posting and a plain standing order are still debits.
+  assertEquals(r('SAR 300.00 posted to card *4521 - Test Hotel').direction, 'debit');
+  assertEquals(r('Standing order SAR 1,000.00 to Ali executed').direction, 'debit');
+  // PR-03 / PR-05.
+  assertEquals([r('Due amount SAR 230 for Test Telecom paid successfully').amount], [230]);
+  const code = r('Purchase of SAR 250.00 at SHOPX completed. Approval code 4829 for the purchase');
+  assertEquals([code.direction, code.amount], ['debit', 250]);
+  assertEquals(isResolved(r('تذكير: موعد سداد 1,200 ريال لبطاقتك *1234 بتاريخ 25/11')), false);
 });

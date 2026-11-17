@@ -272,6 +272,14 @@ bool localParseContradictsServer({
     ParserEngine.isNoticeMessage(text, senderId: senderId) ||
     localParseOpposesDirection(
         text: text, direction: direction, type: type, senderId: senderId) ||
+    // PR-04 — the wording alone names the opposite direction, even when the
+    // device reads no transaction (no sender): "Standing order SAR 1,000.00
+    // received from Ali" is never a confirmed payment.
+    _contradicts(
+        DirectionSignal.detect(text),
+        _asDirection(direction) != TxnDirection.unknown
+            ? _asDirection(direction)
+            : _directionOfType(type)) ||
     (amount != null &&
         _localAmountDiffers(text, amount.toDouble(), senderId: senderId));
 
@@ -280,7 +288,13 @@ bool _localAmountDiffers(String text, double amount, {String? senderId}) {
   if (!local.isTransaction) return false;
   final t = local.transaction!;
   bool same(double? v) => v != null && (v - amount).abs() < 0.005;
-  return !same(t.amount) && !same(t.foreignAmount);
+  if (same(t.amount) || same(t.foreignAmount)) return false;
+  // PR-06 — another amount the text names with its currency (a foreign or
+  // local equivalent the device did not pair: "EUR 35.00 … Amount in SAR
+  // 143.20") is the server's honest reading, unless it is an account figure
+  // (a limit, a balance). An unreadable server amount (NaN) never matches.
+  return !(captureAmountTokens(text).any((v) => same(double.tryParse(v))) &&
+      !ParserEngine.isAccountFigure(text, amount));
 }
 
 DateTime? _inWindow(String? iso, DateTime receivedAt) {

@@ -43,9 +43,10 @@ void main() {
       'review',
       'not_completed',
       'transfer',
-      // OR-03 / item 6: open wrong-direction defects ([defect] rows only).
-      'completed_payment',
-      'completed_withdrawal',
+      // Round 9: no amount read (a bank sender's Smart Inbox card), and an
+      // incoming transfer recorded as income (same direction).
+      'dropped',
+      'completed_income',
     });
   });
 
@@ -77,18 +78,27 @@ void main() {
       final completed = (c['expect'] as String).startsWith('completed_');
       if (!completed) continue;
       expect(c['amount'], isA<num>(), reason: '${c['text']}');
-      // Completed rows are run with a bank sender: never silent.
-      expect(['dropped', 'ignored'], isNot(contains(c['device'])),
-          reason: '${c['text']}');
+      // Completed rows are run with a bank sender: never ignored (silent).
+      // ('dropped' = no amount read: a Smart Inbox card, asserted below.)
+      expect(c['device'], isNot('ignored'), reason: '${c['text']}');
       expect(['dropped', 'ignored'], isNot(contains(c['server'])),
           reason: '${c['text']}');
+      // Round 9 (PR-01): another recorded outcome is only ever the same
+      // direction — a credit row never deviates to a payment or withdrawal,
+      // a debit row never to income or a refund. No open defects remain.
+      const credit = {
+        'completed_credit',
+        'completed_income',
+        'completed_transfer_in'
+      };
       final device = c['device'] as String?;
       if (device != null && device.startsWith('completed_')) {
-        // Another recorded outcome is a wrong direction: an open defect.
-        expect(c['defect'], isA<String>(), reason: '${c['text']}');
-      } else {
-        expect(c['defect'], isNull, reason: '${c['text']}');
+        expect(credit.contains(device), credit.contains(c['expect']),
+            reason: '${c['text']}');
       }
+    }
+    for (final c in cases) {
+      expect(c['defect'], isNull, reason: '${c['text']}');
     }
   });
 
@@ -96,6 +106,7 @@ void main() {
     final text = c['text'] as String;
     final expected = (c['device'] ?? c['expect']) as String;
     final review = expected == 'not_completed';
+    final completed = (c['expect'] as String).startsWith('completed_');
 
     test('[${c['src']}] ${c['expect']}/$expected: $text', () {
       expect(TransactionStateCues.isNotCompleted(text), review,
@@ -128,8 +139,22 @@ void main() {
       // OR-03: a recorded completed row carries the table's amount (never a
       // limit, balance or code figure).
       if (r.isTransaction && (c['expect'] as String).startsWith('completed_')) {
-        expect(r.transaction!.amount, closeTo((c['amount'] as num), 0.005),
-            reason: 'amount');
+        // (or, for a foreign purchase, the foreign amount in its currency,
+        // as on the server).
+        final foreign = c['foreign'] as Map<String, dynamic>?;
+        if (foreign != null &&
+            r.transaction!.currency == foreign['currency']) {
+          expect(r.transaction!.amount,
+              closeTo((foreign['amount'] as num), 0.005),
+              reason: 'amount');
+        } else {
+          expect(r.transaction!.amount, closeTo((c['amount'] as num), 0.005),
+              reason: 'amount');
+        }
+        // Round 9: and the currency the text names.
+        if (c['currency'] != null && foreign == null) {
+          expect(r.transaction!.currency, c['currency'], reason: 'currency');
+        }
       }
       switch (expected) {
         case 'not_completed':
@@ -175,10 +200,24 @@ void main() {
       // advice contains a cue word is not reduced to the generic one.
       // (The Swift preview still matches the asset's list by substring.)
       final p = preview.parse(text);
-      if (review) {
+      // Round 9: nothing recorded (no amount read) never gets the detailed
+      // preview either.
+      if (expected == 'dropped' && completed) {
+        // A completed movement whose amount the device does not read: the
+        // preview may still describe it.
+      } else if (review || expected == 'dropped') {
         expect(p.isHighConfidence, isFalse, reason: 'preview');
-      } else {
-        expect(p.outcome, isNot(PreviewOutcome.ignored), reason: 'preview');
+      } else if (p.outcome == PreviewOutcome.ignored) {
+        // Round 9: the sender-less preview stays generic only for a text the
+        // sender-less engine does not record (recorded with the bank's
+        // profile) and that an ignore or notice word holds back.
+        expect(engine.parse(text).isTransaction, isFalse, reason: 'preview');
+        expect(
+            ParserEngine.hasIgnoreWord(text.toLowerCase()) ||
+                ParserEngine.isNoticeMessage(text) ||
+                ParserEngine.isNonTransactionText(text),
+            isTrue,
+            reason: 'preview');
       }
 
       // AI-validated and AI-primary candidates, in either direction.

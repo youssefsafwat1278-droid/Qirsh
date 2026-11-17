@@ -584,9 +584,12 @@ class CaptureImportService {
       direction: p['direction'] is String ? p['direction'] as String : null,
       type: p['type'] is String ? p['type'] as String : null,
       senderId: item.sender,
+      // PR-06: an amount the device cannot read is never taken as agreeing.
       amount: p['amount'] is num
           ? p['amount'] as num
-          : (p['amount'] is String ? num.tryParse(p['amount'] as String) : null),
+          : (p['amount'] is String
+              ? num.tryParse(p['amount'] as String) ?? double.nan
+              : null),
     );
   }
 

@@ -24,8 +24,10 @@ class ParserEngine {
   // but the normaliser cannot un-glue (or vice versa) is exactly the gap that
   // let `SAR129.90` parse as `90`.
   static const String _currencyPattern = Normalizer.isoCurrencyAlternation;
-  static final RegExp _currency =
-      RegExp('(?:$_currencyPattern)', caseSensitive: false);
+  // Round 9: a code as a word ("Mada purchase … SAR" is not MAD).
+  static final RegExp _currency = RegExp(
+      '(?<![A-Za-z])(?:$_currencyPattern)(?![A-Za-z])',
+      caseSensitive: false);
   static final RegExp _last4Star = RegExp(r'\*{2,}\s*([0-9]{4})');
   static final RegExp _last4SingleStar = RegExp(r'\*\s*([0-9]{4})');
   static final RegExp _last4TrailingStar = RegExp(
@@ -162,17 +164,13 @@ class ParserEngine {
     final outside = outsideMerchant(lower,
         engine._extractMerchantAndSource(text.split('\n'), bank: bank)
             .merchant);
-    if (!engine._isIgnored(outside, bank) &&
-        (!engine._isNotice(lower, outside, bank) ||
-            // OR-01 — an account notice is silent only when it names no
-            // amount at all: one with an amount and currency stays visible
-            // (review, or a Smart Inbox card), whatever words it uses.
-            _amountWithCurrency.hasMatch(lower))) {
-      return false;
-    }
+    // PR-02 — only the original ignore words (security, promotions, the
+    // ignore markers) can make a message silent. An account notice word
+    // never does: such a message is a review row or, with no amount, the
+    // drop it always was (a Smart Inbox card with a bank sender).
+    if (!engine._isIgnored(outside, bank)) return false;
     // FR-13: an ignore word on a message the parser reads as a transaction
-    // (and that is not an OTP code) goes to review instead of being dropped;
-    // so does an account notice that names an amount (NR-01).
+    // (and that is not an OTP code) goes to review instead of being dropped.
     return !engine
         .parse(rawText, senderId: senderId, bankProfiles: bankProfiles)
         .amountDetected;
@@ -329,7 +327,7 @@ class ParserEngine {
   /// Promotions: an ignore word like the security words and [ignoreMarkers].
   static const List<String> promotionWords = [
     'عرض خاص', 'promo', 'promotion', 'marketing', 'offer', 'coupon', 'prize',
-    'winner', 'won', 'winning', 'مبروك', 'جائزة', 'اربح',
+    'winner', 'won', 'مبروك', 'جائزة', 'اربح',
   ];
 
   /// LR-04 / NR-01 — account notices (a credit limit, a card activation, a
@@ -340,6 +338,8 @@ class ParserEngine {
   /// server's `ignoreKeywords`, are `nonTransactionKeywords` in
   /// `process-ios-sms/parser_rules.json` (drift test).
   static const List<String> noticeWords = [
+    // An advert's "winning" (never silent: not an original ignore word).
+    'winning',
     // Limits, card activation / issuance / renewal.
     'credit limit', 'card limit', 'الحد الائتماني', 'حد الائتمان',
     'حد البطاقة', 'activated', 'activation', 'is now active', 'تم تفعيل',
@@ -427,6 +427,47 @@ class ParserEngine {
     r'|(?:الرمز|رمزك|رمز|الكود|كود)\s*:?\s*[0-9]{4,8}\s+ل',
   );
 
+  /// The sentence of [lower] that holds the transaction [amount] (the whole
+  /// message when it cannot be found).
+  static String _amountSentence(
+      String lower, _AmountExtraction extraction, double amount) {
+    for (final c in extraction.candidates) {
+      if (c.kind != AmountCandidateKind.transactionAmount ||
+          (c.value - amount).abs() >= 0.005) {
+        continue;
+      }
+      final line = c.line.toLowerCase();
+      final at = line.indexOf(c.raw.toLowerCase());
+      if (at < 0) break;
+      var from = 0;
+      var to = line.length;
+      for (final m in _sentenceCut.allMatches(line)) {
+        if (m.end <= at) from = m.end;
+        if (m.start >= at + c.raw.length && to == line.length) to = m.start;
+      }
+      return line.substring(from, to);
+    }
+    return lower;
+  }
+
+  static final RegExp _sentenceCut = RegExp(r'[!?؟;؛]|\.(?![0-9])');
+
+  /// OR-05 / PR-05 — [lower] holds a code that authorises a payment
+  /// ([_otpCode]) that is not merely mentioned after a completed transaction
+  /// sentence ("Purchase SAR 250.00 at SHOPX. Pickup code 4829. Valid until
+  /// 18:00", "شراء 250 ريال لدى SHOPX. الرمز 4829 للاستفسار"): a sentence
+  /// before the code with an amount and a money word. Mirrors
+  /// `isPurchaseCode` in `_shared/ai_candidate_validator.ts`.
+  static bool isPurchaseCode(String lower) {
+    final m = _otpCode.firstMatch(lower);
+    if (m == null) return false;
+    final prefix = lower.substring(0, m.start);
+    final cut = RegExp(r'[\n!?؟]|\.(?![0-9])').allMatches(prefix);
+    if (cut.isEmpty) return true;
+    final done = prefix.substring(0, cut.last.end);
+    return !(RegExp('[0-9]').hasMatch(done) && hasMoneyWord(done));
+  }
+
   /// OR-03 — labels of an account figure that is not the amount that moved:
   /// a credit or card limit, what remains or is outstanding, a minimum due.
   /// Read like a balance label ([AmountCandidateKind.balance]): never the
@@ -486,7 +527,7 @@ class ParserEngine {
     // OR-05 — a purchase code with no security word ("482913 is your code
     // for the purchase of SAR 250.00") authorises a payment that has not
     // happened: never recorded, a review row.
-    if (_otpCode.hasMatch(lower)) {
+    if (isPurchaseCode(lower)) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
@@ -536,7 +577,16 @@ class ParserEngine {
     // LR-04 / NR-01 — an account notice that names an amount but no money
     // movement ("Your credit limit is SAR 15,000"): never recorded, never
     // dropped silently — a review row.
-    if (!ignored && catalogMatch == null && _isNotice(lower, ignoreText, bank)) {
+    // PR-02: only a notice word in the sentence that carries the amount
+    // counts ("Card *4521 used for SAR 45 at Test Diner. Card activated" is
+    // a purchase).
+    if (!ignored &&
+        catalogMatch == null &&
+        _isNotice(
+            lower,
+            outsideMerchant(_amountSentence(lower, amountExtraction, amount),
+                merchantResult.merchant),
+            bank)) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
@@ -614,6 +664,13 @@ class ParserEngine {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
+    // PR-08 — no type, and the wording names money both in and out: a
+    // review row, never a pre-filled payment.
+    if (type == TransactionType.unknown &&
+        DirectionSignal.isMixed(_factualClauses(text))) {
+      return ParseResult.notTransaction(
+          bankKey: bank?.bankKey, amountDetected: true);
+    }
 
     final txn = ParsedTransaction(
       amountText: catalogMatch?.amountText != null && ruleAmount != null
@@ -688,6 +745,12 @@ class ParserEngine {
     ])) {
       return TransactionType.refund;
     }
+    // PR-08 — a deposit at an ATM ("إيداع ATM", "Cash deposit … via ATM") is
+    // money in; only a withdrawal word makes an ATM message a withdrawal.
+    if (_containsAny(lower, ['إيداع', 'ايداع', 'deposit']) &&
+        !_containsAny(lower, ['سحب', 'withdraw'])) {
+      return TransactionType.income;
+    }
     if (_containsAny(lower, ['سحب', 'صراف', 'atm'])) {
       return TransactionType.withdrawal;
     }
@@ -704,7 +767,6 @@ class ParserEngine {
       'purchase',
       'payment',
       'نقاط بيع',
-      'pos',
       'trx.',
       'trx of',
       'trx. of',
@@ -712,6 +774,10 @@ class ParserEngine {
       'transaction of',
       'debit card',
     ])) {
+      return TransactionType.payment;
+    }
+    // "POS" as a word: "posted to your account" is not a card payment.
+    if (RegExp(r'(?<![a-z])pos(?![a-z])|posted(?! to (?:your )?account)').hasMatch(lower)) {
       return TransactionType.payment;
     }
     return TransactionType.unknown;
@@ -1068,7 +1134,8 @@ class ParserEngine {
         // OR-05: "482913 is your code …", "482913 هو رمز …".
         _codeSubject.hasMatch(l.substring(start)) ||
         _hasNearbyKeyword(l, start, feeWords, before: 24, after: 12) ||
-        _hasNearbyKeyword(l, start, totalDueWords, before: 32, after: 12) ||
+        (_hasNearbyKeyword(l, start, totalDueWords, before: 32, after: 12) &&
+            !movementActsOnFigure(l, start, end, totalDueWords)) ||
         _hasNearbyKeyword(l, start, phoneHelpWords, before: 16, after: 6) ||
         _hasNearbyKeyword(l, start, fxWords, before: 12, after: 4) ||
         // A maximum ("a refund of up to SAR 50") is an offer, not an amount
@@ -1082,7 +1149,8 @@ class ParserEngine {
         score: 0.95,
       );
     }
-    if (_hasNearbyKeyword(l, start, balanceWords, before: 32, after: 8)) {
+    if (_hasNearbyKeyword(l, start, balanceWords, before: 32, after: 8) &&
+        !movementActsOnFigure(l, start, end, balanceWords)) {
       return AmountCandidate(
         value: value,
         raw: raw,
@@ -1483,6 +1551,71 @@ class ParserEngine {
         'apple pay',
         'ابل باي',
       ]);
+
+  /// PR-03 — a labelled figure (a balance, a limit, an amount due) is the
+  /// transaction amount when a completed movement in the same clause acts on
+  /// it: a verb before the label ("تم سداد المبلغ المستحق 500", "Debited from
+  /// your balance SAR 75"), an English verb between the label and the figure
+  /// ("Outstanding amount settled SAR 1,200") or right after the figure
+  /// ("Minimum payment SAR 115.00 has been paid"), with no other number in
+  /// between. A clause that only states the figure ("Available balance SAR
+  /// 900", "Minimum due SAR 115 by 5 Dec", "Purchase SAR 100 at X available
+  /// balance SAR 900") is not. Mirrors `maskAccountFigures` in
+  /// `_shared/ai_candidate_validator.ts`.
+  static bool movementActsOnFigure(
+      String l, int start, int end, List<String> labels) {
+    var cs = 0;
+    var ce = l.length;
+    for (final m in _clauseCut.allMatches(l)) {
+      if (m.end <= start) cs = m.end;
+      if (m.start >= end && ce == l.length) ce = m.start;
+    }
+    var labelAt = start;
+    final from = (start - 32).clamp(cs, start).toInt();
+    for (final w in labels) {
+      final i = l.indexOf(w.toLowerCase(), from);
+      if (i >= 0 && i < labelAt) labelAt = i;
+    }
+    bool latin(String s, List<String> verbs) => verbs.any((v) =>
+        RegExp('(?<![a-z])${RegExp.escape(v)}(?![a-z])').hasMatch(s));
+    // (a) An English verb right after the figure.
+    if (latin(l.substring(end, ce).split(RegExp('[0-9]')).first,
+        _movementVerbsLatin)) {
+      return true;
+    }
+    final head = l.substring(cs, start);
+    final lastDigit = head.lastIndexOf(RegExp('[0-9]'));
+    final free = lastDigit < 0 ? cs : cs + lastDigit + 1;
+    // (c) An English verb between the label and the figure.
+    if (labelAt >= free &&
+        latin(l.substring(labelAt, start), _movementVerbsLatin)) {
+      return true;
+    }
+    // (c) "after <Arabic verb>" between the label and the figure ("رصيدك
+    // بعد إيداع 1,000"), not a purpose or a due date ("للشراء", "موعد سداد").
+    if (labelAt >= free) {
+      final mid = l.substring(labelAt, start);
+      if (_movementVerbsArabic.any((v) => mid.contains('بعد $v'))) {
+        return true;
+      }
+    }
+    // (b) A verb before the label, no number in between.
+    if (labelAt <= free) return false;
+    final before = l.substring(free, labelAt);
+    return latin(before, _movementVerbsLatin) ||
+        _movementVerbsArabic.any(before.contains);
+  }
+
+  static final RegExp _clauseCut = RegExp(r'[\n;!?؟؛،]|, |\.(?![0-9])');
+  static const List<String> _movementVerbsLatin = [
+    'paid', 'settled', 'received', 'debited', 'deducted', 'charged',
+    'transferred', 'credited', 'withdrawn', 'collected', 'recharged',
+    'recharge', 'top up', 'topped up',
+  ];
+  static const List<String> _movementVerbsArabic = [
+    'سداد', 'سدد', 'خصم', 'خُصم', 'شراء', 'شحن', 'دفع', 'تحويل', 'قيد',
+    'إيداع', 'ايداع', 'استلام', 'سحب',
+  ];
 
   bool _hasNearbyKeyword(
     String lowerLine,
