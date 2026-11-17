@@ -85,14 +85,15 @@ void main() {
       });
     }
 
+    // V1-RES3 (owner policy): a refund/reversal of a declined or failed
+    // original returns money that was never recorded — ambiguous, so it goes
+    // to review with no total change (it was recorded as a refund before).
     for (final sms in _refundsOfFailed) {
-      test('refund/reversal of a failed purchase still parses: $sms', () {
-        expect(TransactionStateCues.isNotCompleted(sms), isFalse);
+      test('refund/reversal of a failed purchase goes to review: $sms', () {
+        expect(TransactionStateCues.isNotCompleted(sms), isTrue);
         final r = engine.parse(sms, senderId: _sender);
-        expect(r.isTransaction, isTrue);
-        // V1-001 residual (c): `تم استرجاع …` is a refund too (it was typed
-        // as a payment before).
-        expect(r.transaction!.type, TransactionType.refund);
+        expect(r.isTransaction, isFalse);
+        expect(r.amountDetected, isTrue);
       });
     }
 
@@ -122,7 +123,8 @@ void main() {
       expect(v.rejectionReason, 'transaction_not_completed');
     });
 
-    test('an AI candidate for a refund of a failed purchase is not', () {
+    test('an AI candidate for a refund of a failed purchase is too (V1-RES3)',
+        () {
       const sms = 'Refund for failed transaction: SAR 99.00 from SHOP TWO';
       final v = const AiCandidateValidator().validate(
         response: const AiParseResponse(
@@ -132,7 +134,8 @@ void main() {
         messageText: sms,
         normalizedType: TransactionType.refund,
       );
-      expect(v.accepted, isTrue);
+      expect(v.accepted, isFalse);
+      expect(v.rejectionReason, 'transaction_not_completed');
     });
   });
 

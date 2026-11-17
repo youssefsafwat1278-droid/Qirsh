@@ -156,8 +156,60 @@ class ParserEngine {
       senderId: senderId,
       extraProfiles: bankProfiles,
     );
-    return const ParserEngine()._isIgnored(text.toLowerCase(), bank);
+    if (!const ParserEngine()._isIgnored(text.toLowerCase(), bank)) {
+      return false;
+    }
+    // FR-13: an ignore word on a message the parser reads as a transaction
+    // (and that is not an OTP code) goes to review instead of being dropped.
+    return !const ParserEngine()
+        .parse(rawText, senderId: senderId, bankProfiles: bankProfiles)
+        .amountDetected;
   }
+
+  /// FR-13 — a Latin ignore word counts only as a whole word, with an
+  /// optional plural/inflection ending ("offers", "promotional"): "Hotpot" is
+  /// not an OTP and "Wonder Mall" is not "won". Arabic phrases and URL
+  /// prefixes keep substring matching. Mirrors `isIgnoredText` in
+  /// `process-ios-sms/parse.ts`.
+  static bool containsIgnoreWord(String lower, String keyword) {
+    final k = keyword.toLowerCase();
+    if (!RegExp('[a-z]').hasMatch(k) || k.contains('://')) {
+      return lower.contains(k);
+    }
+    return _ignoreWordPatterns
+        .putIfAbsent(
+            k,
+            () => RegExp(
+                '(?<![a-z])${RegExp.escape(k)}(?:s|es|al|ed|ing)?(?![a-z])'))
+        .hasMatch(lower);
+  }
+
+  static final Map<String, RegExp> _ignoreWordPatterns = {};
+
+  /// The security words among the ignore rules: on a purchase they are
+  /// often a footer ("Never share your OTP"), not the message's purpose.
+  static const List<String> _securityIgnoreWords = [
+    'otp',
+    'one time password',
+    'verification code',
+    'security code',
+    'رمز الدخول',
+    'رمز التحقق',
+    'كود التحقق',
+    'لا تشاركه',
+  ];
+
+  // An OTP message carries its code ("OTP is 123456", "رمز التحقق: 4821",
+  // "123456 is your one time password"); a security footer on a purchase
+  // ("Never share your OTP") does not.
+  static final RegExp _otpCode = RegExp(
+    r'(?:otp|one time password|verification code|security code|passcode|'
+    r'رمز الدخول|رمز التحقق|كود التحقق)'
+    r'(?:[^\n]{0,40}?(?:\bis\b|هو))?\s*:?\s*[0-9]{4,8}(?![0-9])'
+    r'|(?<![0-9*x#.,])[0-9]{4,8} (?:is|هو) [^\n0-9]{0,25}'
+    r'(?:otp|one time password|verification code|security code|passcode|'
+    r'رمز|كود)',
+  );
 
   ParseResult parse(
     String rawText, {
@@ -182,7 +234,13 @@ class ParserEngine {
     final lines = text.split('\n');
     final lower = text.toLowerCase();
 
-    if (_isIgnored(lower, bank)) {
+    // FR-13 — an ignore word drops the message silently, except a security
+    // word with no OTP code ("Never share your OTP") on a message the parser
+    // reads as a transaction: that goes to review (amountDetected) instead.
+    final ignored = _isIgnored(lower, bank);
+    if (ignored &&
+        (_otpCode.hasMatch(lower) ||
+            _isIgnored(lower, bank, securityWords: false))) {
       return ParseResult.notTransaction(bankKey: bank?.bankKey);
     }
     // DATA-01 — a declined/failed purchase moved no money. It is not ignored
@@ -286,6 +344,10 @@ class ParserEngine {
             dateAmbiguous: dateResult.ambiguous,
           );
     if (confidence < pendingThreshold) {
+      return ParseResult.notTransaction(
+          bankKey: bank?.bankKey, amountDetected: !ignored);
+    }
+    if (ignored) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
@@ -1050,17 +1112,11 @@ class ParserEngine {
     return afterDateCap.clamp(0.0, 1.0);
   }
 
-  bool _isIgnored(String lower, BankProfile? bank) {
+  bool _isIgnored(String lower, BankProfile? bank,
+      {bool securityWords = true}) {
     final ignoreRules = [
       ...?bank?.ignoreRules.map((item) => item.toLowerCase()),
-      'otp',
-      'one time password',
-      'verification code',
-      'security code',
-      'رمز الدخول',
-      'رمز التحقق',
-      'كود التحقق',
-      'لا تشاركه',
+      if (securityWords) ..._securityIgnoreWords,
       'عرض خاص',
       'promo',
       'promotion',
@@ -1082,15 +1138,17 @@ class ParserEngine {
       'http://',
       'https://',
     ];
-    if (_containsAny(lower, ignoreRules)) return true;
-    if (_containsAny(lower, [
+    bool any(List<String> words) =>
+        words.any((w) => containsIgnoreWord(lower, w));
+    if (any(ignoreRules)) return true;
+    if (any([
       'تجميد',
       'تحديث بياناتك',
       'تسجيل خروج',
     ])) {
       return true;
     }
-    return _containsAny(lower, [
+    return any([
       'complaint',
       'شكوى',
       'has been closed',

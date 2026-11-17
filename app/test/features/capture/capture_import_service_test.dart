@@ -560,6 +560,34 @@ void main() {
       });
     }
 
+    for (final aiPrimary in [false, true]) {
+      test(
+          'FR-02 (aiPrimary=$aiPrimary): a server debit for a text the device '
+          'reads as a credit is not imported; the path\'s rejected outcome',
+          () async {
+        const credit = 'تم استرجاع مبلغ 100.00 ريال إلى حسابك';
+        queue.items.add(item(_id(1), text: credit));
+        server.fetch = CaptureServerFetch(CaptureFetchStatus.ok,
+            {_id(1): _processed(_id(1), amount: '100.00')});
+
+        final report = await buildService(aiPrimary: aiPrimary).run();
+
+        expect(report.imported.single.path,
+            aiPrimary ? CaptureImportPath.server : CaptureImportPath.local);
+        final rows =
+            await db.customSelect('SELECT type FROM transactions;').get();
+        if (aiPrimary) {
+          expect(rows, isEmpty, reason: 'no confirmed money');
+          expect(
+              await count('smart_inbox_items', "payload_id = '${_id(1)}'"), 1);
+        } else {
+          // The local parse of the device's own text: a credit, never the
+          // server's debit.
+          expect(rows.map((r) => r.read<String>('type')), ['refund']);
+        }
+      });
+    }
+
     for (final entry in {
       'rejected': (String id) => _rejected(id),
       'retryable (unresolved)': (String id) => ProcessedCaptureDto(

@@ -12,6 +12,7 @@ import '../../../data/repositories/drift_smart_inbox_repository.dart';
 import '../../../data/repositories/drift_suspected_duplicate_repository.dart';
 import '../../../data/repositories/drift_transaction_repository.dart';
 import '../../../data/repositories/drift_user_settings_repository.dart';
+import '../../../domain/capture/validated_capture.dart';
 import '../../../domain/entities/account_entity.dart';
 import '../../../domain/entities/captured_message.dart';
 import '../../../domain/entities/smart_inbox_item_entity.dart';
@@ -949,6 +950,17 @@ class CaptureSyncService {
       return null;
     }
 
+    // FR-02 — the device's own parse of the same text reads the opposite money
+    // direction (debit vs credit): the same recoverable review path.
+    if (localParseOpposesDirection(
+      text: _string(parsed['rawMessage']) ?? capture.sanitizedText ?? '',
+      direction: _string(parsed['direction']),
+      type: _string(parsed['type']),
+    )) {
+      await _persistBackendUnprocessableCapture(
+          capture, requireCurrentAdmission, committed);
+      return null;
+    }
     final amount = _num(parsed['amount']);
     final amountText = _string(parsed['amount_text']);
     final currency = _string(parsed['currency']);

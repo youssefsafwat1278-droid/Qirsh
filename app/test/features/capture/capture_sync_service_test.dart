@@ -385,6 +385,43 @@ void main() {
   });
 
   test(
+      'FR-02: a processed capture in the opposite direction to the device '
+      'parse of the same text is a review row, not a confirmed transaction',
+      () async {
+    // The device reads both texts (a credit and a debit); the server claims
+    // the opposite direction for the first two and agrees for the last.
+    const credit = 'تم استرجاع مبلغ 100.00 ريال إلى حسابك';
+    const debit = 'Purchase of SAR 100.00 at CAFE ONE card **1234. '
+        'Disputed purchases may be reversed';
+    final client = _FakeCaptureBackendClient([
+      for (final (id, type, direction, text) in [
+        ('opposite-credit', 'payment', 'debit', credit),
+        ('opposite-debit', 'refund', 'credit', debit),
+        ('agreeing', 'refund', 'credit', credit),
+      ])
+        _capture(
+          payloadId: id,
+          status: 'processed',
+          type: type,
+          direction: direction,
+          rawMessage: text,
+          amountText: '100.00',
+          numericAmount: 100,
+          merchant: null,
+        ),
+    ]);
+    final txRepo = DriftTransactionRepository(db);
+
+    await service(client).sync();
+
+    final stored = await txRepo.getRecent(limit: 10, accountId: null);
+    expect(stored.map((t) => (t.type, t.status)),
+        [(TransactionTypeEntity.refund, TransactionStatus.confirmed)],
+        reason: 'only the agreeing capture is imported');
+    expect(await DriftSmartInboxRepository(db).getOpen(), hasLength(2));
+  });
+
+  test(
       'V1-001 residuals: every not_completed case of the shared table, '
       'marked processed by a server as a payment or a refund, changes no total',
       () async {

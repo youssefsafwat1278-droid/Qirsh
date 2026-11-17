@@ -491,11 +491,12 @@ Deno.test('completed purchase with an unrelated negation stays RESOLVED debit', 
   }
 });
 
-Deno.test('refund of a failed purchase stays a RESOLVED credit', () => {
+// V1-RES3 (owner policy): a refund of a declined/failed original returns money
+// that was never recorded — ambiguous, so rejected (review), never a credit.
+Deno.test('refund of a failed purchase is not completed (review, no credit)', () => {
   for (const text of REFUND_OF_FAILED_SMS) {
-    const p = deterministicParse(text, RECEIVED, 180);
-    assert(isResolved(p), text);
-    assertEquals(p.direction, 'credit', text);
+    assert(isDeclinedText(text), text);
+    assertEquals(isResolved(deterministicParse(text, RECEIVED, 180)), false, text);
   }
 });
 

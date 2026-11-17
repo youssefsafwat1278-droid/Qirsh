@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'parser_engine.dart';
 import 'transaction_state_cues.dart';
 
 /// المرآة الـ Dart لقواعد المعاينة المشتركة `assets/catalog/parser_rules.json`.
@@ -116,7 +117,7 @@ class SharedPreviewParser {
     final normalized = _normalize(text);
     final lower = normalized.toLowerCase();
 
-    if (_ignoreKeywords.any(lower.contains) ||
+    if (_ignoreKeywords.any((k) => ParserEngine.containsIgnoreWord(lower, k)) ||
         TransactionStateCues.isNotCompleted(text)) {
       return const PreviewResult(outcome: PreviewOutcome.ignored);
     }

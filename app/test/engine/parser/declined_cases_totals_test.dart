@@ -94,16 +94,24 @@ void main() {
         reason: reason);
   }
 
-  for (final c in cases.where((c) => c['expect'] == 'not_completed')) {
+  // FR-13: the ignore-rule outcomes change no total on device either: a real
+  // OTP/promotion is dropped, a purchase with a security footer is a review
+  // row (with consented AI it is AI-read like any review-shaped message, so
+  // only the on-device path is asserted for `review`).
+  for (final c in cases.where((c) =>
+      const ['not_completed', 'review', 'ignored'].contains(c['expect']))) {
     final text = c['text'] as String;
-    test('[${c['src']}] totals unchanged: $text', () async {
+    final withAi = c['expect'] != 'review';
+    test('[${c['src']}] ${c['expect']}: totals unchanged: $text', () async {
       for (final sms in [text, _snb(text)]) {
         for (final sender in ['SNB', 'AlRajhi']) {
           await AddTransactionUseCase(
             transactionRepository: txRepo,
             merchantCategoryRepository: DriftMerchantCategoryRepository(db),
           )(rawMessage: sms, senderId: sender, onDeviceOnly: true);
-          for (final type in ['payment', 'refund']) {
+          for (final type in [
+            if (withAi) ...['payment', 'refund']
+          ]) {
             await AddTransactionUseCase(
               transactionRepository: txRepo,
               merchantCategoryRepository: DriftMerchantCategoryRepository(db),
@@ -119,7 +127,8 @@ void main() {
 
   // A completed purchase or refund is still recorded, with the type that moves
   // the right total (never diverted to Smart Inbox by the rule).
-  for (final c in cases.where((c) => c['expect'] != 'not_completed')) {
+  for (final c in cases.where((c) =>
+      const ['completed_payment', 'completed_credit'].contains(c['expect']))) {
     final text = c['text'] as String;
     final payment = c['expect'] == 'completed_payment';
     test('[${c['src']}] ${c['expect']} is recorded: $text', () async {

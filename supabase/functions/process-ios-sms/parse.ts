@@ -99,9 +99,20 @@ export function isResolved(p: ParsedCapture): boolean {
     (p.direction === 'debit' || p.direction === 'credit');
 }
 
+// FR-13: a Latin ignore word counts only as a whole word, with an optional
+// plural/inflection ending ("offers", "promotional"), so "Hotpot" is not an
+// OTP. Arabic phrases and URL prefixes keep substring matching. Mirrors
+// ParserEngine._isIgnored.
+const IGNORE_SUFFIX = '(?:s|es|al|ed|ing)?';
+const IGNORE_MATCHERS = (rules.ignoreKeywords as string[]).map((keyword) => {
+  const k = keyword.toLowerCase();
+  if (!/[a-z]/.test(k) || k.includes('://')) return (lower: string) => lower.includes(k);
+  const re = new RegExp(`(?<![a-z])${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}${IGNORE_SUFFIX}(?![a-z])`);
+  return (lower: string) => re.test(lower);
+});
+
 function isIgnoredText(lower: string): boolean {
-  return (rules.ignoreKeywords as string[]).some((keyword) => lower.includes(keyword.toLowerCase())) ||
-    isDeclinedText(lower);
+  return IGNORE_MATCHERS.some((matches) => matches(lower)) || isDeclinedText(lower);
 }
 
 // DATA-01: the transaction-state rule of
@@ -109,20 +120,26 @@ function isIgnoredText(lower: string): boolean {
 // (parser_rules.json; Dart drift test transaction_state_cues_drift_test.dart):
 // 1. whole-token cues (Arabic: one و/ف/ب/ال clitic, never the purpose ل);
 // 2. a cue right after a merchant introducer ("at Failed Ventures", "at The
-//    Failed Co", "لدى شركة مرفوض"; not "due to") is a name; a cue next to a
-//    plural generic noun ("Declined transactions incur…") or in a question
-//    ("Unauthorized transaction? Call us") is not a status;
+//    Failed Co", "لدى شركة مرفوض"; not "due to") is a name — except a feminine
+//    Arabic cue after a name word (`من متجر مرفوضة` agrees with the operation);
+//    a cue next to a plural generic noun ("Declined transactions incur…"), in
+//    a question whose own clause holds it ("Unauthorized transaction? Call
+//    us"), or right after a negation ("not declined") is not a status;
 // 3. a cue preceded in its clause by a hypothetical/future/instructional
-//    marker is not a status; a credit word that is negated, directly followed
+//    marker is not a status — except a future-only marker in a clause that
+//    names an amount ("Payment of SAR 100 will be declined"); a clause also
+//    ends at a spaced dash ("Transaction Report - …"); a credit word that is negated, directly followed
 //    by a declined cue / marker / negation, or followed later in its sentence
 //    by a declined status ("Refund of SAR 99 failed") was not done — unless
 //    that cue describes a transaction noun ("Refund for failed transaction");
-// 4. not completed = a declined status with no done credit before it, or a
+// 4. not completed = a declined status (even after a done credit: a refund
+//    of a declined purchase reverses money that was never recorded), or a
 //    promised/negated credit in a message that names a declined operation;
 // 5. a generic noun followed by a colon or a count is a status header
 //    ("Declined transactions: 1. Purchase of …"), not advice;
-// 6. a reversed purchase ("Purchase of SAR 100 at X reversed") in a message
-//    with no declined cue is ambiguous: review, no total change.
+// 6. a reversed purchase ("Purchase of SAR 100 at X reversed", "POS
+//    reversal", "تم خصم … وتم استرجاعه") in a message with no declined cue is
+//    ambiguous: review, no total change.
 const ARABIC_LETTER = 'ء-ي';
 const NO_LETTER_BEFORE = `(?<![a-z${ARABIC_LETTER}])`;
 const NO_LETTER_AFTER = `(?![a-z${ARABIC_LETTER}])`;
@@ -153,6 +170,7 @@ const latin = (words: string[]) => words.filter((w) => /[a-z]/i.test(w));
 const arabic = (words: string[]) => words.filter((w) => !/[a-z]/i.test(w));
 const DECLINED_CUES = rules.declinedKeywords as string[];
 const HYPOTHETICAL_CUES = rules.stateCueHypotheticalMarkers as string[];
+const FUTURE_CUES = rules.stateCueFutureMarkers as string[];
 const NEGATION_CUES = rules.stateCueNegationMarkers as string[];
 const GENERIC_NOUNS = rules.stateCueGenericNouns as string[];
 const ALL_NOUNS = [...(rules.stateCueTransactionNouns as string[]), ...GENERIC_NOUNS];
@@ -164,9 +182,12 @@ const PURCHASE = tokenPattern(rules.stateCuePurchaseNouns as string[], false);
 const HEADER = /^ ?(?::|\(?[0-9٠-٩])/;
 const HYPOTHETICAL = tokenPattern(HYPOTHETICAL_CUES, true);
 const NEGATION = tokenPattern(NEGATION_CUES, false);
+const FUTURE = tokenPattern(FUTURE_CUES, true);
+const NOT_FUTURE = tokenPattern(HYPOTHETICAL_CUES.filter((c) => !FUTURE_CUES.includes(c)), true);
+const NEGATED_BEFORE = new RegExp(`${NO_LETTER_BEFORE}(?:${alternation(NEGATION_CUES)})(?: يتم| تتم| been)? \\(?$`);
 const AFTER_INTRODUCER = new RegExp(
   `${NO_LETTER_BEFORE}(?<!due )(?<!owing )(?:${alternation(rules.stateCueMerchantIntroducers as string[])})` +
-    `[\\s:]*(?:(?:${alternation(rules.stateCueMerchantNameWords as string[])}) )?$`,
+    `[\\s:]*(?:(${alternation(rules.stateCueMerchantNameWords as string[])}) )?$`,
 );
 const UNDONE_NEXT = new RegExp(
   `^ (?:was |has been |is |been |تم )?(?:${alternation([...DECLINED_CUES, ...HYPOTHETICAL_CUES, ...NEGATION_CUES])})${NO_LETTER_AFTER}`,
@@ -180,7 +201,7 @@ const GENERIC_BEFORE = nounBefore(GENERIC_NOUNS);
 const NOUN_NEXT = nounNext(ALL_NOUNS);
 const NOUN_BEFORE = nounBefore(ALL_NOUNS);
 const BOUNDARY = /[\n!?؟;؛]|\.(?![0-9])/g;
-const CLAUSE_BOUNDARY = /[\n!?؟;؛]|[.,،:](?![0-9])/g;
+const CLAUSE_BOUNDARY = /[\n!?؟;؛]|[.,،:](?![0-9])| [-–—](?= )/g;
 
 function lastBoundary(text: string, end: number, boundary: RegExp): number {
   let start = 0;
@@ -196,14 +217,20 @@ type Cue = { start: number; end: number };
 /** 'name' = not a status at all; 'hypothetical' = a status that did not (yet) happen. */
 function notStatus(text: string, m: Cue): 'name' | 'hypothetical' | null {
   const sentence = text.slice(lastBoundary(text, m.start, BOUNDARY), m.start);
-  if (AFTER_INTRODUCER.test(sentence)) return 'name';
+  const named = AFTER_INTRODUCER.exec(sentence);
+  // A feminine Arabic cue after a name word agrees with the operation
+  // (`عملية شراء … من متجر مرفوضة`), or cannot be told apart: a status.
+  if (named && !(named[1] && !/[a-z]/.test(named[1]) && text.slice(m.start, m.end).endsWith('ه'))) {
+    return 'name';
+  }
   const after = text.slice(m.end);
   const genericAfter = GENERIC_NEXT.exec(after);
   const generic = genericAfter
     ? !HEADER.test(after.slice(genericAfter[0].length))
     : GENERIC_BEFORE.test(sentence) && !HEADER.test(after);
   if (generic) return 'name';
-  if (/[?؟]/.test(sentenceEnd(text, m.end).mark)) return 'name';
+  const end = sentenceEnd(text, m.end);
+  if (/[?؟]/.test(end.mark) && !new RegExp(CLAUSE_BOUNDARY.source).test(text.slice(m.end, end.at))) return 'name';
   const clause = text.slice(lastBoundary(text, m.start, CLAUSE_BOUNDARY), m.start);
   return HYPOTHETICAL.test(clause) ? 'hypothetical' : null;
 }
@@ -214,7 +241,7 @@ const cues = (re: RegExp, text: string): Cue[] =>
 function failsLater(text: string, credit: Cue): boolean {
   const end = sentenceEnd(text, credit.end).at;
   return cues(DECLINED, text).some((d) =>
-    d.start >= credit.end && d.start < end && notStatus(text, d) === null &&
+    d.start >= credit.end && d.start < end && isDeclinedStatus(text, d) &&
     !NOUN_NEXT.test(text.slice(d.end)) && !NOUN_BEFORE.test(text.slice(0, d.start))
   );
 }
@@ -234,14 +261,28 @@ export function isDeclinedText(raw: string): boolean {
     creditAt = m.start;
     break;
   }
-  const declinedAt = cues(DECLINED, text).find((d) => notStatus(text, d) === null)?.start ?? null;
-  if (declinedAt !== null) return creditAt === null || declinedAt < creditAt;
+  if (cues(DECLINED, text).some((d) => isDeclinedStatus(text, d))) return true;
   const anyDeclined = new RegExp(DECLINED.source).test(text);
   if (!anyDeclined && PURCHASE.test(text) &&
     cues(REVERSAL, text).some((m) => creditDone(text, m) === true)) {
     return true;
   }
   return creditAt === null && undone && anyDeclined;
+}
+
+/**
+ * A declined cue that states this message's status. A future-only marker
+ * ("will be", `سيتم`) in a clause that names an amount is this transaction's
+ * own status ("Payment of SAR 100 will be declined"), not advice.
+ */
+function isDeclinedStatus(text: string, d: Cue): boolean {
+  // "not declined", "has not been rejected", `لم يتم رفض`.
+  if (NEGATED_BEFORE.test(text.slice(lastBoundary(text, d.start, BOUNDARY), d.start))) return false;
+  const why = notStatus(text, d);
+  if (why === null) return true;
+  if (why === 'name') return false;
+  const clause = text.slice(lastBoundary(text, d.start, CLAUSE_BOUNDARY), d.start);
+  return FUTURE.test(clause) && !NOT_FUTURE.test(clause) && /[0-9]/.test(clause);
 }
 
 /** Whether the credit word [m] reports money returned: null = not a status, false = promised/negated/failed. */

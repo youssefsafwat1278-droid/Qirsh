@@ -40,7 +40,7 @@
     "prize",
     "winner"
   ],
-  "_declinedReadme": "DATA-01: transaction-state cues, identical to app/lib/engine/parser/transaction_state_cues.dart (drift test: app/test/engine/parser/transaction_state_cues_drift_test.dart) and applied by the same rule in parse.ts isDeclinedText: whole-token match after folding tashkeel/tatweel/hamza/ta marbuta/alef maqsura; a cue right after a stateCueMerchantIntroducers word (except after 'due'/'owing'), optionally followed by one stateCueMerchantNameWords word, is part of a name; a cue next to a stateCueGenericNouns plural (English after it, Arabic before it) or in a question is not a status, unless the noun is followed by a colon or a count (a status header: 'Declined transactions: 1. …'); a cue preceded in its clause (sentence, or after a comma/colon) by a stateCueHypotheticalMarkers entry is not a status; a declinedExemptKeywords credit counts only when not negated, promised, or followed later in its sentence by a declined status that is not attributive (next to a stateCueTransactionNouns/stateCueGenericNouns word), and when it comes before the first declined status. A stateCueReversalWords status in a message naming a stateCuePurchaseNouns word, with no declined cue ('Purchase of SAR 100 at X reversed'), is ambiguous and also not completed (review, no total change). A not-completed message is treated like ignoreKeywords (rejected, no AI).",
+  "_declinedReadme": "DATA-01: transaction-state cues, identical to app/lib/engine/parser/transaction_state_cues.dart (drift test: app/test/engine/parser/transaction_state_cues_drift_test.dart) and applied by the same rule in parse.ts isDeclinedText: whole-token match after folding tashkeel/tatweel/hamza/ta marbuta/alef maqsura; a cue right after a stateCueMerchantIntroducers word (except after 'due'/'owing'), optionally followed by one stateCueMerchantNameWords word, is part of a name; a cue next to a stateCueGenericNouns plural (English after it, Arabic before it) or in a question is not a status, unless the noun is followed by a colon or a count (a status header: 'Declined transactions: 1. …'); a cue preceded in its clause (sentence, or after a comma/colon) by a stateCueHypotheticalMarkers entry is not a status; a declinedExemptKeywords credit counts only when not negated, promised, or followed later in its sentence by a declined status that is not attributive (next to a stateCueTransactionNouns/stateCueGenericNouns word), and when it comes before the first declined status. A stateCueReversalWords status in a message naming a stateCuePurchaseNouns word, with no declined cue ('Purchase of SAR 100 at X reversed'), is ambiguous and also not completed (review, no total change). V1-RES3: a declined status counts even after a done credit (a refund of a declined original is review); a declined cue right after a stateCueNegationMarkers word ('not declined') is not a status; a feminine Arabic cue after an Arabic stateCueMerchantNameWords word is a status; the question rule applies only when the question mark ends the cue's own clause; a spaced dash ends a clause; a stateCueFutureMarkers-only clause that names an amount ('Payment of SAR 100 will be declined') does not make a declined cue hypothetical. A not-completed message is treated like ignoreKeywords (rejected, no AI). ignoreKeywords: a Latin word matches only as a whole word with an optional s/es/al/ed/ing ending; Arabic phrases and URL prefixes by substring.",
   "declinedKeywords": [
     "مرفوضة",
     "مرفوض",
@@ -92,6 +92,24 @@
     "تم الإلغاء",
     "غير مصرح",
     "انتهت صلاحية العملية",
+    "لم ينجح",
+    "لم يتم تحويل",
+    "تعذر تحويل",
+    "تعذر صرف",
+    "لم يتم صرف",
+    "تعذر السحب",
+    "تعذر سداد",
+    "لم يتم سداد",
+    "لم يتم السداد",
+    "معلقة",
+    "معلق",
+    "قيد المعالجة",
+    "قيد الانتظار",
+    "تم حجز",
+    "مبلغ محجوز",
+    "تم إيقاف",
+    "موقوفة",
+    "سيتم تنفيذ",
     "declined",
     "rejected",
     "unsuccessful",
@@ -127,7 +145,24 @@
     "transaction error",
     "timed out",
     "expired",
-    "not completed"
+    "not completed",
+    "pending",
+    "on hold",
+    "hold of",
+    "authorization hold",
+    "hold released",
+    "pre-authorization",
+    "pre-authorisation",
+    "preauthorization",
+    "preauthorisation",
+    "pre-auth",
+    "blocked",
+    "stopped",
+    "could not be dispensed",
+    "not dispensed",
+    "could not be sent",
+    "could not be paid",
+    "will be processed"
   ],
   "declinedExemptKeywords": [
     "استرداد",
@@ -153,7 +188,9 @@
     "عند",
     "في",
     "to",
-    "إلى"
+    "إلى",
+    "merchant",
+    "via"
   ],
   "stateCueMerchantNameWords": [
     "the",
@@ -188,6 +225,11 @@
     "contact us",
     "اتصل بنا",
     "تواصل معنا"
+  ],
+  "stateCueFutureMarkers": [
+    "will be",
+    "سيتم",
+    "سوف"
   ],
   "stateCueNegationMarkers": [
     "not",
@@ -227,12 +269,20 @@
     "reversed",
     "عكس",
     "معكوس",
-    "معكوسة"
+    "معكوسة",
+    "تم استرجاعه",
+    "تم استرجاعها",
+    "تم استرداده",
+    "تم استردادها"
   ],
   "stateCuePurchaseNouns": [
     "purchase",
     "payment",
-    "شراء"
+    "شراء",
+    "pos",
+    "خصم",
+    "transaction",
+    "txn"
   ],
   "debitKeywords": [
     "عملية شراء",

@@ -542,7 +542,7 @@ class CaptureImportService {
     double? number(Object? v) =>
         v is num ? v.toDouble() : (v is String ? double.tryParse(v) : null);
     String? text(Object? v) => v is String ? v : null;
-    return validateCaptureCandidate(
+    final validation = validateCaptureCandidate(
       candidate: CaptureCandidate(
         amount: number(p['amount']),
         amountText: text(p['amount_text']),
@@ -555,7 +555,12 @@ class CaptureImportService {
       ),
       text: item.text,
       receivedAt: item.receivedAt ?? dto.createdAt ?? DateTime.now().toUtc(),
-    ).accepted;
+    );
+    // FR-02 — the device's own parse of the same text reads the opposite money
+    // direction: not imported as confirmed (the caller's rejected path).
+    return validation.accepted &&
+        !localParseOpposesDirection(
+            text: item.text, direction: validation.capture!.direction);
   }
 
   Future<CaptureImportItem> _importFromServer(

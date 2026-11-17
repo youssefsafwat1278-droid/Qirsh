@@ -26,6 +26,7 @@ void main() {
       'declinedExemptKeywords': TransactionStateCues.creditAction,
       'stateCueMerchantIntroducers': TransactionStateCues.merchantIntroducers,
       'stateCueHypotheticalMarkers': TransactionStateCues.hypotheticalMarkers,
+      'stateCueFutureMarkers': TransactionStateCues.futureMarkers,
       'stateCueNegationMarkers': TransactionStateCues.negationMarkers,
       'stateCueMerchantNameWords': TransactionStateCues.merchantNameWords,
       'stateCueTransactionNouns': TransactionStateCues.transactionNouns,

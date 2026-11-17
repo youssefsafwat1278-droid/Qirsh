@@ -1,5 +1,7 @@
 import '../../engine/parser/direction_signal.dart';
+import '../../engine/models/transaction_type.dart';
 import '../../engine/parser/normalizer.dart';
+import '../../engine/parser/parser_engine.dart';
 import '../../engine/parser/transaction_state_cues.dart';
 
 /// ValidatedCapture v1, the Dart side of the contract the server enforces in
@@ -217,6 +219,34 @@ bool _contradicts(TxnDirection wording, TxnDirection other) =>
     wording != TxnDirection.unknown &&
     other != TxnDirection.unknown &&
     wording != other;
+
+/// FR-02 — true when the device's own deterministic parse of [text] reads a
+/// transaction whose money direction (debit vs credit) is the OPPOSITE of the
+/// server's [direction] (or the one its [type] implies). Only the direction
+/// counts: payment vs transfer is not a disagreement, and a text the local
+/// parser cannot read (or reads as a transfer) never blocks the server result.
+/// An import-path policy applied by the callers, not part of the
+/// ValidatedCapture v1 contract (which the server mirrors).
+bool localParseOpposesDirection({
+  required String text,
+  String? direction,
+  String? type,
+}) {
+  final server = _asDirection(direction) != TxnDirection.unknown
+      ? _asDirection(direction)
+      : _directionOfType(type);
+  if (server == TxnDirection.unknown) return false;
+  final local = const ParserEngine().parse(text);
+  if (!local.isTransaction) return false;
+  final localType = local.transaction!.type;
+  final localDirection = localType.isExpense
+      ? TxnDirection.debit
+      : localType == TransactionType.refund ||
+              localType == TransactionType.income
+          ? TxnDirection.credit
+          : TxnDirection.unknown;
+  return _contradicts(localDirection, server);
+}
 
 DateTime? _inWindow(String? iso, DateTime receivedAt) {
   if (iso == null || iso.trim().isEmpty) return null;

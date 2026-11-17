@@ -25,9 +25,14 @@ void main() {
   final preview = SharedPreviewParser.fromJsonString(
       File('assets/catalog/parser_rules.json').readAsStringSync());
 
-  test('the table covers all three outcomes', () {
-    expect(cases.map((c) => c['expect']).toSet(),
-        {'not_completed', 'completed_payment', 'completed_credit'});
+  test('the table covers all five outcomes', () {
+    expect(cases.map((c) => c['expect']).toSet(), {
+      'not_completed',
+      'completed_payment',
+      'completed_credit',
+      'review',
+      'ignored',
+    });
   });
 
   for (final c in cases) {
@@ -41,6 +46,18 @@ void main() {
 
       // On-device parse (also what the iOS import's local fallback runs).
       final r = engine.parse(text, senderId: 'AlRajhi');
+      // FR-13: an ignore word on a transaction message (a security footer)
+      // is a review row, never a silent drop; a real OTP/promotion is dropped.
+      if (expected == 'review' || expected == 'ignored') {
+        final ignored = expected == 'ignored';
+        expect(r.isTransaction, isFalse, reason: 'never confirmed money');
+        expect(r.amountDetected, !ignored, reason: 'review row');
+        expect(
+            ParserEngine.isIgnoredMessage(text, senderId: 'AlRajhi'), ignored);
+        expect(preview.parse(text).isHighConfidence, isFalse,
+            reason: 'preview');
+        return;
+      }
       switch (expected) {
         case 'not_completed':
           expect(r.isTransaction, isFalse, reason: 'never confirmed money');
@@ -107,6 +124,13 @@ void main() {
           expect(v.reason, _notCompleted, reason: 'import $direction');
         } else {
           expect(v.reason, isNot(_notCompleted), reason: 'import $direction');
+          // FR-02: a server answer in the opposite direction to the device's
+          // own reading is never imported as confirmed (import-path rule).
+          final opposite = expected == 'completed_payment' ? 'credit' : 'debit';
+          // (A text the device cannot read keeps the server result.)
+          expect(localParseOpposesDirection(text: text, direction: direction),
+              direction == opposite && engine.parse(text).isTransaction,
+              reason: 'opposite import $direction');
         }
       }
     });

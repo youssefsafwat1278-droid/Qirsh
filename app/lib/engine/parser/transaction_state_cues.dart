@@ -10,22 +10,31 @@ import 'normalizer.dart';
 /// 1. A cue counts only as a whole token (Arabic: one و/ف/ب/ال clitic, never
 ///    the purpose prefix ل: `لرفض`, `لاسترداد` are instructions).
 /// 2. A cue is not a status when it is part of a name — right after a merchant
-///    introducer (`at`, `from`, `to`, `لدى`, `من`, `عند`, `في`, `إلى`; not
-///    "due to"), optionally followed by one [merchantNameWords] word ("at The
-///    Failed Co", `لدى شركة مرفوض`) — when it qualifies a plural generic noun
-///    ("Declined transactions incur no fee", `العمليات المرفوضة`), or when its
-///    sentence is a question ("Unauthorized transaction? Call us").
-/// 3. A cue preceded in its clause (sentence, or after a comma or colon) by a
-///    hypothetical, future or instructional marker ("will be", "if", "call
-///    us", `سيتم`, `للاعتراض`) is not a status. A credit word was not done when
+///    introducer (`at`, `from`, `to`, `via`, `merchant:`, `لدى`, `من`, `عند`,
+///    `في`, `إلى`; not "due to"), optionally followed by one
+///    [merchantNameWords] word ("at The Failed Co", `لدى شركة مرفوض`), but not
+///    a feminine Arabic cue after an Arabic name word (`من متجر مرفوضة` agrees
+///    with the operation, `شركة مرفوضة` cannot be told apart: a status) — when
+///    it qualifies a plural generic noun ("Declined transactions incur no
+///    fee", `العمليات المرفوضة`), or when the question mark ends its own
+///    clause ("Unauthorized transaction? Call us"; not "…declined, need
+///    help?"). A declined cue right after a negation ("not declined", `لم
+///    يتم رفض`) is not a status.
+/// 3. A cue preceded in its clause (sentence, or after a comma, a colon or a
+///    spaced dash: "Transaction Report - …") by a hypothetical, future or
+///    instructional marker ("will be", "if", "call us", `سيتم`, `للاعتراض`)
+///    is not a status — except a declined cue whose clause has only
+///    [futureMarkers] and names an amount ("Payment of SAR 100 will be
+///    declined due to insufficient funds"). A credit word was not done when
 ///    it is preceded by a negation (`not`, `لم`), directly followed by a
 ///    declined cue, a marker or a negation ("Refund failed", "Refund will be
 ///    processed"), or followed later in its sentence by a declined status
 ///    ("Refund of SAR 99 failed") — unless that cue only describes a
 ///    transaction noun ("Refund for failed transaction", `العملية المرفوضة`).
-/// 4. Not completed = a declined status exists and no done credit comes
-///    BEFORE it. "Refund for failed transaction" stays a credit; "…declined.
-///    Amount credited back" and "…declined. It will be refunded" do not.
+/// 4. Not completed = a declined status exists, wherever a done credit sits:
+///    "…declined. Amount credited back", and also "Refund for failed
+///    transaction" — a refund of a declined original returns money that was
+///    never recorded, so it is ambiguous (review, no total change).
 ///    A credit that is only promised or negated, in a message that names a
 ///    declined operation anywhere ("Refund will be processed for failed
 ///    transaction"), is not completed either: no money has moved yet.
@@ -37,7 +46,8 @@ import 'normalizer.dart';
 ///    purchase may or may not have been recorded. It goes to review (counted
 ///    here as not completed) and changes no total. A reversal or refund that
 ///    names no purchase ("Reversal of SAR 100 credited to your account",
-///    `تم استرجاع مبلغ 100 ريال`) or reverses a declined one stays a credit.
+///    `تم استرجاع مبلغ 100 ريال`) stays a credit. "POS reversal", "Transaction
+///    reversed" and `تم خصم … وتم استرجاعه` name a debit too.
 ///
 /// Matching folds tashkeel, tatweel, hamza forms, ة/ه and ى/ي on both sides.
 /// Mirrored by `supabase/functions/process-ios-sms/parse.ts`; the lists below
@@ -61,6 +71,12 @@ class TransactionStateCues {
     'تجاوز الحد', 'تجاوزت الحد', 'تجاوز حد', 'تخطي الحد',
     'فشل استرداد', 'فشل الاسترداد', 'لم يتم خصم', 'لم يتم الخصم', 'لم تنفذ',
     'تم الإلغاء', 'غير مصرح', 'انتهت صلاحية العملية',
+    // Not (yet) completed: failed transfer / cash / bill payment, pending,
+    // held, blocked (V1-RES3).
+    'لم ينجح', 'لم يتم تحويل', 'تعذر تحويل', 'تعذر صرف', 'لم يتم صرف',
+    'تعذر السحب', 'تعذر سداد', 'لم يتم سداد', 'لم يتم السداد', 'معلقة', 'معلق',
+    'قيد المعالجة', 'قيد الانتظار', 'تم حجز', 'مبلغ محجوز', 'تم إيقاف',
+    'موقوفة', 'سيتم تنفيذ',
     // English
     'declined', 'rejected', 'unsuccessful', 'not successful', 'failed',
     'denied', 'not approved', 'cancelled', 'canceled',
@@ -73,6 +89,11 @@ class TransactionStateCues {
     'void', 'voided', 'not authorised', 'not authorized', 'unauthorised',
     'unauthorized', 'unable to process', 'unable to complete',
     'transaction error', 'timed out', 'expired', 'not completed',
+    'pending', 'on hold', 'hold of', 'authorization hold', 'hold released',
+    'pre-authorization', 'pre-authorisation', 'preauthorization',
+    'preauthorisation', 'pre-auth', 'blocked', 'stopped',
+    'could not be dispensed', 'not dispensed', 'could not be sent',
+    'could not be paid', 'will be processed',
   ];
 
   /// The message's own action returns money (a refund/reversal of the
@@ -85,7 +106,7 @@ class TransactionStateCues {
 
   /// The word right before a cue that makes the cue part of a merchant name.
   static const List<String> merchantIntroducers = [
-    'at', 'from', 'لدى', 'من', 'عند', 'في', 'to', 'إلى',
+    'at', 'from', 'لدى', 'من', 'عند', 'في', 'to', 'إلى', 'merchant', 'via',
   ];
 
   /// One of these may sit between the introducer and the cue ("at The Failed
@@ -103,6 +124,11 @@ class TransactionStateCues {
     'اعتراض', 'إبلاغ',
     'call us', 'contact us', 'اتصل بنا', 'تواصل معنا',
   ];
+
+  /// The future-only [hypotheticalMarkers]: a declined cue after one of these
+  /// in a clause that names an amount is this transaction's own status
+  /// ("Payment of SAR 100 will be declined"), not advice.
+  static const List<String> futureMarkers = ['will be', 'سيتم', 'سوف'];
 
   /// Earlier in the same clause, these make a credit word not done.
   static const List<String> negationMarkers = ['not', 'لم', 'لا', 'لن'];
@@ -126,10 +152,13 @@ class TransactionStateCues {
   /// Rule 6: a reversal word in a message naming a [purchaseNouns] word.
   static const List<String> reversalWords = [
     'reversal', 'reversed', 'عكس', 'معكوس', 'معكوسة',
+    'تم استرجاعه', 'تم استرجاعها', 'تم استرداده', 'تم استردادها',
   ];
 
   /// The debit operations a reversal word can apply to (rule 6).
-  static const List<String> purchaseNouns = ['purchase', 'payment', 'شراء'];
+  static const List<String> purchaseNouns = [
+    'purchase', 'payment', 'شراء', 'pos', 'خصم', 'transaction', 'txn',
+  ];
 
   /// True when [rawText] reports a transaction that did not complete.
   static bool isNotCompleted(String rawText) {
@@ -146,20 +175,29 @@ class TransactionStateCues {
       creditAt = m.start;
       break;
     }
-    int? declinedAt;
-    for (final m in _declined.allMatches(text)) {
-      if (_notStatus(text, m) == null) {
-        declinedAt = m.start;
-        break;
-      }
+    if (_declined.allMatches(text).any((m) => _isDeclinedStatus(text, m))) {
+      return true;
     }
-    if (declinedAt != null) return creditAt == null || declinedAt < creditAt;
     if (!_declined.hasMatch(text) &&
         _purchase.hasMatch(text) &&
         _reversal.allMatches(text).any((m) => _creditDone(text, m) == true)) {
       return true;
     }
     return creditAt == null && undone && _declined.hasMatch(text);
+  }
+
+  /// Whether the declined cue [m] states this message's status (rules 2, 3).
+  static bool _isDeclinedStatus(String text, Match m) {
+    final sentence =
+        text.substring(_lastBoundary(text, m.start, _boundary), m.start);
+    if (_negatedBefore.hasMatch(sentence)) return false;
+    final why = _notStatus(text, m);
+    if (why == null) return true;
+    if (why == _Skip.name) return false;
+    final clause = _clause(text, m.start);
+    return _future.hasMatch(clause) &&
+        !_notFuture.hasMatch(clause) &&
+        RegExp('[0-9]').hasMatch(clause);
   }
 
   /// Whether the credit word [m] reports money returned: null when it is not
@@ -195,9 +233,17 @@ class TransactionStateCues {
     final generic = genericAfter != null
         ? !_header.hasMatch(after.substring(genericAfter.end))
         : _genericBefore.hasMatch(sentence) && !_header.hasMatch(after);
-    if (_afterIntroducer.hasMatch(sentence) ||
-        generic ||
-        _sentenceEnd(text, m.end).question) {
+    final named = _afterIntroducer.firstMatch(sentence);
+    final nameWord = named?.group(1);
+    // A feminine Arabic cue after a name word agrees with the operation
+    // (`عملية شراء … من متجر مرفوضة`) or cannot be told apart: a status.
+    final feminineAfterName = nameWord != null &&
+        !_isLatin(nameWord) &&
+        text.substring(m.start, m.end).endsWith('ه');
+    final end = _sentenceEnd(text, m.end);
+    final ownQuestion = end.question &&
+        !_clauseBoundary.hasMatch(text.substring(m.end, end.at));
+    if ((named != null && !feminineAfterName) || generic || ownQuestion) {
       return _Skip.name;
     }
     return _hypothetical.hasMatch(_clause(text, m.start))
@@ -211,7 +257,7 @@ class TransactionStateCues {
     final end = _sentenceEnd(text, credit.end).at;
     for (final d in _declined.allMatches(text, credit.end)) {
       if (d.start >= end) break;
-      if (_notStatus(text, d) == null &&
+      if (_isDeclinedStatus(text, d) &&
           !_nounNext.hasMatch(text.substring(d.end)) &&
           !_nounBefore.hasMatch(text.substring(0, d.start))) {
         return true;
@@ -241,7 +287,8 @@ class TransactionStateCues {
   }
 
   static final RegExp _boundary = RegExp(r'[\n!?؟;؛]|\.(?![0-9])');
-  static final RegExp _clauseBoundary = RegExp(r'[\n!?؟;؛]|[.,،:](?![0-9])');
+  static final RegExp _clauseBoundary =
+      RegExp(r'[\n!?؟;؛]|[.,،:](?![0-9])| [-–—](?= )');
   static final RegExp _declined = _tokenPattern(declined, lam: false);
   static final RegExp _creditAction = _tokenPattern(creditAction, lam: false);
   static final RegExp _reversal = _tokenPattern(reversalWords, lam: false);
@@ -251,11 +298,19 @@ class TransactionStateCues {
   static final RegExp _hypothetical =
       _tokenPattern(hypotheticalMarkers, lam: true);
   static final RegExp _negation = _tokenPattern(negationMarkers, lam: false);
+  static final RegExp _future = _tokenPattern(futureMarkers, lam: true);
+  static final RegExp _notFuture = _tokenPattern(
+      hypotheticalMarkers.where((c) => !futureMarkers.contains(c)).toList(),
+      lam: true);
+  // "not declined", "has not been rejected", `لم يتم رفض`.
+  static final RegExp _negatedBefore = RegExp(
+      '(?<![a-z$_arabicLetter])(?:${_alternation(negationMarkers)})'
+      r'(?: يتم| تتم| been)? \(?$');
   static final RegExp _afterIntroducer = RegExp(
       '(?<![a-z$_arabicLetter])(?<!due )(?<!owing )'
       '(?:${_alternation(merchantIntroducers)})'
       r'[\s:]*'
-      '(?:(?:${_alternation(merchantNameWords)}) )?\$');
+      '(?:(${_alternation(merchantNameWords)}) )?\$');
   // "Refund failed", "refund was declined", "refund will be processed",
   // `الاسترداد مرفوض`.
   static final RegExp _undoneNext = RegExp(
