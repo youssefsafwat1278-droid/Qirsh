@@ -43,11 +43,20 @@ class SectionHeader extends StatelessWidget {
         ),
         if (trailing != null)
           GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: onTrailingTap,
-            child: Text(
-              trailing!,
-              style: AppTypography.subhead(
-                  trailingColor ?? t.textOnCanvasSecondary),
+            // UX-05: a 44x44 pt tap target around the unchanged link text.
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              child: Center(
+                widthFactor: 1,
+                heightFactor: 1,
+                child: Text(
+                  trailing!,
+                  style: AppTypography.subhead(
+                      trailingColor ?? t.textOnCanvasSecondary),
+                ),
+              ),
             ),
           ),
       ],

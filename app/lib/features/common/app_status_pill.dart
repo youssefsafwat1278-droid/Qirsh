@@ -31,7 +31,8 @@ class AppStatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final colors = _colors(c, tone);
+    final colors =
+        _colors(c, tone, Theme.of(context).brightness == Brightness.dark);
 
     return Semantics(
       label: label,
@@ -72,7 +73,7 @@ class AppStatusPill extends StatelessWidget {
     );
   }
 
-  static _PillColors _colors(AppColors c, AppStatusTone tone) {
+  static _PillColors _colors(AppColors c, AppStatusTone tone, bool isDark) {
     final effectiveTone =
         tone == AppStatusTone.pending ? AppStatusTone.warning : tone;
     final resolvedTone = effectiveTone == AppStatusTone.confirmed
@@ -82,7 +83,9 @@ class AppStatusPill extends StatelessWidget {
     return switch (resolvedTone) {
       AppStatusTone.success => _PillColors(
           background: c.successBg,
-          foreground: c.success,
+          // UX-07: light `success` on `successBg` is 4.02:1 (below 4.5 for
+          // this 12 pt label); the secondary text token is 8.13:1.
+          foreground: isDark ? c.success : c.textSecondary,
           border: c.success.withValues(alpha: 0.24),
         ),
       AppStatusTone.warning => _PillColors(

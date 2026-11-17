@@ -410,7 +410,7 @@ Widget _insightAction(BuildContext context, String label, VoidCallback onTap) =>
       style: TextButton.styleFrom(
         foregroundColor: context.colors.actionText,
         padding: const EdgeInsets.symmetric(horizontal: 4),
-        minimumSize: const Size(44, 40),
+        minimumSize: const Size(44, 44),
         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         alignment: AlignmentDirectional.centerStart,
         textStyle: AppTypography.subhead(context.colors.actionText)
@@ -649,7 +649,6 @@ class _HomeBody extends ConsumerWidget {
           trailing: context.l10n.homeDetails,
           onTrailingTap: () => ref.read(shellIndexProvider.notifier).state = 4,
         ),
-        const SizedBox(height: AppSpacing.s2),
         // The range these categories (and «آخر العمليات») cover. It is the
         // same range the Transactions tab uses, so it says so and stays
         // changeable from here.
@@ -658,8 +657,11 @@ class _HomeBody extends ConsumerWidget {
           child: InkWell(
             borderRadius: BorderRadius.circular(AppRadius.pill),
             onTap: () => _showRangeSheet(context, ref, data.range),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            // UX-05: at least 44 pt tall; the taller target replaces the 8 pt
+            // gaps that sat above and below this row.
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 44),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -678,7 +680,6 @@ class _HomeBody extends ConsumerWidget {
             ),
           ),
         ),
-        const SizedBox(height: AppSpacing.s2),
         CategorySpendCard(
           categories: data.topCategories,
           privacyMode: privacyMode,
@@ -2146,11 +2147,21 @@ class _HomeSectionTitle extends StatelessWidget {
                         onBlue ? Colors.white : t.textOnCanvasPrimary))),
             if (trailing != null)
               GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: onTrailingTap,
-                child: Text(trailing!,
-                    style: AppTypography.subhead(onBlue
-                        ? Colors.white.withValues(alpha: 0.8)
-                        : context.colors.actionText)),
+                // UX-05: a 44x44 pt tap target around the link text.
+                child: ConstrainedBox(
+                  constraints:
+                      const BoxConstraints(minWidth: 44, minHeight: 44),
+                  child: Center(
+                    widthFactor: 1,
+                    heightFactor: 1,
+                    child: Text(trailing!,
+                        style: AppTypography.subhead(onBlue
+                            ? Colors.white.withValues(alpha: 0.8)
+                            : context.colors.actionText)),
+                  ),
+                ),
               ),
           ],
         ),

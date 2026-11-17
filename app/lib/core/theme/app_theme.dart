@@ -296,8 +296,11 @@ class AppTheme {
         fillColor: c.surfaceMuted.withValues(
           alpha: brightness == Brightness.dark ? 0.72 : 0.86,
         ),
-        labelStyle: AppTypography.body(c.textMuted),
-        hintStyle: AppTypography.body(c.textMuted.withValues(alpha: 0.6)),
+        // UX-07: on this fill, `textMuted` measured 4.20:1 (light) and
+        // 3.36:1 (navy sheet), and the 60% hint 2.18:1 (light) / 2.99:1
+        // (dark). `textSecondary` is at least 6:1 on every theme's fill.
+        labelStyle: AppTypography.body(c.textSecondary),
+        hintStyle: AppTypography.body(c.textSecondary),
         prefixIconColor: c.textMuted,
         suffixIconColor: c.textMuted,
         contentPadding:

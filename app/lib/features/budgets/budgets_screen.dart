@@ -523,16 +523,24 @@ class _HistoryPeriodFilterRow extends StatelessWidget {
     ];
     return Wrap(
       spacing: AppSpacing.s2,
-      runSpacing: AppSpacing.s2,
+      // Each chip's 44 pt tap target already spaces the rows apart.
+      runSpacing: 0,
       children: [
         for (final (period, label) in options) ...[
           GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () {
               if (selected != period) HapticFeedback.selectionClick();
               ref.read(budgetsHistoryPeriodFilterProvider.notifier).state =
                   period;
             },
-            child: AnimatedContainer(
+            // UX-05: a 44x44 pt tap target around the unchanged chip.
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              child: Align(
+                widthFactor: 1,
+                heightFactor: 1,
+                child: AnimatedContainer(
               duration: const Duration(milliseconds: 180),
               padding: const EdgeInsets.symmetric(
                   horizontal: AppSpacing.s3, vertical: AppSpacing.s1 + 2),
@@ -554,6 +562,8 @@ class _HistoryPeriodFilterRow extends StatelessWidget {
                 style: AppTypography.caption(
                   selected == period ? c.actionText : c.textSecondary,
                 ).copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
               ),
             ),
           ),
@@ -668,7 +678,11 @@ class _BudgetsHeader extends StatelessWidget {
                 value: '$safeCount',
                 label: context.l10n.bdgStateSafeF,
                 background: c.successBg,
-                foreground: c.success),
+                // UX-07: light `success` on `successBg` is 4.02:1; the
+                // secondary text token is 8.13:1 there. Dark green passes.
+                foreground: Theme.of(context).brightness == Brightness.dark
+                    ? c.success
+                    : c.textSecondary),
             _SummaryChip(
                 value: '$warningCount',
                 label: context.l10n.bdgStateNear,
@@ -1048,7 +1062,7 @@ class _BudgetCard extends StatelessWidget {
               if (onDelete != null)
                 SizedBox(
                     height: 44,
-                    width: 40,
+                    width: 44,
                     child: IconButton(
                         padding: EdgeInsets.zero,
                         tooltip: context.l10n.setDelete,

@@ -48,9 +48,11 @@ class SegmentedControl<T> extends StatelessWidget {
       return c.textSecondary;
     }
 
+    // UX-05: the 4pt inset applies to the thumb only, so each segment's tap
+    // target is the full 44pt track height (the visible thumb is unchanged).
     return Container(
       height: 44,
-      padding: const EdgeInsets.all(4),
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: c.surfaceMuted,
         borderRadius: BorderRadius.circular(AppRadius.pill),
@@ -65,8 +67,8 @@ class SegmentedControl<T> extends StatelessWidget {
                 AnimatedPositioned(
                   duration: AppMotion.moderate,
                   curve: AppMotion.springSmoothCurve,
-                  top: 0,
-                  bottom: 0,
+                  top: 4,
+                  bottom: 4,
                   width: w,
                   left: rtl ? w * (options.length - 1 - selected) : w * selected,
                   child: DecoratedBox(

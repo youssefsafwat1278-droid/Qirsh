@@ -2013,7 +2013,7 @@ class _ProfileCard extends StatelessWidget {
         const SizedBox(width: AppSpacing.s2),
         AppSecondaryButton(
           label: context.l10n.setEdit,
-          height: 36,
+          height: 44,
           onTap: onNameTap,
         ),
       ]),
@@ -2071,16 +2071,25 @@ class _IdentityHeader extends StatelessWidget {
                   Transform.scale(scale: s, child: child),
               child: avatar,
             ),
-          const SizedBox(height: AppSpacing.s3),
+          // UX-05: the name is a full-width tap target at least 44 pt tall;
+          // the padding replaces the 12 pt gap above and 2 pt gap below it.
           GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: onNameTap,
-            child: Text(name,
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppTypography.sectionTitle(c.textPrimary)),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                  minWidth: double.infinity, minHeight: 44),
+              child: Padding(
+                padding:
+                    const EdgeInsets.only(top: AppSpacing.s3, bottom: 2),
+                child: Text(name,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.sectionTitle(c.textPrimary)),
+              ),
+            ),
           ),
-          const SizedBox(height: 2),
           Text(_middleEllipsis(contact),
               textAlign: TextAlign.center,
               maxLines: 1,
@@ -2103,7 +2112,7 @@ class _IdentityHeader extends StatelessWidget {
             width: 140,
             child: AppSecondaryButton(
               label: context.l10n.setEdit,
-              height: 40,
+              height: 44,
               onTap: onNameTap,
             ),
           ),
@@ -2141,7 +2150,9 @@ class _DestinationGrid extends StatelessWidget {
     final rows = <Widget>[];
     for (var i = 0; i < items.length; i += 2) {
       if (i > 0) rows.add(const SizedBox(height: AppSpacing.s3));
-      rows.add(Row(children: [
+      // Both tiles in a row share the taller one's height.
+      rows.add(IntrinsicHeight(
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Expanded(child: _DestinationTile(item: items[i])),
         const SizedBox(width: AppSpacing.s3),
         Expanded(
@@ -2149,7 +2160,7 @@ class _DestinationGrid extends StatelessWidget {
               ? _DestinationTile(item: items[i + 1])
               : const SizedBox.shrink(),
         ),
-      ]));
+      ])));
     }
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
@@ -2175,8 +2186,10 @@ class _DestinationTile extends StatelessWidget {
           onTap: item.onTap,
           splashFactory: NoSplash.splashFactory,
           highlightColor: settingsV2PressedColor(context),
-          child: SizedBox(
-            height: 88,
+          // UX-09: at least 88pt, taller when large text needs it (a fixed
+          // 88pt overflowed at 2x), and the title wraps instead of cutting.
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 88),
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.s3 + 2),
               child: Column(
@@ -2185,7 +2198,7 @@ class _DestinationTile extends StatelessWidget {
                 children: [
                   Icon(item.icon, size: 28, color: c.actionText),
                   Text(item.title,
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.subhead(c.textPrimary)),
                 ],

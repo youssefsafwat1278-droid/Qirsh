@@ -38,35 +38,42 @@ class AppPillTabBar extends StatelessWidget {
 
     return SizedBox(
       height: scaledHeight > height ? scaledHeight : height,
-      child: Container(
-        decoration: BoxDecoration(
-          color: onPhoto ? const Color(0xB30B1526) : c.surface,
-          borderRadius: BorderRadius.circular(AppRadius.pill),
-          border:
-              Border.all(color: onPhoto ? const Color(0x55FFFFFF) : c.border),
-        ),
-        padding: const EdgeInsets.all(_inset),
-        child: Stack(
-          children: [
-            if (selectedIndex >= 0 && selectedIndex < count)
-              Positioned.fill(
-                child: AnimatedAlign(
-                  duration: const Duration(milliseconds: 240),
-                  curve: Curves.easeOutCubic,
-                  alignment: AlignmentDirectional(x, 0),
-                  child: FractionallySizedBox(
-                    widthFactor: 1 / count,
-                    heightFactor: 1,
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: lensFill,
-                        borderRadius: BorderRadius.circular(AppRadius.pill),
-                      ),
-                    ),
-                  ),
-                ),
+      // UX-05: the track and lens are drawn inset, but the tab row spans the
+      // full height, so each tab's tap target is the whole track height.
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                color: onPhoto ? const Color(0xB30B1526) : c.surface,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(
+                    color: onPhoto ? const Color(0x55FFFFFF) : c.border),
               ),
-            Row(
+              padding: const EdgeInsets.all(_inset),
+              child: selectedIndex >= 0 && selectedIndex < count
+                  ? AnimatedAlign(
+                      duration: const Duration(milliseconds: 240),
+                      curve: Curves.easeOutCubic,
+                      alignment: AlignmentDirectional(x, 0),
+                      child: FractionallySizedBox(
+                        widthFactor: 1 / count,
+                        heightFactor: 1,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: lensFill,
+                            borderRadius: BorderRadius.circular(AppRadius.pill),
+                          ),
+                        ),
+                      ),
+                    )
+                  : null,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: _inset + 1),
+            child: Row(
               children: [
                 for (var i = 0; i < count; i++)
                   Expanded(
@@ -101,8 +108,8 @@ class AppPillTabBar extends StatelessWidget {
                   ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

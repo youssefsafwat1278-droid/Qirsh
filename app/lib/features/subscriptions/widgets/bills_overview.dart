@@ -109,7 +109,8 @@ class _BillsOverviewState extends ConsumerState<BillsOverview> {
         const SizedBox(height: AppSpacing.s3),
         Wrap(
           spacing: 8,
-          runSpacing: 8,
+          // The chips' 44 pt tap targets already keep 8 pt between rows.
+          runSpacing: 0,
           children: [
             ActivityChip(
               label: context.l10n.txnBillsSubs,

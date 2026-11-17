@@ -359,15 +359,15 @@ class _RewardCard extends StatelessWidget {
                       ? Icons.verified_rounded
                       : Icons.schedule_rounded,
                   size: 18,
-                  color: summary.entitlementActive ? c.onSuccess : c.textSecondary,
+                  color: summary.entitlementActive ? c.success : c.textSecondary,
                 ),
                 const SizedBox(width: AppSpacing.s2),
                 Expanded(
                   child: Text(
                     entitlementLine,
-                    style: AppTypography.caption(
-                      summary.entitlementActive ? c.onSuccess : c.textSecondary,
-                    ),
+                    // UX-07: `onSuccess` (white in light) on `successBg` was
+                    // 1.15:1; the text keeps the same token in both states.
+                    style: AppTypography.caption(c.textSecondary),
                   ),
                 ),
               ],

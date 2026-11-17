@@ -55,68 +55,77 @@ class ActivityChip extends StatelessWidget {
           HapticFeedback.selectionClick();
           onTap();
         },
-        child: AnimatedContainer(
-          duration: AppMotion.micro,
-          curve: AppMotion.easeOut,
-          constraints: const BoxConstraints(minHeight: 36),
-          padding: EdgeInsets.symmetric(
-              horizontal: label.isEmpty ? 10 : 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? c.ctaSoft : c.surface,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            border: Border.all(
-              color: selected
-                  ? c.cta.withValues(alpha: 0.40)
-                  : isDark
-                      ? c.border
-                      : c.strokeSoft,
+        // UX-05: the tap target is at least 44x44 pt; the visible chip keeps
+        // its 36 pt pill and is centred in it.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+          child: Align(
+            widthFactor: 1,
+            heightFactor: 1,
+            child: AnimatedContainer(
+              duration: AppMotion.micro,
+              curve: AppMotion.easeOut,
+              constraints: const BoxConstraints(minHeight: 36),
+              padding: EdgeInsets.symmetric(
+                  horizontal: label.isEmpty ? 10 : 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: selected ? c.ctaSoft : c.surface,
+                borderRadius: BorderRadius.circular(AppRadius.pill),
+                border: Border.all(
+                  color: selected
+                      ? c.cta.withValues(alpha: 0.40)
+                      : isDark
+                          ? c.border
+                          : c.strokeSoft,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (leading != null) ...[
+                    leading!,
+                    if (label.isNotEmpty) const SizedBox(width: 6),
+                  ],
+                  if (label.isNotEmpty)
+                    Text(
+                      label,
+                      style: AppTypography.subhead(fg)
+                          .copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  if (count != null) ...[
+                    const SizedBox(width: 5),
+                    Text(
+                      '$count',
+                      textDirection: TextDirection.ltr,
+                      style: AppTypography.subhead(fg.withValues(alpha: .7))
+                          .copyWith(fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                  if (badge > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      constraints:
+                          const BoxConstraints(minWidth: 20, minHeight: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 5),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: c.warning,
+                        borderRadius: BorderRadius.circular(AppRadius.pill),
+                      ),
+                      child: Text(
+                        '$badge',
+                        textDirection: TextDirection.ltr,
+                        style: AppTypography.overline(Colors.white),
+                      ),
+                    ),
+                  ],
+                  if (trailing != null) ...[
+                    const SizedBox(width: 4),
+                    trailing!,
+                  ],
+                ],
+              ),
             ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (leading != null) ...[
-                leading!,
-                if (label.isNotEmpty) const SizedBox(width: 6),
-              ],
-              if (label.isNotEmpty)
-                Text(
-                  label,
-                  style: AppTypography.subhead(fg)
-                      .copyWith(fontWeight: FontWeight.w600),
-                ),
-              if (count != null) ...[
-                const SizedBox(width: 5),
-                Text(
-                  '$count',
-                  textDirection: TextDirection.ltr,
-                  style: AppTypography.subhead(fg.withValues(alpha: .7))
-                      .copyWith(fontWeight: FontWeight.w500),
-                ),
-              ],
-              if (badge > 0) ...[
-                const SizedBox(width: 6),
-                Container(
-                  constraints:
-                      const BoxConstraints(minWidth: 20, minHeight: 20),
-                  padding: const EdgeInsets.symmetric(horizontal: 5),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: c.warning,
-                    borderRadius: BorderRadius.circular(AppRadius.pill),
-                  ),
-                  child: Text(
-                    '$badge',
-                    textDirection: TextDirection.ltr,
-                    style: AppTypography.overline(Colors.white),
-                  ),
-                ),
-              ],
-              if (trailing != null) ...[
-                const SizedBox(width: 4),
-                trailing!,
-              ],
-            ],
           ),
         ),
       ),
