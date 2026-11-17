@@ -22,6 +22,9 @@
 #   4c. flutter test — SERIALIZED real-replica deletion suites. Their admission
 #       and cleanup bounds stay unchanged. This isolates real SQLite/file I/O
 #       from bulk CPU/memory contention; every tagged suite still runs.
+#   4d. flutter test — SERIALIZED synthetic-define suites (REL-05/REV-06): the
+#       configured cases that skip without SUPABASE_ENV/URL/ANON_KEY, run with
+#       literal placeholder defines (no network). Bulk stays define-free.
 #   5. Node contract tests (supabase/tests/*.mjs; live cases self-skip)
 #   6. skip/ignore manifest enforcement (tools/test_skip_manifest.json) — node
 #      skips, deno ignores, and every Flutter skip site in app/test (REL-05)
@@ -178,6 +181,40 @@ if [ "${SKIP_FLUTTER_TEST:-0}" != "1" ]; then
   fi
 else
   caller_skipped "flutter test deletion replica I/O (SKIP_FLUTTER_TEST=1)"
+fi
+
+# REL-05 / REV-06: suites whose configured cases skip unless the build is
+# configured. The values are literal placeholders (no network; every transport
+# is faked) and are compile-time, so they are never passed to the bulk stage.
+# ci_gates_contract_node_test.mjs checks these inputs against every
+# "synthetic-define" entry of tools/test_skip_manifest.json.
+synthetic_defines=(
+  --dart-define=SUPABASE_ENV=local
+  --dart-define=SUPABASE_URL=https://example.supabase.co
+  --dart-define=SUPABASE_ANON_KEY=anon
+)
+synthetic_define_tests=(
+  test/core/auth/immediate_account_deletion_test.dart
+  test/core/tracking/user_activity_consent_test.dart
+  test/core/session/local_read_host_test.dart
+  test/features/app/smart_inbox_status_cycle_test.dart
+  test/features/planning_sync/startup_reconcile_default_rpc_refusal_test.dart
+)
+# This file also holds the unconfigured removal group, which runs in the bulk
+# stage and is built for an unconfigured binary; only its configured group runs here.
+synthetic_define_group_test=test/core/startup/bootstrap_remove_data_integration_test.dart
+synthetic_define_group='configured real sender bootstrap receivers'
+step "flutter test (synthetic-define suites — serialized, --concurrency=1)"
+if [ "${SKIP_FLUTTER_TEST:-0}" != "1" ]; then
+  ( cd "$ROOT/app" && flutter test "${synthetic_define_tests[@]}" "${synthetic_defines[@]}" --concurrency=1 ); sd_files=$?
+  ( cd "$ROOT/app" && flutter test "$synthetic_define_group_test" --plain-name "$synthetic_define_group" "${synthetic_defines[@]}" --concurrency=1 ); sd_group=$?
+  if [ "$sd_files" -eq 0 ] && [ "$sd_group" -eq 0 ]; then
+    ok "flutter test (synthetic-define serialized)"
+  else
+    bad "flutter test (synthetic-define serialized)"
+  fi
+else
+  caller_skipped "flutter test synthetic-define (SKIP_FLUTTER_TEST=1)"
 fi
 
 step "node contract tests"

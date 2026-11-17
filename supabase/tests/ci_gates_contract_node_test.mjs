@@ -108,6 +108,37 @@ for (const { tag, variable, label, otherTag } of [
   });
 }
 
+test("every synthetic-define skip site runs in one mandatory define stage; bulk stays define-free (REL-05/REV-06)", () => {
+  const sh = readFileSync(`${root}/tools/ci_gates.sh`, "utf8");
+  const manifest = JSON.parse(readFileSync(`${root}/tools/test_skip_manifest.json`, "utf8"));
+  const expected = [...new Set(manifest.flutter.expectedSkips
+    .filter((e) => e.class === "synthetic-define")
+    .map((e) => `test/${e.file}`))].sort();
+  assert.ok(expected.length > 0, "coverage assertion must not be vacuous");
+  const files = sh.match(/synthetic_define_tests=\(([\s\S]*?)\)/)?.[1]
+    ?.match(/test\/[^\s]+_test\.dart/g) ?? [];
+  const group = sh.match(/^synthetic_define_group_test=(test\/[^\s]+_test\.dart)$/m)?.[1];
+  const groupName = sh.match(/^synthetic_define_group='([^']+)'$/m)?.[1];
+  assert.ok(group && groupName, "the group-selected input must be declared");
+  assert.deepEqual([...files, group].sort(), expected, "no synthetic-define suite may be left unrun");
+  assert.ok(readFileSync(`${root}/app/${group}`, "utf8").includes(`group('${groupName}'`),
+    "the selected group exists, so --plain-name cannot select nothing");
+  const defines = sh.match(/synthetic_defines=\(([\s\S]*?)\)/)?.[1] ?? "";
+  for (const d of [
+    "--dart-define=SUPABASE_ENV=local",
+    "--dart-define=SUPABASE_URL=https://example.supabase.co",
+    "--dart-define=SUPABASE_ANON_KEY=anon",
+  ]) assert.ok(defines.includes(d), d);
+  assert.ok(sh.includes('flutter test "${synthetic_define_tests[@]}" "${synthetic_defines[@]}" --concurrency=1'));
+  assert.ok(sh.includes('flutter test "$synthetic_define_group_test" --plain-name "$synthetic_define_group" "${synthetic_defines[@]}" --concurrency=1'));
+  assert.ok(sh.includes('ok "flutter test (synthetic-define serialized)"'));
+  assert.ok(sh.includes('bad "flutter test (synthetic-define serialized)"'));
+  assert.ok(sh.includes('caller_skipped "flutter test synthetic-define (SKIP_FLUTTER_TEST=1)"'));
+  // The bulk stage must not inherit the defines (they change compile-time config).
+  const bulk = sh.split("\n").find((l) => l.includes("--exclude-tags 'crypto-prod || deletion-replica-io'"));
+  assert.ok(bulk && !bulk.includes("dart-define"), "bulk stage stays define-free");
+});
+
 test("the failing CDN tslib import uses an exact integrity-locked npm archive", () => {
   const config = JSON.parse(readFileSync(`${root}/supabase/functions/deno.json`, "utf8"));
   const lock = JSON.parse(readFileSync(`${root}/supabase/functions/deno.lock`, "utf8"));

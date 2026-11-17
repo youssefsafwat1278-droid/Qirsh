@@ -80,6 +80,11 @@ class _Queue implements CaptureQueueBridge {
 
 void main() {
   _senderBootstrapConfigured();
+  // Built for an UNCONFIGURED binary (debugAuthClient stands in for the SDK):
+  // it runs in the define-free bulk stage. With the synthetic defines the
+  // compile-time config routes startup through the real SDK and native
+  // keychain instead, so ci_gates.sh selects only the configured group
+  // (_senderBootstrapConfigured) there.
   group('original removal integration controls', () {
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory support;

@@ -96,7 +96,7 @@
         "contextContains": "Requires only the approved synthetic local",
         "count": 1,
         "class": "synthetic-define",
-        "reason": "QD003 configured legacy deletion RPC group. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; no gate or CI workflow passes these defines, so this coverage never runs in CI (REL-05 — owner/engineering decision pending).",
+        "reason": "QD003 configured legacy deletion RPC group. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; skipped in the define-free bulk stage, these sites EXECUTE in the mandatory ci_gates.sh stage 'flutter test (synthetic-define suites)' (REL-05/REV-06).",
         "finding": "REL-05"
       },
       {
@@ -141,7 +141,7 @@
         "contextContains": "Run with synthetic SUPABASE_URL and SUPABASE_ANON_KEY",
         "count": 1,
         "class": "synthetic-define",
-        "reason": "Remote completion case runs only when SupabaseConfig.isConfigured (synthetic SUPABASE_URL/SUPABASE_ANON_KEY defines); no gate or CI workflow passes them, so it never runs in CI (REL-05 — owner/engineering decision pending).",
+        "reason": "Remote completion case runs only when SupabaseConfig.isConfigured (synthetic SUPABASE_URL/SUPABASE_ANON_KEY defines); skipped in the define-free bulk stage, these sites EXECUTE in the mandatory ci_gates.sh stage 'flutter test (synthetic-define suites)' (REL-05/REV-06).",
         "finding": "REL-05"
       },
       {
@@ -150,7 +150,7 @@
         "contextContains": "Requires synthetic config.",
         "count": 2,
         "class": "synthetic-define",
-        "reason": "Two local_read_host cases run only when SupabaseConfig.isConfigured (synthetic defines); never run in CI (REL-05 — owner/engineering decision pending).",
+        "reason": "Two local_read_host cases run only when SupabaseConfig.isConfigured (synthetic defines); skipped in the define-free bulk stage, these sites EXECUTE in the mandatory ci_gates.sh stage 'flutter test (synthetic-define suites)' (REL-05/REV-06).",
         "finding": "REL-05"
       },
       {
@@ -168,7 +168,7 @@
         "contextContains": "Requires exact synthetic local/example/anon defines",
         "count": 1,
         "class": "synthetic-define",
-        "reason": "Configured real-sender remove-data bootstrap group. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; no gate or CI workflow passes these defines, so this coverage never runs in CI (REL-05 — owner/engineering decision pending).",
+        "reason": "Configured real-sender remove-data bootstrap group. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; skipped in the define-free bulk stage, these sites EXECUTE in the mandatory ci_gates.sh stage 'flutter test (synthetic-define suites)' (REL-05/REV-06).",
         "finding": "REL-05"
       },
       {
@@ -177,7 +177,7 @@
         "contextContains": "Requires exact synthetic local/example/anon defines",
         "count": 1,
         "class": "synthetic-define",
-        "reason": "Consent barrier ('denied activity is not throttled…'). Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; no gate or CI workflow passes these defines, so this coverage never runs in CI (REL-05 — owner/engineering decision pending).",
+        "reason": "Consent barrier ('denied activity is not throttled…'). Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; skipped in the define-free bulk stage, these sites EXECUTE in the mandatory ci_gates.sh stage 'flutter test (synthetic-define suites)' (REL-05/REV-06).",
         "finding": "REL-05"
       },
       {
@@ -195,7 +195,7 @@
         "contextContains": "No caller qualification",
         "count": 1,
         "class": "synthetic-define",
-        "reason": "Smart-inbox mounted caller qualification. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; no gate or CI workflow passes these defines, so this coverage never runs in CI (REL-05 — owner/engineering decision pending).",
+        "reason": "Smart-inbox mounted caller qualification. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; skipped in the define-free bulk stage, these sites EXECUTE in the mandatory ci_gates.sh stage 'flutter test (synthetic-define suites)' (REL-05/REV-06).",
         "finding": "REL-05"
       },
       {
@@ -204,7 +204,7 @@
         "contextContains": "No qualification: requires SUPABASE_ENV=local",
         "count": 1,
         "class": "synthetic-define",
-        "reason": "Default-RPC refusal qualification. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; no gate or CI workflow passes these defines, so this coverage never runs in CI (REL-05 — owner/engineering decision pending).",
+        "reason": "Default-RPC refusal qualification. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; skipped in the define-free bulk stage, these sites EXECUTE in the mandatory ci_gates.sh stage 'flutter test (synthetic-define suites)' (REL-05/REV-06).",
         "finding": "REL-05"
       },
       {
