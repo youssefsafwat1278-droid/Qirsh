@@ -68,5 +68,163 @@
         "mustRunWhenPrereq": true
       }
     ]
+  },
+  "flutter": {
+    "_doc": "REL-05 — every Flutter skip site under app/test (`skip:`, `@Skip`, `markTestSkipped(`) enumerated statically by tools/check_test_skips.mjs --flutter. A site matches an entry by file + kind + contextContains (in the site line or the 3 after it); each entry must match exactly `count` sites. An unlisted site, an extra site, or a stale entry FAILS the gate. Entries record the stated reason; they do not make the skipped coverage run.",
+    "expectedSkips": [
+      {
+        "file": "adversarial/session_recovery_attack_test.dart",
+        "kind": "skip",
+        "contextContains": "design: adoption never continues in the background",
+        "count": 2,
+        "class": "by-design",
+        "reason": "Unconditional. Documents a known limitation kept by design (decision (c), §11.4): iOS may suspend a backgrounded process mid-write, so adoption never continues once paused; fail-closed outcome. Never runs anywhere.",
+        "finding": "REL-05"
+      },
+      {
+        "file": "architecture/vendored_file_picker_test.dart",
+        "kind": "markTestSkipped",
+        "contextContains": "pristine 11.0.3 not in the local pub cache",
+        "count": 1,
+        "class": "host-tool",
+        "reason": "Byte diff against upstream file_picker 11.0.3 is skipped when the pristine package is not in the local pub cache; the structural assertions still run.",
+        "finding": "REL-05"
+      },
+      {
+        "file": "core/auth/immediate_account_deletion_test.dart",
+        "kind": "skip",
+        "contextContains": "Requires only the approved synthetic local",
+        "count": 1,
+        "class": "synthetic-define",
+        "reason": "QD003 configured legacy deletion RPC group. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; no gate or CI workflow passes these defines, so this coverage never runs in CI (REL-05 — owner/engineering decision pending).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "core/auth/owned_tls_socket_test.dart",
+        "kind": "markTestSkipped",
+        "contextContains": "openssl unavailable",
+        "count": 7,
+        "class": "host-tool",
+        "reason": "Skips at runtime only when the host has no openssl binary (local TLS test server); runs wherever openssl exists (macOS/Codemagic, ubuntu).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "core/auth/refresh_transport_test.dart",
+        "kind": "markTestSkipped",
+        "contextContains": "openssl unavailable",
+        "count": 12,
+        "class": "host-tool",
+        "reason": "Skips at runtime only when the host has no openssl binary (local TLS test server); runs wherever openssl exists (macOS/Codemagic, ubuntu).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "core/backup/restore_recovery_test.dart",
+        "kind": "markTestSkipped",
+        "contextContains": "dart executable",
+        "count": 2,
+        "class": "host-tool",
+        "reason": "Kill-mid-restore process test skips only when no `dart` executable can be started (genuine platform absence; load never causes a skip).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "core/backup/restore_recovery_test.dart",
+        "kind": "markTestSkipped",
+        "contextContains": "native sqlite",
+        "count": 2,
+        "class": "host-tool",
+        "reason": "Kill-mid-restore process test skips only when the child proves the sqlite3 native library cannot load.",
+        "finding": "REL-05"
+      },
+      {
+        "file": "core/session/local_read_host_test.dart",
+        "kind": "skip",
+        "contextContains": "Run with synthetic SUPABASE_URL and SUPABASE_ANON_KEY",
+        "count": 1,
+        "class": "synthetic-define",
+        "reason": "Remote completion case runs only when SupabaseConfig.isConfigured (synthetic SUPABASE_URL/SUPABASE_ANON_KEY defines); no gate or CI workflow passes them, so it never runs in CI (REL-05 — owner/engineering decision pending).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "core/session/local_read_host_test.dart",
+        "kind": "skip",
+        "contextContains": "Requires synthetic config.",
+        "count": 2,
+        "class": "synthetic-define",
+        "reason": "Two local_read_host cases run only when SupabaseConfig.isConfigured (synthetic defines); never run in CI (REL-05 — owner/engineering decision pending).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "core/startup/asr_production_path_test.dart",
+        "kind": "markTestSkipped",
+        "contextContains": "openssl unavailable",
+        "count": 1,
+        "class": "host-tool",
+        "reason": "Skips at runtime only when the host has no openssl binary (local TLS test server); runs wherever openssl exists (macOS/Codemagic, ubuntu).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "core/startup/bootstrap_remove_data_integration_test.dart",
+        "kind": "skip",
+        "contextContains": "Requires exact synthetic local/example/anon defines",
+        "count": 1,
+        "class": "synthetic-define",
+        "reason": "Configured real-sender remove-data bootstrap group. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; no gate or CI workflow passes these defines, so this coverage never runs in CI (REL-05 — owner/engineering decision pending).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "core/tracking/user_activity_consent_test.dart",
+        "kind": "skip",
+        "contextContains": "Requires exact synthetic local/example/anon defines",
+        "count": 1,
+        "class": "synthetic-define",
+        "reason": "Consent barrier ('denied activity is not throttled…'). Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; no gate or CI workflow passes these defines, so this coverage never runs in CI (REL-05 — owner/engineering decision pending).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "data/db/database_process_liveness_test.dart",
+        "kind": "markTestSkipped",
+        "contextContains": "dart executable unavailable for Process.start",
+        "count": 1,
+        "class": "host-tool",
+        "reason": "Process-liveness test skips only when `dart` cannot be started via Process.start.",
+        "finding": "REL-05"
+      },
+      {
+        "file": "features/app/smart_inbox_status_cycle_test.dart",
+        "kind": "skip",
+        "contextContains": "No caller qualification",
+        "count": 1,
+        "class": "synthetic-define",
+        "reason": "Smart-inbox mounted caller qualification. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; no gate or CI workflow passes these defines, so this coverage never runs in CI (REL-05 — owner/engineering decision pending).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "features/planning_sync/startup_reconcile_default_rpc_refusal_test.dart",
+        "kind": "skip",
+        "contextContains": "No qualification: requires SUPABASE_ENV=local",
+        "count": 1,
+        "class": "synthetic-define",
+        "reason": "Default-RPC refusal qualification. Runs only with --dart-define=SUPABASE_ENV=local SUPABASE_URL=https://example.supabase.co SUPABASE_ANON_KEY=anon; no gate or CI workflow passes these defines, so this coverage never runs in CI (REL-05 — owner/engineering decision pending).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "features/report_ads/staging_live_smoke_test.dart",
+        "kind": "skip",
+        "contextContains": "requires staging --dart-define credentials",
+        "count": 1,
+        "class": "live-external",
+        "reason": "R5 live smoke against staging; runs only with staging URL/anon key and test account defines. Never runs in CI by design (live external backend).",
+        "finding": "REL-05"
+      },
+      {
+        "file": "integration_local/sync_e2e_local_supabase_test.dart",
+        "kind": "skip",
+        "contextContains": "LOCAL_SUPABASE_URL not set",
+        "count": 1,
+        "class": "live-external",
+        "reason": "Opt-in end-to-end sync proof against a developer's isolated local Supabase (dart_test.yaml tag local-supabase); skipped unless LOCAL_SUPABASE_URL is set.",
+        "finding": "REL-05"
+      }
+    ]
   }
 }

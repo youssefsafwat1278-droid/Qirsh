@@ -23,7 +23,8 @@
 #       and cleanup bounds stay unchanged. This isolates real SQLite/file I/O
 #       from bulk CPU/memory contention; every tagged suite still runs.
 #   5. Node contract tests (supabase/tests/*.mjs; live cases self-skip)
-#   6. skip/ignore manifest enforcement (tools/test_skip_manifest.json)
+#   6. skip/ignore manifest enforcement (tools/test_skip_manifest.json) — node
+#      skips, deno ignores, and every Flutter skip site in app/test (REL-05)
 #   7. admin authorization tests
 #   8. l10n freshness (flutter gen-l10n + git diff app/lib/l10n; .g.dart is gitignored)
 #   9. MALI-034 architecture guard — the retired Supabase-primary financial
@@ -74,12 +75,12 @@ fi
 tool_missing_count=0     # UNAVAILABLE_TOOL   — fatal under strict
 caller_skipped_count=0   # CALLER_SKIPPED     — fatal under strict (not evidence)
 artifact_pending_count=0 # ARTIFACT_NOT_BUILT — deferred to post-build (never strict-fatal)
-node_skips="n/a"; deno_ignored="n/a"; manifest_state="not-run"
+node_skips="n/a"; deno_ignored="n/a"; flutter_skips="n/a"; manifest_state="not-run"
 LINT_EXCEPTIONS=7  # deno-lint-ignore no-explicit-any suppressions (2 prod Edge helpers + 5 test doubles); see PHASE_7_TEST_AND_CI_CONTRACT.md
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/ci_gates.XXXXXX")"
 trap 'rm -rf "$TMP"' EXIT
-NODE_TAP="$TMP/node.tap"; DENO_OUT="$TMP/deno.txt"
+NODE_TAP="$TMP/node.tap"; DENO_OUT="$TMP/deno.txt"; FLUTTER_SKIPS="$TMP/flutter_skips.txt"
 
 step() { echo; echo "══ $1 ══"; }
 ok() { echo "  ✓ $1"; pass_count=$((pass_count + 1)); }
@@ -196,13 +197,18 @@ if command -v node >/dev/null 2>&1; then
   args=()
   [ -f "$NODE_TAP" ] && args+=(--node "$NODE_TAP")
   [ -f "$DENO_OUT" ] && args+=(--deno "$DENO_OUT")
-  if node "$ROOT/tools/check_test_skips.mjs" "${args[@]}"; then
+  # REL-05 — Flutter skip sites are enumerated statically from the source, so the
+  # check holds even when the Flutter stages were skipped by the caller.
+  args+=(--flutter "$ROOT/app/test")
+  if FLUTTER_SKIP_COUNT_FILE="$FLUTTER_SKIPS" node "$ROOT/tools/check_test_skips.mjs" "${args[@]}"; then
     ok "skip/ignore manifest"; manifest_state="satisfied"
   else
     bad "skip/ignore manifest"; manifest_state="VIOLATED"
   fi
   deno_ignored="$(grep -c '\.\.\. .*ignored' "$DENO_OUT" 2>/dev/null || true)"
   deno_ignored="${deno_ignored:-0}"
+  flutter_skips="$(cat "$FLUTTER_SKIPS" 2>/dev/null || true)"
+  flutter_skips="${flutter_skips:-n/a}"
 else
   unavail "skip manifest (needs node)"
 fi
@@ -278,12 +284,13 @@ echo "  caller-skipped tests   : $caller_skipped_count  (strict: $([ "$REQUIRE_A
 echo "  artifact-dependent     : $artifact_pending_count  (deferred to a mandatory POST-BUILD check; never a pass, never strict-fatal)"
 echo "  node tests skipped     : $node_skips  (credentials absent — see manifest)"
 echo "  deno tests ignored     : $deno_ignored  (live-Postgres — see manifest)"
+echo "  flutter skip sites     : $flutter_skips  (static skip:/@Skip/markTestSkipped in app/test — see manifest; NOT counted as passed)"
 echo "  skip/ignore manifest   : $manifest_state"
 echo "  external verification  : pending (device / live Supabase / native timing — see PHASE_6 checklist)"
 echo "  retained lint exceptions: $LINT_EXCEPTIONS deno-lint-ignore (no-explicit-any; loosely-typed Supabase Edge client — see PHASE_7 doc)"
 # machine-readable line for CI assertions (no secrets). Each reason is preserved
 # as a distinct field — no broad bucket erases the classification (requirement 7).
-echo "CI_GATES_JSON {\"passed\":$pass_count,\"failed\":$fail_count,\"tool_missing\":$tool_missing_count,\"caller_skipped\":$caller_skipped_count,\"artifact_pending\":$artifact_pending_count,\"strict\":$REQUIRE_ALL_GATES,\"node_skipped\":\"$node_skips\",\"deno_ignored\":\"$deno_ignored\",\"manifest\":\"$manifest_state\",\"lint_exceptions\":$LINT_EXCEPTIONS}"
+echo "CI_GATES_JSON {\"passed\":$pass_count,\"failed\":$fail_count,\"tool_missing\":$tool_missing_count,\"caller_skipped\":$caller_skipped_count,\"artifact_pending\":$artifact_pending_count,\"strict\":$REQUIRE_ALL_GATES,\"node_skipped\":\"$node_skips\",\"deno_ignored\":\"$deno_ignored\",\"flutter_skip_sites\":\"$flutter_skips\",\"manifest\":\"$manifest_state\",\"lint_exceptions\":$LINT_EXCEPTIONS}"
 echo
 if [ "$fail" -eq 0 ]; then
   extra=$((unavail_count + caller_skipped_count + artifact_pending_count))

@@ -93,6 +93,11 @@ workflows:
         working_directory: app
         script: |
           # SUPABASE_* come from the "supabase" group; asserted non-empty above.
+          APP_VERSION="$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)"
+          [ -n "$APP_VERSION" ] || {
+            echo "ERROR: could not read the marketing version from app/pubspec.yaml."
+            exit 1
+          }
           flutter build ios --release --no-codesign \
             --dart-define=SUPABASE_URL="${SUPABASE_URL:-}" \
             --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}" \
@@ -103,7 +108,7 @@ workflows:
             --dart-define=QIRSH_GOOGLE_AUTH_ENABLED="${QIRSH_GOOGLE_AUTH_ENABLED:-false}" \
             --dart-define=QIRSH_EMAIL_AUTH_ENABLED="${QIRSH_EMAIL_AUTH_ENABLED:-false}" \
             --dart-define=QIRSH_ALTERNATE_SIGNUP_ENABLED="${QIRSH_ALTERNATE_SIGNUP_ENABLED:-true}" \
-            --dart-define=APP_VERSION="$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' app/pubspec.yaml)"
+            --dart-define=APP_VERSION="$APP_VERSION"
 
       - name: Package .app into unsigned .ipa
         working_directory: app
@@ -318,7 +323,7 @@ workflows:
             --dart-define=QIRSH_GOOGLE_AUTH_ENABLED="${QIRSH_GOOGLE_AUTH_ENABLED:-false}" \
             --dart-define=QIRSH_EMAIL_AUTH_ENABLED="${QIRSH_EMAIL_AUTH_ENABLED:-false}" \
             --dart-define=QIRSH_ALTERNATE_SIGNUP_ENABLED="${QIRSH_ALTERNATE_SIGNUP_ENABLED:-true}" \
-            --dart-define=APP_VERSION="$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' app/pubspec.yaml)" \
+            --dart-define=APP_VERSION="$IOS_MARKETING_VERSION" \
             --dart-define=ADMOB_APP_ID_IOS="${ADMOB_APP_ID_IOS:-}" \
             --dart-define=ADMOB_INTERSTITIAL_IOS="${ADMOB_INTERSTITIAL_IOS:-}" \
             --dart-define=ADMOB_BANNER_IOS="${ADMOB_BANNER_IOS:-}" \
@@ -499,6 +504,11 @@ workflows:
           # AdMob (R7 A3): ADMOB_APP_ID_ANDROID is read from the environment by
           # Gradle for the manifest placeholder, and passed to Dart as well so
           # the eligibility gate agrees with the manifest. Absent ⇒ no ads.
+          APP_VERSION="$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' pubspec.yaml)"
+          [ -n "$APP_VERSION" ] || {
+            echo "ERROR: could not read the marketing version from app/pubspec.yaml."
+            exit 1
+          }
           flutter build appbundle --release \
             --dart-define=SUPABASE_URL="${SUPABASE_URL:-}" \
             --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}" \
@@ -506,7 +516,7 @@ workflows:
             --dart-define=SENTRY_DSN="${SENTRY_DSN:-}" \
             --dart-define=LEGAL_BASE_URL="${LEGAL_BASE_URL:-}" \
             --dart-define=GOOGLE_SERVER_CLIENT_ID="${GOOGLE_SERVER_CLIENT_ID:-}" \
-            --dart-define=APP_VERSION="$(sed -n 's/^version: *\([0-9.]*\).*/\1/p' app/pubspec.yaml)" \
+            --dart-define=APP_VERSION="$APP_VERSION" \
             --dart-define=ADMOB_APP_ID_ANDROID="${ADMOB_APP_ID_ANDROID:-}" \
             --dart-define=ADMOB_INTERSTITIAL_ANDROID="${ADMOB_INTERSTITIAL_ANDROID:-}" \
             --dart-define=ADMOB_BANNER_ANDROID="${ADMOB_BANNER_ANDROID:-}"

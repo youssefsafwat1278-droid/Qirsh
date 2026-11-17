@@ -4,11 +4,11 @@
 // whose reason matches no manifest entry, partial/malformed credential config, or a
 // group whose credentials are present but whose tests still skipped.
 //
-// Usage: node tools/check_test_skips.mjs --node <node.tap> --deno <deno.txt>
-// Either input may be omitted (that surface is then not checked).
-import { readFileSync } from "node:fs";
+// Usage: node tools/check_test_skips.mjs --node <node.tap> --deno <deno.txt> --flutter <app/test>
+// Any input may be omitted (that surface is then not checked).
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, sep } from "node:path";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 // The committed manifest by default; SKIP_MANIFEST_PATH lets contract tests exercise
@@ -119,6 +119,58 @@ if (denoOut) {
     }
   }
   notes.push(`deno: ${ignored.length} ignored, all manifest-matched (unless errored above)`);
+}
+
+// --- flutter: statically enumerate skip sites under the test tree ----------------
+// REL-05 — `skip:` / `@Skip` / `markTestSkipped(` turn a Flutter test into a silent
+// pass ("All tests passed!"). Every site must match a manifest entry (same file,
+// same kind, `contextContains` in the site line or the 3 lines after it, which is
+// where the stated reason lives), and every entry must match EXACTLY `count`
+// sites: an extra site with a known reason is still a new skip. Static, so it
+// holds whether or not the Flutter stages ran.
+const flutterDir = arg("--flutter");
+if (flutterDir) {
+  const kinds = [
+    ["skip", /(?<![\w.$'"])skip\s*:/],
+    ["@Skip", /@Skip\b/],
+    ["markTestSkipped", /\bmarkTestSkipped\s*\(/],
+  ];
+  const files = readdirSync(flutterDir, { recursive: true })
+    .filter((f) => f.endsWith(".dart"))
+    .map((f) => f.split(sep).join("/"))
+    .sort();
+  const sites = [];
+  for (const file of files) {
+    const lines = readFileSync(join(flutterDir, file), "utf8").split("\n");
+    lines.forEach((line, i) => {
+      const t = line.trimStart();
+      if (t.startsWith("//") || t.startsWith("*") || t.startsWith("/*")) return;
+      for (const [kind, re] of kinds) {
+        if (re.test(line)) {
+          sites.push({ file, line: i + 1, kind, window: lines.slice(i, i + 4).join("\n") });
+        }
+      }
+    });
+  }
+  const entries = manifest.flutter?.expectedSkips || [];
+  const hits = new Map(entries.map((e) => [e, 0]));
+  for (const s of sites) {
+    const entry = entries.find((e) =>
+      e.file === s.file && e.kind === s.kind && s.window.includes(e.contextContains),
+    );
+    if (!entry) {
+      errors.push(`UNEXPECTED flutter skip: ${s.file}:${s.line} (${s.kind}) — add a manifest entry with its stated reason or remove the skip`);
+      continue;
+    }
+    hits.set(entry, hits.get(entry) + 1);
+  }
+  for (const [e, n] of hits) {
+    if (n !== e.count) {
+      errors.push(`flutter skip entry ${e.file} "${e.contextContains}" expects ${e.count} site(s), found ${n} — a new skip was added, or a stale entry outlived its test`);
+    }
+  }
+  if (process.env.FLUTTER_SKIP_COUNT_FILE) writeFileSync(process.env.FLUTTER_SKIP_COUNT_FILE, `${sites.length}\n`);
+  notes.push(`flutter: ${sites.length} skip site(s) in ${flutterDir}, all manifest-matched (unless errored above)`);
 }
 
 for (const n of notes) console.log(`  · ${n}`);

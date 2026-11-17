@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 
 // Phase-7 Batch-1 — the skip/ignore manifest checker (tools/check_test_skips.mjs) must
@@ -134,4 +134,88 @@ test("a RESOLVED known-failure that is failing again → fail", () => {
 test("a RESOLVED known-failure that passes normally → ok", () => {
   const r = runWithManifest(rkfManifest, "ok 1 - MALI-999 resolved probe");
   assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+// REL-05 — Flutter `skip:` / `@Skip` / `markTestSkipped(` sites are enumerated
+// statically and must each match a manifest entry; counts are exact.
+function runFlutter(manifestObj, files) {
+  const dir = mkdtempSync(join(tmpdir(), "skipman-flutter-"));
+  const testDir = join(dir, "test");
+  for (const [rel, body] of Object.entries(files)) {
+    mkdirSync(dirname(join(testDir, rel)), { recursive: true });
+    writeFileSync(join(testDir, rel), body);
+  }
+  const env = { ...process.env, SUPABASE_URL: "", SUPABASE_ANON_KEY: "", SUPABASE_SERVICE_ROLE_KEY: "" };
+  if (manifestObj) {
+    const mPath = join(dir, "manifest.json");
+    writeFileSync(mPath, JSON.stringify(manifestObj));
+    env.SKIP_MANIFEST_PATH = mPath;
+  }
+  return spawnSync("node", [checker, "--flutter", testDir], { cwd: root, encoding: "utf8", env });
+}
+
+const flutterManifest = (count = 1) => ({
+  credentialGroups: {},
+  node: { expectedSkips: [] },
+  deno: { expectedIgnored: [] },
+  flutter: {
+    expectedSkips: [
+      { file: "a/listed_test.dart", kind: "skip", contextContains: "needs synthetic defines", count, reason: "probe" },
+    ],
+  },
+});
+const listed = [
+  "void main() {",
+  "  test('x', () {}, skip: configured",
+  "      ? false : 'needs synthetic defines');",
+  "  // a comment mentioning skip: is not a skip",
+  "  final rest = xs.skip(1);",
+  "}",
+].join("\n");
+
+test("the real app/test tree: every Flutter skip site is manifest-matched → pass", () => {
+  const r = spawnSync("node", [checker, "--flutter", join(root, "app/test")], { cwd: root, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /flutter: \d+ skip site\(s\)/);
+});
+
+test("a listed Flutter skip (reason on the next line) passes; comments and .skip( are not skips", () => {
+  const r = runFlutter(flutterManifest(), { "a/listed_test.dart": listed });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /flutter: 1 skip site/);
+});
+
+for (const [label, line] of [
+  ["skip:", "  test('y', () {}, skip: 'quietly off');"],
+  ["@Skip", "@Skip('whole suite off')"],
+  ["markTestSkipped", "  test('z', () { markTestSkipped('nope'); });"],
+]) {
+  test(`an UNLISTED Flutter ${label} fails the gate`, () => {
+    const r = runFlutter(flutterManifest(), {
+      "a/listed_test.dart": listed,
+      "b/new_test.dart": `void main() {\n${line}\n}\n`,
+    });
+    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.match(r.stderr, /UNEXPECTED flutter skip: b\/new_test\.dart:2/);
+  });
+}
+
+test("an extra Flutter skip reusing a listed reason fails (counts are exact)", () => {
+  const r = runFlutter(flutterManifest(), {
+    "a/listed_test.dart": listed + "\nvoid more() { test('w', () {}, skip: 'needs synthetic defines'); }\n",
+  });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /expects 1 site\(s\), found 2/);
+});
+
+test("a stale Flutter manifest entry (skip removed) fails", () => {
+  const r = runFlutter(flutterManifest(), { "a/listed_test.dart": "void main() {}\n" });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /expects 1 site\(s\), found 0/);
+});
+
+test("the committed manifest rejects a new unlisted skip next to the real tree's files", () => {
+  const r = runFlutter(null, { "core/injected_unlisted_test.dart": "void main() {\n  test('q', () {}, skip: 'injected');\n}\n" });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /UNEXPECTED flutter skip: core\/injected_unlisted_test\.dart:2/);
 });

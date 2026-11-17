@@ -37,6 +37,10 @@ test("the canonical gate wires in the previously CI-invisible mandatory suites",
   assert.match(sh, /unavail/);
   assert.match(sh, /node tests skipped/);
   assert.match(sh, /deno tests ignored/);
+  // REL-05 — Flutter skip sites are enforced by the manifest gate and reported.
+  assert.match(sh, /args\+=\(--flutter "\$ROOT\/app\/test"\)/, "flutter skips governed by the manifest");
+  assert.match(sh, /flutter skip sites/);
+  assert.match(sh, /\\"flutter_skip_sites\\"/);
   assert.match(sh, /CI_GATES_JSON/);
 });
 
