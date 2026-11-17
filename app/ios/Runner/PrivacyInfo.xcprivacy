@@ -95,14 +95,27 @@
 				<string>C617.1</string>
 			</array>
 		</dict>
-		<!-- App Group UserDefaults (SharedCaptureStore) — accessing info from
-		     the same App Group (MALI-020). -->
+		<!-- UserDefaults: CA92.1 for app-only UserDefaults.standard
+		     (AppDelegate); 1C8F.1 for the App Group suite shared with the
+		     extension (SharedCaptureStore, SharedOfferIntentStore,
+		     SceneDelegate) (MALI-020, IOS-01). -->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
 				<string>CA92.1</string>
+				<string>1C8F.1</string>
+			</array>
+		</dict>
+		<!-- Disk space (SharedCaptureStore.deviceCapacityState): a coarse
+		     ok/near/full state shown in the Sync diagnostics screen (IOS-01). -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>85F4.1</string>
 			</array>
 		</dict>
 	</array>

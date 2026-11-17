@@ -29,14 +29,35 @@
 	</array>
 	<key>NSPrivacyAccessedAPITypes</key>
 	<array>
-		<!-- App Group UserDefaults (SharedCaptureStore) — the extension's only
-		     required-reason API. No file-timestamp API is used. -->
+		<!-- App Group UserDefaults (SharedCaptureStore, SharedOfferIntentStore):
+		     only the suite shared within the App Group, never .standard (IOS-01). -->
 		<dict>
 			<key>NSPrivacyAccessedAPIType</key>
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
-				<string>CA92.1</string>
+				<string>1C8F.1</string>
+			</array>
+		</dict>
+		<!-- File timestamps of the App Group inflight-upload registry
+		     (SharedCaptureStore.inflightFileIsStale) (IOS-01). -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>C617.1</string>
+			</array>
+		</dict>
+		<!-- Disk space (SharedCaptureStore.deviceCapacityState, compiled into
+		     this target too): a coarse ok/near/full state shown in the app's
+		     Sync diagnostics screen (IOS-01). -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>85F4.1</string>
 			</array>
 		</dict>
 	</array>

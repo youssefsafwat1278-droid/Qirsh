@@ -1356,8 +1356,10 @@ enum ApnsEnvironment {
     return nil
   }
 
-  private func installPrivacySnapshotView() {
-    guard privacySnapshotView == nil, let targetWindow = window else { return }
+  /// Under the UIScene lifecycle the window belongs to the scene, so
+  /// SceneDelegate passes it in (IOS-03).
+  func installPrivacySnapshotView(in sceneWindow: UIWindow? = nil) {
+    guard privacySnapshotView == nil, let targetWindow = sceneWindow ?? window else { return }
     let overlay = UIView(frame: targetWindow.bounds)
     overlay.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     overlay.backgroundColor = UIColor.systemBackground
@@ -1378,7 +1380,7 @@ enum ApnsEnvironment {
     privacySnapshotView = overlay
   }
 
-  private func removePrivacySnapshotView() {
+  func removePrivacySnapshotView() {
     privacySnapshotView?.removeFromSuperview()
     privacySnapshotView = nil
   }

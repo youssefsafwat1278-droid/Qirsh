@@ -63,6 +63,7 @@ class SceneDelegate: FlutterSceneDelegate {
     UserDefaults(suiteName: SharedCaptureStore.appGroupIdentifier)?
       .set(true, forKey: Self.foregroundKey)
     if let appDelegate = UIApplication.shared.delegate as? AppDelegate {
+      appDelegate.removePrivacySnapshotView()
       appDelegate.configureNativeCaptureChannelIfNeeded()
       appDelegate.configureDeviceTimezoneChannelIfNeeded()
       appDelegate.configureNativeGlassChannelIfNeeded()
@@ -70,9 +71,17 @@ class SceneDelegate: FlutterSceneDelegate {
     }
   }
 
+  // IOS-03: the app-delegate background/foreground callbacks are not delivered
+  // under the scene lifecycle, so the app-switcher cover is driven from here.
   override func sceneDidEnterBackground(_ scene: UIScene) {
     super.sceneDidEnterBackground(scene)
     UserDefaults(suiteName: SharedCaptureStore.appGroupIdentifier)?
       .set(false, forKey: Self.foregroundKey)
+    (UIApplication.shared.delegate as? AppDelegate)?.installPrivacySnapshotView(in: window)
+  }
+
+  override func sceneWillEnterForeground(_ scene: UIScene) {
+    super.sceneWillEnterForeground(scene)
+    (UIApplication.shared.delegate as? AppDelegate)?.removePrivacySnapshotView()
   }
 }
