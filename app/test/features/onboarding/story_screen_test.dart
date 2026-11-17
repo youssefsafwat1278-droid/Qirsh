@@ -138,12 +138,12 @@ void main() {
     await tester.pumpWidget(_app());
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('الصفحة ١ من ٢'), findsOneWidget);
+    expect(find.bySemanticsLabel('الصفحة 1 من 2'), findsOneWidget);
 
     await tester.tap(find.text('كمّل'));
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('الصفحة ٢ من ٢'), findsOneWidget);
+    expect(find.bySemanticsLabel('الصفحة 2 من 2'), findsOneWidget);
   });
 
   testWidgets('copy is sourced from localization, not hardcoded Arabic',
