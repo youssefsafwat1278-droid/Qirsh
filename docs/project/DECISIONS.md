@@ -260,3 +260,40 @@ analytics events, which cost no build inputs.
 
 **No ad is enabled by this.** Every flag remains seeded OFF; activation stays a
 separate owner action.
+
+## D-20 · Version 1 product decisions (owner, round 3)
+
+**Owner decisions, 2026-11-17. Approved; not to be re-asked.** Source, kept
+verbatim: `docs/releases/version-1/OWNER-BRIEF-ROUND3.md` §3. Where they differ,
+these supersede **D-19's advertising position** (and, through it, D-18's) and
+the earlier **30-day deletion brief** (scheduled deletion with an undo window).
+
+| # | Decision | Supersedes |
+|---|---|---|
+| 3.1 | V1 targets iPhone. Dedicated iPad support and Android release readiness are outside V1. Android code is kept. | — |
+| 3.2 | **V1 has no advertising.** Ad display and ad SDK initialisation/requests are disabled in the V1 build; a remote flag must not reactivate them. Production ad-flag changes are prepared, not executed without approval. Privacy declarations stay truthful about any SDK that remains linked. | D-19 / D-18 ad surfaces for V1 |
+| 3.3 | Backup restore merges: restores missing records, keeps newer data, keeps server identities, respects tombstones and manual edits. | — |
+| 3.4 | **Account deletion is final, with no 30-day undo period.** Copy must not promise immediate completion of asynchronous server work. No historical production clean-up is authorised by this decision. | 30-day deletion brief |
+| 3.5 | Privacy Policy and Terms open with Cloud off, before consent, without enabling Cloud/AI or sending messages. | — |
+| 3.6 | First launch asks for a language with none preselected; existing choices are kept. | — |
+| 3.7 | All countries are selectable. Country availability is separate from verified bank-parser coverage; no claim that every bank, language or format is tested. | Egypt/Saudi-only onboarding |
+| 3.8 | One first-run consent screen: "Agree and enable" / "Continue locally". Cloud and AI start only on the affirmative action. Sanitised text is not called anonymous. Existing users are not opted in by an update. | — |
+| 3.9 | The user-facing disabling action turns Cloud and AI off together, and does not imply that sent requests can be recalled. | — |
+| 3.10 | Shared learning is part of the Cloud/AI consent; the contribution is explained and minimised; existing aggregation/publication safeguards stay. | — |
+| 3.11 | Existing sign-in methods are kept; no reviewer backdoor. | — |
+| 3.12 | Notifications show the available transaction details within platform limits and never OTPs, full numbers, secrets or raw SMS. | — |
+| 3.13 | Signed-out capture never reports success silently and never attaches a message to whoever signs in next. | — |
+| 3.14 | Balances are labelled by source with their update time. | — |
+| 3.15 | Parser corrections apply to newly processed messages only; no bulk re-analysis of history. | — |
+
+**What this means for D-19 in the code.** The ad structure D-18/D-19 put in place
+(closed allowlist, flags seeded OFF, guard tests) is kept, so a later version can
+reopen advertising by a new owner decision. For V1 an additional build-time gate
+sits above it: ads are compiled out unless the build passes
+`--dart-define=QIRSH_ADS_ENABLED=true` (`AdMobBuildConfig.adsCompiledIn`), which
+the V1 release build does not. The Google Mobile Ads and UMP SDKs remain linked
+but are never initialised. The eight production ad flags are currently `true`;
+turning them off is a prepared owner action (RELEASE-PLAN.md).
+
+**Not decided here:** risk tolerances for AI accuracy, any historical data
+clean-up, and the advertising position for versions after V1.

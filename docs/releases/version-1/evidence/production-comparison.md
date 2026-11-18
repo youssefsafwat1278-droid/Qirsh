@@ -116,3 +116,50 @@ Remediation references: [SECURITY DEFINER executable by anon](https://supabase.c
 - New: all advertising flags are on in production (V1-063), contrary to the records.
 - New: two `SECURITY DEFINER` functions are executable by the anonymous role (V1-064).
 - The smallest justified deployment set is functions only — see [RELEASE-PLAN.md](../RELEASE-PLAN.md).
+
+## 7. Closure round — second read-only pass (ops specialist, 2026-11-17)
+
+Taken by the backend-privacy-ops specialist (model `claude-opus-5-5`, as stated by the harness) with the same signed-in CLI and the attached connector. **Read operations only:** `functions list`, `functions download --use-api` (source, into the scratchpad), `secrets list` (names), `backups list`, and connector `execute_sql` calls that are single `SELECT`s over catalogs, `cron.*`, `vault.secrets` (names only), `public.feature_flags`, and **counts** of user tables. No row of user data was exported; no secret value was read.
+
+### 7.1 Function sources against HEAD (`d1212986`) and build 147's commit (`b6fc0dad`)
+
+One command, now in the repository: `SUPABASE_PROJECT_REF=<ref> bash tools/prod_compare.sh HEAD b6fc0dad` (downloads the original **source** with `--use-api`, so no normalisation is needed; compares each function's import closure file by file).
+
+| Result | Functions |
+|---|---|
+| Identical to both HEAD and `b6fc0dad` (21) | `bank-discovery`, the six `catalog-*`, `cron-daily-reminders`, `delete-account-immediate` (12 files, including the two-bucket `storage_erasure.ts`), `enrich-merchant`, `google-enrollment`, `link-capture-device`, `merchant-category-contribution`, `merchant-feedback`, `purge-scheduled-deletions`, `register-device`, `register-push-token`, `send-push-broadcast`, `set-device-consent`, `sync-captures`, `unlink-capture-device` |
+| Identical to `b6fc0dad`, differs from HEAD | `parse-sms` (`_shared/ai_candidate_validator.ts`, `parse-sms/index.ts`, `parse-sms/money.ts`, and HEAD's closure adds `process-ios-sms/parser_rules.json`), `process-ios-sms` (`_shared/ai_candidate_validator.ts`, `parse.ts`, `parser_rules.json`) |
+| Differs from both | `account-deletion-worker` (`_shared/storage_erasure.ts`: deployed erases only `backups`), `evaluate-budgets`, `evaluate-gamification`, `evaluate-goals`, `process-notification-retries` (`_shared/apns.ts`: deployed predates the `sendApnsAlert` refactor `79a063d8`) |
+
+So **`process-ios-sms` v27 and `parse-sms` v15 are build 147's backend** (`b6fc0dad`): that is their exact rollback source. `account-deletion-worker` v5 matches neither; its rollback source must be found (RELEASE-PLAN P0). The uncommitted closure-round work changes the closures of `parse-sms` and `process-ios-sms` again (`_shared/ai_primary.ts`, `ai_understanding.ts`, `ai_candidate_validator.ts`, `gemini_request.ts`, `process-ios-sms/index.ts`, `message_meaning.ts`) and, through a type-only change to `gemini_request.ts`, `bank-discovery`. Re-run the command at the final commit.
+
+### 7.2 Schema equivalence beyond migration names
+
+`tools/schema_fingerprint.sql` (one read-only `SELECT` over the catalogs) was run on production and on a fresh local apply of HEAD's 134 migrations (`tools/backend_behaviour.sh` scaffold, session time zone UTC). Per-kind hashes:
+
+| Kind | Rows (local) | Production = local? |
+|---|---|---|
+| columns (`col`) | 1036 | **identical** (`6db5192868f3`) |
+| constraints (`con`) | 390 | **identical** (`2bf574c0156f`) |
+| indexes (`idx`) | 238 | **identical** (`4df90eed4925`) |
+| policies (`pol`, incl. `storage.objects`) | 155 | **identical** (`3a19be695b5e`) |
+| tables, RLS and anon/authenticated grants (`tbl`) | 95 | **identical** (`f405b704a8ee`) |
+| triggers (`trg`) | 140 | **identical** (`bf9f45747c1c`) |
+| functions (`fn`: body hash, definer, config, return, anon/authenticated EXECUTE) | 243 | **one real drift**: production grants `anon` EXECUTE on `public.set_default_account(uuid)` (SECURITY INVOKER; migration `0025` revokes only from `public`). Plus the scaffold-only `public._dryrun_noop`. Bodies, definer flags and `search_path` settings are otherwise identical |
+| cron (`cron`) | 7 | Commands of the shared jobs identical. Differences explained: `affiliate-sync-hourly` is **inactive** in production (changed by hand, not by a migration); `account-deletion-worker`, `account-deletion-purge-expired`, `push-broadcast-retry` are absent locally only because the scaffold has no pg_cron |
+
+Result: the applied schema equals the migration files except one `anon` grant, which goes to the separate grants package (V1-064).
+
+### 7.3 Facts that were unknown in §5
+
+| Item | Finding |
+|---|---|
+| Plan | Organisation plan **free** |
+| Backups | `pitr_enabled false`, `backups []`, `walg_enabled true` (unchanged). No restorable backup is listed |
+| Vault (names only) | `account_deletion_worker_secret`, `affiliate_worker_secret`, `engagement_worker_secret`, `notification_retry_worker_secret`, `project_url`, `purge_worker_secret`, `push_broadcast_worker_secret`, `reminders_worker_secret`. **The deletion worker is really called**; engagement triggers make HTTP calls |
+| Cron run history (last 24 h) | Every run succeeded: `account-deletion-worker` 288, `notification-retry-dispatch-5min` 288, `push-broadcast-retry` 144, the daily/hourly jobs 1 or 24 |
+| Ad flags | All 8: `value 'true'`, `is_active true`, `rollout_percent 100`, `target_countries []`, `updated_at 2026-10-04 14:29:12.530481+00`. `feature_flag_admin_audit` has **no row** for them (set before or outside the audited path) |
+| Counts | 11 auth users; `processed_captures` 208 (last 7 days: 96 processed, 8 duplicate, 3 rejected); `deletion_job` 12 completed; orphaned objects: `profile-photos` 0, `backups` 0 |
+| AI volume | Per-key daily counters 3–25 calls a day |
+| Notifications (7 days) | 1,428 sent, 540 failed, 3 opened, 4 pending. **All 540 failures are `local_ios` with `PlatformException(Error 2003 …)` from one install since 2026-11-07** (passed to the iOS specialist; monitoring signal M5 in RELEASE-PLAN). `notification_retry_queue` empty |
+| Admin panel | `admin.qirsh.site` does not resolve; `qirsh.site` (static legal site) returns 404 for `/admin`, `/dashboard`, `/flags`, `/api/feature-flags`; no Vercel/Netlify configuration in the repository. No internet exposure found |

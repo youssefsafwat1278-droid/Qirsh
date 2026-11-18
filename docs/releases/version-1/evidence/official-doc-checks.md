@@ -156,3 +156,19 @@ Source: App Review Guidelines, https://developer.apple.com/app-store/review/guid
 - `SRC-APPLE-1.5`, `SRC-APPLE-4.8`, `SRC-APPLE-TESTFLIGHT`, `SRC-APPLE-PRIVACY-LABELS`: corrected or extended (contact conflict, email-code sign-in, internal-only export option, missing data types, SDK disclosure).
 - New: `SRC-APPLE-SCREENSHOTS`, `SRC-APPLE-PHASED`, `SRC-GMA-DISCLOSURE`, `SRC-PLAY-PERMDECL`, `SRC-PLAY-ADID`, `SRC-PLAY-16KB`.
 - Tier 3 items 1, 2 and 15 updated.
+
+---
+
+## e. Closure round re-checks (ops specialist, 2026-11-17)
+
+Fetched again on **2026-11-17** by the backend-privacy-ops specialist (model `claude-opus-5-5`, as stated by the harness). Paraphrase only.
+
+| Source (URL, access date 2026-11-17) | What it says | Used for |
+|---|---|---|
+| App privacy details — https://developer.apple.com/app-store/app-privacy-details/ (no "last updated" date shown) | "Collect" = transmitted off device and kept longer than needed to service the request in real time; on-device-only processing is not collection; answers cover third-party partners and SDKs; definitions of linked, tracking and the purposes | STORE-READINESS closure table (V1-003). A linked SDK that never runs transmits nothing; Apple does not address that case in words — **UNCONFIRMED** that App Review accepts "not collected" for a linked, never-started ad SDK |
+| Complying with encryption export regulations — `https://developer.apple.com/tutorials/data/documentation/security/complying-with-encryption-export-regulations.json` | `NO` only if the app, including linked libraries, uses no encryption or only exempt encryption; OS-provided encryption is typically exempt; exempt use may still need a year-end self-classification report | A14 (V1-026) |
+| App Store Connect Help, "Overview of export compliance" (same page as section c; URL not re-recorded here) | The developer is responsible for the EAR determination; France has its own import rules | A14 |
+| App Store Connect Help, "Export compliance documentation for encryption" — https://developer.apple.com/help/app-store-connect/reference/export-compliance-documentation-for-encryption/ | Categories: only Apple OS encryption (no documents); standard algorithms instead of or in addition to OS encryption (French declaration if distributed in France); proprietary/non-standard algorithms (CCATS and the French declaration) | A14: Qirsh is in the **standard algorithms** category (SQLCipher/`sqlite3mc`, Dart `cryptography`) |
+| App Review — https://developer.apple.com/distribute/app-review/ and App Review Help "Complete review" — https://developer.apple.com/help/app-review/before-submitting-for-review/complete-review | Provide active demo credentials; if sign-in requires an authentication code, include the code or how to obtain it in the notes; list external authentication services; apps with sensitive data may offer a demo mode (needs prior approval per Guideline 2.1) | REVIEWER-NOTES-DRAFT (V1-015): Sign in with Apple path |
+
+Supabase test OTPs for **email** sign-in (a fixed code for one address) were not found in this check — **UNCONFIRMED**; not relied on.

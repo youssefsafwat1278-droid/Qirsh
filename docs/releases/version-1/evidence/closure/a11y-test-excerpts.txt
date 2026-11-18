@@ -1,0 +1,198 @@
+# a11y closure — test output excerpts (widget tests, synthetic data). Paths shortened.
+
+## large_text_overflow_test.dart BEFORE layout fixes (cap removed, run1)
+00:10 +3 -1: Home has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+00:18 +5 -2: Transactions has no layout error at 2.0x (en/ar, 320x568 and 390x844) [E]
+00:21 +5 -3: Transactions has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+00:57 +20 -4: Reports has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+01:05 +23 -5: Bills has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+01:14 +26 -6: Budget form has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+01:28 +32 -7: Settings account has no layout error at 2.0x (en/ar, 320x568 and 390x844) [E]
+01:30 +32 -8: Settings account has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+01:32 +32 -9: Smart Inbox has no layout error at 1.0x (en/ar, 320x568 and 390x844) [E]
+01:34 +32 -10: Smart Inbox has no layout error at 1.3x (en/ar, 320x568 and 390x844) [E]
+01:36 +32 -11: Smart Inbox has no layout error at 2.0x (en/ar, 320x568 and 390x844) [E]
+01:38 +32 -12: Smart Inbox has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+01:45 +35 -13: Transaction details (review) has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+01:53 +38 -14: Transaction details sheet has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+02:15 +49 -15: Paste bank message has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+02:30 +57 -15: Some tests failed.
+
+## large_text_overflow_test.dart AFTER (final)
+01:16 +27 -1: Bills has no layout error at 3.1x (en/ar, 320x568 and 390x844) [E]
+            'ar Size(320.0, 568.0): A RenderFlex overflowed by 54 pixels on the right.'
+            'en Size(320.0, 568.0): A RenderFlex overflowed by 21 pixels on the right.',
+02:53 +71 -1: Some tests failed.
+
+## Text cut off with ellipsis (printed, not asserted), final run
+[UX-09 1.0x Size(320.0, 568.0) en] Home cut off: Your money companion ; All accounts ; Paste SMS ; Nov 17, 2026 · 9:29 PM · Income ; Nov 17, 2026 · 8:29 PM · Groceries ; Today’s transactions
+[UX-09 1.0x Size(390.0, 844.0) en] Home cut off: Nov 17, 2026 · 9:29 PM · Income
+[UX-09 1.0x Size(320.0, 568.0) ar] Home cut off: كل الحسابات ; لصق رسالة ; 17 نوفمبر 2026 · 9:29 م · دخل ; 17 نوفمبر 2026 · 8:29 م · بقالة
+[UX-09 1.3x Size(320.0, 568.0) en] Home cut off: Your money companion ; Set a budget to track your pace ; Income ; Paste SMS ; Budget ; Goals ; Recent transactions ; Today’s transactions ; Where your money went
+[UX-09 1.3x Size(390.0, 844.0) en] Home cut off: Your money companion ; Paste SMS ; Today’s transactions
+[UX-09 1.3x Size(320.0, 568.0) ar] Home cut off: لصق رسالة ; ميزانية ; أهداف
+[UX-09 1.3x Size(390.0, 844.0) ar] Home cut off: لصق رسالة
+[UX-09 2.0x Size(320.0, 568.0) en] Home cut off: Your money companion ; Spent this month ; Set a budget to track your pace ; Income ; Spent ; Paste SMS ; Budget ; Goals ; Coffee Kiosk ; Groceries ; Nov 17, 2026 · 9:29 PM · Income ; Nov 17, 2026 · 8:29 PM · Groceries ; 7-day average ; Today’s transactions ; Spent this month  87.30
+[UX-09 2.0x Size(390.0, 844.0) en] Home cut off: Your money companion ; Set a budget to track your pace ; Income ; Paste SMS ; Budget ; Goals ; Coffee Kiosk ; 7-day average ; Today’s transactions
+[UX-09 2.0x Size(320.0, 568.0) ar] Home cut off: صديق مالي ; حدّد ميزانية لتتابع الوتيرة ; مصروف ; الصافي ; لصق رسالة ; ميزانية ; أهداف ; Coffee Kiosk ; متوسط 7 أيام ; عمليات اليوم
+[UX-09 2.0x Size(390.0, 844.0) ar] Home cut off: مصروف ; لصق رسالة ; ميزانية ; أهداف ; Coffee Kiosk
+[UX-09 3.1x Size(320.0, 568.0) en] Home cut off: Your money companion ; All accounts ; Spent this month ; Set a budget to track your pace ; Income ; Spent ; Net ; Paste SMS ; Budget ; Goals ; Spent this month  87.30 ; Coffee Kiosk ; Groceries ; Nov 17, 2026 · 9:29 PM · Income ; Nov 17, 2026 · 8:29 PM · Groceries ; 7-day average ; Today’s transactions
+[UX-09 3.1x Size(390.0, 844.0) en] Home cut off: Your money companion ; Spent this month ; Set a budget to track your pace ; Income ; Spent ; Paste SMS ; Budget ; Goals ; Coffee Kiosk ; Groceries ; Nov 17, 2026 · 9:29 PM · Income ; Nov 17, 2026 · 8:29 PM · Groceries ; 7-day average ; Today’s transactions ; Spent this month  87.30
+[UX-09 3.1x Size(320.0, 568.0) ar] Home cut off: صديق مالي ; كل الحسابات ; مصروف الشهر ; حدّد ميزانية لتتابع الوتيرة ; دخل ; مصروف ; الصافي ; لصق رسالة ; ميزانية ; أهداف ; مصروف الشهر  87.30 ; Coffee Kiosk ; بقالة ; 17 نوفمبر 2026 · 9:29 م · دخل ; 17 نوفمبر 2026 · 8:29 م · بقالة ; متوسط 7 أيام ; عمليات اليوم
+[UX-09 3.1x Size(390.0, 844.0) ar] Home cut off: صديق مالي ; مصروف الشهر ; حدّد ميزانية لتتابع الوتيرة ; مصروف ; الصافي ; لصق رسالة ; ميزانية ; أهداف ; Coffee Kiosk ; متوسط 7 أيام ; عمليات اليوم ; مصروف الشهر  87.30
+[UX-09 1.0x Size(320.0, 568.0) en] Transactions cut off: 7:29 PM · Groceries
+[UX-09 1.0x Size(320.0, 568.0) ar] Transactions cut off: 7:29 م · Groceries
+[UX-09 2.0x Size(320.0, 568.0) en] Budgets cut off: Budget history ; Monthly
+[UX-09 2.0x Size(320.0, 568.0) ar] Budgets cut off: سجل الميزانيات
+[UX-09 3.1x Size(320.0, 568.0) en] Budgets cut off: Budget history ; بقالة ; Monthly
+[UX-09 3.1x Size(390.0, 844.0) en] Budgets cut off: Budget history ; Monthly
+[UX-09 3.1x Size(320.0, 568.0) ar] Budgets cut off: سجل الميزانيات ; بقالة ; شهري
+[UX-09 3.1x Size(390.0, 844.0) ar] Budgets cut off: سجل الميزانيات
+[UX-09 2.0x Size(320.0, 568.0) en] Goals cut off: Budget history ; Add a savings goal so Qirsh can track your progress alongside your budgets.
+[UX-09 2.0x Size(390.0, 844.0) en] Goals cut off: Add a savings goal so Qirsh can track your progress alongside your budgets.
+[UX-09 2.0x Size(320.0, 568.0) ar] Goals cut off: سجل الميزانيات
+[UX-09 3.1x Size(320.0, 568.0) en] Goals cut off: Budget history ; Add a savings goal so Qirsh can track your progress alongside your budgets.
+[UX-09 3.1x Size(390.0, 844.0) en] Goals cut off: Budget history ; Add a savings goal so Qirsh can track your progress alongside your budgets.
+[UX-09 3.1x Size(320.0, 568.0) ar] Goals cut off: سجل الميزانيات ; أضف هدف ادخار ليتابع قِرش تقدمك إلى جانب ميزانياتك.
+[UX-09 3.1x Size(390.0, 844.0) ar] Goals cut off: سجل الميزانيات ; أضف هدف ادخار ليتابع قِرش تقدمك إلى جانب ميزانياتك.
+[UX-09 1.3x Size(320.0, 568.0) en] Budget history cut off: Pick a period that has budgets, or add a new budget — each day, week or month then appears here as its own record.
+[UX-09 1.3x Size(390.0, 844.0) en] Budget history cut off: Pick a period that has budgets, or add a new budget — each day, week or month then appears here as its own record.
+[UX-09 2.0x Size(320.0, 568.0) en] Budget history cut off: Budget history ; Pick a period that has budgets, or add a new budget — each day, week or month then appears here as its own record.
+[UX-09 2.0x Size(390.0, 844.0) en] Budget history cut off: Pick a period that has budgets, or add a new budget — each day, week or month then appears here as its own record.
+[UX-09 2.0x Size(320.0, 568.0) ar] Budget history cut off: سجل الميزانيات ; اختر فترة تحتوي على ميزانيات أو أضف ميزانية جديدة، وسيظهر كل يوم/أسبوع/شهر هنا كسجلّ منفصل.
+[UX-09 2.0x Size(390.0, 844.0) ar] Budget history cut off: اختر فترة تحتوي على ميزانيات أو أضف ميزانية جديدة، وسيظهر كل يوم/أسبوع/شهر هنا كسجلّ منفصل.
+[UX-09 3.1x Size(320.0, 568.0) en] Budget history cut off: Budget history ; Pick a period that has budgets, or add a new budget — each day, week or month then appears here as its own record.
+[UX-09 3.1x Size(390.0, 844.0) en] Budget history cut off: Budget history ; Pick a period that has budgets, or add a new budget — each day, week or month then appears here as its own record.
+[UX-09 3.1x Size(320.0, 568.0) ar] Budget history cut off: سجل الميزانيات ; اختر فترة تحتوي على ميزانيات أو أضف ميزانية جديدة، وسيظهر كل يوم/أسبوع/شهر هنا كسجلّ منفصل.
+[UX-09 3.1x Size(390.0, 844.0) ar] Budget history cut off: سجل الميزانيات ; اختر فترة تحتوي على ميزانيات أو أضف ميزانية جديدة، وسيظهر كل يوم/أسبوع/شهر هنا كسجلّ منفصل.
+[UX-09 3.1x Size(320.0, 568.0) en] Reports cut off: Overview
+[UX-09 3.1x Size(320.0, 568.0) ar] Reports cut off: الاتجاهات ; 87.30 ريال
+[UX-09 1.3x Size(320.0, 568.0) ar] Bills cut off: Streaming
+[UX-09 2.0x Size(320.0, 568.0) en] Bills cut off: Streaming
+[UX-09 2.0x Size(390.0, 844.0) en] Bills cut off: Streaming
+[UX-09 2.0x Size(320.0, 568.0) ar] Bills cut off: Streaming
+[UX-09 2.0x Size(390.0, 844.0) ar] Bills cut off: Streaming
+[UX-09 3.1x Size(320.0, 568.0) en] Bills cut off: Streaming
+[UX-09 3.1x Size(390.0, 844.0) en] Bills cut off: Streaming
+[UX-09 3.1x Size(320.0, 568.0) ar] Bills cut off: Streaming
+[UX-09 3.1x Size(390.0, 844.0) ar] Bills cut off: Streaming
+[UX-09 1.0x Size(320.0, 568.0) en] Budget form cut off: All expenses
+[UX-09 1.0x Size(320.0, 568.0) ar] Budget form cut off: كل المصروفات
+[UX-09 1.3x Size(390.0, 844.0) en] Budget form cut off: All expenses
+[UX-09 1.3x Size(320.0, 568.0) ar] Budget form cut off: كل المصروفات
+[UX-09 1.3x Size(390.0, 844.0) ar] Budget form cut off: كل المصروفات
+[UX-09 2.0x Size(320.0, 568.0) en] Budget form cut off: All expenses ; Restaurants ; Groceries ; Transport ; Shopping
+[UX-09 2.0x Size(390.0, 844.0) en] Budget form cut off: All expenses ; Restaurants
+[UX-09 2.0x Size(320.0, 568.0) ar] Budget form cut off: كل المصروفات ; مواصلات
+[UX-09 2.0x Size(390.0, 844.0) ar] Budget form cut off: كل المصروفات
+[UX-09 3.1x Size(320.0, 568.0) en] Budget form cut off: Weekly ; Monthly ; Yearly ; All expenses ; Restaurants ; Groceries ; Transport ; Shopping ; Health
+[UX-09 3.1x Size(390.0, 844.0) en] Budget form cut off: Monthly ; All expenses ; Restaurants ; Groceries ; Transport ; Shopping
+[UX-09 3.1x Size(320.0, 568.0) ar] Budget form cut off: أسبوعي ; كل المصروفات ; مطاعم ; مواصلات
+[UX-09 3.1x Size(390.0, 844.0) ar] Budget form cut off: كل المصروفات ; مواصلات
+[UX-09 1.0x Size(320.0, 568.0) en] Settings cut off: Your money companion ; Level Beginner · ⁦0 XP⁩
+[UX-09 1.0x Size(320.0, 568.0) ar] Settings cut off: المستوى مبتدئ · ⁦0 XP⁩
+[UX-09 1.3x Size(320.0, 568.0) en] Settings cut off: Your money companion ; Level Beginner · ⁦0 XP⁩
+[UX-09 1.3x Size(390.0, 844.0) en] Settings cut off: Your money companion
+[UX-09 1.3x Size(320.0, 568.0) ar] Settings cut off: صديق مالي ; المستوى مبتدئ · ⁦0 XP⁩
+[UX-09 2.0x Size(320.0, 568.0) en] Settings cut off: Your money companion ; Level Beginner · ⁦0 XP⁩ ; Accounts and wallets ; Subscriptions and bills ; Organise expenses, income and transfers ; Merchants whose category you asked Qirsh to remember ; Badges and levels that encourage the habit of tracking ; Safely review the currency of older planning data
+[UX-09 2.0x Size(390.0, 844.0) en] Settings cut off: Your money companion ; Level Beginner · ⁦0 XP⁩ ; Accounts and wallets ; Subscriptions and bills
+[UX-09 2.0x Size(320.0, 568.0) ar] Settings cut off: صديق مالي ; المستوى مبتدئ · ⁦0 XP⁩ ; الحسابات والمحافظ ; الاشتراكات والفواتير
+[UX-09 2.0x Size(390.0, 844.0) ar] Settings cut off: صديق مالي ; المستوى مبتدئ · ⁦0 XP⁩
+[UX-09 3.1x Size(320.0, 568.0) en] Settings cut off: Your money companion ; Level Beginner · ⁦0 XP⁩ ; Accounts and wallets ; All cards ; Subscriptions and bills ; Organise expenses, income and transfers ; Merchants whose category you asked Qirsh to remember ; Badges and levels that encourage the habit of tracking ; Safely review the currency of older planning data
+[UX-09 3.1x Size(390.0, 844.0) en] Settings cut off: Your money companion ; Level Beginner · ⁦0 XP⁩ ; Accounts and wallets ; Subscriptions and bills ; Organise expenses, income and transfers ; Merchants whose category you asked Qirsh to remember ; Badges and levels that encourage the habit of tracking ; Safely review the currency of older planning data
+[UX-09 3.1x Size(320.0, 568.0) ar] Settings cut off: صديق مالي ; المستوى مبتدئ · ⁦0 XP⁩ ; الحسابات والمحافظ ; كل البطاقات ; الاشتراكات والفواتير ; نظم المصروفات والدخل والتحويلات ; متاجر طلبت من قِرش أن يتذكّر تصنيفها ; شارات ومستويات تشجع عادة المتابعة ; راجع عملة بيانات التخطيط القديمة بأمان
+[UX-09 3.1x Size(390.0, 844.0) ar] Settings cut off: صديق مالي ; المستوى مبتدئ · ⁦0 XP⁩ ; الحسابات والمحافظ ; كل البطاقات ; الاشتراكات والفواتير ; شارات ومستويات تشجع عادة المتابعة
+[UX-09 1.0x Size(320.0, 568.0) en] Settings account cut off: 🇸🇦 Saudi Arabia
+[UX-09 1.0x Size(320.0, 568.0) ar] Settings account cut off: 🇸🇦 المملكة العربية السعودية
+[UX-09 1.0x Size(390.0, 844.0) ar] Settings account cut off: 🇸🇦 المملكة العربية السعودية
+[UX-09 2.0x Size(320.0, 568.0) en] Settings account cut off: Your money companion ; Your account details
+[UX-09 2.0x Size(390.0, 844.0) en] Settings account cut off: Your money companion ; Your account details
+[UX-09 3.1x Size(320.0, 568.0) en] Settings account cut off: Your account details ; Your money companion
+[UX-09 3.1x Size(390.0, 844.0) en] Settings account cut off: Your money companion ; Your account details
+[UX-09 3.1x Size(320.0, 568.0) ar] Settings account cut off: صديق مالي ; بيانات حسابك
+[UX-09 3.1x Size(390.0, 844.0) ar] Settings account cut off: بيانات حسابك
+[UX-09 1.0x Size(320.0, 568.0) en] Smart Inbox cut off: 7:31 PM · Groceries
+[UX-09 1.0x Size(320.0, 568.0) ar] Smart Inbox cut off: 7:31 م · Groceries
+[UX-09 3.1x Size(320.0, 568.0) en] Transaction details sheet cut off: Transaction details
+[UX-09 1.0x Size(320.0, 568.0) en] Add transaction cut off: Merchant or source (optional)
+[UX-09 1.3x Size(320.0, 568.0) en] Add transaction cut off: Merchant or source (optional)
+[UX-09 1.3x Size(320.0, 568.0) ar] Add transaction cut off: المتجر أو المصدر (اختياري)
+[UX-09 2.0x Size(320.0, 568.0) en] Add transaction cut off: Add a transaction manually ; Merchant or source (optional) ; Note (optional)
+[UX-09 2.0x Size(390.0, 844.0) en] Add transaction cut off: Add a transaction manually ; Merchant or source (optional)
+[UX-09 2.0x Size(320.0, 568.0) ar] Add transaction cut off: المتجر أو المصدر (اختياري) ; ملاحظة (اختياري)
+[UX-09 2.0x Size(390.0, 844.0) ar] Add transaction cut off: المتجر أو المصدر (اختياري)
+[UX-09 3.1x Size(320.0, 568.0) en] Add transaction cut off: Add a transaction manually ; Expense ; Income ; Transfer ; Category ; Merchant or source (optional) ; Note (optional)
+[UX-09 3.1x Size(390.0, 844.0) en] Add transaction cut off: Add a transaction manually ; Expense ; Merchant or source (optional) ; Note (optional)
+[UX-09 3.1x Size(320.0, 568.0) ar] Add transaction cut off: إضافة عملية يدويًا ; مصروف ; المتجر أو المصدر (اختياري) ; ملاحظة (اختياري)
+[UX-09 3.1x Size(390.0, 844.0) ar] Add transaction cut off: المتجر أو المصدر (اختياري) ; ملاحظة (اختياري)
+[UX-09 2.0x Size(320.0, 568.0) en] Edit transaction cut off: Merchant or source (optional) ; Note (optional)
+[UX-09 2.0x Size(390.0, 844.0) en] Edit transaction cut off: Merchant or source (optional)
+[UX-09 2.0x Size(320.0, 568.0) ar] Edit transaction cut off: المتجر أو المصدر (اختياري) ; ملاحظة (اختياري)
+[UX-09 3.1x Size(320.0, 568.0) en] Edit transaction cut off: Edit transaction ; Expense ; Income ; Transfer ; Category ; Merchant or source (optional) ; Note (optional)
+[UX-09 3.1x Size(390.0, 844.0) en] Edit transaction cut off: Edit transaction ; Expense ; Merchant or source (optional) ; Note (optional)
+[UX-09 3.1x Size(320.0, 568.0) ar] Edit transaction cut off: مصروف ; المتجر أو المصدر (اختياري) ; ملاحظة (اختياري)
+[UX-09 3.1x Size(390.0, 844.0) ar] Edit transaction cut off: المتجر أو المصدر (اختياري) ; ملاحظة (اختياري)
+[UX-09 1.3x Size(320.0, 568.0) en] Accounts cut off: Accounts & wallets ; Each account in its own currency — cash, bank, wallet or card.
+[UX-09 2.0x Size(320.0, 568.0) en] Accounts cut off: Accounts & wallets ; Each account in its own currency — cash, bank, wallet or card.
+[UX-09 2.0x Size(390.0, 844.0) en] Accounts cut off: Accounts & wallets ; Each account in its own currency — cash, bank, wallet or card.
+[UX-09 2.0x Size(320.0, 568.0) ar] Accounts cut off: كل حساب بعملته الخاصة — نقدي، بنك، محفظة أو بطاقة.
+[UX-09 3.1x Size(320.0, 568.0) en] Accounts cut off: Accounts & wallets ; Each account in its own currency — cash, bank, wallet or card.
+[UX-09 3.1x Size(390.0, 844.0) en] Accounts cut off: Accounts & wallets ; Each account in its own currency — cash, bank, wallet or card.
+[UX-09 3.1x Size(320.0, 568.0) ar] Accounts cut off: كل حساب بعملته الخاصة — نقدي، بنك، محفظة أو بطاقة.
+[UX-09 3.1x Size(390.0, 844.0) ar] Accounts cut off: كل حساب بعملته الخاصة — نقدي، بنك، محفظة أو بطاقة.
+
+## tap targets BEFORE (secondary + primary scans)
+            '"Change" 48x20 at 235,161'
+            '"Change" 48x20 at 235,165',
+            '"Change" 48x20 at 305,437'
+            '"Change" 48x20 at 305,614',
+            '"Close" 48x23 at 20,53',
+            '"Edit transaction" 48x23 at 252,53',
+            '"Edit transaction" 48x23 at 322,53',
+            '"إغلاق" 48x23 at 252,53',
+            '"إغلاق" 48x23 at 322,53',
+            '"تعديل العملية" 48x23 at 20,53',
+            '"تغيير" 29x20 at 37,161'
+            '"تغيير" 29x20 at 37,165',
+            '"تغيير" 29x20 at 37,437'
+            '"تغيير" 29x20 at 37,606',
+  Actual: Set:[
+  Actual: Set:['"" 14x14 at 173,393']
+  Actual: Set:['"" 14x14 at 206,381']
+  Actual: Set:['"" 14x14 at 230,392', '"" 14x14 at 230,51']
+  Actual: Set:['"" 14x14 at 85,387', '"" 14x14 at 85,46']
+  Actual: Set:['"Change" 48x20 at 235,303', '"Change" 48x20 at 235,187']
+  Actual: Set:['"Change" 48x20 at 305,598', '"Change" 48x20 at 305,463']
+  Actual: Set:['"Close" 48x23 at 252,53']
+  Actual: Set:['"Close" 48x23 at 322,53']
+  Actual: Set:['"إغلاق" 48x23 at 20,53']
+  Actual: Set:['"تغيير" 29x20 at 37,303', '"تغيير" 29x20 at 37,187']
+  Actual: Set:['"تغيير" 29x20 at 37,590', '"تغيير" 29x20 at 37,463']
+01:04 +53 -19: Some tests failed.
+
+## tap targets AFTER
+00:36 +72: All tests passed!
+
+## FOLLOW-UP: large_text_overflow_test.dart (80 cases incl. Bills, details (saved), category filter)
+02:37 +80: All tests passed!
+
+## FOLLOW-UP: tap-target scans
+00:21 +80: All tests passed!
+
+## FOLLOW-UP: fail-before runs
+category_filter_clear_target_test (old 14 pt GestureDetector):
+  Actual: 'groceries'
+00:03 +0 -2: Some tests failed.
+move_to_review_test + balance_source_label_test (button / bank row removed):
+  Actual: <0>
+  Actual: _KeyWidgetFinder:<Found 0 widgets with key [<'accountBankReportedBalance'>]: []>
+00:06 +7 -4: Some tests failed.
+test/features/accounts/balance_source_label_test.dart: account details shows the bank-reported balance with the time the bank reported it (ar) [E]
+test/features/accounts/balance_source_label_test.dart: account details shows the bank-reported balance with the time the bank reported it (en) [E]
+test/features/transactions/move_to_review_test.dart: a saved transaction moves into review and leaves the totals (ar) [E]
+test/features/transactions/move_to_review_test.dart: a saved transaction moves into review and leaves the totals (en) [E]
+manual_legacy_all_expenses_test (old filter):
+  Actual: <0>
+00:01 +0 -1: category field, edit legacy (en) [E]
+00:03 +1 -2: category field, edit legacy (ar) [E]
+00:03 +2 -2: Some tests failed.

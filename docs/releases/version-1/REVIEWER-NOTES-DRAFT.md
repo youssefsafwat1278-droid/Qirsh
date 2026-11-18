@@ -4,24 +4,25 @@
 > Written 2026-11-17 from the code at the working tree of `release-readiness/v1` (HEAD `d830855e`), by a documentation agent (Claude Opus 5.5). It replaces §5 of `docs/v1-release/V1_APP_STORE_SUBMISSION.md`, which contradicts the build (PROD-02, REL-12).
 > Corrected the same day (round 2) only where later facts made a statement stale: the production ad flags (all ON) and the tab-bar defect (RT-01). Nothing else was re-checked against the final candidate.
 > Every statement in Part 1 is backed by a code reference in Part 2. Part 2 is **not** for pasting.
+> **Closure round (2026-11-17, ops):** Part 1 updated for the owner decisions D-20 — reviewer path by Sign in with Apple, no advertising, all countries, iPhone only, first-run consent with "Agree and enable" / "Continue locally", final deletion. Labels quoted are from `app_en.arb` in the working tree; walk them on the submitted build (MDT-IOS-25).
 > The sample messages were written to match formats used in the project's own parser tests; they have **not** been run through a build. Before submission, paste each one into the build being submitted and confirm it produces a transaction.
 
-Blocking problem the owner must solve first (see Part 3, item 1): the build has **no password sign-in**. Email sign-in sends a one-time code to the inbox, so a reviewer given only `<reviewer email>` cannot receive the code. The text below is written for the option the owner chooses.
+Reviewer access (V1-015): the build has no password sign-in and an emailed one-time code cannot reach the reviewer, so Part 1 directs the reviewer to **Sign in with Apple with their own Apple ID**, which Apple's guidance allows without demo credentials. No reviewer backdoor exists or is added (D-20, 3.11).
 
 ---
 
 ## Part 1 — text to paste (English)
 
 **What Qirsh does**
-Qirsh is a personal expense tracker for bank customers in Saudi Arabia and Egypt. It turns bank transaction text messages into a private spending record (amount, merchant, date, card) and adds budgets, goals and reports. It does not connect to banks, move money, sell anything or offer financial advice. The app is available in Arabic and English; the language is chosen on the first screen and can be changed in Settings.
+Qirsh is a personal expense tracker for iPhone. Any country can be chosen; bank-message reading has been tested with some banks in Saudi Arabia and Egypt only, and other messages can be entered manually. It turns bank transaction text messages into a private spending record (amount, merchant, date, card) and adds budgets, goals and reports. It does not connect to banks, move money, sell anything or offer financial advice. The app is available in Arabic and English; the language is chosen on the first screen and can be changed in Settings.
 
 iOS does not let apps read SMS. On iPhone, a bank message reaches Qirsh in one of three ways, all started by the user: pasting it into the app, sharing it to Qirsh from the share sheet, or an optional Shortcuts automation that the user builds in Apple's Shortcuts app.
 
 **Signing in**
-Sign-in is required. This build offers Sign in with Apple, Sign in with Google, and email with a one-time code (no passwords). Review account: `<reviewer email>` / `<password — owner supplies in App Store Connect only>`. *(Owner: replace this sentence according to the option chosen in Part 3, item 1.)*
+Sign-in is required. Please use **Sign in with Apple** with any Apple ID; no demo account is needed and a new, empty account is created. The app has no passwords: the other methods shown (Google, and email with a one-time code sent to the inbox) are for existing users. External authentication services: Sign in with Apple, Google Sign-In; accounts are hosted by Supabase.
 
-**Consent (shown once, after sign-in)**
-"Smart Analysis & Cloud Sync" is off until the user accepts it. One choice turns on both cloud sync/backup and assisted reading of messages; it names Google Gemini (reads the sanitized message text) and Google Places (receives merchant names). Card, account and phone numbers and codes are removed before sending. If the reviewer taps "Not now", everything below still works: messages are read on the device and nothing about the user's finances leaves the device. Consent can be withdrawn in More → Privacy and data; withdrawing stops sync and analysis together.
+**Consent (shown once, at first run)**
+"Smart Analysis & Cloud Sync" stays off until the user taps **Agree and enable**. That one choice turns on cloud sync and backup, assisted reading of messages by Google Gemini (sanitized text), merchant lookup by Google Places and shared category learning; the screen names each recipient and says the sanitized text is not anonymous. **Continue locally** keeps everything on the device, and everything below still works. Turning it off later (More → Privacy and data → Turn off → **Turn off both**) stops sync and AI together; requests already sent cannot be recalled. The Privacy Policy and Terms open from the app even with Cloud off.
 
 **How to test capture without receiving a bank SMS**
 
@@ -46,10 +47,10 @@ Sample messages (fictional merchant, amount and card):
 Qirsh provides a Shortcuts action, **Process Bank SMS**. A user can create a personal automation in the Shortcuts app ("When I get a message from <bank sender> → Process Bank SMS with the message text") so that bank messages are recorded without opening Qirsh. The action can also be run manually from the Shortcuts app with the sample text in the "SMS Text" field. It does nothing while the user is signed out. In-app setup help: + → **Automatic capture**.
 
 **Account deletion**
-More → **Delete my account and all my data** → **Delete my account and all my data** → **Delete account** → **Delete permanently**. The user confirms their identity with the method they signed in with (Apple, Google, or an emailed code). Deletion is immediate and permanent and cannot be undone. Separately, "Sign out and erase data" removes the data from this device only.
+More → **Delete my account and all my data** → **Delete my account and all my data** → **Delete account** → **Delete permanently**. The user confirms their identity with the method they signed in with (Apple, Google, or an emailed code). Deletion starts as soon as it is confirmed and is final (no undo period); some server steps finish in the background within minutes and the app shows when deletion is complete. Separately, "Sign out and erase data" removes the data from this device only.
 
 **Data practices**
-Financial data is stored on the device in an encrypted database. With Smart Analysis & Cloud Sync off (the default), no financial data leaves the device. If the user accepts it, transactions and settings sync to the developer's backend (Supabase), sanitized message text is sent to the backend and may be read by Google's Gemini API, merchant names may be sent to Google Places, and crash reports are sent to Sentry. Qirsh does not sell data. The app contains the Google Mobile Ads SDK; *(owner: state here whether ads are shown in this version — see Part 3, item 3. Today every ad flag is ON in production, so a build carrying AdMob IDs would show ads during review.)* Privacy policy: https://qirsh.site/privacy.
+Financial data is stored on the device in an encrypted database. With Smart Analysis & Cloud Sync off (the default), no financial data leaves the device. If the user accepts it, transactions and settings sync to the developer's backend (Supabase), sanitized message text is sent to the backend and may be read by Google's Gemini API, merchant names may be sent to Google Places, and crash reports are sent to Sentry. Qirsh does not sell data. **This version shows no ads.** The Google Mobile Ads SDK is still linked in the binary from earlier development, but it is compiled out of use in this build: it is never initialised, no ad is requested and no advertising consent form is shown; no remote setting can turn it on. Privacy policy: https://qirsh.site/privacy.
 
 **Contact**: `<one monitored support address — see Part 3, item 5>`
 
@@ -99,15 +100,18 @@ Financial data is stored on the device in an encrypted database. With Smart Anal
 
 ## Part 3 — what the owner must do or decide before these notes are usable
 
-1. **Reviewer access (blocking).** No password sign-in exists, so the App Store Connect "password" field has nothing true to hold, and an emailed code cannot reach the reviewer. Options: (a) tell the reviewer to use Sign in with Apple with their own Apple ID and test with the sample messages (no seeded data; seeding then is unnecessary); (b) add a reviewer-only sign-in path — a code change that needs its own security review and decision; (c) provide an inbox the reviewer can read — not recommended. Deleting the review account also needs an emailed code if it was created by email. Whether Supabase can issue a fixed code for one email address was not checked — **UNCONFIRMED**.
+1. **Reviewer access — resolved in Part 1 (Sign in with Apple).** Historical note: No password sign-in exists, so the App Store Connect "password" field has nothing true to hold, and an emailed code cannot reach the reviewer. Options: (a) tell the reviewer to use Sign in with Apple with their own Apple ID and test with the sample messages (no seeded data; seeding then is unnecessary); (b) add a reviewer-only sign-in path — a code change that needs its own security review and decision; (c) provide an inbox the reviewer can read — not recommended. Deleting the review account also needs an emailed code if it was created by email. Whether Supabase can issue a fixed code for one email address was not checked — **UNCONFIRMED**.
 2. **If a seeded account is used**, seed only fictional data: 2 accounts (one SAR, one EGP), about 20 transactions over the last 30 days with fictional merchants (for example "EXAMPLE TEST CAFE", "مقهى التجربة"), one budget, one goal, one subscription, and 2–3 items waiting in Smart Inbox. No real names, card numbers or phone numbers.
-3. **Ads sentence**: decide what to say (V1-005, DECISIONS-NEEDED B1). **All eight ad flags are ON at 100% in production** (`evidence/production-comparison.md` §4.3), contrary to the recorded decision D-19. Whether the submitted build shows ads then depends only on whether it carries the AdMob IDs (`ios-signed-release` attaches the `admob` group; `ios-signed` does not). The notes must not say "no ads" unless the flags are off or the build carries no AdMob IDs, and must not say ads are shown unless the policy, consent text and privacy answers cover them.
+3. **Ads sentence — resolved by D-20 (no ads; compiled out).** Turn the production ad flags off anyway (RELEASE-PLAN P4) so no future ad-capable build inherits them. Historical note: decide what to say (V1-005, DECISIONS-NEEDED B1). **All eight ad flags are ON at 100% in production** (`evidence/production-comparison.md` §4.3), contrary to the recorded decision D-19. Whether the submitted build shows ads then depends only on whether it carries the AdMob IDs (`ios-signed-release` attaches the `admob` group; `ios-signed` does not). The notes must not say "no ads" unless the flags are off or the build carries no AdMob IDs, and must not say ads are shown unless the policy, consent text and privacy answers cover them.
 3a. **Tab bar (RT-01)**: the navigation in Part 1 ("More → …") needs the tab bar. Build 147 hides it after email-code sign-in; the fix (`45ea901a`) is in the candidate and was confirmed on a simulator only. Submit only a build containing it, and walk Part 1 on that build (MDT-IOS-25, MDT-IOS-30).
 4. **Backend that must be live during review** (Guideline 2.1): Supabase Auth (Apple, Google, email OTP providers and SMTP), the database and its RLS, Edge Functions used by consent-on paths (`process-ios-sms`, `parse-sms`, `bank-discovery`, `enrich-merchant`, catalog functions, the account-deletion challenge/request functions), the Gemini and Places keys, APNs push, and https://qirsh.site/privacy and /terms. With consent off the reviewer needs only Auth and deletion.
 5. **Support contact**: pick one monitored address; the app shows `support@money-companion.app` and the policy shows `business@qirsh.site` (Guideline 1.5).
-6. **iPad**: if the iPad device family stays, the reviewer may test on iPad and iPad screenshots are required (V1-014).
+6. **iPad**: resolved — the device family is iPhone only (`TARGETED_DEVICE_FAMILY = 1`), portrait.
+7. **Before pasting:** publish the updated policy (owner, `tools/deploy_site.sh`) only once the V1 app is live, and make sure the reviewer-facing policy does not describe 30-day deletion; confirm the release build enables the sign-in methods named above (RELEASE-PLAN f).
 
 ## Part 4 — places where the privacy policy and the code disagree (not papered over)
+
+**2026-11-17 closure round:** rows 1–4 and 6 are addressed in the rewritten `docs/legal/PRIVACY_POLICY.md` (not yet published). Row 5 (one support address) remains an owner action.
 
 | # | Privacy policy (`docs/legal/PRIVACY_POLICY.md`, last updated 2026-11-16) | Code | Issue |
 |---|---|---|---|

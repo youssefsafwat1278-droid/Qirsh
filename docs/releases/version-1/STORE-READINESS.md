@@ -21,6 +21,41 @@ No store console was opened during this assessment. Nothing has been submitted, 
 
 Current verdict for G6: **not satisfied on either store.**
 
+### Closure round (2026-11-17, ops specialist) — App Store answers taken from the code
+
+Owner decisions D-20 change several rows: V1 is iPhone-only (`TARGETED_DEVICE_FAMILY = 1` on all six build configurations), has no advertising (ads compiled out unless `QIRSH_ADS_ENABLED=true`; `ios-signed-release` attaches no `admob` group), and the policy and Terms were rewritten (`docs/legal/`, **not published**; the owner redeploys the site with `tools/deploy_site.sh` after the V1 app is live). Rows A2, A3, A4, A9, A11, A14, A16 below are superseded by this section where they differ.
+
+**A2/A3 — App privacy details (V1-003).** Definitions re-read 2026-11-17 at https://developer.apple.com/app-store/app-privacy-details/ (no date on the page): "collect" = transmitted off the device and kept longer than needed to service the request in real time; data processed only on the device is not collected; answers cover the developer and third-party partners (SDKs). Proposed answers, from the code with Cloud/AI consent on (with consent off nothing below is collected):
+
+| App Store type | Collected because (code) | Linked to user | Tracking | Purposes | Runner manifest now |
+|---|---|---|---|---|---|
+| Financial Info > Other Financial Info | Synced transactions, accounts, balances, budgets | Yes | No | App Functionality | Declared |
+| User Content > Emails or Text Messages | Sanitized bank-message text kept on the server up to 7 days (`processed_captures`, migration 0112) and sent to Gemini | Yes | No | App Functionality | Declared |
+| User Content > Photos or Videos | Profile photo in `profile-photos` | Yes | No | App Functionality | Declared |
+| Contact Info > Name, Email Address, Phone Number | Profile and auth | Yes | No | App Functionality | Declared |
+| Identifiers > User ID | Supabase account id | Yes | No | App Functionality | Declared |
+| Identifiers > Device ID | Capture device / install identifiers | Yes | No | App Functionality | Declared |
+| Usage Data > Product Interaction | Notification delivery/open logs (30 days) and achievement/streak events (`record_engagement_event`) | Yes | No | **App Functionality** (both serve features: delivery reliability, streaks); add Analytics only if the logs are used to analyse behaviour | Declared with **Analytics** only — **reconcile with the `ios` specialist** |
+| Diagnostics > Crash Data | Sentry, consent-gated | Not linked (Sentry receives no account id) — confirm in the release build's Sentry config | No | App Functionality | Declared |
+| Other Data Types | Date of birth in synced profile settings | Yes | No | App Functionality | **Missing** — add, or stop syncing the field |
+| Location | **Not collected.** The user-chosen country is sent with catalog requests; it is a setting, not location data in Apple's sense (Apple: "Coarse Location … lower resolution than … 3 kilometers") — **UNCONFIRMED** reading | — | — | — | — |
+| Shared learning contribution | Merchant name + category with a one-way code: covered by Product Interaction / Other Financial Info as App Functionality (improves categories for all users) | Pseudonymous (derived from the account) — answer **Linked** | No | App Functionality | — |
+| Advertising Data, and the GMA SDK's types | The Google Mobile Ads SDK 13.3.0 and UMP 3.1.0 remain **linked** (`Podfile.lock`), but in the V1 build `MobileAdsInitializer` and `AdConsentService` return before touching the SDK (`adsCompiledIn` false) and `GADDelayInitialization` is true, so nothing is transmitted → **not collected**. Caveat: the SDKs' own privacy manifests will still appear in Xcode's Privacy Report. Condition for answering "not collected": the release build log shows no `QIRSH_ADS_ENABLED`, and a proxy capture on the release build (MDT) shows no request to Google ad/UMP endpoints. If either is not verified, declare Google's listed types (Device ID, Advertising Data, Coarse Location, Performance Data, Product Interaction; Third-Party Advertising/Analytics) | — | — | — | — |
+
+Follow-up check (2026-11-18): the in-app AI request now also carries the on-device reading (amount as written; currency and direction when found in the message) and the matched account's currency code (`ai_parser_client.dart` `AiParseContext`), and results record the model and prompt version. These are financial details of the same message (Other Financial Info / Emails or Text Messages, already declared) and service metadata, so **no data type changes**. The global AI budget table holds date, service and counts only: not user data.
+
+Simplest durable fix (files not owned by ops): remove `google_mobile_ads` from the V1 binary, which also removes `GADApplicationIdentifier` and the SKAdNetwork list from `Info.plist`.
+
+**A14 — Export compliance (V1-026), concrete answer.** Re-read 2026-11-17: Apple developer documentation "Complying with encryption export regulations" (JSON endpoint, see official-doc-checks) and App Store Connect Help "Export compliance documentation for encryption" (https://developer.apple.com/help/app-store-connect/reference/export-compliance-documentation-for-encryption/). The only category needing no documentation is "only encryption within Apple's operating system". Qirsh also ships **standard algorithms not provided by iOS**: SQLCipher/`sqlite3mc` database encryption and the Dart `cryptography` package (AES, Argon2id key derivation) for backups; CryptoKit AES-GCM for the capture queue is OS-provided. Answer:
+1. `ITSAppUsesNonExemptEncryption` → **`true`** (today `false` in `app/ios/Runner/Info.plist`; change owned by the `ios` specialist).
+2. App Store Connect: the app uses **standard encryption algorithms instead of, or in addition to, Apple's operating system encryption**; no proprietary algorithm.
+3. **France:** Apple requires the French encryption declaration for this category if the app is distributed in France. Either upload it, or exclude France from the V1 territories.
+4. **Question for counsel (US EAR):** "Qirsh is a personal-finance app whose primary function is not information security; it encrypts the user's own data at rest (SQLCipher AES-256, AES via the Dart `cryptography` package) and uses OS TLS. Is it excluded from Category 5 Part 2 under the Note 3 / primary-function provisions, or classified 5D992.c mass market under License Exception ENC §740.17(b)(1) — and in either case is any self-classification report or other filing required before distribution from the US?"
+Not legal advice.
+
+**A8 — Reviewer access (V1-015).** Re-read 2026-11-17: https://developer.apple.com/distribute/app-review/ and https://developer.apple.com/help/app-review/before-submitting-for-review/complete-review — provide sign-in details; if sign-in needs an authentication code, include the code or a way to obtain it in the Review Notes; name any external authentication service. Feasible normal path without a backdoor: **Sign in with Apple** with the reviewer's own Apple ID (no credentials needed; the notes say so). The email-code path cannot give the reviewer a code (Supabase test OTPs exist for phone sign-in only — **UNCONFIRMED** for email), so the notes should not offer it. No blocker remains if the release build shows Sign in with Apple (it always does on iOS) and the backend is live during review. Draft: `REVIEWER-NOTES-DRAFT.md`.
+
+
 ---
 
 ## 1. Apple App Store

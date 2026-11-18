@@ -1,12 +1,16 @@
 # Qirsh — Privacy Policy
 
-**Last updated: 2026-11-16**
+**Last updated: 2026-11-17**
 
 Qirsh (قِرش) is a personal finance app that reads bank SMS on your device and
 turns them into a private record of your spending.
 
-Qirsh is currently available on iOS. The Android app has not been released yet;
-the parts of this policy marked Android describe how it behaves once it is.
+Qirsh is currently available for iPhone. The Android app has not been released
+yet; the parts of this policy marked Android describe how it behaves once it is.
+
+You can choose any country in the app. Choosing a country does not mean Qirsh
+can read every bank's messages there: it has been tested with messages from some
+banks in Saudi Arabia and Egypt only, and not with every message format.
 
 This policy describes what the app actually does. It was written after the
 privacy behaviour was audited and corrected, not before — several statements
@@ -19,14 +23,20 @@ that used to be aspirational are now enforced in code and covered by tests.
 - **Your financial data lives on your device**, in a database encrypted with a
   key held in the device keychain. Bank messages waiting to be processed are
   also stored encrypted on your device.
-- **Cloud sync is OFF by default.** With it off, no financial data leaves your
-  device — this is enforced at every network call, not only in the settings UI.
+- **Cloud sync and AI are off by default, and nothing is sent until you
+  agree.** On first use Qirsh asks you to choose **"Agree and enable"** (turns
+  on **Smart Analysis & Cloud Sync**) or **"Continue locally"**. Until you
+  agree, no financial data leaves your device, and no bank message either —
+  this is enforced at every network call, not only in the settings screen.
 - **The model that categorises your spending runs entirely on your device**, with
   no network access at all. Separately, if you accept **Smart Analysis & Cloud
-  Sync** — one choice, off unless you accept it, which turns on both cloud
-  processing and AI assistance together — a sanitized copy of a bank message may
-  be sent to our servers and to Google's Gemini API to help read it. The
-  sanitized text is still personal financial information; it is not anonymous.
+  Sync** — one choice, which turns on both cloud processing and AI assistance
+  together, with shared category learning included — a sanitized copy of a bank message may be sent to
+  our servers and to Google's Gemini API to help read it. The sanitized text is
+  still personal financial information; **it is not anonymous**.
+- **Turning it off turns both off.** One action stops cloud sync and AI message
+  reading together. Anything already sent cannot be recalled.
+- **No advertising.** This version of Qirsh shows no ads (section 7).
 - **We do not sell your data.** There is no advertising profile built from your
   transactions.
 
@@ -80,9 +90,9 @@ reading by Google's Gemini API described in section 8.
 
 ## 3. What is sent to the cloud, and only with your consent
 
-Cloud features are **off by default**. The gate is checked at the moment of
-sending — turning consent off stops transmission immediately, not at the next
-app start.
+Cloud features are **off until you choose "Agree and enable"**. The gate is
+checked at the moment of sending — turning consent off stops transmission
+immediately, not at the next app start.
 
 | Category | Sent when enabled | Purpose |
 |---|---|---|
@@ -94,10 +104,11 @@ app start.
 | Bank identification | For a bank sender we do not recognise: the sender's name (letters, such as a bank's name; never a phone number) and the sanitized text | Identify which bank sent it |
 | Merchant lookup | A merchant name we cannot categorise | Find the merchant's category |
 | Bank mappings | Which bank a sender ID belongs to | Improve parsing for everyone |
-| Shared category learning (**on by default** once Smart Analysis & Cloud Sync is on; you can turn it off) | When you choose "Remember for this merchant": the merchant name and the category only, with a one-way code in place of your account ID. Never amounts, dates, messages, transfers, wallet movements, or anything that looks like a person's name or contains numbers | Improve categories for everyone (see section 4) |
+| Shared category learning (**included** in Smart Analysis & Cloud Sync; you can turn it off on its own) | When you choose "Remember for this merchant": the merchant name and the category only, with a one-way code in place of your account ID. The one-way code is derived from your account, so it is a pseudonym, not anonymity. Never amounts, dates, messages, transfers, wallet movements, or anything that looks like a person's name or contains numbers | Improve categories for everyone (see section 4) |
 | Smart Inbox | Messages awaiting your confirmation | Review across devices |
 | Gamification | Achievement progress | Cross-device streaks |
-| Telemetry | Notification delivery/open events | Reliability of capture |
+| Telemetry | Notification delivery/open events, linked to your account | Reliability of capture |
+| App updates (catalog) | Your app version and country, sent with your sign-in session | Parser-rule updates, feature switches, and notices that an update is required |
 | Messages from us | Nothing extra: a notification we send reaches devices with Cloud Sync on whose "Qirsh messages and tips" notifications are on; we record whether it was delivered, against a one-way code of the install | Product news and announcements |
 | Diagnostics | Crash reports | Fixing crashes |
 
@@ -105,38 +116,44 @@ app start.
 does not transmit — the report is dropped before it is assembled, not merely
 scrubbed.
 
-### Always allowed, and why
+### What happens with Smart Analysis & Cloud Sync off
 
-Two things are not consent-gated:
-
-1. **Catalog updates** — parser rules, feature flags, and the force-update
-   notice. These carry **no data about you** and are requested anonymously. They
-   also deliver safety controls, so gating them would leave the most
-   privacy-conscious users unable to receive a critical fix notice.
-2. **Authentication**, when you choose to sign in.
+- **No catalog updates.** Qirsh does not contact our servers for parser-rule
+  updates, feature switches or update notices. It keeps using the rules built
+  into the installed app, and **you will not see an in-app notice that an update
+  is required** — keep the app updated from the App Store.
+- **Sign-in** happens only when you choose to sign in (and your session is kept
+  fresh while you stay signed in). It sends nothing about your finances.
+- **Opening the Privacy Policy or Terms** opens our website (qirsh.site) in an
+  in-app browser view, also before you have made a choice. That is an ordinary
+  web page request, so our web host receives what any website receives (your
+  IP address and browser details). It sends nothing about your finances or
+  messages and does not turn Smart Analysis & Cloud Sync on.
 
 ---
 
 ## 4. Consent, and how it behaves
 
-- Consent is **off by default**. Nothing about your finances is uploaded until
-  you turn it on.
+- Consent is **off until you agree**. Nothing about your finances is uploaded
+  until you choose "Agree and enable". "Continue locally" keeps everything on
+  your device; you can turn it on later in Settings → Privacy.
 - **Smart Analysis & Cloud Sync is one choice.** Accepting it turns on cloud
-  processing and AI assistance together; message reading by Google's Gemini API
-  requires both, and withdrawing stops it.
-- **Revocation is immediate.** The check is performed at each transmission, so
-  turning cloud off stops the next sync — including retries, background work,
-  and startup reconciliation.
-- **Shared category learning is a separate switch, on by default.** It only
-  works while Smart Analysis & Cloud Sync is on, and the app says so at the
-  moment you choose "Remember for this merchant". Turn it off any time in
-  Privacy; the choice is kept for your account on that device. Choices are
-  pooled: a merchant→category pair is added to the categories everyone
+  sync, AI message reading and shared category learning together.
+- **Turning it off turns both off.** Settings → Privacy → Turn off → "Turn off
+  both" stops cloud sync and AI message reading together, including retries,
+  background work and new shared-learning contributions. The check is performed
+  at each transmission. **A request that was already sent cannot be recalled.**
+- **Shared category learning is part of that consent.** When you agree, it is
+  included; you can still turn shared learning off on its own in Privacy, and
+  the choice is kept for your account on that device. If you agreed to Smart
+  Analysis & Cloud Sync in an earlier version, before shared learning was part
+  of it, shared learning stays off unless you agree when the app asks. Choices
+  are pooled: a merchant→category pair is added to the categories everyone
   receives only when at least 6 users agree and they are a clear majority
   (75%), or after an admin reviews it, and an admin can remove it at any time.
-  Turning the switch off stops future contributions; deleting a learned rule
-  while the switch is on withdraws that rule's contribution; deleting your
-  account deletes all the contributions you made.
+  Turning it off stops future contributions; deleting a learned rule while it is
+  on withdraws that rule's contribution; deleting your account deletes all the
+  contributions you made.
 - **Across devices, the more restrictive setting wins.** Turning consent OFF on
   one device propagates as a revocation. Turning it ON does **not** silently
   grant consent on your other devices — you grant it on each device yourself.
@@ -160,10 +177,17 @@ automatic SMS capture off. Data already saved to the cloud is not affected and
 can be downloaded again by signing in.
 
 ### Delete your account entirely
-Settings → Privacy & data → Delete my account and all my data. Your account and
-your cloud data (transactions, goals, budgets, backups, your profile photo, and the capture and AI
-records described in section 6) are scheduled for permanent deletion after 30
-days. You can undo it before then by signing in again.
+Settings → Privacy & data → Delete my account and all my data. After you confirm
+your identity (with Apple, or with a one-time code sent to your account's
+email), deletion starts at once and **is final — there is no undo period**. Your
+account and your cloud data (transactions, goals, budgets, backups, your profile
+photo, your shared-learning contributions, and the capture and AI records
+described in section 6) are deleted. Some server steps run in the background and
+can take a few minutes to finish; the app shows when deletion is complete.
+
+A deletion request made in an earlier version of Qirsh, which scheduled deletion
+after 30 days, will not be carried out; the app tells you so and you can delete
+your account with the action above.
 
 If you cannot access the app, email the address in §9 from the address on the
 account and we will action the deletion.
@@ -180,6 +204,8 @@ account and we will action the deletion.
 | Android: message text sent for reading | **Not stored** in our database. We keep a one-way fingerprint of the request and the extracted result (amount, merchant, date, category) for about 1 hour, removed by a daily clean-up — **at most about 25 hours** — to prevent duplicate processing |
 | iOS (Shortcut / share): sanitized message text and its sender and time on our servers | **Unavailable after 168 hours (7 days)** at most, and removed as soon as your device collects the result; the record without its content is **deleted after 30 days** |
 | Duplicate-detection fingerprints | **Deleted automatically after 7 days** |
+| Notification delivery records | **Deleted automatically after 30 days**, and when you delete your account |
+| App activity events (achievements and streaks) | **No fixed expiry** — removed when you delete your account |
 | Daily request counters | **No fixed expiry** — removed when you delete your account |
 | Device identifiers used for capture | **No fixed expiry** — removed when you delete your account |
 | Merchant names added to the shared merchant catalogue | **No fixed expiry** — a business name and category, not linked to you or your account |
@@ -207,11 +233,22 @@ data written before a deletion can remain in those backups until they expire.
 | Google — Gemini API (message reading) | Sanitized bank-message text; for an unrecognised bank, the sender's name | Only with Smart Analysis & Cloud Sync on, which turns on **both** cloud processing and AI assistance |
 | Google — Places API (merchant lookup) | A merchant name, without your identity | Only with Smart Analysis & Cloud Sync on |
 | Sentry (crash reporting) | Crash diagnostics | Only with consent |
+| Apple Push Notification service | The notification content Qirsh shows you | Only for notifications you allow |
 | Google / Apple sign-in | Authentication only | Only if you sign in |
+
+**No advertising.** This version of Qirsh shows no ads and does not request
+ads. The app still contains Google's Mobile Ads SDK and its consent (UMP) SDK
+from earlier development; in this version they are not started, so no ad is
+requested and no advertising consent form is shown. We do not use your data for
+advertising or share it with advertisers.
 
 Supabase, Sentry and the Gemini API process data **on our behalf**, under our
 instructions, to run the service. We do not sell or share your data for
 advertising.
+
+**Spending limit.** Our servers keep a daily count of paid AI requests across
+all users, so that AI use stops at a fixed daily ceiling. The count holds only
+the date, the service name and numbers — no user, device or message data.
 
 **Google's Gemini API.** We send each request with Google's request-level
 setting that turns off storage of the request in Google AI Studio logs. Google
@@ -306,9 +343,16 @@ If you accept **Smart Analysis & Cloud Sync** — a separate consent from the SM
 permission, off unless you accept it — captured bank messages are **sanitized**
 on your device and then sent to Qirsh's servers, which sanitize them again and
 pass the text to **Google's Gemini API** to read the amount, currency, merchant,
-transaction type and date. On Android this includes bank SMS that Qirsh reads
-automatically and messages you share to Qirsh; on iOS, messages you share or
-pass through the Shortcut. Sanitizing removes:
+transaction type and date. When you paste or share a message in the app, the
+request may also include what the app already read from that message on your
+device — the amount as written in the message, and the currency and direction
+when the app found them in it — and the currency code of your account the
+message matched, so that the two readings can be checked against each other.
+The amount is only sent if it still appears in the sanitized text. We record
+which AI model and instruction version produced each result, to investigate
+errors. On Android this includes bank
+SMS that Qirsh reads automatically and messages you share to Qirsh; on iOS,
+messages you share or pass through the Shortcut. Sanitizing removes:
 
 - full card numbers,
 - phone numbers,
@@ -361,38 +405,40 @@ updated" date above always reflects the current version.
 <!--
   DEPLOYMENT NOTE — not part of the published text.
 
-  Before publishing:
-    1. Replace <CONTACT_EMAIL> with a monitored address.
-    2. Resolve the bracketed "[OWNER MUST CONFIRM ...]" sentence in section 7
-       (Gemini billing tier). If the production Gemini project is NOT on the
-       paid tier, the sentence must instead say that Google may use the
-       requests to improve its products and that human reviewers may read
-       them — and sending bank-message text there should be reconsidered.
-    3. Do NOT publish this version until the 2026-11 backend changes are
-       DEPLOYED (parse-sms, bank-discovery, process-ios-sms, enrich-merchant,
-       _shared/sms_redaction.ts, _shared/gemini_request.ts, _shared/ai_primary.ts):
-       server-side name / e-mail / reference masking, `store:false` on every
-       Gemini request, numeric senders never sent to bank-discovery, and the
-       enrich-merchant identifier refusal. Sections 3, 7 and 8 describe them.
-    4. Do NOT publish before the app release that contains (a) the AES-256-GCM
-       encrypted Android capture queue and (b) cold-start background processing
-       (WorkManager / BGTaskScheduler). Sections 1, 2, 6 and 8 describe them.
-    4a. Do NOT publish the "Profile photo" rows (sections 3, 5, 6, 8) before
-       migration 20261116210000 (private profile-photos bucket) AND the
-       deletion worker that sweeps it (_shared/storage_erasure.ts, used by
-       purge-scheduled-deletions and delete-account-immediate) are deployed,
-       and an app release that uploads the photo ships.
-    5. Set "Last updated" to the publication date.
-    6. Host at the URL configured in `app/lib/core/config/legal_urls.dart`.
-       That host must resolve — the in-app Privacy screen links to it, and both
-       app stores require a reachable privacy URL.
+  Publication: the live site is NOT updated by editing this file. The owner
+  redeploys it with `tools/deploy_site.sh` (not run by the release work).
 
-  This document describes behaviour verified in the 2026-08 audit:
-  C-3 (consent enforced at every egress point, fail-closed),
-  OD-13 (on-device model, no network path),
-  OD-10 (revocation and cloud deletion are separate actions),
-  and the 2026-11 Android SMS + AI review
-  (docs/privacy/ANDROID_SMS_AI_DISCLOSURE_PROPOSAL.md).
-  If that behaviour changes, this text must change with it — a privacy policy
-  that describes the software inaccurately is worse than none.
+  Before publishing:
+    1. Do NOT publish before BOTH (a) the app release built from the V1
+       candidate (first-run consent, combined turn-off, final deletion, ads
+       compiled out, catalog gated on Cloud consent, all-country picker) is
+       live on the App Store, and (b) the V1 backend package in
+       docs/releases/version-1/RELEASE-PLAN.md is deployed — in particular
+       account-deletion-worker (the deployed v5 still erases only the
+       `backups` bucket, not `profile-photos`; section 5 says the profile
+       photo is deleted).
+    2. Until (a), build 147 users still see the earlier behaviour (separate
+       shared-learning switch on by default, 30-day deletion text in the app).
+       Publishing earlier would describe a build they do not have.
+    3. Gemini billing tier: confirm the production Gemini project is on the
+       paid tier (section 7 says so). If not, section 7 must change.
+    4. Set "Last updated" to the publication date.
+    5. Host at the URL configured in `app/lib/core/config/legal_urls.dart`
+       (https://qirsh.site by default).
+
+  Statements that depend on another specialist's code and must be reconciled
+  against the final commit before publishing:
+    - ads SDK presence and "not started" (admob_build_config.dart
+      `adsCompiledIn`, mobile_ads_initializer.dart, ad_consent_service.dart);
+    - consent and shared-learning wording (smart_analysis_consent_sheet.dart,
+      shared_learning_preference.dart, app_en.arb smartConsent* keys);
+    - deletion lifecycle (deleteAccount* and privScheduledForDeletion keys);
+    - catalog gated on Cloud consent (consent_authority.dart,
+      catalog_sync_service.dart);
+    - country coverage note (countryCoverageNote).
+
+  Retention statements in section 6 were checked against migrations 0112
+  (7-day capture text, 30-day capture rows, 7-day fingerprints, 30-day
+  notification logs) and 0117 (account-deletion purge). If behaviour changes,
+  this text must change with it.
 -->

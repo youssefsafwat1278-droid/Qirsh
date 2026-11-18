@@ -5,7 +5,21 @@ headers describe what a migration *does*; they do not record where it has run.
 
 ---
 
-## Verified production state
+## Verified production state — current (2026-11-17)
+
+**This section supersedes the 2026-09-02 table below, which is kept as history.**
+
+| | |
+|---|---|
+| **Production project** | `rjwphwsefnuotpbtuycf` |
+| **Applied** | **134 migrations**: `0001`–`0117` and the 17 timestamped files through `20261117010000_push_broadcast_auto_retry` — exactly the set in `supabase/migrations/` at `d1212986` |
+| **Verified by** | Connector `list_migrations` (names), 2026-11-17; and a schema fingerprint (`tools/schema_fingerprint.sql`) of production against a fresh local apply of the same files: columns, constraints, indexes, policies, table grants/RLS and triggers identical; functions identical except one hand-made grant (`anon` EXECUTE on `public.set_default_account(uuid)`); cron differs only by `affiliate-sync-hourly` set inactive by hand. Details: `docs/releases/version-1/evidence/production-comparison.md` §7.2 |
+| **Source-only, NOT applied — in the V1 package** | `20261117120000_ai_global_spend_guard.sql` (global AI spend ceiling, V1-022). Additive and idempotent; rollback `supabase/rollback/20261117120000_ai_global_spend_guard_rollback.sql`. Applied only with the owner's approval of the V1 release package |
+| **Deferred, not applied** | `0118_record_metric_ad_keys` (`supabase/deferred/`) |
+
+---
+
+## Verified production state — 2026-09-02 (historical)
 
 | | |
 |---|---|
