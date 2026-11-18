@@ -291,3 +291,115 @@ Policy-dependent rows at `7577f347`:
 - Wallet top-up: review without AI, spending on the oracle path.
 
 The real-model run is still BLOCKED, for the same reason as §5.
+
+## 10. Review-fix commit `7dd6efa8` and the build-147 MIXED mode (2026-11-18)
+
+Same set (753 messages, `messages.jsonl` unchanged), same labels, same `ACCEPTANCE.md` criteria. **No label was changed.** `df -h /` showed 17 GB free before the runs. Three runs, all exit 0 with 0 runner errors:
+- `tools/message_eval/run.sh 7dd6efa8` (the normal run);
+- `tools/message_eval/run.sh b6fc0dad` (build 147 on today's deployed server);
+- `MESSAGE_EVAL_SERVER_REV=7dd6efa8 tools/message_eval/run.sh b6fc0dad` (MIXED: build 147 after the server deploy).
+
+All scratch worktrees were removed (`git worktree list` shows none under the scratch directory).
+
+**Runner change (one, in `run.sh`).** A new optional variable `MESSAGE_EVAL_SERVER_REV` checks out a second detached worktree and runs the Deno server step (`server_eval.ts`) from that commit, while the Dart device step runs from the commit named on the command line. Results are labelled `<client>-client+<server>-server`. Without the variable, the runner behaves exactly as before (server and client from the same commit). Nothing else changed: same server step (including the §9 meaning-gate copy, which is active only when the server commit exports `messageMeaning`), same Dart runner, same grading.
+
+Why this does not favour either side: it only chooses which commit's server code produces the stored result that the client imports. Each side's code is used unmodified.
+
+**Code identity check.** `b6fc0dad` (build 147) differs from `ab5dc10a` only in UI files (`app.dart`, `app_boot_loader.dart`, `app_shell.dart`, `smart_analysis_consent_sheet.dart`). The capture, import, parser and server code is identical, and the `b6fc0dad` run reproduces the `ab5dc10a` numbers exactly. "Old server" below is therefore today's deployed server code.
+
+### Four-way table (`ab5dc10a` → `5dae2e2d` → `7577f347` → `7dd6efa8`)
+
+Counts exclude the 14 policy-dependent rows. Denominators as in §9. Pass marks are for `7dd6efa8`.
+
+| Criterion (bar) | local_only | cloud_det | cloud_primary_oracle |
+|---|---|---|---|
+| A1 non-transactions saved (0) | 24 → 20 → 4 → **0** PASS | 44 → 32 → 8 → **0** PASS | 0 → 0 → 0 → **0** PASS |
+| A2 declined/pending saved (0) | 60 → 20 → 5 → **5** FAIL | 79 → 27 → 12 → **12** FAIL | 0 → 0 → 0 → **0** PASS |
+| A3 ambiguous saved (0) | 4 → 4 → 4 → **0** PASS | 4 → 4 → 4 → **0** PASS | 0 → 0 → 0 → **0** PASS |
+| A4 wrong amount / currency / direction (≤ 1 %) | 8.0 → 7.1 → 1.8 → **0/0/0 (0.0 %)** PASS | 13.9 → 12.6 → 3.5 → **0/4/0 (0.9 %)** PASS | 4.4 → 4.0 → 2.6 → **4/0/4 (1.8 %)** FAIL |
+| A4 injection-bearing wrong (0) | 4 → 0 → 0 → **0** PASS | 4 → 0 → 0 → **0** PASS | 0 → 0 → 0 → **0** PASS |
+| A5 duplicates (0) | 0 → 0 → 0 → **0** PASS | 0 → 0 → 0 → **0** PASS | 0 → 0 → 0 → **0** PASS |
+| A6 lost silently (0) | 12 → 0 → 0 → **0** PASS | 8 → 0 → 0 → **0** PASS | 8 → 0 → 0 → **0** PASS |
+| A7 completed to review (≤ 15 / 15 / 5 %) | 34.2 → 31.6 → 28.9 → **28.9 %** FAIL | 7.3 → 11.0 → 8.8 → **8.8 %** PASS | 1.8 → 7.7 → 3.1 → **3.1 %** PASS |
+| A8b correct AI answer not saved (≤ 5 %) | – | – | 16 → 35 → 14 → **14 (3.1 %)** PASS |
+| Info: non-transactions sent to review | 117 → 161 → 192 → 196 | 81 → 145 → 184 → 192 | 201 → 201 → 201 → 201 |
+| Info: wrong type, right direction | 0 → 0 → 0 → 0 | 20 → 4 → 4 → 4 | 0 → 0 → 0 → 0 |
+
+A4 is shown as amount/currency/direction at `7dd6efa8`; earlier columns give the rate (the counts are in §9).
+
+**A8a, validators on the correct candidate:** server **6 (1.3 %)**, all `amount_not_grounded`; device **10 (2.2 %)**, `transaction_not_completed` 4 and `amount_not_grounded` 6. Both PASS, unchanged from `7577f347`.
+
+**Server reading alone** (`det`): processed although not a completed movement **16** (16 declined/pending, 0 non-transactions; was 20); completed messages rejected **94** (was 90; the device recovers them).
+
+**Verdict for `7dd6efa8`:**
+- `local_only` fails A2 and A7 only.
+- `cloud_det` fails A2 only.
+- `cloud_primary_oracle` fails A4 only.
+- Silent loss, duplicates and injection stay at 0 on every path.
+
+### Remaining failure classes at `7dd6efa8` (aggregate)
+
+- **A2, `local_only`:** pending-refund notices ("refund request … under review" and similar) booked as refunds (5).
+- **A2, `cloud_det`:**
+  - "standing order … will be executed tomorrow" booked as a payment (4);
+  - pending-refund notices booked as refunds (5);
+  - "cheque … returned unpaid" booked (3).
+- **A4, `cloud_det`, wrong currency:** the GBP form with "amount debited SAR y … FX fee" recorded in the foreign currency (4).
+- **A4, `cloud_primary_oracle`:** own-account moves ("from your Savings to your Current account") booked as spending (4); a two-purchase message booked as one event (4).
+- **A7, `local_only`:** unchanged at about 29 %, in the same families as §9 (fee lines, FX/VAT/tip totals, refunds, Arabic bill payments, Gulf 3-decimal and "$"/"£" formats, injection-bearing purchases, truncated tails).
+
+### Got worse
+
+- **Than `5dae2e2d`:** only the Arabic purchase with an embedded instruction, 3 messages from a correct save to review on `cloud_det` and on `cloud_primary_oracle` (as in §9). The mixed debit + salary regression listed in §9 is gone. Improvements: 83 / 132 / 34 messages (local_only / cloud_det / oracle).
+- **Than `7577f347`:** nothing. Improvements: 16 / 24 / 4.
+
+**Completed messages newly sent to review:** against `5dae2e2d` 0 / 3 / 3 (all the instruction-bearing purchase); against `7577f347` 0 / 0 / 0.
+
+Policy-dependent rows: ATM cash deposit review on every path; card repayment booked as spending; wallet top-up review without AI and spending on the oracle path; crypto review without AI, booked on the oracle path.
+
+### MIXED: build 147 before and after the server deploy
+
+OLD = build 147 client + today's server (`b6fc0dad` both sides). NEW = build 147 client + `7dd6efa8` server. Same messages. `local_only` does not use the server and is identical in both (24 / 60 / 4 / 8.0 % / 4 / 0 / 12 / 34.2 %).
+
+| Criterion | cloud_det OLD → NEW | cloud_primary_oracle OLD → NEW |
+|---|---|---|
+| A1 non-transactions saved | 44 → **24** | 0 → 0 |
+| A2 declined/pending saved | 79 → **72** | 0 → 0 |
+| A3 ambiguous saved | 4 → 4 | 0 → 0 |
+| A4 wrong amount/currency/direction | 8/16/39 (13.9 %) → **8/4/15 (6.0 %)** | 5/0/15 (4.4 %) → **4/0/4 (1.8 %)** |
+| A4 injection-bearing wrong | 4 → 4 | 0 → 0 |
+| A5 duplicates | 0 → 0 | 0 → 0 |
+| A6 lost silently | 8 → **0** | 8 → **0** |
+| A7 completed to review | 33 (7.3 %) → 29 (6.4 %) | 8 (1.8 %) → 16 (3.5 %) |
+
+**Per class, `cloud_det`, rows that change totals (OLD → NEW):**
+
+| Class | OLD | NEW |
+|---|---|---|
+| balance notice saved | 8 | 4 |
+| bill due saved | 12 | 4 |
+| marketing saved | 12 | 4 |
+| expected salary saved | 12 | 12 |
+| completed: wrong direction | 32 | 12 |
+| completed: wrong currency | 16 | 4 |
+| completed: wrong amount | 7 | 7 |
+| completed: lost | 8 | 0 |
+| multi-event: wrong direction / amount | 7 / 1 | 3 / 1 |
+| declined recorded | 43 | 43 |
+| pending recorded | 24 | 24 |
+| pending refund recorded | 12 | 5 |
+| ambiguous recorded | 4 | 4 |
+
+`cloud_primary_oracle`: completed lost 8 → 0 and wrong direction 8 → 4; multi-event wrong amount 5 → 4 and wrong direction 7 → 0. Nothing is worse.
+
+**Worse for a build-147 user after the deploy (per message, `cloud_det`): 8 messages.** Today's server rejects them, so build 147 keeps them out of totals. The new server stores them as processed, and build 147 books them:
+- 4 Arabic pending-refund notices ("refund request … under review"), booked as refunds (income-side);
+- 4 "standing order … will be executed tomorrow" notices, booked as payments.
+
+The class totals for pending and pending refund do not rise only because other messages in those classes improved by at least the same number. No declined message, wrong direction or wrong amount is newly recorded, and no completed message is newly lost. Improvements: 79 messages on `cloud_det`, 20 on the oracle path.
+
+**Completed messages newly sent to review for build 147:** `cloud_det` 4 (the Arabic instruction-bearing purchase); oracle path 8 (that purchase, 4, and an English completed refund, 4). These are safe (no wrong money) but add review work.
+
+Both groups of 8 new bookings are the same server-side families that remain in A2 at `7dd6efa8` itself. Fixing them in the server parser would remove the regression for build-147 users too.
+
+The real-model run is still BLOCKED, for the same reason as §5.

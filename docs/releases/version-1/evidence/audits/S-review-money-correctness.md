@@ -293,3 +293,146 @@ HEAD remains well ahead of ab5dc10a overall. Against `5dae2e2d`, however, it is 
 - **SM-09.** Cap the parse length, or bound the clause scope work.
 
 Each fix needs table pins on both the device and the server.
+
+---
+
+## Re-review at 7dd6efa8
+
+- Reviewer: `review-money` (independent; same rules as above). Model: `claude-opus-5-5`. Date: 2026-11-18.
+- Commits run side by side: `ab5dc10a` (build 147 parser) → `5dae2e2d` ("pre") → `7577f347` (first review) → `7dd6efa8` ("new"). Each ran in a scratch git worktree. Device code ran under `flutter test --no-pub`; server code ran under Deno. All data was synthetic. `tools/message_eval/heldout/**` was not read.
+- Claims checked: parser.md "Follow-up 3" and ai.md "Follow-up 9".
+
+### Verdict: REJECT (narrow)
+
+Most of the first review is fixed. SM-01, SM-02, SM-05, SM-08 and SM-09 are fixed, and wrong outcomes on my original set fell below `5dae2e2d` on every path.
+
+One S1 class from SM-03 remains open, and it is a regression against `5dae2e2d` on realistic messages: a purchase that also says a reward, cashback, bonus or Qitaf was "credited to your account" is booked as **income** on every path. Example: `Purchase SAR 45.00 at Noon card *4521, cashback SAR 2.00 credited to your account`.
+
+SM-04 is only partly fixed. The server still silently drops some completed purchases as `no_movement` and pushes "not recorded" (S2).
+
+### Status per finding
+
+| Finding | Status | Evidence at `7dd6efa8` |
+|---|---|---|
+| SM-01 declined recorded | **Fixed** (new S3 edge, NEW-3) | A-class (44): 0 recorded. Q-class (12): 0 recorded. New not-completed probes in English and Arabic (21): 0 recorded on any path. Status words in merchant names or service footers (32 probes): 2 go to review, the same 2 as at pre, so nothing newly went to review. |
+| SM-02 parser throws | **Fixed** | X-class: 0 exceptions (was 14). Dart fuzz: 45,000 random texts × 22 entry points, 0 throws. Entry points include parse, meaningOf, clauseScope, isNotCompleted, DirectionSignal.detect, meaningHoldReason, localParseContradictsServer, validateCaptureCandidate, AiCandidateValidator.validate/chargedTotal/bookedDirection, SmsSanitizer, CardNetworkDetector, MerchantSanity, and captureAmountTokens with canonicalCaptureMoneyText. TS fuzz: 40,000 texts × 7 entry points (parseSms, messageMeaning, isDeclinedText, deterministicParse, chargedTotal, validateAiCandidate, redaction), 0 throws. |
+| SM-03 reward clause → income | **Partly fixed, S1 open** (NEW-1) | Original P-class: 7 of 8 fixed. P006 (`…, credited to your account: 4 points`) is still IN on every path. See NEW-1 for the new probes. |
+| SM-04 notice tail → no_movement | **Partly fixed, S2 open** (NEW-2) | Server silent completed purchases, head → new: rm 22 → 5 and rm2 36 → 16 (pre: 7 and 3). New probes: 8 of 19 completed-with-tail messages silent on the server. |
+| SM-05 chargedTotal false rejects | **Fixed** | `chargedTotal` returns null for "Total bal", "Total due" and «الرصيد الإجمالي». The tip total (115) still applies. |
+| SM-06 footers → multiple events | **Partly fixed** (S3) | "Cashback SAR 4.00 credited" and "Previous purchase SAR 80.00 at Panda" now record. "Last transaction SAR 30.00 at Panda", "Previous salary SAR 11,500.00", «الراتب السابق» and «آخر عملية 30 ريال» still go to review as multiple_events. That is 4 probes, correct at `5dae2e2d` on bank paths. |
+| SM-07 parity / redaction | **Mostly fixed** (S4) | Over 1,915 texts, the disposition differs in 2: G000 (tip total; device records 100 with the wrong amount, server sends to review) and T79. The claim names only T79. Kind or reason differs in 162 texts. The redaction merge is fixed: R004/K015 is `uncertain` on both sides. |
+| SM-08 allowlist | **Fixed** | The ceiling equals the count (703). |
+| SM-09 parse time | **Fixed** | Device, on a Mac: 20k "Avl. Bal." 11,592 → 29 ms; 7.6k "SAR n.00" 7,240 → 325 ms. Worst under the 2,000-character bound is 873 ms (2,000 chars of "SAR n.00"). That is still super-linear inside the bound, so check the margin on a slow iPhone. Server worst is 144 ms. |
+
+### New findings
+
+**NEW-1 — S1 — REPRODUCED — regression vs `5dae2e2d`: purchase plus a reward/cashback credit phrase is booked as income**
+
+`isRewardFlow` only skips flows that move points, miles, نقاط or أميال. The following are booked IN 45 on dB, dN (where recorded), s, eB and eN; at `5dae2e2d` all were OUT 45:
+
+- `Purchase SAR 45.00 at Noon card *4521, cashback SAR 2.00 credited to your account`
+- `Purchase SAR 45.00 at Noon card *4521, reward credited to your account`
+- `Purchase SAR 45.00 at Noon card *4521, Qitaf credited to your account`
+- `Purchase SAR 45.00 at Noon card *4521, bonus credited to your wallet`
+- `Purchase SAR 45.00 at Miles Cafe card *4521, credited to your account: 4 points`
+
+On the server, `شراء 45 ريال لدى نون بطاقة 4521، تم إيداع المكافأة في حسابك` and `…، تم إيداع استرداد نقدي 2 ريال` are also IN.
+
+Real cash credits are read correctly: "Cashback SAR 20.00 credited to your card" and point or mile redemptions credited in SAR are IN on all bank-sender paths.
+
+**NEW-2 — S2 — REPRODUCED — SM-04 residual: the server silently drops completed purchases with a tail**
+
+The server returns `no_movement` before any AI call, and the push says "not recorded". The new client sends these to review; build 147 records them locally. Examples:
+
+- `Your card *4521 was used for EGP 650.00 at Seoudi, earn 5 points`. The "was used for" lead is not read as a movement.
+- `Purchase SAR 230.00 at Jarir with card *4521 and earn rewards`
+- `…, total spent this month SAR 3,200`
+- `When you paid SAR 60.00 at Kudu … you earned 6 points`
+- `شراء 150 ريال لدى نون بطاقة 4521 سيتم إضافة النقاط لحسابك`
+- `دفع فاتورة 300 ريال …، تذكير: موعد السداد القادم 1/12`
+- `خصم 99 ريال اشتراك شاهد …، تذكير بالتجديد`
+
+**NEW-3 — S3 — REPRODUCED — regression of this round: a status cue in the dropped middle of a message over 2,000 characters is recorded**
+
+Example: a completed purchase, then 1,100 characters of filler, then "Transaction declined." (or "Status: pending.", or «العملية مرفوضة»), then 1,100 more characters. It is recorded as OUT 45 on every path. At `5dae2e2d` it was not recorded.
+
+This needs an unrealistic length for an SMS, but pasted or notification text has no length cap. A cue inside the last 1,000 characters is still caught.
+
+**Other observations**
+
+- A transaction placed in the dropped middle goes to review. That is a safe outcome.
+- Two messages concatenated are pre-existing at `5dae2e2d`, except that two different purchases now go to review. Two identical purchases ("…*4521. Purchase SAR 45.00 at Jarir card *4521.") are still recorded once.
+- "Spend SAR 500 at Jarir and get SAR 50 credited" is recorded as IN 500 on the server. This is pre-existing.
+- `Transfer SAR 2,000.00 from account *4521 to credit card *7788` was review on the server at `5dae2e2d` and is now counted as spend. This first changed at `7577f347`. On eB it was already wrong at `5dae2e2d`.
+
+### Measurements
+
+W = wrong (wrong direction, amount or currency, recorded when nothing happened, own-account counted, one of two events lost, or an exception). S = completed movement silent.
+
+On the server path, `uncertain` is counted as silent here. The implementers' harness treats it as review, so subtract 3 on rm and 3 on rm2 for that reading.
+
+**Original set rm (268):**
+
+| Path | ab5dc10a | 5dae2e2d | 7577f347 | 7dd6efa8 |
+|---|---|---|---|---|
+| dB | W90 S6 | W31 S5 | W44 S5 | **W7 S3** |
+| dN | W54 S6 | W16 S5 | W41 S5 | **W4 S3** |
+| s | W65 S4 | W14 S7 | W38 S26 | **W3 S11** |
+| eB | W81 S4 | W29 S3 | W43 S5 | **W6 S3** |
+| eN | W68 S4 | W21 S3 | W41 S5 | **W4 S3** |
+
+**Original set rm2 (82):**
+
+| Path | ab5dc10a | 5dae2e2d | 7577f347 | 7dd6efa8 |
+|---|---|---|---|---|
+| dB | W15 S0 | W0 S0 | W27 S0 | W1 S0 |
+| s | W10 S0 | W0 S3 | W12 S37 | W1 S19 |
+| eB | W16 S0 | W0 S0 | W26 S0 | W1 S0 |
+
+**New probes rm3 (156)**, aimed at the fixes: merchant names, footers, success status, not-completed, the 2,000-character bound, reward vs cash credit, the no_movement boundary both ways, `uncertain`, and Arabic equivalents.
+
+| Path | ab5dc10a | 5dae2e2d | 7577f347 | 7dd6efa8 |
+|---|---|---|---|---|
+| dB | W46 S2 | W15 S0 | W13 S0 | W13 S0 |
+| dN | W24 S2 | W6 S0 | W10 S0 | W11 S0 |
+| s | W30 S2 | W12 S6 | W12 S11 | W13 S12 |
+| eB | W43 S2 | W17 S0 | W10 S0 | W12 S0 |
+| eN | W33 S2 | W14 S0 | W10 S0 | W12 S0 |
+
+On rm3, `7dd6efa8` is worse than `5dae2e2d` on 8 messages that change totals: NEW-1 (5 on every path, 2 more on the server) and NEW-3 (3).
+
+### The implementers' harness (`tools/parser_diff/run.sh 5dae2e2d`)
+
+**Reproduction.** I ran it from a scratch worktree at `7dd6efa8`: exit 0, 0 regressions. The per-path numbers match parser.md (eB right 1,215).
+
+**Is it honest?** Partly. "Right" is graded against labels, but only 1,563 of the 2,345 texts are labelled; the rest are reported as "moves". A "regression" means only right → wrong or silent, a throw, or a base-not-completed text now recorded. **Right → review is never a regression.**
+
+**Planted mutations** (in the scratch copy):
+1. `isRewardFlow` made to always return false (device only). Caught: exit 1, 21 path-moves on 7 messages.
+2. Every message containing "card" made `uncertain`. Result: exit 0 and "0 regressions", while 351 correctly recorded messages (1,227 path-moves) moved to review.
+
+So "0 regressions vs `5dae2e2d`" is true only in that narrow sense, and the case set does not contain the NEW-1 shapes.
+
+**Model differences from the real import code.** The harness's effective-import model sends a `direction_contradiction` server row to the local parse instead of Smart Inbox, and it does not pass the merchant to `localParseContradictsServer`.
+
+### Build 147 with the new server (`7dd6efa8`) vs the deployed server (`b6fc0dad` = `ab5dc10a` on these paths)
+
+Build 147's client import code was run against server rows from each.
+
+Overall, the new server is better for build 147. On eB, wrong outcomes went 81 → 71 (rm), 16 → 16 (rm2) and 43 → 46 (rm3), with 20 messages better against 10 worse.
+
+The classes that get worse and change totals:
+- **Purchase plus reward/cashback "credited to your account"** (NEW-1, 8 messages). Correct with the deployed server; booked as income with the new one.
+- **"Credit card payment of AED 2,500.00 received"**. Income with the deployed server; spend with the new one. Already wrong at `5dae2e2d`.
+- **K001** (a message with an injected second amount). The new server sends it to review, so build 147 falls back to its own local parse, which books income.
+
+The SM-04 residual (NEW-2) does not change build 147's totals, because build 147 records those messages locally. It does produce a false "not recorded" push.
+
+### Not checked in the re-review
+
+- Real AI calls.
+- Native paths.
+- Smart Inbox UI.
+- Timing on an iPhone.
+- Any deployed server.
+- The held-out set.

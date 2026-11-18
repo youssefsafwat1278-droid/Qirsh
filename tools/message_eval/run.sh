@@ -12,6 +12,11 @@
 #   MESSAGE_EVAL_GEMINI_KEY=<authorized test key> MESSAGE_EVAL_MAX_REQUESTS=300 \
 #     tools/message_eval/run.sh <commit>
 #
+# Mixed mode (old client, new server): MESSAGE_EVAL_SERVER_REV=<server commit>
+# runs the server parse of that commit and feeds it to <commit>'s client
+# import, e.g. build 147's client on a newly deployed server:
+#   MESSAGE_EVAL_SERVER_REV=7dd6efa8 tools/message_eval/run.sh b6fc0dad
+#
 # Output: $MESSAGE_EVAL_OUT (default <scratch>/message_eval/<sha>/) holds
 # server.json, device.json and metrics.json/metrics.md. Per-message results
 # stay there: do not share them with the tuners.
@@ -27,17 +32,25 @@ for REV in "$@"; do
   SHA="$(git -C "$REPO" rev-parse --verify "$REV^{commit}")"
   SHORT="${SHA:0:8}"
   WT="$SCRATCH/wt-$SHORT"
-  OUT="${MESSAGE_EVAL_OUT:-$SCRATCH/$SHORT}"
+  SRV_WT="$WT"
+  LABEL="$SHORT"
+  if [ -n "${MESSAGE_EVAL_SERVER_REV:-}" ]; then
+    SRV_SHA="$(git -C "$REPO" rev-parse --verify "$MESSAGE_EVAL_SERVER_REV^{commit}")"
+    SRV_WT="$SCRATCH/wt-${SRV_SHA:0:8}"
+    LABEL="$SHORT-client+${SRV_SHA:0:8}-server"
+  fi
+  OUT="${MESSAGE_EVAL_OUT:-$SCRATCH/$LABEL}"
   mkdir -p "$OUT"
-  echo "== $SHORT: worktree $WT"
+  echo "== $LABEL: worktree $WT (server from $SRV_WT)"
   if [ ! -d "$WT" ]; then git -C "$REPO" worktree add --detach "$WT" "$SHA" >/dev/null; fi
+  if [ ! -d "$SRV_WT" ]; then git -C "$REPO" worktree add --detach "$SRV_WT" "$SRV_SHA" >/dev/null; fi
 
   python3 "$HERE/expand.py" "$HERE/heldout/messages.jsonl" "$OUT/messages.json"
 
   echo "== $SHORT: server (Deno, the commit's parse.ts)"
   (cd "$OUT" && deno run --no-lock --allow-read --allow-write --allow-env \
      --allow-net=generativelanguage.googleapis.com \
-     "$HERE/deno/server_eval.ts" "$WT" "$OUT/messages.json" "$OUT/server.json")
+     "$HERE/deno/server_eval.ts" "$SRV_WT" "$OUT/messages.json" "$OUT/server.json")
 
   echo "== $SHORT: device (flutter test, the commit's iOS import)"
   T="$WT/app/test/zz_message_eval"
@@ -64,9 +77,10 @@ PY
 
   echo "== $SHORT: score"
   python3 "$HERE/score.py" "$OUT/messages.json" "$OUT/server.json" "$OUT/device.json" \
-    --label "$SHORT" --out "$OUT/metrics"
+    --label "$LABEL" --out "$OUT/metrics"
 
   if [ "${MESSAGE_EVAL_KEEP:-0}" != "1" ]; then
     git -C "$REPO" worktree remove --force "$WT"
+    if [ "$SRV_WT" != "$WT" ]; then git -C "$REPO" worktree remove --force "$SRV_WT"; fi
   fi
 done

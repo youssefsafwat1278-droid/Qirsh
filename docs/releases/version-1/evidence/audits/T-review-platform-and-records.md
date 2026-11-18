@@ -75,3 +75,68 @@ Reviewer reproduction tests (not in the repository) are kept at `/private/tmp/cl
 ## Not checked
 
 Native XCTests (not run: build time/disk); a simulator or device; network capture of the linked GMA/UMP SDKs; the admin production build; a full trace of every pre-consent network client; queued iOS captures across deletion and account switch; iPad compatibility mode; the 30-day-legacy UI on a device; production (no access, none used); parsing/AI (other reviewer).
+
+---
+
+## Re-review at 7dd6efa8
+
+Reviewer `review-platform`, model `claude-opus-5-5`, 2026-11-18. Read-only on the repository (this section is the only write). Runs were made on a `git archive 7dd6efa8` copy in the scratchpad and on my own local Supabase stack (project `review_platform`, ports 58321–58331), torn down afterwards.
+
+### Runs
+
+| Run | Result |
+|---|---|
+| My kept reproductions (`restore_merge_attack_test`, `large_text_uncovered_test`) + `restore_merge_rule_test` + `restore_recovery_test` (in memory) | `+46: All tests passed!` — both SP-01/SP-02 repros now pass |
+| Own stack, dart-defines: `restore_then_sync_local_supabase_test` + `sync_e2e_local_supabase_test` | `+24 ~2: All tests passed!` (S9/S9b skipped, manifest entry) |
+| Large-text gate, unplanted, full | `+128: All tests passed!` (matches the implementer's 128/128) |
+| Large-text gate with a planted truncation (`linesUnlessLargeText` returns `normal` always), `QIRSH_LARGE_TEXT_SCREENS=Home` | **Fails** at 1.3x: "Home cut off: Set a budget to track your pace ; Income ; Paste SMS ; …" — the gate is real |
+| Scratch semantics test (mine) on `SegmentedControl` and `AppPillTabBar` at 1.0x / 2.0x / 3.1x | `+6`: every option keeps `isButton`, `hasSelectedState`, tap action and its label; tapping moves `isSelected` to the tapped option; the callback gets the right value/index |
+| `tools/deploy_set.sh` on a scratch clone with a planted line in `_shared/capture_auth.ts` and `_shared/sms_redaction.ts` | Every importer reported CHANGED, including transitive ones (`process-notification-retries` via `process_one.ts`, `send-push-broadcast` via `send.ts`, functions reached through `capture_push.ts`/`feature_flags.ts`) — correct |
+| `tools/deploy_set.sh b6fc0dad 7dd6efa8` | **8 CHANGED**, not the 6 RELEASE-PLAN records: adds `merchant-category-contribution` (`_shared/sms_redaction.ts`) and `sync-captures` (`_shared/money_text.ts`) — see SP-11 |
+
+### Status of the findings
+
+| ID | Status | Note |
+|---|---|---|
+| SP-01 | **Fixed** | Merge never takes backup `merchant_category_map` rows; a row deleted/ignored on the device is never overwritten (`_deviceRowDeleted`) |
+| SP-02 | **Fixed** | `_deviceHoldsUserData` counts accounts, cards and all user tables, user-confirmed rules and non-seed categories; a device with any account merges |
+| SP-03 | **Fixed at 98e8e56d, regressed at 7dd6efa8** | Derivation tool is correct; the plan's recorded set is stale (SP-11) |
+| SP-04 | **Partly fixed** | Matrix and options are in RELEASE-PLAN (c); whether 147's planning currency repair rewrites the server row is still "not traced" (stated honestly) |
+| SP-05 | **Fixed** | Migration header, rollback header, `ai_spend_guard.ts` and RELEASE-PLAN (b)/(h) all state the PGRST202/42883 fail-open and the undo order |
+| SP-06 | **Partly fixed** | S8 change is real (stricter: throws `:stale`, outboxes byte-identical, all "nothing sent as B" assertions kept). S12/S14 real. S9/S9b honestly skipped. S11 no longer covers "parked while the server lacks 0102" end to end (only in-process) |
+| SP-07 | **Partly fixed** | P5→P4 fixed; code comments presenting open B24/B26 as decided remain (listed, not edited) |
+| SP-08 | **Fixed** | Full-apply destination has no account, all 9 fault points incl. both delete points reached and asserted (`reached`) |
+| SP-09 | **Fixed** | Twelve more screens in the gate |
+| SP-10 | **Fixed** | Gate fails on ellipsis truncation; allowlist is 3 entries, each scoped to one screen and one regex; planted truncation fails. Known residual: text clipped without an ellipsis (`overflow: clip`/`fade`, fixed-height parents) is not detected |
+
+### Attacks on the fixes
+
+**"Device rules win" (SP-01 fix).** On any device that merges — including one holding a single empty account, which is every user who finished onboarding — **all** backup-only rules are dropped, learned and user-confirmed alike. The confirmation copy (`rpConfirmBody`) does say "rules that are only in the backup are not added" and defines the no-records case, but it is the same text whichever case applies, so the user is not told which path this restore will take, and it does not say how to get the rules back. The only ways back: Cloud rule sync (only if Cloud was on and the rules were synced; restore turns Cloud off until re-enabled), or removing the device's data so the restore becomes a full apply (which discards everything newer). For a never-Cloud user the backup's rules are effectively unrecoverable on a set-up device. Accepted trade-off, but it belongs in the known limitations (SP-12, S4).
+
+**Onboarding classification.** Correct: a fresh install has no auto-seeded account (A-7), seeds only `DatabaseSeed.categories`, and onboarding offers restore (`/onboarding/check`) before account setup, so an onboarding restore is a full apply. Residual: a device whose DB carries a legacy category key no longer in `DatabaseSeed` would be classed "has data" and merge; not reachable on a fresh install.
+
+**Deleted stays deleted.** It does not change recovery of a transaction deleted by mistake: a same-device deletion is always newer than the backup, so merge never revived it before either; the new guard matters only under clock skew. The only path to recover one is the full-apply route (remove device data, restore, losing everything newer). No in-app undo/trash for deleted transactions was found. State this in known limitations (part of SP-12).
+
+**Stacked selectors.** `StackedChoices` wraps each option in `Semantics(button: true, selected: i == selectedIndex)` around a tap handler, min height 44, label without `maxLines`. My scratch test confirms semantics and selection at 1.0/2.0/3.1x. There is **no committed test** for the stacked branch's semantics or selection (the large-text gate checks layout only) — S4 test gap (SP-13).
+
+**RELEASE-PLAN, read end to end as the owner.** Order (P0 read-only → P1 worker → P2 M1 → P3 retries-first then AI functions → P4 flags → P5 observe), stop conditions per step, kill switches and M1 undo order are coherent. Problems:
+- **SP-11 (S3, REPRODUCED, round 2).** At the commit that now exists, `deploy_set.sh b6fc0dad 7dd6efa8` prints CHANGED for `merchant-category-contribution` (its `redactPii` behaviour changed: `To:`/`إلى` redaction now stops at a sentence end) and `sync-captures` (additive `isRewardFlow` export only). The plan records 6 CHANGED and "18 IDENTICAL"; at this commit `prod_compare` would not match, so P0 stops (fail-safe) and the package cannot be executed as written. The owner/privacy specialist must decide whether `merchant-category-contribution` ships with the new redaction (it governs what reaches shared learning) and the plan's lists must be regenerated at the final commit. Repro: `bash tools/deploy_set.sh b6fc0dad 7dd6efa8`.
+- **SP-14 (S3, CODE-SUPPORTED, round 2).** The `process-notification-retries` v12 rollback source is "unknown, identify in P0" in (b), but P0's command list and stop conditions only cover the `account-deletion-worker` v5 source. If v12's source is not found, P3 deploys an un-rollbackable function with no stop condition. Add it to P0 (command and "no source found" stop).
+- **SP-15 (S4, round 2).** Stale text: "closure-round changes are uncommitted (HEAD `d1212986`)"; (a) "Identical to HEAD: 21" vs "18 IDENTICAL" in the same section; the (g) "call-site contract" still reads as if the guard always fails closed (the deviation is noted in its lead-in only). Unverified assumptions the plan relies on and labels as such: the `79a063d8` sender refactor is "behaviour-preserving by design, not proven"; no undo is rehearsed against production; the 147 × new parser cell is still to be measured.
+
+### Fresh verdicts
+
+| Area | Verdict |
+|---|---|
+| 1 Restore = merge | **ACCEPT WITH FOLLOW-UP** (SP-12 known limitations: rules dropped on merge, no recovery of a mistaken deletion except full apply) |
+| 2 Deletion final | ACCEPT WITH FOLLOW-UP (unchanged) |
+| 3 Consent, language, countries | ACCEPT WITH FOLLOW-UP (SP-04 repair trace) |
+| 4 iOS | ACCEPT WITH FOLLOW-UP (SP-14) |
+| 5 Accessibility | **ACCEPT** (SP-13 test gap, non-ellipsis clipping undetected — both S4) |
+| 6 Backend/ops | **ACCEPT WITH FOLLOW-UP — plan must be regenerated** at the final commit (SP-11, SP-14) before owner approval |
+| 7 Legal and records | ACCEPT WITH FOLLOW-UP (SP-07 comments, SP-15) |
+| 8 Test integrity | ACCEPT WITH FOLLOW-UP (SP-06 S11 end-to-end gap) |
+
+### Not checked in this re-review
+
+Native/simulator runs; `merchant-category-contribution` redaction correctness itself (parser/privacy reviewer's area); whether 147's planning currency repair rewrites the server row; the legal text; `tools/prod_compare.sh` (needs production); the whole backup suite (implementer reports `+316`; I ran the restore subset). The working tree has an unrelated uncommitted change to `tools/message_eval/run.sh` that is not mine.
