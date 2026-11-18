@@ -291,3 +291,74 @@ Runs:
 - XCTest on the iPhone 17 Pro simulator: **200 passed, 0 failed**. One launch denial (SBMainWorkspace) happened and xcodebuild recovered by itself.
 - Flutter source-contract tests that read the Swift files: 365 passed, plus 46 run alone.
 - Scratch DerivedData and `app/build/ios` were removed.
+
+## Follow-up (2026-11-18, third): signed test build without upload
+
+The owner authorised one push of the reviewed candidate to a new `release/*` branch and one signed Codemagic test build. Production changes, TestFlight distribution and store submission are not authorised.
+
+### (1) What a push to `release/<name>` starts automatically: nothing
+
+**The file.** Only `backend-and-quality-gates` has a `triggering` block (push and pull_request events, plus a `when.changeset` filter). Its branch patterns are `main`, `master`, `develop` and `feat/*`; none matches `release/<name>`. `ios-unsigned-sideload`, `ios-signed-release`, `ios-signed-test-build`, `android-release` and `ios-signed` have no `triggering`.
+
+This is pinned by the new contract test "a push to release/* starts no workflow automatically". It also fails if any triggered workflow lists no branch patterns, because then every branch would trigger it.
+
+**Codemagic's documentation.**
+- *Starting builds automatically*, https://docs.codemagic.io/yaml-running-builds/starting-builds-automatically/ (read 2026-11-18; "last updated September 8, 2026"):
+  - "If no events are defined, you can start builds only manually."
+  - Patterns are wildcards (`*-dev`, `{test,qa}/*`), so `feat/*` cannot match `release/x`.
+  - For a webhook build Codemagic "uses the `codemagic.yaml` file from the source branch".
+- **Consequence:** the workflow that runs is the one in the pushed commit. The `ios-signed-test-build` workflow exists only if the pushed candidate contains this `codemagic.yaml` change. `EXPECTED_REVIEWED_CI_SHA` must be that commit.
+
+**Does an upload with `submit_to_testflight: false` reach testers?**
+- *Codemagic, App Store Connect publishing*, https://docs.codemagic.io/yaml-publishing/app-store-connect/ (read 2026-11-18; "last updated March 24, 2026"): `submit_to_testflight` is "Whether or not to submit the uploaded build to TestFlight beta review"; `beta_groups` names groups that "will get access to the build". With `false`, the build is still uploaded; only beta review is skipped.
+- *Apple, Add internal testers*, https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers (read 2026-11-18; no page date): "You can choose to automatically distribute builds to internal groups", and the "Enable automatic distribution" checkbox makes builds go "to all group members".
+- **Answer:** an upload from `ios-signed-release` reaches internal testers if any internal group in App Store Connect has automatic distribution on. I cannot see that setting, so an upload is treated as distribution. **`ios-signed-release` must not be used for this build.**
+
+### (2) New workflow `ios-signed-test-build`
+
+- **Form: duplicated, not merged.** Codemagic documents anchors and `<<` merge keys only for sections such as `environment`. *YAML getting started*, https://docs.codemagic.io/yaml-basic-configuration/yaml-getting-started/ (read 2026-11-18; "last updated October 2, 2026"), has no example and no statement on merging or overriding a whole workflow. The repo's own contract parser also reads the file as text.
+- **What is identical to `ios-signed-release`:** integrations, the `supabase` group, `app_store` signing, Flutter/Xcode/CocoaPods versions, vars, every script step (all 11, same names and commands), and the artifacts.
+- **What differs:**
+  - the name, "iOS Signed Test Build (no upload)";
+  - one artifact comment;
+  - `publishing`, which holds only the existing owner e-mail notice: no `app_store_connect`, `submit_to_*`, `beta_groups` or other target;
+  - no `triggering` and no `when`.
+- `ios-signed-release`, `ios-signed` and every other workflow are untouched: the diff is +378 lines, 0 deletions.
+- **Signing stays `distribution_type: app_store`, deliberately.** The signing check (copied unchanged) asserts an App Store profile: Team 5TWARK8A23, no `get-task-allow`, `aps-environment` production, and no `ProvisionedDevices`/`ProvisionsAllDevices`. An ad hoc build would fail that check, so it would not be "the same verified IPA".
+- **What the owner can do with the artifact:**
+  - confirm that the reviewed commit passes the strict gate and the XCTests and builds, signs and verifies;
+  - keep the IPA with its `.sha256`, `.provenance`, `.verification.txt` and `.signing-verification.txt`;
+  - later, after a separate approval, upload those exact bytes (e.g. Transporter), so the build that is tested is the build that ships.
+- **What the owner cannot do:** install it on an iPhone directly. App Store–signed IPAs install only through TestFlight or the App Store.
+- **To put the same commit on the one registered iPhone, either:**
+  - (a) a separate ad hoc build: an Apple Distribution certificate plus an ad hoc profile listing that device, for the app and the share extension with the app group. That needs its own verification variant, because the current check rejects `ProvisionedDevices`. Or a development build: this Mac has 1 Apple Development identity and development profiles for both bundle IDs and the 1 device, so `flutter build ios --profile` then `flutter install`, as already in this report.
+  - (b) TestFlight, after a separate approval.
+- No certificates or profiles were created.
+
+### (3) Contract tests
+
+`supabase/tests/codemagic_ios_store_pipeline_contract_test.mjs` gains three tests:
+- the test build's text before `publishing` equals the release workflow's, ignoring comments and the display name; its step names equal the release's in order; each step's commands and working directory equal the release's;
+- the test build's `publishing` is e-mail only (no `app_store_connect`, `submit_to_`, `beta_groups`, Google Play, Firebase or TestFlight), it has no `triggering`/`when`, and the release still uploads with `submit_to_testflight: false`;
+- a push to `release/*` starts nothing.
+
+Before-proof: with the committed `codemagic.yaml`, the two test-build tests fail (16 pass, 2 fail). Now 18/18 pass. `codemagic_app_version_contract_test.mjs`: 2/2.
+
+Flutter tests that read `codemagic.yaml` (legal_urls, android_release_signing, ci_release_gate_authority, ios_source_integrity, release_supabase_config_guard, android_ci_compile_gate): **105 passed**. One deliberate update was needed, **outside the `*codemagic*contract*test*` scope I was given**: `release_supabase_config_guard_test.dart` failed with "a workflow publishes artifacts but is not guarded". It is an allowlist built to force this, so `ios-signed-test-build` is added to its `shipping` list. That subjects the new workflow to every Supabase-config check; it adds coverage and weakens nothing.
+
+### (4) How to start the build, and its build number
+
+- **Before starting:** commit this `codemagic.yaml` into the reviewed candidate, then push that commit as a new `release/<name>` branch (the one authorised push). Nothing starts on push.
+- **Codemagic UI:** the app → **Start new build** → branch `release/<name>` → workflow **iOS Signed Test Build (no upload)** (`ios-signed-test-build`) → add the variable `EXPECTED_REVIEWED_CI_SHA` = the full 40-character SHA of the pushed commit → **Start**.
+- **API alternative** (Codemagic REST, https://docs.codemagic.io/rest-api/builds/, read 2026-11-18; the page says the API is in preview): `POST https://api.codemagic.io/builds` with header `x-auth-token` and body `{"appId": "<app id>", "workflowId": "ios-signed-test-build", "branch": "release/<name>", "environment": {"variables": {"EXPECTED_REVIEWED_CI_SHA": "<sha>"}}}`. The UI is the safer choice.
+- **Required at start:** `EXPECTED_REVIEWED_CI_SHA` only.
+- **Configured in Codemagic, names only:**
+  - variable group `supabase`: `SUPABASE_URL` must be the production URL and the anon key is required; optional `SENTRY_DSN`, `GOOGLE_SERVER_CLIENT_ID`, `LEGAL_BASE_URL`;
+  - the App Store Connect API key integration `codemagic_asc_api_key`;
+  - iOS code signing identities for `com.youssefsafwat.mali` and its share extension, App Store distribution. Release signing must already be set up for `ios-signed-release`.
+  - The workflow sets `QIRSH_GOOGLE_AUTH_ENABLED`, `QIRSH_EMAIL_AUTH_ENABLED` and `QIRSH_ALTERNATE_SIGNUP_ENABLED` to `true` itself.
+- **Build number:**
+  - The resolve step reads App Store Connect read-only. It computes max(latest build for any version, latest for `1.0.0`) + 1, i.e. **148 if 147 is still the latest**.
+  - The marketing version comes from `app/pubspec.yaml`: 1.0.0.
+  - Nothing is uploaded, so 148 is not consumed. A later `ios-signed-release` run for the same commit would also produce 148, from a different build.
+  - If the owner later approves uploading **this** artifact, it must still be the newest number at that time.

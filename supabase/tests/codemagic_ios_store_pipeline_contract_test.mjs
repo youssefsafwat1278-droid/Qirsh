@@ -389,3 +389,53 @@ test("3.11: both signed iOS workflows keep Apple, Google and email-code sign-in"
     }
   }
 });
+
+// Owner-authorised signed test build: the exact store build, never uploaded.
+const TEST_BUILD = "ios-signed-test-build";
+// Workflow text up to `publishing:`, comments and blank lines removed, with the
+// display name taken out (the only intended difference before publishing).
+const headOf = (wf) => {
+  const t = normalize(workflows[wf].text);
+  return t.slice(0, t.indexOf("\n    publishing:")).replace(/^    name: .*\n/m, "");
+};
+
+test("test build: same environment and the same script steps as ios-signed-release", () => {
+  assert.equal(headOf(TEST_BUILD), headOf(RELEASE), "everything before publishing must match the store build");
+  assert.deepEqual(steps(TEST_BUILD).map((s) => s.name), steps(RELEASE).map((s) => s.name));
+  for (const s of steps(RELEASE)) {
+    const t = step(TEST_BUILD, s.name);
+    assert.equal(normalize(t.text), normalize(s.text), `"${s.name}" drifted`);
+    assert.equal(t.wd, s.wd, `"${s.name}" working directory drifted`);
+  }
+  assert.ok(steps(TEST_BUILD).length >= 10);
+});
+
+test("test build: no upload, no submission, no distribution, manual start only", () => {
+  const t = normalize(workflows[TEST_BUILD].text);
+  const pub = t.slice(t.indexOf("\n    publishing:"));
+  assert.ok(pub.startsWith("\n    publishing:\n      email:\n"), "publishing holds the e-mail notice only");
+  for (const forbidden of [/app_store_connect:\n\s+auth/, /submit_to_/, /beta_groups/, /google_play/, /firebase/, /testflight/i]) {
+    assert.ok(!forbidden.test(pub), `test build publishing must not contain ${forbidden}`);
+  }
+  assert.ok(!/^    (triggering|when):/m.test(workflows[TEST_BUILD].text), "manual start only");
+  // The store workflow still uploads exactly as before (unchanged).
+  assert.match(normalize(workflows[RELEASE].text), /\n    publishing:\n      app_store_connect:\n        auth: integration\n        submit_to_testflight: false\n/);
+});
+
+// A push to a new release/* branch must start nothing on its own.
+const glob = (pattern, name) =>
+  new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`).test(name);
+
+test("a push to release/* starts no workflow automatically", () => {
+  const triggered = Object.values(workflows).filter((w) => /^    triggering:/m.test(w.text));
+  assert.deepEqual(triggered.map((w) => w.name), ["backend-and-quality-gates"]);
+  for (const w of triggered) {
+    const patterns = [...w.text.matchAll(/- pattern: '?([^'\n]+?)'?\n\s+include: true/g)].map((m) => m[1]);
+    assert.ok(patterns.length > 0, `${w.name} must list its branches (no pattern = every branch)`);
+    for (const p of patterns) {
+      for (const b of ["release/v1.0.0", "release/ios-v1-test", "release-readiness/v1"]) {
+        assert.ok(!glob(p, b), `${w.name} pattern "${p}" would build ${b}`);
+      }
+    }
+  }
+});

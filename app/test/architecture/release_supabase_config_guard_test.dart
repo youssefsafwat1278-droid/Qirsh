@@ -57,6 +57,8 @@ void main() {
   const shipping = [
     'ios-unsigned-sideload',
     'ios-signed-release',
+    // Owner-authorised signed test build (artifacts only, no upload).
+    'ios-signed-test-build',
     'ios-signed',
     'android-release',
   ];
