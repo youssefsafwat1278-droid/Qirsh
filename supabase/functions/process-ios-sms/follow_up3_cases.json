@@ -66,7 +66,7 @@
     {"id": "S13", "src": "FU3", "kind": "n", "text": "سيتم خصم 250 ريال رسوم سنوية بتاريخ 1 ديسمبر"},
     {"id": "S14", "src": "FU3", "kind": "n", "text": "Get SAR 50 cashback when you spend SAR 500 or more at Extra"},
     {"id": "M01", "src": "FU3", "kind": "r", "text": "Purchase SAR 80.00 at Danube card *4521. Purchase SAR 45.00 at Kudu card *4521"},
-    {"id": "M02", "src": "FU3", "kind": "r", "text": "Purchases: SAR 30.00 at Kudu and SAR 55.00 at Panda, card *4521", "device": "record", "server": "record", "pin": "OPEN defect (characterization, as at 5dae2e2d): two purchases in one sentence are recorded as the first"},
+    {"id": "M02", "src": "FU3", "kind": "r", "text": "Purchases: SAR 30.00 at Kudu and SAR 55.00 at Panda, card *4521"},
     {"id": "M03", "src": "FU3", "kind": "d", "text": "Purchase SAR 80.00 at Danube card *4521. Cashback of SAR 4.00 credited to your account", "amount": 80, "currency": "SAR"},
     {"id": "H01", "src": "FU3", "kind": "r", "text": "تم إيداع راتب 8,000 ريال في حسابك 4521. تم خصم 1,200 ريال قسط تمويل"},
     {"id": "H02", "src": "FU3", "kind": "r", "text": "Salary SAR 8,000.00 credited to account *4521. SAR 1,200.00 debited for loan instalment."},

@@ -4,7 +4,6 @@ import '../../engine/parser/direction_signal.dart';
 import '../../engine/parser/message_meaning.dart';
 import '../../engine/models/transaction_type.dart';
 import '../../engine/parser/parser_engine.dart';
-import '../../engine/parser/transaction_state_cues.dart';
 
 /// ValidatedCapture v1, the Dart side of the contract the server enforces in
 /// `supabase/functions/_shared/ai_candidate_validator.ts`. Both sides run the
@@ -231,11 +230,43 @@ bool localParseOpposesDirection({
 /// notice, an OTP, or a review kind (not completed, an ATM cash deposit, own
 /// accounts, several movements) — or null when it may be recorded. Import
 /// paths keep such a capture in Smart Inbox with this reason.
-String? meaningHoldReason(String text) {
+///
+/// Dev siblings (family e): a tip/fee form (`tip_component`,
+/// `total_with_parts`) whose [amount]
+/// (the server's or model's answer) is the total the message states
+/// ([AiCandidateValidator.statedTotal]) may be recorded.
+String? meaningHoldReason(String text, {num? amount}) {
   final meaning = ParserEngine.meaningOf(text);
-  return meaning.disposition == MessageDisposition.record
-      ? null
-      : meaning.reason;
+  if ((meaning.reason == 'tip_component' ||
+          meaning.reason == 'total_with_parts') &&
+      amount != null) {
+    final total = AiCandidateValidator.statedTotal(text);
+    if (total != null && (total - amount).abs() < 0.005) return null;
+  }
+  if (meaning.disposition != MessageDisposition.record) return meaning.reason;
+  return severalMovements(text, meaning) ? 'multiple_amounts' : null;
+}
+
+final RegExp _sentenceCut = RegExp(r'[\n!?؟;؛]|\.(?![0-9])');
+
+/// Dev siblings (family d): a message the meaning reads as one completed
+/// movement, with no footer set aside, whose movement sentences (the ones the
+/// parser itself reads as a movement) name several amounts of one currency
+/// ([AiCandidateValidator.separateMovementAmounts]): several purchases, so no
+/// single reading (a server's, a model's or the device's) is the movement.
+/// Server twin: `gatedMeaning` in `process-ios-sms/meaning_gate.ts`.
+bool severalMovements(String text, [MessageMeaning? meaning]) {
+  meaning ??= ParserEngine.meaningOf(text);
+  if (meaning.kind != MessageKind.completedMovement || meaning.footerCount > 0) {
+    return false;
+  }
+  final movement = text
+      .split(_sentenceCut)
+      .where((s) =>
+          RegExp('[0-9٠-٩]').hasMatch(s) &&
+          ParserEngine.meaningOf(s).disposition == MessageDisposition.record)
+      .join('\n');
+  return AiCandidateValidator.separateMovementAmounts(movement) != null;
 }
 
 /// LR-03 / LR-04 — the device's own reading contradicts a server result for
@@ -324,7 +355,12 @@ CaptureValidation validateCaptureCandidate({
   // DATA-01 / REV-03 — a declined/failed/cancelled message moved no money,
   // whatever a server (including one deployed before the fix) concluded. The
   // caller then takes its existing rejected path (local parse → Smart Inbox).
-  if (TransactionStateCues.isNotCompleted(text)) {
+  // Follow-up 13: any meaning other than `record` rejects
+  // ([AiCandidateValidator.meaningRejectionOf]): the not-completed reason
+  // first, another non-record meaning just before acceptance.
+  final meaningRejection = AiCandidateValidator.meaningRejectionOf(text,
+      amount: candidate.amount);
+  if (meaningRejection == 'transaction_not_completed') {
     return reject('transaction_not_completed');
   }
   if (!_amountGrounded(candidate.amount, text)) {
@@ -371,6 +407,7 @@ CaptureValidation validateCaptureCandidate({
   final direction =
       aiDirection != TxnDirection.unknown ? aiDirection : typeDirection;
   if (direction == TxnDirection.unknown) return reject('direction_unresolved');
+  if (meaningRejection != null) return reject(meaningRejection);
 
   return CaptureValidation.accepted(ValidatedCapture(
     amount: amount,

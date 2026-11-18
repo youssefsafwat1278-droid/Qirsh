@@ -18,9 +18,9 @@ import { amountTextGrounded, CURRENCY_CODES, currencyGrounded } from './ai_candi
 import { canonicalMoneyText } from './money_text.ts';
 
 /** Recorded with every result (V1-058). Bump on any prompt/schema change. */
-export const UNDERSTANDING_PROMPT_VERSION = 'sms-understanding-v2';
+export const UNDERSTANDING_PROMPT_VERSION = 'sms-understanding-v3';
 /** The system instruction every primary AI request carries (all callers). */
-export const UNDERSTANDING_SYSTEM_VERSION = 'sms-system-v2';
+export const UNDERSTANDING_SYSTEM_VERSION = 'sms-system-v3';
 
 export const MESSAGE_TYPES = [
   'transaction',
@@ -33,6 +33,13 @@ export const MESSAGE_TYPES = [
   'otp_or_security',
   'other_non_transaction',
   'ambiguous',
+  // Dev siblings c/d: a completed move between the user's own accounts, and a
+  // message reporting several separate movements. Both are kept for review
+  // (the app has no neutral own-account transfer, and one answer cannot hold
+  // several movements); like every non-'transaction' type they are a terminal
+  // "not a transaction" verdict, never booked as spending.
+  'own_account_transfer',
+  'multiple_transactions',
 ] as const;
 export const STATUSES = ['completed', 'declined', 'failed', 'pending', 'scheduled', 'unknown'] as const;
 
@@ -81,6 +88,8 @@ First decide what the message is (message_type) and the status of the operation 
 - declined_or_failed: the operation was declined, rejected or failed. pending_or_scheduled: pending, on hold, scheduled, will be processed, a refund still being processed.
 - balance_or_limit_notice: balance, available or credit limit information only. bill_or_reminder: an amount due or a payment reminder, not a payment. expected_income: money that will arrive later.
 - marketing: offers and adverts. otp_or_security: codes and security notices. other_non_transaction: anything else with no money movement. ambiguous: you cannot tell.
+- own_account_transfer: money moved between two accounts or cards that both belong to the user (savings to current, own card repayment), whatever the direction; a transfer to another person or company is a transaction.
+- multiple_transactions: the message reports two or more separate movements (for example two purchases at different merchants); a total with its own parts (tip, fee, VAT) is one transaction.
 A message can carry a completed movement plus an unrelated footer (balance, due date, limit, advert); the completed movement decides, the footer does not.
 The transaction amount is never the available balance, a credit or transfer limit, a reference number, an OTP, a card or account number, or a fee/VAT/tip when a separate total was charged. When a foreign amount and the amount charged to the account both appear, amount_text is the charged amount and original_amount_text/original_currency hold the foreign one; it is one event.
 Give amount_evidence, currency_evidence, status_evidence and direction_evidence as short exact quotes copied from the SMS. Never invent a currency: if the SMS names none, leave currency_source empty unless the request gives an account currency, and then set currency_source=account_context.

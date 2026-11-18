@@ -2921,11 +2921,11 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get privCloudProcessingBody =>
-      'Your data is synced and backed up on Qirsh servers, and captured bank messages may be sent there, with card, account and phone numbers and codes removed, to be read; a merchant name may be sent to Google Places to categorise it. Turning it off stops sending: messages are read by Qirsh\'s on-device rules and nothing new is synced. Manual entry keeps working.';
+      'Your data is synced and backed up on Qirsh servers, and captured bank messages may be sent there to be read, with the card and account numbers, IBANs, mobile numbers and codes Qirsh recognises removed (this is automatic and can miss some); a merchant name may be sent to Google Places to categorise it. Turning it off stops sending: messages are read by Qirsh\'s on-device rules and nothing new is synced. Manual entry keeps working.';
 
   @override
   String get privAiAnalysisBody =>
-      'With Cloud Sync on, captured bank messages — including bank SMS read automatically on Android — with card, account and phone numbers and codes removed and recognised names, e-mails and reference numbers masked, may be analysed by Google Gemini to read the amount, merchant and bank. The text still contains amounts, merchants, dates and balances. Withdrawing consent limits reading to Qirsh\'s on-device rules.';
+      'With Cloud Sync on, captured bank messages — including bank SMS read automatically on Android — with the card and account numbers, IBANs, mobile numbers and codes Qirsh recognises removed and the names, e-mails and reference numbers it recognises masked (this is automatic and can miss some), may be analysed by Google Gemini to read the amount, merchant and bank. The text still contains amounts, merchants, dates and balances. Withdrawing consent limits reading to Qirsh\'s on-device rules.';
 
   @override
   String get privSharedLearningTitle => 'Help improve categories for everyone';
@@ -6041,7 +6041,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get smartConsentBullet1 =>
-      'Bank messages: bank messages you capture are sent to Qirsh servers after card, account and phone numbers and codes are removed, and with people’s names masked where the app detects them. Google Gemini may process this text, with what the app already read from it on your device and the currency of the account it matches, to identify the amount, merchant, date and type. Google Places may receive merchant names. For a bank sender Qirsh does not recognise, the sender’s name may be sent to identify the bank. Qirsh servers keep the message text only until processing finishes, at most 7 days. Amounts, merchants, balances and the last digits of cards remain, so it is not anonymous.';
+      'Bank messages: bank messages you capture are sent to Qirsh servers. Qirsh automatically removes the card numbers, long or labelled account numbers, IBANs, mobile numbers and verification codes it recognises, and masks the names of people it detects, on your device and again on its servers. Because this is automatic, it can miss some, and the rest of the message is sent as written. Google Gemini may process this text, with what the app already read from it on your device and the currency of the account it matches, to identify the amount, merchant, date and type. Google Places may receive merchant names. For a bank sender Qirsh does not recognise, the sender’s name may be sent to identify the bank. Qirsh servers keep the message text only until processing finishes, at most 7 days. Amounts, merchants, balances and the last digits of cards remain, so it is not anonymous.';
 
   @override
   String get smartConsentBullet2 =>

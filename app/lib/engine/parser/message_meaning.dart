@@ -176,6 +176,8 @@ class MessageMeaning {
     'spending this month', 'spending summary', 'monthly statement',
     'total spent', 'total received', 'alert settings', 'alerts for',
     'notify me', 'مصروفاتك', 'ملخص',
+    // Follow-up 5 (S3): a month-to-date total.
+    'هذا الشهر', 'الشهر الحالي', 'إجمالي مشترياتك', 'اجمالي مشترياتك',
   ];
 
   /// Words that report the operation as done; one outside a future or

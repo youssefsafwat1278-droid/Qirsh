@@ -55,6 +55,18 @@ output price, using the provider's current published price for the model
 is ~450 tokens + the message; 750 messages × ≤3 attempts ≈ 2,250 requests
 worst case, typically ~800.
 
+## Development siblings (not held-out)
+
+`dev_siblings.jsonl` is DEVELOPMENT data for the parser and AI tuners: fresh
+hand-written texts in the same schema (`"set": "dev"`, ids `DEV…`, a `family`
+per failing class), written separately from the held-out set. Tuners may read
+and test against it; its numbers are never reported as held-out numbers.
+
+```bash
+MESSAGE_EVAL_SET=$PWD/tools/message_eval/dev_siblings.jsonl \
+  MESSAGE_EVAL_OUT=<scratch>/dev-<sha> tools/message_eval/run.sh <sha>
+```
+
 ## What it is not
 
 Synthetic, single-author messages; not real traffic and not real-world

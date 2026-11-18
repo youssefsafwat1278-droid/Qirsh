@@ -58,6 +58,19 @@ void main() {
       expect(messages.single.receivedAtInferred, isNull);
     });
 
+    // LEN-1: the queued raw-text length (SharedCaptureStore.Payload
+    // .textLength) is read when present and valid; a payload from a build
+    // that does not store it has none.
+    test('textLength is parsed when a non-negative int, else null', () async {
+      final messages = await peek([
+        {'id': 'a', 'text': 'x 1', 'textLength': 2400},
+        {'id': 'b', 'text': 'x 2'},
+        {'id': 'c', 'text': 'x 3', 'textLength': '2400'},
+        {'id': 'd', 'text': 'x 4', 'textLength': -1},
+      ]);
+      expect(messages.map((m) => m.textLength), [2400, null, null, null]);
+    });
+
     test('a native queue failure is a typed read error, never an empty queue',
         () async {
       // F10: "unreadable" must not look like "nothing queued" — the drain

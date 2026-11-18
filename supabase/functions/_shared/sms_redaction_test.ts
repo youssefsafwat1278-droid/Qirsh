@@ -284,3 +284,24 @@ Deno.test('beneficiary redaction keeps every word after the name', () => {
     }
   }
 });
+
+// PRIV-0 (re-review at 6f771108): a labelled synthetic set where every third
+// party's name, account number, IBAN group and phone is tagged. None may
+// survive; amounts, dates, tense and status words and the user's own masked
+// suffix must. The device runs the same file and must give the same text.
+const LABELLED: { id: string; raw: string; expected: string; secrets: string[]; mustKeep: string[] }[] = JSON.parse(
+  Deno.readTextFileSync(new URL('./fixtures/sms_leak_labelled_cases.json', import.meta.url)),
+);
+
+Deno.test('PRIV-0: no tagged third-party name, number, IBAN or phone survives redaction', () => {
+  assert(LABELLED.length >= 70);
+  const failures: string[] = [];
+  for (const c of LABELLED) {
+    const out = serverSanitize(c.raw);
+    if (out !== c.expected) failures.push(`${c.id}: expected ${JSON.stringify(c.expected)}, got ${JSON.stringify(out)}`);
+    for (const s of c.secrets) if (out.includes(s)) failures.push(`${c.id}: "${s}" leaked in ${JSON.stringify(out)}`);
+    for (const k of c.mustKeep) if (!out.includes(k)) failures.push(`${c.id}: lost "${k}"`);
+    if (serverSanitize(out) !== out) failures.push(`${c.id}: not idempotent`);
+  }
+  assertEquals(failures, []);
+});

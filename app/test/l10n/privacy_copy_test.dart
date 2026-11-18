@@ -33,16 +33,29 @@ void main() {
   for (final k in keys) {
     test('$k (en) states sanitisation and no absolute claims', () {
       final s = en[k] as String;
+      // Decided change (decision 3.8, ai.md Follow-up 12): the shown copy
+      // promises only what redaction does — what it recognises — and says it
+      // can miss some. The unused onb* keys keep their old wording.
       if (k == 'smartConsentBullet1') {
         expect(
             s,
-            contains('sent to Qirsh servers after card, account and phone '
-                'numbers and codes are removed'));
+            contains('Qirsh automatically removes the card numbers, long or '
+                'labelled account numbers, IBANs, mobile numbers and '
+                'verification codes it recognises'));
+        expect(s, contains('it can miss some'));
+        expect(s, contains('the rest of the message is sent as written'));
         expect(s, contains('Google Gemini may process this text'));
+      } else if (k.startsWith('priv')) {
+        expect(
+            s,
+            contains('the card and account numbers, IBANs, mobile numbers and '
+                'codes Qirsh recognises removed'));
+        expect(s, contains('can miss some'));
       } else {
         expect(
             s, contains('card, account and phone numbers and codes removed'));
       }
+      expect(s, isNot(contains('after card, account and phone numbers')));
       expect(s.toLowerCase(), isNot(matches(RegExp(r'\bevery\b'))));
       expect(s.toLowerCase(), isNot(contains('only when')));
       if (aiKeys.contains(k) && k != 'smartConsentBullet1') {
@@ -55,9 +68,17 @@ void main() {
       if (k == 'smartConsentBullet1') {
         expect(
             s,
-            contains('إلى خوادم قرش بعد إزالة أرقام البطاقات والحسابات '
-                'والهواتف والرموز'));
+            contains('يحذف قِرش تلقائيًا ما يتعرّف عليه من أرقام البطاقات '
+                'وأرقام الحسابات الطويلة'));
+        expect(s, contains('فقد يفوته بعضها'));
+        expect(s, contains('ويُرسَل باقي نص الرسالة كما هو'));
         expect(s, contains('قد تعالج خدمة Google Gemini هذا النص'));
+      } else if (k.startsWith('priv')) {
+        expect(
+            s,
+            contains('بعد حذف ما يتعرّف عليه قِرش من أرقام البطاقات '
+                'والحسابات وأرقام IBAN والجوال والرموز'));
+        expect(s, contains('وقد يفوته بعضها'));
       } else {
         expect(
             s, contains('بعد حذف أرقام البطاقات والحسابات والهواتف والرموز'));

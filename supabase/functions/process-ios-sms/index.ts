@@ -29,6 +29,8 @@ import {
 import { type FingerprintReservationStore, reserveCaptureFingerprint } from '../_shared/fingerprint_reservation.ts';
 import { apiError, correlationId } from '../_shared/ai_endpoint.ts';
 import { isDeclinedText, messageMeaning, type ParseOutcome, type ParsedCapture, parseSms } from './parse.ts';
+import { dispositionOf, MAX_TEXT_LENGTH } from './message_meaning.ts';
+import { gatedMeaning } from './meaning_gate.ts';
 import { AI_PRIMARY_MODE } from '../_shared/ai_primary.ts';
 import { UNDERSTANDING_SYSTEM_VERSION } from '../_shared/ai_understanding.ts';
 import { reserveAiBudget } from '../_shared/ai_budget_gate.ts';
@@ -173,6 +175,14 @@ export async function handleProcessIosSms(
   const tzOffsetMinutes = typeof body.tzOffsetMinutes === 'number' ? body.tzOffsetMinutes : null;
   const locale = readString(body, 'locale', 'deviceLocale', 'device_locale');
   const allowAi = body.allowAi === true || body.allow_ai === true;
+  // LEN-1: the device decides "over length" on the message as received, in
+  // UTF-16 code units (Dart and JS `String.length`), before redaction shortens
+  // it. A client that sends that length lets the server use the same measure.
+  // It can only move a capture to review, never to recorded.
+  const rawTextLength = body.textLength ?? body.text_length;
+  const deviceTextLength = typeof rawTextLength === 'number' && Number.isInteger(rawTextLength) && rawTextLength >= 0
+    ? rawTextLength
+    : null;
 
   if (!payloadId || !sanitizedText) {
     return json({ error: 'missing_fields' }, 400);
@@ -374,7 +384,13 @@ export async function handleProcessIosSms(
     // cash deposit, own accounts, several movements) is never processed money
     // because a model (or any later step) answered with a transaction. It is
     // kept for review with the reason; the device applies the same meaning.
-    const meaning = outcome.meaning ?? messageMeaning(sanitizedText);
+    let meaning = gatedMeaning(sanitizedText, outcome.meaning ?? messageMeaning(sanitizedText), parsed.amount ?? null);
+    if (
+      deviceTextLength !== null && deviceTextLength > MAX_TEXT_LENGTH && meaning.kind !== 'otp' &&
+      meaning.disposition === 'record'
+    ) {
+      meaning = { ...meaning, kind: 'uncertain', disposition: dispositionOf('uncertain'), reason: 'over_length' };
+    }
     if (status === 'processed' && meaning.disposition !== 'record') {
       status = 'rejected';
       parsed.reviewReason = meaning.reason;
@@ -397,7 +413,7 @@ export async function handleProcessIosSms(
     const shown: ShownCapture = status !== 'rejected' && ownerUid
       ? await withUserMerchantRule(supabase, ownerUid, parsed)
       : parsed;
-    const captureOutcome = outcomeOf(status, sanitizedText, outcome);
+    const captureOutcome = outcomeOf(status, sanitizedText, { ...outcome, meaning });
     const notification: NotificationPayload = aiPrimary && status === 'rejected'
       ? { title: '', body: '', type: 'received' }
       : buildNotification(status, shown, sender, receivedAt, tzOffsetMinutes, locale, captureOutcome);

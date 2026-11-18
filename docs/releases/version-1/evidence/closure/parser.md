@@ -532,3 +532,107 @@ Unlabelled on eB: record 609 → 595, review 2 → 16, not-completed 159 → 159
 - Deno, whole `supabase/functions`: **1,250 passed, 0 failed** (6 ignored). `deno lint` is clean on `process-ios-sms/`, `_shared/money_text.ts` and `tools/parser_diff/server.ts`. `deno check` is clean. `deno.lock` is unchanged.
 - `flutter analyze --no-pub` on the WHOLE app: **No issues found.**
 - Flutter: `flutter test --no-pub -j 2` over 200 files: all of `test/engine`, every test importing `engine/parser`, every capture import/sync test, and the 138-file list from Follow-up 3. Result: **6,373 passed, 1 failed** (P02, the stale pin above). After the pin fix, `follow_up3_money_correctness_test.dart` passes on both sides (95 + 95).
+
+## Follow-up 5 (held-out sibling families a–f and reviewer S3), 2026-11-18
+
+The work is on the working tree after HEAD `5a5a1587`. Nothing is committed. All messages are synthetic: `tools/message_eval/dev_siblings.jsonl` (92 rows) and 8 S3 probes, in `tools/parser_diff/cases/fu5.json` and the shared fixture `process-ios-sms/follow_up5_cases.json` (100 rows).
+
+### Rules (device `parser_engine.dart` AND server `message_meaning.ts` / `parse.ts`, the same word lists)
+
+- **(a) Pending refunds.** `isRefundPending`: a refund or reversal subject plus a request, initiated, submitted, registered, awaiting, expected, pending, under-review or future word **anywhere** in the message (English and «قيد/تحت المراجعة», «جاري», «طلب», «سيتم», …) is `not_completed/pending`. The exception is a clause that states the credit happened. Such a clause has a credit verb and no not-done word (will, once, expected, not, «سيتم», «لم», …) between the last clause cut and the verb.
+- **(b) Standing and scheduled orders.** For a standing, scheduled, recurring, future-dated or upcoming order or transfer (also «أمر … دائم/مستديم», «تحويل مجدول», «جدولة»):
+  - It is `no_movement_notice/scheduled_or_expected` when the message has a future or scheduling cue and no clause stating the execution happened.
+  - The future or scheduling cues are: will, due for, scheduled for, set for, set up, has been scheduled, next/first execution, upcoming, tomorrow, reminder, «سيتم», «ليتم», «سوف», «جدولة», «القادم», «غدا» and «تذكير».
+  - The execution verbs are: executed, completed, transferred, debited, paid, processed, sent, received, credited, done, made, «تم تنفيذ/تحويل/خصم/…» and «نفذ» with any diacritics («نُفذ»).
+  - A standing order with no future cue reads as before. This matters on the server, where the redaction can remove the verb (cr/R21 «… إلى المالك نُفذ» becomes «إلى: [REDACTED]»).
+  - A stated execution also stops the notice and summary footers from holding the movement. This is S3c ("executed as per your request") and S3d ("transferred as scheduled").
+- **(c) Own-account moves.** A move between two named account types (savings, current, checking or salary, and «توفير/ادخار/جاري», also after «إلى: [REDACTED]») is `own_account_transfer`, which is review. Third-party transfers stay money out.
+- **(d) Several purchases.** Two or more distinct figures, each followed by a merchant («at X», «@», «لدى», «(X)») or forming a numbered list line, are `multiple_events`, which is review. This also fixes FU3 M02. Its OPEN-defect pins `device=record server=record` are removed from `follow_up3_cases.json`.
+- **(e) Totals.** `partsTotal` applies when the message has a total or inclusion word (total, incl, of which, plus, «+», «إجمالي», «شامل»). It also needs a non-zero figure labelled as a part (tip, VAT, tax, service, fee, subtotal, delivery, «ضريبة», «رسوم», «بقشيش», «خدمة»). Balance, limit and due figures are left out.
+  - When the first figure is not the total: `uncertain/total_with_parts`, which is review.
+  - `parse()` (device) and `deterministicParse` (server) never record an amount other than that total. They send it to review instead.
+  - The tip rule also reads "SAR 30.00 tip" (figure before the word).
+  - **I tried and reverted** "record when the first figure is the stated total" (DEV072 «SAR 230.00 (SAR 200.00 + SAR 30.00 tip)»). It contradicts FU4 Gt3 (pinned `r`) and the AI owner's `meaning_gate_test.ts`. That test expects a tip form to be review unless the model's amount equals the stated total. Tip forms therefore stay review.
+- **S3 summary tails.** The summary markers gain «هذا الشهر», «الشهر الحالي» and «إجمالي/اجمالي مشترياتك». S3b is now recorded with its month-to-date tail. The word lists were regenerated into `parser_rules.json`, and the drift tests pass.
+- **S3 card repayment.** The Arabic card-repayment rule now needs the card to be the **object** of the repayment («سداد (مستحقات|رصيد|مبلغ)? بطاقتك الائتمانية»). «سداد فاتورة … ببطاقتك الائتمانية» and «… باستخدام بطاقتك الائتمانية» are purchases, which is S3e and S3f (recorded).
+
+### Sibling families: where they stand (dB = device with sender, dN = without, s = server, eB/eN = effective import)
+
+Before this pass, 65 of the 100 rows were not right on every path. Now **28 are not right on every path, and none of them is wrong or booked.** Every one is review, or the reversal case (f) below.
+
+- **a, b-future, c-own, d:** all right on all five paths.
+- **b-done:** recorded on dB, s and eB/eN. DEV041 and DEV042 go to review on dN only. The device confidence is low without a sender, because "standing order … executed" has no type verb. Review is safe. Fixing it would mean changing type detection, which is not in scope.
+- **c-third:** stays money out. DEV059, DEV060 and DEV062 go to the AI on s (`to_ai`); the effective import is right.
+- **e:**
+  - DEV074 records the stated total on every path. DEV075 and DEV079 record it everywhere except dN, where they are review.
+  - DEV071, DEV072, DEV073, DEV076, DEV077, DEV078, DEV080, DEV081 and DEV082 are review on one or more paths. The base figure is never recorded.
+- **f: left, needs a decision.** The completed reversals ("Reversal … credited", "Transaction reversed … credited back", "A reversal … completed and credited": DEV083, DEV084, DEV085 and DEV090) stay not completed. Device and import send them to review; the server rejects them. They contradict the Follow-up 3 pre-round invariant (`pre_round_not_completed.json`: texts `5dae2e2d` read as not completed are never recorded). That invariant names this very shape ("Partial reversal … credited to your card", "… reversed and credited to your account"). Making them completed refunds means dropping those invariant rows. That is the coordinator's call. "Reversal initiated/pending" (S3g, S3h) is not completed.
+- **S3:**
+  - S3b–S3f are recorded on the server.
+  - S3c and S3d go to the AI on s.
+  - S3a «دفع فاتورة الكهرباء 320 ريال من حسابك 4521 + reminder» is review on the device. This was a pre-existing device gap, present without the tail too; the server records it.
+
+### Harness
+
+- **`run.sh 5dae2e2d` (pd11): exit 1, only on the review budget: 38 of 35.** Regressions 0, throws 0, base-not-completed-now-recorded 0. There are 3 more to-review messages than in Follow-up 4 (pd7):
+  - `fu5/DEV072`: a tip form. It is a new corpus row and is review at HEAD too, through the FU4 tip rule.
+  - `corpus/K062` "Paid 75.00 SAR / 750.00 SAR" and `corpus/K126` "Purchase 100.00 EGP then 200.00 EGP": eB/eN only, `hold:multiple_amounts`. That is the AI owner's new hold in `validated_capture.dart`, not my files. Both are correct review rows.
+  - Without the corpus growth and the AI owner's hold, the count is 35.
+  - An earlier run (pd10) showed kl/L_L58 recorded on s. That was a transient state of the concurrently edited `sms_redaction.ts`. It is rejected now, and re-checked on pd11.
+- **`server_diff.sh` (b6fc0dad → working tree, sd8): exit 1, 3 regressions.** They are DEV084, DEV085 and DEV090, family f: the pre-round invariant above. They are equally rejected at HEAD.
+  - rejected → processed: 195.
+  - The 9 recorded → rejected for the invariant are as before.
+- **`server_diff.sh HEAD` (sd9): exit 0, 0 regressions.**
+  - **Newly right on the server vs HEAD (30):**
+    - S3b, S3e, S3f (review → record)
+    - FU3 M02, DEV065–DEV070 (several purchases → review)
+    - DEV003, DEV005, DEV010, DEV013, DEV016, DEV019, S3g (pending refund → not completed)
+    - DEV022, DEV026, DEV029, DEV032, DEV034 (scheduled → no movement)
+    - DEV053, DEV054, DEV057 (own accounts → review)
+    - DEV077, DEV080, DEV081, DEV082 (wrong base amount → review)
+  - **Newly review vs HEAD:** DEV073 "charged AED 315.00 … incl. AED 15.00 tip" (tip form, figure before the word).
+
+### Tests: "fails before, passes after"
+
+- New tests:
+  - `app/test/engine/parser/follow_up5_money_correctness_test.dart` and `supabase/functions/process-ios-sms/follow_up5_money_correctness_test.ts`, with the shared fixture `follow_up5_cases.json`. It has 100 rows; the 22 pins say why: the f invariant, safe review, and S3a.
+  - Rule tests for a, b (including «نُفذ» and the redacted-verb case), c, d, e and the S3 card instrument.
+  - 106 tests on each side.
+- "Before": the case table was copied into a `git archive` of HEAD `5a5a1587`. **Dart: 40 failures. TS: 29 failures.** The rule tests do not compile there, because `isRefundPending`, `partsTotal` and `merchantFigureCount` are new.
+- Changed expectations: `follow_up3_cases.json` M02 lost its OPEN-defect pins (now fixed). The `declined_cases.json` table is unchanged; the ceiling is still 703.
+
+### For the coordinator / AI owner
+
+1. **Family f vs the FU3 pre-round invariant:** decide whether completed-credit reversals may be recorded. If yes, drop those rows from `pre_round_not_completed.json`, then make a stated credit clause override the "reversal" not-completed cue.
+2. **AI owner's in-progress files.** The following fail on the current tree from their edits; I checked each with my parser on HEAD's AI and validator files:
+   - `ai_candidate_validator.dart`: 7 assertions in `declined_state_cues_table_test.dart` (lines 286 and 287, "approved. Previous attempt declined" rows, AI accepted).
+   - `sms_sanitizer_test.dart:147` (income «إلى: حسابك» strips the amount line). This one **also fails at HEAD `5a5a1587`**.
+   - Earlier, `parse-sms/ai_meaning_gate_contract_test.ts` failed while `parse-sms/index.ts` was mid-edit. It passes now.
+3. The redaction swallows the verb after «إلى» names (cr/R21). My standing rule no longer depends on that verb.
+
+### Commands and results (final state)
+
+- `bash tbl_all.sh` (both table suites: device and server over `declined_cases.json`): no pin changes.
+- Deno, whole `supabase/functions`: **1,406 passed, 0 failed** (6 ignored, the real-backend tests). `deno lint` and `deno check` are clean on `process-ios-sms/` and `_shared/money_text.ts`. `deno.lock` is unchanged.
+- `flutter analyze --no-pub`, whole app: **No issues found.**
+- Flutter, 202 files (all of `test/engine`, the parser importers, the capture suites, the FU3 list, and the new test): **6,589 passed, 8 failed**. All 8 are the AI-owner items in point 2; none is in a parser test.
+- `parser_engine.dart` is not run through `dart format` as a whole: it was unformatted at HEAD, and only my hunks are formatted.
+
+### Follow-up 5, coordinator decision applied (accepted list), re-run on the current tree
+
+- **Coordinator decision.** Family f (DEV084, DEV085 and DEV090: completed reversals "… credited") stays review this round. It is a known review cost, not a defect.
+- **Harness change: an `ACCEPTED` list in `tools/parser_diff/diff.py`.** Each accepted id has a reason, and the list is printed on every run in both modes. Anything not on the list still fails.
+  - **`ACCEPTED_SERVER`:** DEV084, DEV085 and DEV090. Only a not-completed rejection of exactly these ids is accepted.
+  - **`ACCEPTED_REVIEW`:** DEV072 (tip form), and K062 and K126 (two distinct movement amounts, held by the AI gate).
+  - **Review budget:** the default is now **38**, which is the 35 from Follow-up 4 plus these 3.
+- `run.sh 5dae2e2d` (pd12): **exit 0**. 2,519 distinct messages, 1,737 labelled. Regressions 0, throws 0, base not-completed now recorded 0. To review: 38 of a 38 budget; all 3 accepted ids are present.
+- `server_diff.sh` (b6fc0dad → work, sd10): **exit 0**. Server regressions 0, after excluding the 3 accepted ids; all 3 are present and printed. Rejected → processed: 195.
+- `server_diff.sh HEAD` (sd11): **exit 0**. 0 regressions, rejected → processed 3, and no accepted id occurs.
+- Table comparison (`declined_cases.json`, device and server): no pin changes, ceiling 703.
+- Deno, whole `supabase/functions`: 1,408 passed, 0 failed (6 ignored). `deno lint` is clean.
+  - `deno.lock` is unchanged: a `deno check` I ran over `_shared/*.ts` without `--no-lock` had added `npm:jose`, and I removed those lines again.
+- `flutter analyze` on the whole app: no issues.
+- Flutter, 202 files (all of `test/engine`, the parser importers, the capture suites, and FU3/FU5): **6,599 passed, 1 failed**.
+  - The failure is `local_notification_service_tracking_test.dart:256`, an ordering check on notification events, outside the parser.
+  - It passed on a lone rerun (11/11). I did not check whether it fails at HEAD.
+  - The AI validator and sanitizer failures from the earlier run are gone, now that the AI owner's Follow-up 13 fix is in.

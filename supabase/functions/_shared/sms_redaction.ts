@@ -69,6 +69,30 @@ const INTL_PHONE_PATTERN = new RegExp(`\\+${D}{7,15}${NB_END}`, 'g');
 const IBAN_PATTERN = new RegExp(IBAN_DETECT_PATTERN.source, 'g');
 const ACCOUNT_PATTERN = new RegExp(`${NB}${D}{10,20}${NB_END}`, 'g');
 
+/// An IBAN written in groups ("SA88 1234 5678 9012 3456 9898"). The unspaced
+/// rule cannot see it and the card rule used to eat the middle 16 digits,
+/// leaving the country, check digits and last group behind. Every group after
+/// the check digits holds a digit, so ordinary words are never taken. Runs
+/// before the card rule (PRIV-0).
+const SPACED_IBAN_PATTERN = new RegExp(
+  `${NB}[A-Za-z]{2}${D}{2}(?:[ \\-](?=[A-Za-z0-9\u0660-\u0669\u06F0-\u06F9]{0,3}${D})[A-Za-z0-9\u0660-\u0669\u06F0-\u06F9]{4}){3,7}` +
+    `(?:[ \\-](?=[A-Za-z0-9\u0660-\u0669\u06F0-\u06F9]{0,3}${D})[A-Za-z0-9\u0660-\u0669\u06F0-\u06F9]{1,3})?${NB_END}`,
+  'g',
+);
+
+/// A number of 5 to 9 digits right after an account label ("account
+/// 60181590", «حساب ٦٠١٨١٥٩٠», "a/c no. 1234567") is an account number, the
+/// third party's or the user's own, even though it is shorter than the
+/// generic 10-digit rule. A partial suffix of 4 digits or fewer («حسابك
+/// ***1234») stays, and a figure followed by a currency or a decimal part is
+/// an amount and stays (PRIV-0).
+const LABELLED_ACCOUNT_PATTERN = new RegExp(
+  `((?<![\\p{L}\\p{M}])(?:account|acct|a\\/c|ac|حساب|الحساب|لحساب|للحساب|بحساب|حسابك|لحسابك|حسابكم|حسابي)` +
+    `(?![\\p{L}\\p{M}])\\.?(?:[ \\t]+(?:no|number|num|رقم)(?![\\p{L}\\p{M}])\\.?)?[ \\t]*[:#]?[ \\t]*)` +
+    `[*xX•#]*${D}{5,9}(?!${D}|[.,\u066B\u066C]${D}|[ \\t]*(?:sar|egp|aed|usd|eur|gbp|kwd|qar|bhd|omr|jod|le|sr|riyals?|pounds?|dirhams?|dinars?|dollars?|ريال|جنيه|جم|درهم|دينار|دولار|يورو|ر\\.س)(?![\\p{L}\\p{M}])(?![ \\t]*${D}))`,
+  'giu',
+);
+
 /// E-mail addresses. Runs FIRST: a local part such as `ahmed0551234567`
 /// would otherwise be half-eaten by the phone rule and leave the rest behind.
 const EMAIL_PATTERN = /[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}/g;
@@ -98,6 +122,7 @@ const REF_PATTERN = new RegExp(
 export function redactPii(text: string): string {
   return text
     .replace(EMAIL_PATTERN, '[EMAIL]')
+    .replace(SPACED_IBAN_PATTERN, '[IBAN]')
     .replace(CARD_PATTERN, '[CARD]')
     .replace(SAUDI_PHONE_PATTERN, '[PHONE]')
     .replace(EGYPT_PHONE_PATTERN, '[PHONE]')
@@ -105,6 +130,7 @@ export function redactPii(text: string): string {
     .replace(IBAN_PATTERN, '[IBAN]')
     .replace(OTP_PATTERN, '$1[OTP]')
     .replace(ACCOUNT_PATTERN, '[ACCOUNT]')
+    .replace(LABELLED_ACCOUNT_PATTERN, '$1[ACCOUNT]')
     .replace(REF_PATTERN, '$1[REF]');
 }
 
@@ -416,6 +442,20 @@ const NAME_STOPWORDS = [
   'current',
   'checking',
   'chequing',
+  'iban',
+  // A failure reason after "due to" is never a name (L_L58).
+  'insufficient',
+  'funds',
+  'limit',
+  'reason',
+  'technical',
+  'error',
+  'request',
+  'lack',
+  'الآيبان',
+  'الايبان',
+  'آيبان',
+  'ايبان',
   'التوفير',
   'توفير',
   'الادخار',
@@ -465,7 +505,8 @@ const BENEFICIARY_OBJECT_WORDS = new Set([
 // initial or title keeps its period ("A. Ali", "Mr. Ali") so the name after
 // it is still masked.
 const SENTENCE_END = `(?:(?<!(?<![\\p{L}\\p{M}])(?:\\p{L}|mrs|mr|ms|dr))\\.(?=\\s|$)|[\\n!?؟;؛])`;
-const NAME_TOKEN = `(?!(?:${NAME_STOPWORDS.join('|')})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]))` +
+// A one-letter stopword before ". Name" is an initial («A. Ali Hassan»).
+const NAME_TOKEN = `(?!(?:${NAME_STOPWORDS.join('|')})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]|(?<=(?<![\\p{L}\\p{M}])\\p{L})\\.[ \\t]+\\p{L}))` +
   // A lone star before digits is a masked number, not a masked name.
   `(?!\\*+${D})[\\p{L}\\p{M}*](?:[\\p{L}\\p{M}*'’\\-]|(?!${SENTENCE_END})\\.)*(?![\\p{L}\\p{M}*'’\\-]|${D})`;
 const NAME = `${NAME_TOKEN}(?:[ \\t]+${NAME_TOKEN}){0,5}`;
@@ -495,7 +536,7 @@ const BENEFICIARY_ID = `(?:\\[(?:ACCOUNT|IBAN|CARD|PHONE|REF)\\]|[A-Z]{2}${D}{2}
 const BENEFICIARY_PART = `(?:${BENEFICIARY_ID}|${BENEFICIARY_TOKEN})`;
 const BENEFICIARY_RUN = `(?:\\[NAME\\]|${BENEFICIARY_PART})(?:[ \\t]+${BENEFICIARY_PART})*`;
 const BENEFICIARY_AR = new RegExp(`(إلى|الى)\\s*:?\\s*${BENEFICIARY_RUN}`, 'giu');
-const BENEFICIARY_EN = new RegExp(`\\bTo\\s*:\\s*${BENEFICIARY_RUN}`, 'giu');
+const BENEFICIARY_EN = new RegExp(`\\bTo(?:[ \\t]+name)?\\s*:\\s*${BENEFICIARY_RUN}`, 'giu');
 
 // The user's own account or card after the cue stays («إلى حسابك ***1234»),
 // but only as a partial suffix: an unmasked number of five or more digits
@@ -528,7 +569,7 @@ const NUMBER_IN_BENEFICIARY_SENTENCE = new RegExp(
     `(?<!(?<![\\p{L}\\p{M}])${CURRENCY_WORD}[ \\t]*)` +
     `(?:[A-Z]{2}(?=${D}))?[*xX•#]*${D}+(?:-${D}+)*` +
     `(?![0-9A-Za-z\u0660-\u0669\u06F0-\u06F9]|[.,\u066B\u066C/:\\-]${D}|[ \\t]*${CURRENCY_WORD}(?![ \\t]*${D}))` +
-    `(?<=(?:إلى|الى|\\bTo\\s*:)(?:(?!${SENTENCE_END}).)*)`,
+    `(?<=(?:إلى|الى|\\bTo(?:[ \\t]+name)?\\s*:)(?:(?!${SENTENCE_END}).)*)`,
   'giu',
 );
 const CUE_SEP = `(?:[ \\t]*:[ \\t]*|[ \\t]+)`;
@@ -548,15 +589,15 @@ const SALUTATION_PATTERN = new RegExp(
 /// are applied only when the message reads as a transfer/credit AND not as a
 /// purchase/refund/bill — see [isCounterpartyContext].
 const COUNTERPARTY_PATTERN = new RegExp(
-  `((?<![\\p{L}\\p{M}])(?:from|to|by|beneficiary(?:[ \\t]+name)?|sender(?:[ \\t]+name)?|remitter(?:[ \\t]+name)?` +
+  `((?<![\\p{L}\\p{M}])(?:from|to(?:[ \\t]+name)?|by|beneficiary(?:[ \\t]+name)?|sender(?:[ \\t]+name)?|remitter(?:[ \\t]+name)?` +
     `|recipient(?:[ \\t]+name)?|payer(?:[ \\t]+name)?|on[ \\t]+behalf[ \\t]+of|in[ \\t]+favou?r[ \\t]+of|mrs|mr|ms|dr` +
-    `|من[ \\t]+قبل|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي)` +
+    `|من[ \\t]+قبل|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي)` +
     `\\.?(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
   'giu',
 );
 
 const TRANSFER_CONTEXT =
-  /transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|\bsent\b|حوال|تحويل|حول|وارد|استلام|استلمت|إيداع|ايداع|أودع|اودع|مستفيد|المرسل|انستا|لصالح/iu;
+  /transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|\bsent\b|standing\s+order|حوال|تحويل|حول|وارد|استلام|استلمت|إيداع|ايداع|أودع|اودع|مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
 const PURCHASE_CONTEXT =
   /purchase|\bpos\b|point of sale|paid at|spent|refund|revers|e-?commerce|\bbill|merchant|شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد|تاجر/iu;
 

@@ -622,6 +622,86 @@ export function withoutUnrelatedNotices(text: string, amountText: string | null)
   return kept.join('\n');
 }
 
+// ── Several movements in one message (dev siblings, family d) ────────────────
+// Two or more distinct amounts of one currency in the message's movement
+// text: several purchases ("SAR 120.00 at A; SAR 45.50 at B"), so no single
+// answer is the movement and the message is held for review. Not when the
+// figures are parts of one movement (a stated total, a tip, fee, VAT or
+// subtotal, an original/equivalent amount, one figure the sum of the others),
+// an account figure (any balance, limit or due word) or a reward: the check
+// is conservative and never holds such a message. The caller passes only the
+// sentences the parser reads as movements. App twin:
+// AiCandidateValidator.separateMovementAmounts.
+const PART_OF_ONE_MOVEMENT = new RegExp(
+  '(?<![a-z])(?:total|subtotal|sub-total|incl\\.?|including|inclusive|of which|plus|tips?|gratuity|vat|tax|fees?|' +
+    'service|delivery|commission|original(?:ly)?|equivalent|approx(?:\\.|imately)?|exchange|rate|cashback|cash back|' +
+    'points?|rewards?|miles|refund(?:ed)?|reversal|reversed|instal?ments?|monthly|remaining|outstanding|due|' +
+    'balance|bal|avl|available|limit)(?![a-z])|[+=]|' +
+    'الإجمالي|الاجمالي|إجمالي|اجمالي|المجموع|شامل|بقشيش|إكرامية|اكرامية|ضريبة|رسوم|عمولة|خدمة|يعادل|' +
+    'استرداد|مسترد|نقاط|مكافأة|كاش باك|قسط|أقساط|اقساط|المتبقي|المستحق|رصيد|المتاح|متاح|الحد|حد ',
+  'i',
+);
+
+/** Every currency-tagged amount of [text], by currency code. */
+function taggedAmounts(text: string): { movement: string; byCurrency: Map<string, Set<number>> } {
+  const ascii = text.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replaceAll('٬', ',').replaceAll('٫', '.');
+  const movement = normalizeCurrencyTokens(ascii);
+  const codes = CURRENCY_CODES.join('|');
+  const tagged = new RegExp(
+    `(?<![A-Za-z])(${codes})\\s?([0-9][0-9,]*(?:\\.[0-9]+)?)(?![0-9])|(?<![0-9.,])([0-9][0-9,]*(?:\\.[0-9]+)?)\\s?(${codes})(?![A-Za-z])`,
+    'g',
+  );
+  const byCurrency = new Map<string, Set<number>>();
+  for (const m of movement.matchAll(tagged)) {
+    const code = (m[1] ?? m[4])!;
+    const canonical = canonicalMoneyText(m[2] ?? m[3]!);
+    if (canonical == null || Number(canonical) <= 0) continue;
+    if (!byCurrency.has(code)) byCurrency.set(code, new Set());
+    byCurrency.get(code)!.add(Number(canonical));
+  }
+  return { movement, byCurrency };
+}
+
+/** The distinct amounts when the movement text names several of one currency; else null. */
+export function separateMovementAmounts(text: string): number[] | null {
+  const { movement, byCurrency } = taggedAmounts(text);
+  if (PART_OF_ONE_MOVEMENT.test(movement.toLowerCase())) return null;
+  for (const values of byCurrency.values()) {
+    if (values.size < 2) continue;
+    const list = [...values];
+    const sum = list.reduce((a, b) => a + b, 0);
+    if (list.some((v) => Math.abs(v * 2 - sum) < 0.005)) return null; // one figure is the total of the others
+    return list;
+  }
+  return null;
+}
+
+/**
+ * The total a message states for one movement made of parts (dev siblings,
+ * family e): the labelled charged total (chargedTotal), or the one figure of a
+ * currency that is the sum of all the others ("SAR 230.00 (SAR 200.00 +
+ * SAR 30.00 tip)", «400.00 ريال + بقشيش 40.00 ريال = الإجمالي 440.00 ريال»);
+ * null when there is none. App twin: AiCandidateValidator.statedTotal.
+ */
+const INCLUDES_PART = /(?<![a-z])(?:incl\.?|including|inclusive of|of which)(?![a-z])|شامل/i;
+
+export function statedTotal(text: string): number | null {
+  const labelled = chargedTotal(text);
+  if (labelled != null) return labelled;
+  const { movement, byCurrency } = taggedAmounts(text);
+  for (const values of byCurrency.values()) {
+    const list = [...values];
+    // "AED 315.00 … incl. AED 15.00 tip": the figure that includes the other.
+    if (list.length === 2 && INCLUDES_PART.test(movement)) return Math.max(...list);
+    if (list.length < 3) continue;
+    const sum = list.reduce((a, b) => a + b, 0);
+    const total = list.find((v) => Math.abs(v * 2 - sum) < 0.005);
+    if (total != null) return total;
+  }
+  return null;
+}
+
 export function validateAiCandidate(input: {
   candidate: AiCandidate;
   sanitizedText: string;

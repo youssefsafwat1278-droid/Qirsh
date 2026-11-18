@@ -189,6 +189,7 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
   }
 
   pass(SmsSanitizer.emailPattern, (_) => '[EMAIL]', '[EMAIL]');
+  pass(SmsSanitizer.spacedIbanPattern, (_) => '[IBAN]', '[IBAN]');
   pass(SmsSanitizer.cardNumberPattern, (_) => '[CARD]', '[CARD]');
   pass(SmsSanitizer.saudiPhonePattern, (_) => '[PHONE]', '[PHONE]');
   pass(SmsSanitizer.egyptPhonePattern, (_) => '[PHONE]', '[PHONE]');
@@ -196,6 +197,8 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
   pass(SmsSanitizer.ibanPattern, (_) => '[IBAN]', '[IBAN]');
   pass(SmsSanitizer.otpPattern, (m) => '${m.group(1)!}[OTP]', '[OTP]');
   pass(SmsSanitizer.accountNumberPattern, (_) => '[ACCOUNT]', '[ACCOUNT]');
+  pass(SmsSanitizer.labelledAccountPattern, (m) => '${m.group(1)!}[ACCOUNT]',
+      '[ACCOUNT]');
   pass(SmsSanitizer.referencePattern, (m) => '${m.group(1)!}[REF]', '[REF]');
   pass(SmsSanitizer.salutationPattern, (m) => '${m.group(1)!}[NAME]',
       '[NAME]');

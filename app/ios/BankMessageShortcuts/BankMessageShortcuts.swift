@@ -864,6 +864,10 @@ struct BackendCaptureClient {
       "deviceSecret": deviceSecret,
       "smsText": sanitized,
       "sanitizedText": sanitized,
+      // LEN-1: the message's length as received (trimmed, as queued), in
+      // UTF-16 units like Dart/JS `String.length`, measured BEFORE redaction
+      // shortens it. The server sends anything over 2,000 to review.
+      "textLength": Self.textLength(request.smsText),
       "sender": request.senderID ?? request.senderName ?? "",
       "senderName": request.senderName ?? "",
       "senderId": request.senderID ?? "",
@@ -938,6 +942,11 @@ struct BackendCaptureClient {
        aiDetail: Self.aiDetail(capture["parsed"] as? [String: Any]))
   }
 
+  /// LEN-1 measure shared by the upload body and the queued payload.
+  static func textLength(_ text: String) -> Int {
+    text.trimmingCharacters(in: .whitespacesAndNewlines).utf16.count
+  }
+
   static func aiDetail(_ parsed: [String: Any]?) -> CaptureDetail? {
     guard let parsed,
           let amount = parsed["amount"] as? Double, amount > 0,
@@ -960,222 +969,228 @@ struct BackendCaptureClient {
   }
 
   /// Internal (not private) so RunnerTests can run the shared redaction
-  /// fixture against it; still only called by [process].
+  /// fixtures against it; still only called by [process].
+  ///
+  /// PRIV-0 (closure FU10–12): a rule-for-rule port of the server's
+  /// `redactPii` + `redactThirdPartyNames` in
+  /// `supabase/functions/_shared/sms_redaction.ts`, which the Dart
+  /// `SmsSanitizer` also mirrors. The fixtures
+  /// `_shared/fixtures/sms_redaction_cases.json` and
+  /// `sms_leak_labelled_cases.json` hold all three to the same output
+  /// (RunnerTests). Translation notes, so a future edit stays faithful:
+  /// - JS `\b` is ASCII-only; ICU's is Unicode-aware, so it is written as
+  ///   `(?<![A-Za-z0-9_])` / `(?![A-Za-z0-9_])`.
+  /// - ICU needs a bounded look-behind. Unbounded runs inside a look-behind are
+  ///   bounded here; every bound errs toward masking MORE, except the sentence
+  ///   span of the beneficiary-number pass, bounded at 4,000 characters (twice
+  ///   the server's length limit).
   static func sanitize(_ text: String) throws -> String {
     var value = text
-    // ORDER MATTERS and mirrors `lib/engine/privacy/sms_sanitizer.dart`:
-    // card -> phone -> IBAN -> OTP -> account. The generic account rule is last
-    // because it would otherwise eat the digit run inside a more specific match.
-    //
-    // IBAN and OTP were missing here while this copy carried a comment claiming
-    // parity with the Dart sanitizer. They are not optional: this is the path
-    // that reaches an off-device AI service, so it was the WEAKEST of the three
-    // sanitizers guarding the most sensitive egress. The account rule cannot
-    // stand in for the IBAN rule — `\b\d{10,20}\b` never matches a Saudi IBAN,
-    // because there is no word boundary between "SA" and the digits that follow.
-    // Every digit shape this market sends: Latin, Arabic-Indic (U+0660-0669)
-    // and extended Arabic-Indic (U+06F0-06F9). ASCII `\d` alone meant a card
-    // or account number written in the digits half the market uses was
-    // forwarded to the model untouched. They are matched in place rather than
-    // normalised away, because the proof layer compares model output against
-    // spans of the very string that was sent.
-    // ICU escapes (\uFFFF), not Swift's \u{...}: these live inside raw
-    // strings, so the regex engine is what reads them.
-    let d = #"[0-9\u0660-\u0669\u06F0-\u06F9]"#
-    // `\b` is defined over [A-Za-z0-9_] alone, so it does not treat U+0660 as
-    // a word character and would place a "boundary" inside an Arabic-Indic
-    // run. These are that assertion widened; on ASCII input they are exactly
-    // equivalent to `\b`.
-    let nb = #"(?<![0-9\u0660-\u0669\u06F0-\u06F9A-Za-z_])"#
-    let nbEnd = #"(?![0-9\u0660-\u0669\u06F0-\u06F9A-Za-z_])"#
-
-    let specificRules: [(String, String)] = [
-      // E-mail first: a local part such as `ahmed0551234567` would otherwise be
-      // half-eaten by the phone rule.
-      (#"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"#, "[EMAIL]"),
-      (#"\#(nb)\#(d){4}[\s-]?\#(d){4}[\s-]?\#(d){4}[\s-]?\#(d){4}\#(nbEnd)"#, "[CARD]"),
-      // The leading 0 and 5 may themselves be Arabic-Indic, so they are classes.
-      (#"\#(nb)[0\u0660\u06F0][5\u0665\u06F5]\#(d){8}\#(nbEnd)"#, "[PHONE]"),
-      (#"\#(nb)[0\u0660\u06F0][1\u0661\u06F1][0125\u0660\u0661\u0662\u0665\u06F0\u06F1\u06F2\u06F5]\#(d){8}\#(nbEnd)"#, "[PHONE]"),
-      (#"\+\#(d){7,15}\#(nbEnd)"#, "[PHONE]"),
-      // The country code is matched case-insensitively: `sa0380...` is the same
-      // identifier as `SA0380...` and used to pass straight through.
-      (#"\#(nb)[A-Za-z]{2}\#(d){2}[A-Za-z0-9\u0660-\u0669\u06F0-\u06F9]{11,30}\#(nbEnd)"#, "[IBAN]")
-    ]
-    let genericRules: [(String, String)] = [
-      (#"\#(nb)\#(d){10,20}\#(nbEnd)"#, "[ACCOUNT]")
-    ]
-
-    // A rule that will not compile is thrown, never skipped. `try?` + `continue`
-    // here meant a broken pattern silently redacted nothing and the raw SMS
-    // was posted in full to a backend that forwards it to an AI service.
-    func apply(_ rules: [(String, String)]) throws {
-      for (pattern, replacement) in rules {
-        guard let regex = try? NSRegularExpression(pattern: pattern) else {
-          throw BackendCaptureError.sanitizerUnavailable
-        }
-        value = regex.stringByReplacingMatches(
-          in: value,
-          range: NSRange(location: 0, length: (value as NSString).length),
-          withTemplate: replacement
-        )
-      }
-    }
-
-    try apply(specificRules)
-    // Cue-anchored OTP, applied before the generic account rule. Redacting any
-    // 4-8 digit run by shape would destroy amounts and card suffixes, so only
-    // digits FOLLOWING an explicit cue are removed — and the cue is kept, so the
-    // message stays classifiable as an OTP. Mirrors the Dart `_otp` rule.
-    let otpPattern =
-      #"((?:otp|one[- ]?time(?:\s+password)?|verification\s+code|"# +
-      #"رمز\s+التحقق|كود\s+التحقق|رمز\s+الدخول)"# +
-      #"(?:\s+(?:is|هو))?\s*:?\s*)\#(d){4,8}"#
-    guard let otpRegex = try? NSRegularExpression(
-      pattern: otpPattern,
-      options: [.caseInsensitive]
-    ) else {
-      throw BackendCaptureError.sanitizerUnavailable
-    }
-    value = otpRegex.stringByReplacingMatches(
-      in: value,
-      options: [],
-      range: NSRange(value.startIndex..., in: value),
-      withTemplate: "$1[OTP]"
-    )
-
-    try apply(genericRules)
-
-    // Rules below mirror `lib/engine/privacy/sms_sanitizer.dart` and
-    // `supabase/functions/_shared/sms_redaction.ts` exactly; the fixture
-    // `supabase/functions/_shared/fixtures/sms_redaction_cases.json` holds all
-    // three to the same output (RunnerTests).
-    func replace(_ pattern: String, _ template: String) throws {
-      guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+    // A rule that will not compile is thrown, never skipped: a broken pattern
+    // that silently redacted nothing once meant the raw SMS was posted in full
+    // to a backend that forwards it to an AI service.
+    func regex(_ pattern: String, _ caseInsensitive: Bool) throws -> NSRegularExpression {
+      guard let regex = try? NSRegularExpression(
+        pattern: pattern, options: caseInsensitive ? [.caseInsensitive] : []
+      ) else {
         throw BackendCaptureError.sanitizerUnavailable
       }
-      value = regex.stringByReplacingMatches(
+      return regex
+    }
+    func replace(_ pattern: String, _ template: String, ci: Bool = true) throws {
+      value = try regex(pattern, ci).stringByReplacingMatches(
         in: value,
         range: NSRange(location: 0, length: (value as NSString).length),
         withTemplate: template
       )
     }
     func matches(_ pattern: String) throws -> Bool {
-      guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-        throw BackendCaptureError.sanitizerUnavailable
-      }
-      return regex.firstMatch(
+      try regex(pattern, true).firstMatch(
         in: value,
         range: NSRange(location: 0, length: (value as NSString).length)
       ) != nil
     }
+    func alternation(_ words: [String]) -> String { words.joined(separator: "|") }
 
-    // Reference numbers, cue-anchored, AFTER the account rule (10+ digits are
-    // already [ACCOUNT]). A run that continues into a decimal is an amount.
+    // Every digit shape this market sends: Latin, Arabic-Indic (U+0660-0669)
+    // and extended Arabic-Indic (U+06F0-06F9), matched in place (the proof
+    // layer compares model output against spans of the string that was sent).
+    // ICU escapes (￿) inside raw strings: the regex engine reads them.
+    let d = #"[0-9٠-٩۰-۹]"#
+    let alnum = #"[A-Za-z0-9٠-٩۰-۹]"#
+    // `\b` widened to Arabic-Indic digits; on ASCII exactly `\b`.
+    let nb = #"(?<![0-9٠-٩۰-۹A-Za-z_])"#
+    let nbEnd = #"(?![0-9٠-٩۰-۹A-Za-z_])"#
+    let w = "(?<![A-Za-z0-9_])"
+    let wEnd = "(?![A-Za-z0-9_])"
+    let notLetter = #"(?![\p{L}\p{M}])"#
+    let noLetterBefore = #"(?<![\p{L}\p{M}])"#
+    let currency = alternation(Self.currencyAfter)
+
+    // ── redactPii ── ORDER MATTERS: specific shapes first, the generic
+    // account rule after them (it would eat the digits inside a specific match).
+    try replace(#"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}"#, "[EMAIL]", ci: false)
+    // Spaced IBAN, before the card rule (which ate its middle 16 digits).
+    try replace(
+      #"\#(nb)[A-Za-z]{2}\#(d){2}(?:[ \-](?=\#(alnum){0,3}\#(d))\#(alnum){4}){3,7}"# +
+        #"(?:[ \-](?=\#(alnum){0,3}\#(d))\#(alnum){1,3})?\#(nbEnd)"#,
+      "[IBAN]", ci: false)
+    try replace(#"\#(nb)\#(d){4}[\s-]?\#(d){4}[\s-]?\#(d){4}[\s-]?\#(d){4}\#(nbEnd)"#, "[CARD]", ci: false)
+    // The leading 0 and 5 may themselves be Arabic-Indic, so they are classes.
+    try replace(#"\#(nb)[0٠۰][5٥۵]\#(d){8}\#(nbEnd)"#, "[PHONE]", ci: false)
+    try replace(
+      #"\#(nb)[0٠۰][1١۱][0125٠١٢٥۰۱۲۵]\#(d){8}\#(nbEnd)"#,
+      "[PHONE]", ci: false)
+    try replace(#"\+\#(d){7,15}\#(nbEnd)"#, "[PHONE]", ci: false)
+    try replace(#"\#(nb)[A-Za-z]{2}\#(d){2}\#(alnum){11,30}\#(nbEnd)"#, "[IBAN]", ci: false)
+    // Cue-anchored OTP: the cue is kept so the message stays classifiable.
+    try replace(
+      #"((?:otp|one[- ]?time(?:\s+password)?|verification\s+code|"# +
+        #"رمز\s+التحقق|كود\s+التحقق|رمز\s+الدخول)(?:\s+(?:is|هو))?\s*:?\s*)\#(d){4,8}"#,
+      "$1[OTP]")
+    try replace(#"\#(nb)\#(d){10,20}\#(nbEnd)"#, "[ACCOUNT]", ci: false)
+    // Labelled account numbers of 5-9 digits; a ≤4-digit suffix and an amount
+    // (a currency or a decimal part after it) stay.
+    try replace(
+      #"(\#(noLetterBefore)(?:account|acct|a\/c|ac|حساب|الحساب|لحساب|للحساب|بحساب|حسابك|لحسابك|حسابكم|حسابي)"# +
+        #"\#(notLetter)\.?(?:[ \t]+(?:no|number|num|رقم)\#(notLetter)\.?)?[ \t]*[:#]?[ \t]*)"# +
+        #"[*xX•#]*\#(d){5,9}(?!\#(d)|[.,٫٬]\#(d)|[ \t]*(?:\#(currency))\#(notLetter)(?![ \t]*\#(d)))"#,
+      "$1[ACCOUNT]")
+    // Reference numbers, cue-anchored; a run that continues into a decimal is an amount.
     let refChar = #"[A-Za-z0-9٠-٩۰-۹\-]"#
     try replace(
-      #"((?<![\p{L}\p{M}])(?:reference|ref|rrn|رقم[ \t]+المرجع|الرقم[ \t]+المرجعي|المرجع|مرجع|"# +
-        #"رقم[ \t]+العملية|رقم[ \t]+الحوالة|رقم[ \t]+المعاملة)(?![\p{L}\p{M}])"# +
-        #"(?:[ \t]*(?:no|number|num|id)(?![\p{L}\p{M}]))?[ \t]*[.:#]*[ \t]*)"# +
+      #"(\#(noLetterBefore)(?:reference|ref|rrn|رقم[ \t]+المرجع|الرقم[ \t]+المرجعي|المرجع|مرجع|"# +
+        #"رقم[ \t]+العملية|رقم[ \t]+الحوالة|رقم[ \t]+المعاملة)\#(notLetter)"# +
+        #"(?:[ \t]*(?:no|number|num|id)\#(notLetter))?[ \t]*[.:#]*[ \t]*)"# +
         #"(?=\#(refChar)*\#(d))\#(refChar){6,}(?!\#(refChar)|[.,٫٬]\#(d))"#,
-      "$1[REF]"
-    )
+      "$1[REF]")
 
-    // Personal names → "[NAME]", cue kept. A name is 1-6 letter tokens and
-    // stops at a digit, punctuation, a line break, a placeholder or a stopword.
-    let stopwords = [
-      "your", "yours", "you", "our", "us", "the", "a", "an", "account", "accounts", "acct", "ac", "card",
-      "cards", "wallet", "mobile", "phone", "number", "no", "on", "at", "in", "into", "via", "using", "with",
-      "for", "of", "to", "from", "by", "ref", "reference", "rrn", "amount", "amt", "is", "was", "has",
-      "have", "been", "and", "or", "date", "time", "balance", "bal", "avl", "available", "avail", "customer",
-      "customers", "client", "cardholder", "holder", "valued", "sir", "madam", "member", "there", "team",
-      "atm", "branch", "bank", "app", "online", "internet", "instapay", "ipn", "sarie", "mada", "swift",
-      "transfer", "transaction", "trx", "txn", "successful", "successfully", "credit", "debit", "credited",
-      "debited", "cash", "deposit", "salary", "sar", "egp", "aed", "usd", "eur", "gbp", "kwd", "qar", "bhd",
-      "omr", "jod", "le", "sr", "riyal", "riyals", "pound", "pounds", "dirham", "dirhams", "dinar", "dinars",
-      "dollar", "dollars", "transferred", "sent", "received", "paid", "made", "requested", "deposited",
-      "withdrew", "initiated", "will", "would", "name", "حسابك", "حسابكم", "حساب", "الحساب", "حسابات",
-      "لحسابك", "لحساب", "للحساب", "بطاقتك", "بطاقتكم", "بطاقة", "البطاقة", "بطاقه", "رصيدك", "رصيد",
-      "الرصيد", "خلال", "قبل", "في", "على", "عن", "إلى", "الى", "الي", "من", "بمبلغ", "مبلغ", "المبلغ",
-      "بقيمة", "قيمة", "بتاريخ", "تاريخ", "يوم", "اليوم", "الساعة", "الساعه", "ساعة", "وقت", "رقم", "عبر",
-      "بواسطة", "محفظة", "محفظتك", "المحفظة", "ريال", "جنيه", "جم", "درهم", "دينار", "دولار", "يورو",
-      "العميل", "عميلنا", "عملائنا", "عزيزي", "تطبيق", "الصراف", "صراف", "جهاز", "مدى", "سريع", "انستاباي",
-      "حوالة", "حواله", "تحويل", "التحويل", "الحوالة", "واردة", "وارده", "صادرة", "صادره", "البنك", "بنك",
-      "فرع", "عند", "لدى", "و", "تم", "المتاح", "متاح", "المرجع", "مرجع", "رسوم", "عمولة", "قام", "حول",
-      "حوّل", "أرسل", "ارسل", "إرسال", "ارسال", "بتحويل", "بإرسال", "استلم", "أودع", "اودع", "سحب", "دفع"
-    ].joined(separator: "|")
-    let nameToken = #"(?!(?:\#(stopwords))(?![\p{L}\p{M}*'’\-]|\.[\p{L}\p{M}]))[\p{L}\p{M}*][\p{L}\p{M}*.'’\-]*"#
+    // ── redactThirdPartyNames ──
+    // A period that ends a sentence is never part of a name (SM-07); an
+    // initial or title keeps its period.
+    let sentenceEnd =
+      #"(?:(?<!(?<![\p{L}\p{M}])(?:\p{L}|mrs|mr|ms|dr))\.(?=\s|$)|[\n!?؟;؛])"#
+    let stop = alternation(Self.nameStopwords)
+    let nameToken =
+      #"(?!(?:\#(stop))(?![\p{L}\p{M}*'’\-]|\.[\p{L}\p{M}]|(?<=(?<![\p{L}\p{M}])\p{L})\.[ \t]+\p{L}))"# +
+      #"(?!\*+\#(d))[\p{L}\p{M}*](?:[\p{L}\p{M}*'’\-]|(?!\#(sentenceEnd))\.)*(?![\p{L}\p{M}*'’\-]|\#(d))"#
     let name = #"\#(nameToken)(?:[ \t]+\#(nameToken)){0,5}"#
     let cueSep = #"(?:[ \t]*:[ \t]*|[ \t]+)"#
     // Salutations: Arabic anywhere; English only at a text or sentence start.
     try replace(
-      #"((?:(?<![\p{L}\p{M}])(?:عزيزي|عزيزتي|السيدة|السيد|الأستاذة|الاستاذة|الأستاذ|الاستاذ)"# +
-        #"|(?:^|(?<=[\n.!?؟؛;:،,]))[ \t]*(?:dear|hi|hello))(?![\p{L}\p{M}])\#(cueSep))(\#(name))"#,
-      "$1[NAME]"
-    )
+      #"((?:\#(noLetterBefore)(?:عزيزي|عزيزتي|السيدة|السيد|الأستاذة|الاستاذة|الأستاذ|الاستاذ)"# +
+        #"|(?:^|(?<=[\n.!?؟؛;:،,]))[ \t]*(?:dear|hi|hello))\#(notLetter)\#(cueSep))(\#(name))"#,
+      "$1[NAME]")
     // Counterparty cues only when the text reads as a transfer/credit and NOT
-    // as a purchase/refund/bill — so "Purchase from AMAZON" keeps its merchant.
-    // (ASCII lookarounds instead of `\b`: ICU's `\b` is Unicode-aware, the
-    // Dart/JS one is not.)
-    let w = "(?<![A-Za-z0-9_])"
-    let wEnd = "(?![A-Za-z0-9_])"
+    // as a purchase/refund/bill, so "Purchase from AMAZON" keeps its merchant.
     let transferContext = try matches(
       #"transfer|remit|received|credited|deposit|\#(w)ipn\#(wEnd)|instapay|beneficiary|"# +
-        #"\#(w)sent\#(wEnd)|حوال|تحويل|حول|وارد|استلام|استلمت|إيداع|ايداع|أودع|اودع|مستفيد|المرسل|انستا|لصالح"#
-    )
+        #"\#(w)sent\#(wEnd)|standing\s+order|حوال|تحويل|حول|وارد|استلام|استلمت|إيداع|ايداع|أودع|اودع|"# +
+        #"مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)"#)
     let purchaseContext = try matches(
       #"purchase|\#(w)pos\#(wEnd)|point of sale|paid at|spent|refund|revers|e-?commerce|\#(w)bill|merchant|"# +
-        #"شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد|تاجر"#
-    )
+        #"شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد|تاجر"#)
     if transferContext && !purchaseContext {
       try replace(
-        #"((?<![\p{L}\p{M}])(?:from|to|by|beneficiary(?:[ \t]+name)?|sender(?:[ \t]+name)?|"# +
-          #"remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|"# +
-          #"on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of|mrs|mr|ms|dr|من[ \t]+قبل|اسم[ \t]+المستفيد|"# +
-          #"اسم[ \t]+المرسل|المستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي)"# +
-          #"\.?(?![\p{L}\p{M}])\#(cueSep))(\#(name))"#,
-        "$1[NAME]"
-      )
+        #"(\#(noLetterBefore)(?:from|to(?:[ \t]+name)?|by|beneficiary(?:[ \t]+name)?|sender(?:[ \t]+name)?|"# +
+          #"remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|"# +
+          #"in[ \t]+favou?r[ \t]+of|mrs|mr|ms|dr|من[ \t]+قبل|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|"# +
+          #"مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي)\.?\#(notLetter)\#(cueSep))(\#(name))"#,
+        "$1[NAME]")
     }
-    // Third-party PII: beneficiary/sender names after إلى:/الى:/To: and
-    // Arabic greetings with a personal name — mirrors
-    // lib/engine/privacy/sms_sanitizer.dart so both capture paths (this
-    // direct Shortcut→backend call and the Dart retry-fallback in
-    // capture_sync_service.dart) redact the same way. No transaction-type
-    // detection happens client-side here, so this always strips — safer to
-    // over-redact an unknown message than leak a third party's identity.
-    if let arBeneficiary = try? NSRegularExpression(
-      pattern: #"(إلى|الى)\s*:?\s*.+"#,
-      options: .caseInsensitive
-    ) {
-      value = arBeneficiary.stringByReplacingMatches(
-        in: value,
-        range: NSRange(location: 0, length: (value as NSString).length),
-        withTemplate: "$1: [REDACTED]"
-      )
-    }
-    if let enBeneficiary = try? NSRegularExpression(
-      pattern: #"\bTo\s*:\s*.+"#,
-      options: .caseInsensitive
-    ) {
-      value = enBeneficiary.stringByReplacingMatches(
-        in: value,
-        range: NSRange(location: 0, length: (value as NSString).length),
-        withTemplate: "To: [REDACTED]"
-      )
-    }
-    if let greeting = try? NSRegularExpression(
-      pattern: #"(عزيزي|عزيزتي)\s+\S+"#,
-      options: .caseInsensitive
-    ) {
-      value = greeting.stringByReplacingMatches(
-        in: value,
-        range: NSRange(location: 0, length: (value as NSString).length),
-        withTemplate: "[REDACTED]"
-      )
-    }
+    // The beneficiary after «إلى»/«الى»/"To:": the name's letter tokens, the
+    // account or card object before it and the third party's number — never
+    // a tense, status, amount, currency or date word, an amount, a date or the
+    // next sentence (Vso4). The user's own «حسابك»/"your card" is not consumed.
+    let beneficiaryStop = alternation(Self.nameStopwords.filter { !Self.beneficiaryObjectWords.contains($0) })
+    let beneficiaryToken =
+      #"(?!(?:\#(beneficiaryStop))(?![\p{L}\p{M}*'’\-]|\.[\p{L}\p{M}]))"# +
+      #"[\p{L}\p{M}][\p{L}\p{M}*'’\-]*(?:\.[\p{L}\p{M}][\p{L}\p{M}*'’\-]*)*"# +
+      #"(?:(?<=(?<![\p{L}\p{M}])(?:\p{L}|mrs|mr|ms|dr))\.)?"#
+    let beneficiaryID =
+      #"(?:\[(?:ACCOUNT|IBAN|CARD|PHONE|REF)\]|[A-Z]{2}\#(d){2}(?:[ ]?[0-9A-Z]{4})*(?:[ ]?[0-9A-Z]{1,3})?|"# +
+      #"[*xX•#]*\#(d)+(?:-\#(d)+)*)"# +
+      #"(?![0-9A-Za-z]|[.,٫٬/:]\#(d)|\#(d)|[ \t]*(?:\#(currency))\#(notLetter)(?![ \t]*\#(d)))"#
+    let beneficiaryPart = #"(?:\#(beneficiaryID)|\#(beneficiaryToken))"#
+    let beneficiaryRun = #"(?:\[NAME\]|\#(beneficiaryPart))(?:[ \t]+\#(beneficiaryPart))*"#
+    try replace(#"(إلى|الى)\s*:?\s*\#(beneficiaryRun)"#, "$1: [REDACTED]")
+    try replace(#"\#(w)To(?:[ \t]+name)?\s*:\s*\#(beneficiaryRun)"#, "To: [REDACTED]")
+    // The user's own account after the cue stays only as a partial suffix: an
+    // unmasked number of 5+ digits after it becomes [ACCOUNT].
+    let ownWord = #"(?:your|حسابك|حسابكم|لحسابك|بطاقتك|بطاقتكم|محفظتك)"#
+    try replace(
+      #"((?:إلى|الى|\#(w)to)\s*:?\s*\#(ownWord)(?:[ \t]+(?:account|card|wallet|رقم|no\.?|number))?[ \t]+)"# +
+        #"[*xX•#]*\#(d){5,}(?![.,٫٬/:]?\#(d)|[ \t]*(?:\#(currency))\#(notLetter)(?![ \t]*\#(d)))"#,
+      "$1[ACCOUNT]")
+    // Any other number left in the beneficiary's sentence becomes [ACCOUNT],
+    // unless it is an amount, a date or time, a day before a month name, or the
+    // user's own ≤4-digit suffix.
+    let ownWordBounded = #"\#(ownWord)(?:[ \t]{1,10}(?:account|card|wallet|رقم|no\.?|number))?"#
+    let currencyWord = #"(?:\#(currency))\#(notLetter)"#
+    let months = alternation(Self.monthNames)
+    try replace(
+      #"(?<![A-Za-z0-9٠-٩۰-۹*•#]|\#(d)[.,٫٬/:\-])"# +
+        #"(?![*xX•#]*\#(d){1,4}(?!\#(d)|-\#(d))(?<=\#(ownWordBounded)[ \t]{1,10}[*xX•#]{0,10}\#(d){1,4}))"# +
+        #"(?!\#(d){1,2}[ \t]+(?:\#(months))\#(notLetter))"# +
+        #"(?<!\#(noLetterBefore)\#(currencyWord)[ \t]{0,10})"# +
+        #"(?:[A-Z]{2}(?=\#(d)))?[*xX•#]*\#(d)+(?:-\#(d)+)*"# +
+        #"(?![0-9A-Za-z٠-٩۰-۹]|[.,٫٬/:\-]\#(d)|[ \t]*\#(currencyWord)(?![ \t]*\#(d)))"# +
+        #"(?<=(?:إلى|الى|\#(w)To(?:[ \t]{1,10}name)?\s{0,10}:)(?:(?!\#(sentenceEnd)).){0,4000})"#,
+      "[ACCOUNT]")
+    try replace(#"(عزيزي|عزيزتي)\s+\S+"#, "[REDACTED]")
     return value.trimmingCharacters(in: .whitespacesAndNewlines)
   }
+
+  // Word lists copied verbatim from `_shared/sms_redaction.ts` (NAME_STOPWORDS,
+  // BENEFICIARY_OBJECT_WORDS, CURRENCY_AFTER, MONTH).
+  private static let nameStopwords: [String] = [
+    "your", "yours", "you", "our", "us", "the", "a", "an", "account", "accounts",
+    "acct", "ac", "card", "cards", "wallet", "mobile", "phone", "number", "no", "on",
+    "at", "in", "into", "via", "using", "with", "for", "of", "to", "from",
+    "by", "ref", "reference", "rrn", "amount", "amt", "is", "was", "has", "have",
+    "been", "and", "or", "date", "time", "balance", "bal", "avl", "available", "avail",
+    "customer", "customers", "client", "cardholder", "holder", "valued", "sir", "madam", "member", "there",
+    "team", "atm", "branch", "bank", "app", "online", "internet", "instapay", "ipn", "sarie",
+    "mada", "swift", "transfer", "transaction", "trx", "txn", "successful", "successfully", "credit", "debit",
+    "credited", "debited", "cash", "deposit", "salary", "sar", "egp", "aed", "usd", "eur",
+    "gbp", "kwd", "qar", "bhd", "omr", "jod", "le", "sr", "riyal", "riyals",
+    "pound", "pounds", "dirham", "dirhams", "dinar", "dinars", "dollar", "dollars", "transferred", "sent",
+    "received", "paid", "made", "requested", "deposited", "withdrew", "initiated", "will", "would", "name",
+    "حسابك", "حسابكم", "حساب", "الحساب", "حسابات", "لحسابك", "لحساب", "للحساب", "بطاقتك", "بطاقتكم",
+    "بطاقة", "البطاقة", "بطاقه", "رصيدك", "رصيد", "الرصيد", "خلال", "قبل", "في", "على",
+    "عن", "إلى", "الى", "الي", "من", "بمبلغ", "مبلغ", "المبلغ", "بقيمة", "قيمة",
+    "بتاريخ", "تاريخ", "يوم", "اليوم", "الساعة", "الساعه", "ساعة", "وقت", "رقم", "عبر",
+    "بواسطة", "محفظة", "محفظتك", "المحفظة", "ريال", "جنيه", "جم", "درهم", "دينار", "دولار",
+    "يورو", "العميل", "عميلنا", "عملائنا", "عزيزي", "تطبيق", "الصراف", "صراف", "جهاز", "مدى",
+    "سريع", "انستاباي", "حوالة", "حواله", "تحويل", "التحويل", "الحوالة", "واردة", "وارده", "صادرة",
+    "صادره", "البنك", "بنك", "فرع", "عند", "لدى", "و", "تم", "المتاح", "متاح",
+    "المرجع", "مرجع", "رسوم", "عمولة", "قام", "حول", "حوّل", "أرسل", "ارسل", "إرسال",
+    "ارسال", "بتحويل", "بإرسال", "استلم", "أودع", "اودع", "سحب", "دفع", "shall", "tomorrow",
+    "today", "scheduled", "executes", "executed", "execution", "pending", "declined", "rejected", "failed", "unsuccessful",
+    "completed", "approved", "processed", "awaiting", "expected", "upcoming", "reversed", "cancelled", "canceled", "not",
+    "please", "if", "once", "when", "every", "under", "due", "سينفذ", "ستنفذ", "سيتم",
+    "ستتم", "سوف", "غدا", "غداً", "مجدول", "مجدولة", "سيخصم", "سيُخصم", "سيضاف", "سيودع",
+    "جاري", "جارٍ", "قيد", "معلق", "معلقة", "مرفوضة", "مرفوض", "رفض", "فشلت", "فشل",
+    "لم", "تمت", "بنجاح", "يرجى", "الرجاء", "إذا", "اذا", "مستحق", "مستحقة", "savings",
+    "saving", "current", "checking", "chequing", "iban", "insufficient", "funds", "limit", "reason", "technical",
+    "error", "request", "lack", "الآيبان", "الايبان", "آيبان", "ايبان", "التوفير", "توفير", "الادخار",
+    "ادخار", "الجاري"
+  ]
+  private static let beneficiaryObjectWords: Set<String> = [
+    "you", "us", "the", "a", "an", "account", "accounts", "acct", "ac", "card",
+    "cards", "wallet", "mobile", "phone", "number", "no", "name", "حساب", "الحساب", "حسابات",
+    "لحساب", "للحساب", "بطاقة", "البطاقة", "بطاقه", "محفظة", "المحفظة", "رقم"
+  ]
+  private static let currencyAfter: [String] = [
+    "sar", "egp", "aed", "usd", "eur", "gbp", "kwd", "qar", "bhd", "omr",
+    "jod", "le", "sr", "riyals?", "pounds?", "dirhams?", "dinars?", "dollars?", "ريال", "جنيه",
+    "جم", "درهم", "دينار", "دولار", "يورو", "ر\\.س"
+  ]
+  private static let monthNames: [String] = [
+    "يناير", "فبراير", "مارس", "أبريل", "ابريل", "مايو", "يونيو", "يوليو", "أغسطس", "اغسطس",
+    "سبتمبر", "أكتوبر", "اكتوبر", "نوفمبر", "ديسمبر", "jan(?:uary)?", "feb(?:ruary)?", "mar(?:ch)?", "apr(?:il)?", "may",
+    "june?", "july?", "aug(?:ust)?", "sep(?:t|tember)?", "oct(?:ober)?", "nov(?:ember)?", "dec(?:ember)?"
+  ]
 }
 
 /// Localized user-facing errors surfaced by Shortcuts.

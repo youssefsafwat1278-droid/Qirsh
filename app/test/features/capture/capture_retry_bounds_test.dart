@@ -104,6 +104,7 @@ class _Backend implements CaptureBackendClient {
     required String ownerUid,
     required int ownerGeneration,
     bool schemaV2 = false,
+    int? textLength,
   }) async {
     uploads++;
     if (uploadError != null) throw uploadError!;

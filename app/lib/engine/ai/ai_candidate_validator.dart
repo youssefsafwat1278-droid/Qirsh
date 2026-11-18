@@ -5,6 +5,7 @@ import '../parser/capture_money.dart';
 import '../parser/currency_table.dart';
 import '../parser/direction_signal.dart';
 import '../parser/merchant_sanity.dart';
+import '../parser/message_meaning.dart';
 import '../parser/normalizer.dart';
 import '../parser/parser_engine.dart';
 import '../parser/transaction_state_cues.dart';
@@ -87,7 +88,12 @@ class AiCandidateValidator {
       return const AiCandidateValidation.rejected('status_not_completed');
     }
     // DATA-01 — a declined/failed purchase moved no money, whatever the AI says.
-    if (TransactionStateCues.isNotCompleted(messageText ?? sanitizedText)) {
+    // Follow-up 13: any meaning other than `record` rejects. The not-completed
+    // reason comes first, before any direction check; another non-record
+    // meaning rejects after the specific checks, just before acceptance.
+    final meaningRejection =
+        meaningRejectionOf(messageText ?? sanitizedText, amount: response.amount);
+    if (meaningRejection == 'transaction_not_completed') {
       return const AiCandidateValidation.rejected('transaction_not_completed');
     }
     // LR-06 — an OTP or an advert / account notice is never a transaction,
@@ -200,6 +206,9 @@ class AiCandidateValidator {
         !aiDate.isBefore(reference.subtract(_maxAge)) &&
         !aiDate.isAfter(reference.add(_maxFuture));
 
+    if (meaningRejection != null) {
+      return AiCandidateValidation.rejected(meaningRejection);
+    }
     return AiCandidateValidation.accepted(
       currency: currency,
       merchantName: merchant,
@@ -332,6 +341,118 @@ class AiCandidateValidator {
     final m = _chargedTotal.firstMatch(t);
     if (m == null) return null;
     return double.tryParse(m.group(1)!.replaceAll(',', ''));
+  }
+
+  // Several movements in one message (dev siblings, family d): two or more
+  // distinct amounts of one currency in the message's movement text
+  // ("SAR 120.00 at A; SAR 45.50 at B"). Not when the figures are parts of
+  // one movement (a stated total, a tip, fee, VAT or subtotal, an
+  // original/equivalent amount, one figure the sum of the others), an account
+  // figure (any balance, limit or due word) or a reward: the check is
+  // conservative. The caller passes only the sentences the parser reads as
+  // movements. Server twin: `separateMovementAmounts`.
+  static final RegExp _partOfOneMovement = RegExp(
+    r'(?<![a-z])(?:total|subtotal|sub-total|incl\.?|including|inclusive|of which|plus|tips?|gratuity|vat|tax|fees?|'
+    r'service|delivery|commission|original(?:ly)?|equivalent|approx(?:\.|imately)?|exchange|rate|cashback|cash back|'
+    r'points?|rewards?|miles|refund(?:ed)?|reversal|reversed|instal?ments?|monthly|remaining|outstanding|due|'
+    r'balance|bal|avl|available|limit)(?![a-z])|[+=]|'
+    r'الإجمالي|الاجمالي|إجمالي|اجمالي|المجموع|شامل|بقشيش|إكرامية|اكرامية|ضريبة|رسوم|عمولة|خدمة|يعادل|'
+    r'استرداد|مسترد|نقاط|مكافأة|كاش باك|قسط|أقساط|اقساط|المتبقي|المستحق|رصيد|المتاح|متاح|الحد|حد ',
+    caseSensitive: false,
+  );
+
+  static final RegExp _moneyToken =
+      RegExp(r'^(?:0|[1-9][0-9]*|[1-9][0-9]{0,2}(?:,[0-9]{3})+)(?:\.[0-9]+)?$');
+
+  /// Every currency-tagged amount of [text] (digits and currency words
+  /// normalized), by currency code. Server twin: `taggedAmounts`.
+  static (String, Map<String, Set<double>>) _taggedAmounts(String text) {
+    final ascii = Normalizer.normalizeDigits(text)
+        .replaceAll('٬', ',')
+        .replaceAll('٫', '.');
+    final movement = Normalizer.normalizeCurrencyTokens(ascii);
+    final codes = currencyCodes.join('|');
+    final tagged = RegExp(
+      '(?<![A-Za-z])($codes)\\s?([0-9][0-9,]*(?:\\.[0-9]+)?)(?![0-9])'
+      '|(?<![0-9.,])([0-9][0-9,]*(?:\\.[0-9]+)?)\\s?($codes)(?![A-Za-z])',
+    );
+    final byCurrency = <String, Set<double>>{};
+    for (final m in tagged.allMatches(movement)) {
+      final code = m.group(1) ?? m.group(4)!;
+      final token = m.group(2) ?? m.group(3)!;
+      // As the server's canonicalMoneyText: plain digits or thousands groups.
+      if (!_moneyToken.hasMatch(token)) continue;
+      final value = double.tryParse(token.replaceAll(',', ''));
+      if (value == null || value <= 0) continue;
+      byCurrency.putIfAbsent(code, () => <double>{}).add(value);
+    }
+    return (movement, byCurrency);
+  }
+
+  /// The distinct amounts when [text] names several of one currency, or null.
+  static List<double>? separateMovementAmounts(String text) {
+    final (movement, byCurrency) = _taggedAmounts(text);
+    if (_partOfOneMovement.hasMatch(movement.toLowerCase())) return null;
+    for (final values in byCurrency.values) {
+      if (values.length < 2) continue;
+      final list = values.toList();
+      final sum = list.fold<double>(0, (a, b) => a + b);
+      if (list.any((v) => (v * 2 - sum).abs() < 0.005)) return null;
+      return list;
+    }
+    return null;
+  }
+
+  /// The total a message states for one movement made of parts (dev
+  /// siblings, family e): the labelled charged total ([chargedTotal]), or the
+  /// one figure of a currency that is the sum of all the others ("SAR 230.00
+  /// (SAR 200.00 + SAR 30.00 tip)"); null when there is none. Server twin:
+  /// `statedTotal`.
+  static final RegExp _includesPart = RegExp(
+      r'(?<![a-z])(?:incl\.?|including|inclusive of|of which)(?![a-z])|شامل',
+      caseSensitive: false);
+
+  /// Follow-up 13 — why a candidate [amount] for [text] is never accepted
+  /// from the parser's meaning, or null when the meaning is `record`:
+  /// `transaction_not_completed` when the meaning is not completed, or is any
+  /// other non-record meaning (an over-length text among them) and the whole
+  /// text carries a not-completed cue; otherwise `message_meaning_<reason>`.
+  /// A tip/fee form (`tip_component`, `total_with_parts`) answered at the
+  /// total the message states ([statedTotal]) is not rejected. Server twin:
+  /// `meaningRejectionOf` in `process-ios-sms/meaning_gate.ts`.
+  static String? meaningRejectionOf(String text, {num? amount}) {
+    final meaning = ParserEngine.meaningOf(text);
+    if (meaning.disposition == MessageDisposition.record) return null;
+    if (meaning.kind == MessageKind.notCompleted ||
+        TransactionStateCues.isNotCompleted(text)) {
+      return 'transaction_not_completed';
+    }
+    if ((meaning.reason == 'tip_component' ||
+            meaning.reason == 'total_with_parts') &&
+        amount != null) {
+      final total = statedTotal(text);
+      if (total != null && (total - amount).abs() < 0.005) return null;
+    }
+    return 'message_meaning_${meaning.reason}';
+  }
+
+  static double? statedTotal(String text) {
+    final labelled = chargedTotal(text);
+    if (labelled != null) return labelled;
+    final (movement, byCurrency) = _taggedAmounts(text);
+    for (final values in byCurrency.values) {
+      // "AED 315.00 … incl. AED 15.00 tip": the figure that includes the
+      // other.
+      if (values.length == 2 && _includesPart.hasMatch(movement)) {
+        return values.reduce((a, b) => a > b ? a : b);
+      }
+      if (values.length < 3) continue;
+      final sum = values.fold<double>(0, (a, b) => a + b);
+      for (final v in values) {
+        if ((v * 2 - sum).abs() < 0.005) return v;
+      }
+    }
+    return null;
   }
 
   /// A core parser code counts in any case as a whole word; any other table

@@ -22,10 +22,10 @@ import '../../engine/parser/capture_money.dart';
 import '../../engine/parser/direction_signal.dart';
 import '../../engine/parser/local_validity.dart';
 import '../../engine/parser/message_meaning.dart';
+import '../capture/validated_capture.dart' show severalMovements;
 import '../../engine/parser/parser_engine.dart';
 import '../../engine/parser/parser_isolate.dart';
 import '../../engine/parser/parse_result.dart';
-import '../../engine/parser/transaction_state_cues.dart';
 import '../../engine/parser/transaction_timestamp_extractor.dart';
 import '../../engine/privacy/sms_sanitizer.dart';
 import '../entities/account_entity.dart';
@@ -894,7 +894,10 @@ class AddTransactionUseCase {
     // parsing succeeded. Local money still constrains the candidate validator.
     // A declined/failed purchase is never sent to AI: the validator would
     // reject it anyway, and each rejection counts against the sender.
-    final notCompleted = TransactionStateCues.isNotCompleted(rawMessage);
+    // Follow-up 13: the validators' own rule (a non-record meaning with a
+    // not-completed reading).
+    final notCompleted = AiCandidateValidator.meaningRejectionOf(rawMessage) ==
+        'transaction_not_completed';
     // 4.3 / 4.4: what the device knows goes with the request as evidence the
     // model may overrule: the local reading, and — only when the message
     // names no currency — the currency of the one account it names by number.
@@ -923,7 +926,20 @@ class AddTransactionUseCase {
     // not from the local reading and not because a model said so. No AI
     // request is made; review and no-movement kinds keep the message in Smart
     // Inbox with the reason, an OTP is dropped like the OTP filter's.
-    final meaning = parseResult.meaning ?? ParserEngine.meaningOf(rawMessage);
+    final parsedMeaning =
+        parseResult.meaning ?? ParserEngine.meaningOf(rawMessage);
+    // Dev siblings (family d): several amounts of one currency in the
+    // movement text are several movements, held like the parser's own
+    // multiple_events kind (the server and the import paths agree).
+    final meaning = severalMovements(rawMessage, parsedMeaning)
+        ? MessageMeaning(
+            kind: MessageKind.multipleEvents,
+            reason: 'multiple_amounts',
+            direction: parsedMeaning.direction,
+            footerCount: parsedMeaning.footerCount,
+            eventCount: parsedMeaning.eventCount,
+            currencyAbsent: parsedMeaning.currencyAbsent)
+        : parsedMeaning;
     final meaningHold =
         !wasIgnored && meaning.disposition != MessageDisposition.record;
     final aiFirstAttempt = wasIgnored || onDeviceOnly || notCompleted ||

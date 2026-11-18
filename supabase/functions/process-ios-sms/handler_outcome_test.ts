@@ -423,3 +423,30 @@ Deno.test('AI-primary "not a transaction" stays final (never retried)', async ()
   assertEquals(result.calls, 1);
   assertEquals(fake.captures.get('primary-ignored')!.state, 'rejected');
 });
+
+Deno.test('LEN-1: a message the device measured over 2,000 characters is kept for review, whatever redaction left', async () => {
+  // 2,001 UTF-16 units as received; the device redacted a long number, so the
+  // text sent is shorter than the bound.
+  const fake = fakeSupabase();
+  const text = RESOLVED;
+  const over = await call(fake, { payloadId: 'len-over', sanitizedText: text, allowAi: true, textLength: 2001 }, GOOD_AI);
+  assertEquals(over.json.capture.status, 'rejected');
+  assertEquals(over.json.capture.parsed.reviewReason, 'over_length');
+  // At the bound, and without the field (older clients), it records as before.
+  const at = await call(fakeSupabase(), { payloadId: 'len-at', sanitizedText: text, allowAi: true, textLength: 2000 }, GOOD_AI);
+  assertEquals(at.json.capture.status, 'processed');
+  const none = await call(fakeSupabase(), { payloadId: 'len-none', sanitizedText: text, allowAi: true }, GOOD_AI);
+  assertEquals(none.json.capture.status, 'processed');
+  // A bogus value is ignored.
+  const bad = await call(fakeSupabase(), { payloadId: 'len-bad', sanitizedText: text, allowAi: true, textLength: '9999' }, GOOD_AI);
+  assertEquals(bad.json.capture.status, 'processed');
+});
+
+Deno.test('dev siblings d: a single-transaction answer for a two-purchase message is kept for review', async () => {
+  const text = 'Card *1111 used: SAR 64.00 at Oak Bakery; SAR 210.50 at Pine Books.';
+  const r = await call(fakeSupabase(), { payloadId: 'two-buys', sanitizedText: text, allowAi: true }, {
+    amount: 64, amount_text: '64.00', currency: 'SAR', merchant: 'Oak Bakery', type: 'payment', direction: 'debit',
+  });
+  assertEquals(r.json.capture.status, 'rejected');
+  assertEquals(r.json.capture.parsed.reviewReason, 'multiple_amounts');
+});

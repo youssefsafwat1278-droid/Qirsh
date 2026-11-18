@@ -110,8 +110,9 @@ void main() {
     expect(find.text('Agree and enable'), findsOneWidget);
     expect(find.text('Continue locally'), findsOneWidget);
     expect(
-        find.textContaining('sent to Qirsh servers after card, account and '
-            'phone numbers and codes are removed'),
+        // Decision 3.8 (ai.md Follow-up 12): only what redaction recognises.
+        find.textContaining('Qirsh automatically removes the card numbers, '
+            'long or labelled account numbers'),
         findsOneWidget);
     expect(find.textContaining('Google Gemini may process this text'),
         findsOneWidget);

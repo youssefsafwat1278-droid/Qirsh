@@ -7,6 +7,7 @@ import 'package:money_companion/core/session/consent_capability.dart';
 import 'package:flutter/foundation.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/engine/privacy/sms_sanitizer.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
 import 'package:money_companion/data/db/ownership_guard.dart';
@@ -169,6 +170,7 @@ class _FakeCaptureBackendClient implements CaptureBackendClient {
   int? lastOwnerGeneration;
   bool? lastSchemaV2;
   String? lastLocale;
+  int? lastTextLength;
   Object? processError;
 
   @override
@@ -184,6 +186,7 @@ class _FakeCaptureBackendClient implements CaptureBackendClient {
     required String ownerUid,
     required int ownerGeneration,
     bool schemaV2 = false,
+    int? textLength,
   }) async {
     processedPayloadIds.add(payloadId);
     if (processError != null) throw processError!;
@@ -192,6 +195,7 @@ class _FakeCaptureBackendClient implements CaptureBackendClient {
     lastOwnerGeneration = ownerGeneration;
     lastSchemaV2 = schemaV2;
     lastLocale = locale;
+    lastTextLength = textLength;
   }
 
   @override
@@ -933,6 +937,32 @@ void main() {
     await settingsRepository.saveSettings(settings.copyWith(language: 'en'));
     expect(await syncService.retryPendingSend(native), isTrue);
     expect(client.lastLocale, 'en');
+  });
+
+  // LEN-1 (client side): every replay sends the length of the raw text before
+  // redaction — the queued value when the native layer stored it, else the
+  // same measure on the raw text, never the redacted one.
+  test('replay sends the queued text length, else the raw text length',
+      () async {
+    final client = _FakeCaptureBackendClient([]);
+    final syncService = service(client);
+    const raw = 'Purchase SAR 50.00 card 1234567890123456 at Test Mart';
+    SharedCapturedMessage native({int? textLength}) => SharedCapturedMessage(
+          id: 'len-replay',
+          text: raw,
+          source: CapturedMessageSource.iosShortcut,
+          status: 'pendingSend',
+          receivedAt: DateTime.utc(2026, 11, 9),
+          textLength: textLength,
+        );
+    expect(await syncService.retryPendingSend(native(textLength: 2400)),
+        isTrue);
+    expect(client.lastTextLength, 2400);
+    // A build that did not store it (build 147): the raw text's own length.
+    expect(await syncService.retryPendingSend(native()), isTrue);
+    expect(client.lastTextLength, raw.length);
+    expect(SmsSanitizer.sanitize(raw).length, isNot(raw.length),
+        reason: 'the measure is the raw text, not the redacted one');
   });
 
   test('pendingSend rejected replay is durable before native ack is allowed',

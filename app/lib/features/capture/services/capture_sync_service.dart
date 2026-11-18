@@ -474,6 +474,9 @@ class CaptureSyncService {
         ownerUid: ownerUid,
         ownerGeneration: ownerGeneration,
         schemaV2: auth.contractV2,
+        // LEN-1: the queued length when the native layer stored it, else the
+        // same measure on the raw text (never the redacted one).
+        textLength: message.textLength ?? message.text.length,
       );
     } on CaptureBackendException catch (e) {
       // §4.8 / G1: a 409 (`capture_owner_mismatch`, `capture_owner_conflict`,
@@ -954,8 +957,10 @@ class CaptureSyncService {
     // decides before a server row is booked — an own-account move, several
     // movements, a card repayment, an uncertain status or a no-movement notice
     // is never a transaction because a server (or its model) said so.
+    final heldAmount = parsed['amount'];
     if (meaningHoldReason(
-            _string(parsed['rawMessage']) ?? capture.sanitizedText ?? '') !=
+            _string(parsed['rawMessage']) ?? capture.sanitizedText ?? '',
+            amount: heldAmount is num ? heldAmount : null) !=
         null) {
       await _persistBackendUnprocessableCapture(
           capture, requireCurrentAdmission, committed);

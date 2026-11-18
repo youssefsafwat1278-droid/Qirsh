@@ -169,6 +169,9 @@ class CaptureBackendClient {
     required String ownerUid,
     required int ownerGeneration,
     bool schemaV2 = false,
+    // LEN-1: the UTF-16 length of the raw text before redaction (the server
+    // decides "over length" on it); omitted when unknown.
+    int? textLength,
   }) async {
     final response = await _http
         .post(
@@ -192,6 +195,7 @@ class CaptureBackendClient {
             if (schemaV2) 'schema_version': 2,
             'owner_uid': ownerUid,
             'owner_generation': ownerGeneration,
+            if (textLength != null) 'textLength': textLength,
           }),
         )
         // Unlike the App Intent's strict 8-second budget, this replay runs

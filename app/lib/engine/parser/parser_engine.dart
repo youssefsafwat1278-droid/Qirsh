@@ -479,7 +479,46 @@ class ParserEngine {
           eventCount: events,
           currencyAbsent: currencyAbsent);
     }
-    if (events == 0) {
+    // Follow-up 5 (a): a refund or reversal whose message says it is requested,
+    // initiated, under review or still to come, with no clause stating the
+    // credit happened, is not completed.
+    final notCompletedText = TransactionStateCues.isNotCompletedText(all);
+    if (!notCompletedText && isRefundPending(all)) {
+      return MessageMeaning(
+          kind: MessageKind.notCompleted,
+          reason: 'pending',
+          eventCount: events,
+          currencyAbsent: currencyAbsent);
+    }
+    // Follow-up 5 (b): setting up or scheduling a standing or scheduled
+    // transfer is not its execution; only a clause stating the execution
+    // happened makes it a movement. A standing order with no future or
+    // scheduling cue reads as before (its verb may be redacted away).
+    final standing = _standingSubject.hasMatch(all);
+    final executed = standing && _executionDone(all);
+    if (standing &&
+        !executed &&
+        !notCompletedText &&
+        _standingFuture.hasMatch(all)) {
+      return MessageMeaning(
+          kind: MessageKind.noMovementNotice,
+          reason: 'scheduled_or_expected',
+          footerCount: scope.footerCount,
+          currencyAbsent: currencyAbsent);
+    }
+    // Follow-up 5 (e): a total stated with its parts (VAT, service, fee, …)
+    // is recorded only as the total; when the first figure read is a part,
+    // review.
+    final parts = partsTotal(all);
+    if (parts != null &&
+        DirectionSignal.currencyFigures(all).first.value != parts) {
+      return MessageMeaning(
+          kind: MessageKind.uncertain,
+          reason: 'total_with_parts',
+          eventCount: events,
+          currencyAbsent: currencyAbsent);
+    }
+    if (events == 0 && !executed) {
       // Follow-up: labelled figures that a future clause acts on ("Annual
       // fee of SAR 250 will be charged on 1 Dec") or that are due make a
       // notice — when every sentence with a figure is one (a due footer next
@@ -559,7 +598,7 @@ class ParserEngine {
     final stated = scope.eventSentences.where((s) => !isFieldLine(s));
     final notices = (stated.isEmpty ? scope.eventSentences : stated)
         .map((s) => _noMovementReason(s.toLowerCase()));
-    if (notices.every((r) => r != null)) {
+    if (!executed && notices.every((r) => r != null)) {
       return of(MessageKind.noMovementNotice, notices.first!);
     }
     final flow = DirectionSignal.flowOf(scope.core);
@@ -576,7 +615,10 @@ class ParserEngine {
     if (_isCashDeposit(core)) {
       return of(MessageKind.cashDeposit, 'cash_deposit', TxnDirection.credit);
     }
-    if (_distinctMovementAmounts(scope.coreEvents) > 1 &&
+    // Follow-up 5 (d): two figures each tied to its own merchant ("SAR 120
+    // at A; SAR 45 at B", a numbered list) are two movements.
+    if ((_distinctMovementAmounts(scope.coreEvents) > 1 ||
+            merchantFigureCount(core) > 1) &&
         const ParserEngine()._extractChargedPair(scope.text, null) == null) {
       return of(MessageKind.multipleEvents, 'multiple_amounts');
     }
@@ -688,14 +730,161 @@ class ParserEngine {
       r'(?:(?<![a-z])(?:cheque|check no|check number)|شيك|الشيك)[^\n]{0,60}?'
       r'(?:(?<![a-z])(?:returned|unpaid|bounced|dishonou?red)(?![a-z])|مرتجع|إرجاع|ارجاع|بدون صرف|لم يصرف)'
       r'|(?<![a-z])(?:returned|bounced|dishonou?red) (?:cheque|check)(?![a-z])|إرجاع الشيك|ارجاع الشيك');
+  // ---- Follow-up 5: clause-role rules (mirrored in message_meaning.ts) ----
+
+  /// A refund or reversal named in the message.
+  static final RegExp _refundSubject = RegExp(
+      r'(?<![a-z])(?:refunds?|reversal|reversed)(?![a-z])|استرداد|استرجاع');
+
+  /// A request, review or pending status, or a future or conditional word.
+  static final RegExp _pendingOrFuture = RegExp(
+      r'(?<![a-z])(?:requests?|requested|initiated|submitted|registered|awaiting|expected|pending|claim|'
+      r'under (?:review|processing)|being (?:processed|reviewed)|will|once)(?![a-z])'
+      r'|قيد (?:المراجعة|المعالجة)|تحت (?:المراجعة|المعالجة)|جاري|معلق|طلب|سيتم|ليتم|بعد الموافقة');
+
+  /// A credit verb: the money came back.
+  static final RegExp _creditVerb = RegExp(
+      r'(?<![a-z])(?:credited|refunded|posted|returned|deposited|added)(?![a-z])'
+      r'|(?<![ء-ي])تمت? (?:إيداع|ايداع|إضافة|اضافة|استرداد|استرجاع|إرجاع|ارجاع)|أضيف|اضيف|أعيد|اعيد');
+
+  /// Words that put a verb in a future, conditional or negated clause.
+  static final RegExp _notDoneClause = RegExp(
+      r"(?<![a-z])(?:will|to be|once|when|after|expected|shall|would|if|not|unable|cannot|[a-z]+n't)(?![a-z])"
+      r'|سيتم|ليتم|(?<![\u0621-\u064a])(?:سوف|بعد|عند|حال|لم|تعذر|لا)(?![\u0621-\u064a])');
+  static final RegExp _roleClauseCut =
+      RegExp(r'[\n,،:;!?؟؛]|\.(?![0-9])| [-–—] ');
+
+  /// A [verbs] match in [lower] whose clause (up to the verb) is not future,
+  /// conditional or negated.
+  static bool _statedDone(String lower, RegExp verbs) {
+    for (final m in verbs.allMatches(lower)) {
+      var from = 0;
+      for (final c in _roleClauseCut.allMatches(lower.substring(0, m.start))) {
+        from = c.end;
+      }
+      if (!_notDoneClause.hasMatch(lower.substring(from, m.start))) return true;
+    }
+    return false;
+  }
+
+  /// Follow-up 5 (a): a refund is completed only when a clause states the
+  /// credit happened; a request, review or pending status (or a future
+  /// credit) about it with no such clause means it is not completed.
+  static bool isRefundPending(String lower) =>
+      _refundSubject.hasMatch(lower) &&
+      _pendingOrFuture.hasMatch(lower) &&
+      !_statedDone(lower, _creditVerb);
+
+  /// A standing order or a scheduled, recurring or future-dated transfer.
+  static final RegExp _standingSubject = RegExp(
+      r'(?<![a-z])(?:standing (?:order|instruction)s?|(?:scheduled|recurring|future[- ]dated|upcoming) '
+      r'(?:transfer|payment|standing order)s?)(?![a-z])'
+      r'|أمر (?:\S+ )?(?:دائم|مستديم)|الأمر (?:\S+ )?(?:الدائم|المستديم)|تحويل مجدول|التحويل المجدول|جدولة');
+
+  /// A verb stating the execution happened.
+  static final RegExp _executionVerb = RegExp(
+      r'(?<![a-z])(?:executed|completed|transferred|debited|paid|processed|deducted|sent|received|credited|done|made)(?![a-z])'
+      r'|(?<![ء-ي])تمت? (?:تنفيذ|تحويل|خصم|دفع|سداد|إيداع|ايداع|استلام)|(?<![ء-ي])ن[ً-ْ]*ف[ً-ْ]*ذ(?![ء-ي])');
+  static bool _executionDone(String lower) =>
+      _statedDone(lower, _executionVerb);
+
+  /// A future or scheduling cue for a standing order (it has not run yet).
+  static final RegExp _standingFuture = RegExp(
+      r'(?<![a-z])(?:will|shall|due for|scheduled for|set for|set up|has been scheduled|next execution|first execution|upcoming|tomorrow|reminder)(?![a-z])'
+      r'|سيتم|ليتم|سوف|جدولة|القادم|غدا|تذكير');
+
+  /// Follow-up 5 (c): two of the user's named account types as the ends.
+  static const String _acctType =
+      r'(?:savings|current|checking|salary)(?: plus)?';
+  static final RegExp _namedAccounts = RegExp(
+      '(?<![a-z])$_acctType(?: account| acct| a/c)? to (?:your |the |my )?$_acctType(?![a-z])'
+      '|(?<![a-z])to (?:your |the |my )?$_acctType(?: account| acct| a/c)? from (?:your |the |my )?$_acctType(?![a-z])'
+      r'|من\s+(?:(?:ال)?حسابك?\s+)?(?:ال)?(?:توفير|ادخار|جاري)[^\n]{0,30}?(?:إلى|الى):?\s+(?:\[(?:redacted|name)\]\s+)?(?:(?:ال)?حسابك?\s+)?(?:ال)?(?:جاري|توفير|ادخار)');
+
+  /// Follow-up 5 (d): how many distinct figures are each tied to their own
+  /// merchant: followed by "at" / "@" / «لدى» / "(", or opening a numbered
+  /// list line.
+  static int merchantFigureCount(String lower) {
+    final values = <double>{};
+    for (final f in DirectionSignal.currencyFigures(lower)) {
+      final after = lower.substring(f.end);
+      final before = lower.substring(0, f.start);
+      if (_merchantAfter.hasMatch(after) || _listItemBefore.hasMatch(before)) {
+        values.add(f.value);
+      }
+    }
+    return values.length;
+  }
+
+  static final RegExp _merchantAfter =
+      RegExp(r'^\s*(?:(?:at|@)\s+(?![0-9])|لدى\s|\((?![0-9]))');
+  static final RegExp _listItemBefore =
+      RegExp(r'(?:^|\n)\s*[0-9]{1,2}[).]\s*$');
+
+  /// Follow-up 5 (e): a part of a bill (VAT, service, fee, tip, …) and a
+  /// total or inclusion word.
+  static final RegExp _partLabel = RegExp(
+      r'(?<![a-z])(?:tip|gratuity|vat|tax|service|fee|subtotal|sub-total|delivery)(?![a-z])'
+      r'|ضريبة|رسوم|بقشيش|إكرامية|اكرامية|خدمة');
+  static final RegExp _totalOrIncl = RegExp(
+      r'(?<![a-z])(?:total|incl|including|inclusive|of which|plus)(?![a-z])|\+|إجمالي|اجمالي|شامل');
+
+  /// A balance, limit, due or available figure: not part of the bill.
+  static final RegExp _standingFigureLabel = RegExp(
+      r'(?<![a-z])(?:balance|bal|limit|available|due|outstanding|statement|month)(?![a-z])'
+      r'|رصيد|الرصيد|الحد|المتاح|المتوفر|مستحق|المستحق|الشهر');
+
+  /// The stated total of a message that gives a total with its parts: a
+  /// part label (VAT, service, fee, tip, …) with its own non-zero figure, a
+  /// total or inclusion word, and two or more distinct figures in the first
+  /// figure's currency (balances, limits and dues aside). The total is the
+  /// largest of them; null when the message is not one.
+  static double? partsTotal(String lower) {
+    if (!_totalOrIncl.hasMatch(lower)) return null;
+    final figures = [
+      for (final f in DirectionSignal.currencyFigures(lower))
+        if (!_standingFigureLabel.hasMatch(_lineBefore(lower, f.start, 30))) f
+    ];
+    if (figures.isEmpty) return null;
+    final hasPart = figures.any((f) =>
+        f.value > 0 &&
+        (_partLabel.hasMatch(_lineBefore(lower, f.start, 20)) ||
+            _partLabel.hasMatch(_lineAfter(lower, f.end, 12))));
+    if (!hasPart) return null;
+    final code = figures.first.code;
+    final values = {
+      for (final f in figures)
+        if (f.code == code) f.value
+    };
+    if (values.length < 2) return null;
+    return values.reduce((a, b) => a > b ? a : b);
+  }
+
+  static String _lineBefore(String s, int at, int n) {
+    final from = at - n < 0 ? 0 : at - n;
+    final piece = s.substring(from, at);
+    final nl = piece.lastIndexOf('\n');
+    return nl < 0 ? piece : piece.substring(nl + 1);
+  }
+
+  static String _lineAfter(String s, int at, int n) {
+    final to = at + n > s.length ? s.length : at + n;
+    final piece = s.substring(at, to);
+    final nl = piece.indexOf('\n');
+    return nl < 0 ? piece : piece.substring(0, nl);
+  }
+
   static final RegExp _tipFigure = RegExp(
       r'(?<![a-z])(?:tip(?!\s*:)|gratuity)(?![a-z])[^\n0-9]{0,20}[0-9][0-9,]*(?:\.[0-9]+)?'
+      r'|[0-9][0-9,]*(?:\.[0-9]+)?\s*(?:tip|gratuity)(?![a-z])'
       r'|(?:بقشيش|إكرامية|اكرامية)[^\n0-9]{0,20}[0-9][0-9,]*(?:\.[0-9]+)?');
   static final RegExp _cardRepayment = RegExp(
       r'(?<![a-z])credit card (?:re)?payment(?![a-z])[^\n]{0,60}?(?<![a-z])received(?![a-z])'
       r'|(?<![a-z])(?:re)?payment(?![a-z])[^\n]{0,60}?(?<![a-z])(?:for|to|towards) (?:your )?credit card(?![a-z])'
       r'|(?<![a-z])(?:transfer(?:red)?|paid)(?![a-z])[^\n]{0,60}?(?<![a-z])to (?:your )?credit card(?![a-z])'
-      r'|(?:سداد|تسديد)[^.\n]{0,30}?(?:بطاقت?ك?|البطاقة)\s*(?:ال)?ائتمانية');
+      // Follow-up 5: the card is what is repaid («سداد بطاقتك»), not the
+      // instrument a bill is paid with («سداد فاتورة … ببطاقتك»).
+      r'|(?:سداد|تسديد)\s+(?:(?:مستحقات|رصيد|مبلغ)\s+)?(?:بطاقت?ك|البطاقة)\s*(?:ال)?ائتمانية');
   static final RegExp _truncatedStatus = RegExp(
       r'(?:was|is|been|status:?|transaction|txn)\s+(?:decli?n?e?|reje?c?t?e?|fail?e?|pend?i?n?|canc?e?l?l?e?|reve?r?s?e?|unsu?c?c?e?s?s?f?u?)$');
 
@@ -715,6 +904,9 @@ class ParserEngine {
   /// account-type word with both an outgoing and an incoming clause.
   static bool _isOwnAccountMove(String core) {
     if (_hasAnyWord(core, MessageMeaning.ownAccountStrong)) return true;
+    // Follow-up 5 (c): both ends are the user's named account types
+    // ("from your Savings account to your Current account").
+    if (_namedAccounts.hasMatch(core)) return true;
     // "from your account *1234 to your account *5678" takes money out of
     // and puts it into the user's own accounts.
     final both = (DirectionSignal.hasDebitFlow(core) &&
@@ -1265,6 +1457,13 @@ class ParserEngine {
     }
     final ruleAmount = parseCatalogAmount(catalogMatch?.amountText);
     final amount = ruleAmount ?? amountExtraction.transactionAmount;
+    // Follow-up 5 (e): a total stated with its parts is recorded only as the
+    // total, never as a part: any other amount read is a review row.
+    final total = partsTotal(lower);
+    if (total != null && amount != null && (amount - total).abs() > 0.005) {
+      return ParseResult.notTransaction(
+          bankKey: bank?.bankKey, amountDetected: true, meaning: meaning);
+    }
 
     // ليست معاملة مالية واضحة → تُتجاهَل (§24.6).
     if (amount == null) {

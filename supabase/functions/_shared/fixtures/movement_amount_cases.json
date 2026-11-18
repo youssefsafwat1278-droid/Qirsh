@@ -1,0 +1,107 @@
+[
+ {
+  "id": "two_purchases_semicolon",
+  "text": "Card *1111 used: SAR 64.00 at Oak Bakery; SAR 210.50 at Pine Books.",
+  "separate": [
+   64,
+   210.5
+  ],
+  "statedTotal": null
+ },
+ {
+  "id": "two_purchases_and",
+  "text": "EGP 75.00 at River Cafe and EGP 300.00 at Stone Market were charged to card *2222.",
+  "separate": [
+   75,
+   300
+  ],
+  "statedTotal": null
+ },
+ {
+  "id": "two_purchases_lines",
+  "text": "Purchases on card 3333:\n1) AED 99.00 Lark Store\n2) AED 12.25 City Parking",
+  "separate": [
+   99,
+   12.25
+  ],
+  "statedTotal": null
+ },
+ {
+  "id": "two_purchases_ar",
+  "text": "عمليتا شراء ببطاقتك 4444: 130.00 ريال لدى متجر النخيل و 45.00 ريال لدى مقهى السدر",
+  "separate": [
+   130,
+   45
+  ],
+  "statedTotal": null
+ },
+ {
+  "id": "two_purchases_ar_indic",
+  "text": "تم خصم ١٨٠ جنيه لدى مكتبة النور و ٤٢٠ جنيه لدى متجر الورد",
+  "separate": [
+   180,
+   420
+  ],
+  "statedTotal": null
+ },
+ {
+  "id": "single",
+  "text": "Purchase SAR 120.00 at Oak Bakery card *1111",
+  "separate": null,
+  "statedTotal": null
+ },
+ {
+  "id": "balance_after",
+  "text": "Purchase SAR 120.00 at Oak Bakery, available balance SAR 3,400.00",
+  "separate": null,
+  "statedTotal": null
+ },
+ {
+  "id": "fx_pair",
+  "text": "Purchase USD 20.00 at WEBSHOP, charged SAR 75.40",
+  "separate": null,
+  "statedTotal": null
+ },
+ {
+  "id": "tip_total_labelled",
+  "text": "River Cafe: subtotal EGP 450.00, tip EGP 50.00, total charged EGP 500.00",
+  "separate": null,
+  "statedTotal": 500
+ },
+ {
+  "id": "tip_parens",
+  "text": "You paid SAR 115.00 at Lark Cafe (SAR 100.00 + SAR 15.00 tip) with card *5555.",
+  "separate": null,
+  "statedTotal": 115
+ },
+ {
+  "id": "tip_ar",
+  "text": "مبلغ الفاتورة 300.00 ريال + بقشيش 30.00 ريال = الإجمالي 330.00 ريال لدى مطعم السدر",
+  "separate": null,
+  "statedTotal": 330
+ },
+ {
+  "id": "incl_tip",
+  "text": "Card *6666 charged AED 210.00 at Harbor Grill incl. AED 10.00 tip.",
+  "separate": null,
+  "statedTotal": 210
+ },
+ {
+  "id": "service_sum",
+  "text": "Dinner AED 200.00 + 10% service AED 20.00. Total AED 220.00 charged to card *7777.",
+  "separate": null,
+  "statedTotal": 220
+ },
+ {
+  "id": "cashback",
+  "text": "Purchase SAR 200.00 at Pine Books. Cashback SAR 10.00 credited.",
+  "separate": null,
+  "statedTotal": null
+ },
+ {
+  "id": "one_is_sum",
+  "text": "SAR 50.00 + SAR 25.00 = SAR 75.00 paid at Lark Store",
+  "separate": null,
+  "statedTotal": 75
+ }
+]

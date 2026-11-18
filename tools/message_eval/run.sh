@@ -45,7 +45,9 @@ for REV in "$@"; do
   if [ ! -d "$WT" ]; then git -C "$REPO" worktree add --detach "$WT" "$SHA" >/dev/null; fi
   if [ ! -d "$SRV_WT" ]; then git -C "$REPO" worktree add --detach "$SRV_WT" "$SRV_SHA" >/dev/null; fi
 
-  python3 "$HERE/expand.py" "$HERE/heldout/messages.jsonl" "$OUT/messages.json"
+  # MESSAGE_EVAL_SET=<jsonl> runs another labelled set (e.g. dev_siblings.jsonl);
+  # its results are development numbers, never held-out numbers.
+  python3 "$HERE/expand.py" "${MESSAGE_EVAL_SET:-$HERE/heldout/messages.jsonl}" "$OUT/messages.json"
 
   echo "== $SHORT: server (Deno, the commit's parse.ts)"
   (cd "$OUT" && deno run --no-lock --allow-read --allow-write --allow-env \

@@ -690,3 +690,153 @@ It is never a full number: 5–9 digits become `[ACCOUNT]` through the two passe
 - `flutter analyze`: no issues.
 - `server_diff.sh`: 0 server regressions, exit 0.
 - `run.sh 5dae2e2d`: 0 regressions, review 35 of 35 budget, exit 0.
+
+## Follow-up 12 — re-review at 6f771108 (PRIV-0, CR-1, LEN-1) and the development siblings (families c–f)
+
+### (1) PRIV-0: names and numbers that still reached the server and the model
+
+The same change is made on the server (`_shared/sms_redaction.ts`) and the device (`engine/privacy/sms_sanitizer.dart`, plus its passes in `sanitization_edit_map.dart`). Every new rule is applied in both places.
+
+- **Spaced IBAN → `[IBAN]`.** "SA88 1234 5678 9012 3456 9898" and «…» with Arabic-Indic digits. Every group after the check digits must hold a digit. The rule runs before the card rule, which used to eat the middle 16 digits and leave "SA88 … 9898" behind.
+- **Labelled account numbers of 5–9 digits → `[ACCOUNT]`.** The labels are account, acct, a/c, ac, «حساب/الحساب/لحساب/للحساب/بحساب/حسابك/لحسابك/حسابكم/حسابي», with an optional "no/number/رقم".
+  - A suffix of 4 digits or fewer is kept («حسابك ***1234»).
+  - A figure followed by a currency is an amount and is kept, unless another figure follows the currency ("acct 1234567 SAR 500.00" → masked).
+- **English beneficiary names.**
+  - "Standing order", «أمر مستديم» and «أمر دائم» now count as transfer context, so "Standing order to Sara Ali" → "to [NAME]".
+  - "To Name:" is a beneficiary cue and a counterparty cue.
+  - «مستفيد» (without ال) is a counterparty cue.
+  - A one-letter stopword before ". Name" is an initial, so «A. Ali Hassan» is masked whole.
+- **New stopwords.**
+  - IBAN words, so "to IBAN [IBAN]" keeps "IBAN".
+  - Failure-reason words: insufficient, funds, limit, reason, technical, error, request, lack. Without them "due to insufficient funds" became "due to [NAME]", and `run.sh` caught it as L_L58.
+- **Labelled leak set.** New `_shared/fixtures/sms_leak_labelled_cases.json`: 72 synthetic messages, English and Arabic, Western and Arabic-Indic digits. Every third-party name word, account number, IBAN group of 3 or more characters, and phone number is tagged.
+  - Deno (`sms_redaction_test.ts`) and Flutter (`sms_name_minimization_test.dart`) assert that no tag survives.
+  - They also assert that the amount, tense and status words, dates and the own `***4521` suffix survive, that device == server == expected, that the edit map matches, and that a second pass changes nothing.
+  - 16 of the 72 leaked before this change.
+- **Parity.** Over the 2,535 texts of every case table, device `sanitize` and `sanitizeWithMap` equal the server: 0 mismatches.
+
+**What still survives, and why:**
+- A name with no cue before it ("Sara Ali sent you SAR 500"), or one in a message that reads as a purchase, refund or bill. Counterparty cues are applied only in transfer context, so merchants stay readable.
+- An unlabelled number of 5–9 digits that is not in the beneficiary's sentence ("to [NAME] 60181590" without "account" is masked only after «إلى»/"To:"). A bare 5–9 digit run is more often an amount.
+- Phone numbers that are neither Saudi/Egyptian mobile nor written with "+".
+- OTP codes without a cue word.
+
+**Consent text (owners `consent`, `ops`).** The sentence in `evidence/closure/consent.md` line 58 claims more than the redaction guarantees:
+
+> "Bank messages: bank messages you capture are sent to Qirsh servers after card, account and phone numbers and codes are removed, and with people's names masked where the app detects them."
+
+- Account numbers, phone numbers and codes are removed only in the forms listed above, not all of them.
+- On iOS the text is sent by the native Shortcut sanitizer (`app/ios/BankMessageShortcuts/BankMessageShortcuts.swift`, not mine). It does not have the FU10–FU12 rules: no spaced IBAN, no labelled 5–9 digit account, no beneficiary-sentence numbers. The server re-applies its own redaction at intake, so what is stored and what the model sees are covered. The wire is not.
+- Suggested wording: "…after card numbers, long and labelled account numbers, IBANs, mobile numbers and verification codes are removed…".
+
+### (2) CR-1: the card-repayment rule catches a bill paid with a credit card
+
+The rule is in the parser's files, not my gate: `parser_engine.dart` `_cardRepayment` (last alternative) and `process-ios-sms/message_meaning.ts` `CARD_REPAYMENT`.
+- **The faulty alternative:** `(?:سداد|تسديد)[^.\n]{0,30}?(?:بطاقت?ك?|البطاقة)\s*(?:ال)?ائتمانية`.
+- **Why it matches:** «بطاقتك» is found inside «ببطاقتك» ("with your card"), because there is no boundary before it, and nothing excludes «فاتورة».
+- **The two sides differ:** the device's gap is `[^.\n]`, the server's is `[^\n]`.
+- **Suggested replacement (both sides):** `(?:سداد|تسديد)(?:(?!فاتور)[^.\n]){0,30}?(?<![ء-ي])(?:ل|لل)?(?:بطاقت?ك?|بطاقة|البطاقة)\s*(?:ال)?ائتمانية`.
+- Checked on six texts:
+  - «سداد فاتورة 300 ريال ببطاقتك الائتمانية 4521» → not card repayment.
+  - «تم سداد 2,000 ريال لبطاقتك الائتمانية», «سداد بطاقتك الائتمانية…» and «سداد مستحقات البطاقة الائتمانية…» → still card repayment.
+  - «تم تسديد مبلغ 900 ريال للبطاقة الائتمانية 4521» → now card repayment (the current rule misses it).
+
+### (3) LEN-1: over-length uses the device's measure
+
+`process-ios-sms/index.ts` accepts an optional integer `textLength` (or `text_length`). This is the length of the message as received, in UTF-16 units (Dart and JS `String.length`), measured before redaction.
+- Over 2,000 → `uncertain/over_length` (review). It can only move a capture to review, never to recorded, and it never overrides an OTP.
+- Without the field, behaviour is as before.
+- Test: `handler_outcome_test.ts` "LEN-1". 2,001 → rejected/over_length; 2,000, a missing field and a bogus value → processed.
+- **Still needed on the client (owner: iOS/platform):** the native sender at `BankMessageShortcuts.swift` ~l.865 must add `"textLength": <trimmed raw text>.utf16.count` to the body and keep it in the `pendingSend` payload. `CaptureBackendClient.processIosSms` must then pass it on replay. Until then the server cannot see the device's measure.
+
+### (4) Development siblings (`tools/message_eval/dev_siblings.jsonl`; not held-out)
+
+`run.sh` only takes commits, so I ran the same steps on the working tree from a scratch script: `server_eval.ts`, then the device test copied into `app/test/zz_message_eval` and removed afterwards, then `score.py`.
+
+- **(c) Own-account moves.**
+  - The schema now lets the model say `message_type: own_account_transfer`, and the system instruction says when. Prompt and system versions are bumped to `sms-understanding-v3` / `sms-system-v3`.
+  - Like every non-`transaction` type, this is a terminal "not a transaction" verdict: review on the server, the device and the import paths, whatever the model's direction.
+  - `parse-sms` maps `own_accounts` and `card_repayment` to it.
+  - The app has no neutral own-account transfer anywhere, so the outcome is review.
+  - Deterministically, the parser's concurrent change now reads 11 of 12 siblings as `own_accounts`. DEV050 ("Transfer between your accounts: … from Current to Savings completed") still reads as one event; that is for the parser.
+  - The eval's oracle answers only the legacy fields, so it cannot exercise the new message type.
+- **(d) Two purchases.**
+  - The schema adds `message_type: multiple_transactions`.
+  - **New gate:** `process-ios-sms/meaning_gate.ts` `gatedMeaning`, with twin `meaningHoldReason` / `severalMovements` in `domain/capture/validated_capture.dart`. When the parser's meaning is one completed movement with no footer set aside, and the sentences the parser itself reads as movements name two or more distinct amounts of one currency, the message is held as `multiple_events/multiple_amounts`.
+  - **What does not count:** a total with its parts, a balance or limit word, a reward, or one figure that is the sum of the others. The amounts come from `separateMovementAmounts` (TS and Dart).
+  - **Where it applies:** the `process-ios-sms` gate, the `parse-sms` AI-primary gate, the iOS import, `CaptureSyncService` and the device AI use case.
+  - **Eval:** 8 of 8 oracle cases now go to review (0 booked).
+- **(e) Tip and total forms.** `statedTotal` (TS and Dart) is the labelled charged total, or the figure that includes the other ("incl."), or the one figure that is the sum of the others.
+  - A `tip_component` / `total_with_parts` meaning whose answered amount equals that total now records, on the server gate and in the iOS and sync imports. Any other amount stays in review.
+  - `parse-sms` now asks the model for these forms and accepts only the stated total (`amount_not_stated_total` otherwise).
+  - All 12 e-siblings are accepted at their labelled amount by the gate, and a wrong amount stays in review.
+  - The eval still shows 7 in review because `server_eval.ts` copies the old `index.ts` meaning step instead of calling it (owner: evaluation).
+  - The device's direct AI path still holds tip forms before asking. That is conservative and not changed.
+- **(f) Completed reversals.**
+  - `AiCandidateValidator`, `validateCaptureCandidate` and the use case's pre-AI check now use `ParserEngine.meaningOf(text).kind == notCompleted` instead of `TransactionStateCues.isNotCompleted`.
+  - Over the case tables, the cue list alone flagged 12 texts the meaning reads otherwise. All 12 are `uncertain` (review), so the meaning gates still hold them.
+  - The 4 device-validator rejections in the eval (DEV083/084/085/090) remain because the parser's meaning still says `declined_or_failed` for them. They clear when the parser's fix lands; no AI-side change is needed then.
+
+### Tests and runs
+- **New tests:**
+  - `_shared/fixtures/movement_amount_cases.json` with `_shared/movement_amounts_test.ts` and its twin `test/engine/ai/movement_amounts_test.dart` (incl. meaning-hold, tip-release and validator-follows-meaning tests);
+  - `process-ios-sms/meaning_gate_test.ts`;
+  - two handler tests (two purchases → `multiple_amounts`; LEN-1);
+  - the PRIV-0 labelled set on both sides.
+- **Updated:** the `parse-sms` wiring pin (`ai_meaning_gate_contract_test.ts`) asserts the new gate line and the stated-total check. Every assertion is kept.
+- **Deno, all of `supabase/functions`:** 1,406 passed, 0 failed, 6 ignored.
+- **Flutter** `engine/privacy`, `engine/ai`, `domain/capture`, `domain/usecases`, `features/capture`: 2,092 passed. Re-run of `engine/privacy` after the last stopword change: 190 passed.
+- **`flutter analyze`, whole app:** no issues.
+- **`server_diff.sh`:** exit 1 with 3 "regressions": fu5/DEV084, DEV085 and DEV090. These are rows of the parser specialist's new, untracked `cases/fu5.json`, rejected by the parser's current meaning (`not_completed:declined_or_failed`), which is still being fixed. My redaction does not change those texts.
+- **`run.sh 5dae2e2d`:** 0 regressions (L_L58 fixed by the failure-reason stopwords). 38 messages to review against a budget of 35, so exit 1.
+  - Mine: 2 unlabelled two-amount texts now correctly go to review ("Paid 75.00 SAR / 750.00 SAR", "Purchase 100.00 EGP then 200.00 EGP").
+  - The parser's: fu5/DEV072 (`tip_component`) on every path.
+  - I did not raise the budget.
+
+## Follow-up 13: the device validators accepted not-completed and uncertain messages (BLOCKER)
+
+### Cause
+- In follow-up 12 (f), the device AI validator and `validateCaptureCandidate` (and the use case's pre-AI check) began to reject only when the parser's meaning kind was `not_completed`. Before that, they used the not-completed cue scan.
+- So a candidate for an `uncertain` text was accepted. That covers over-length texts (V1-RES4 N55 and N56: a declined purchase followed by long filler, an S1) and texts with another event's status sentence (V1-RES2 and V1-RES4 N05, V1-RES5 W01 and W06: "approved/completed. Previous attempt declined").
+- W04's not-completed reason came after the direction check, so it reported `direction_contradiction`.
+- **Why Deno passed:** the server never relied on its validator for this. Both server gates (`process-ios-sms` and the `parse-sms` AI-primary path) hold every non-record meaning before any model request, and the Deno table only drives those gates. The device validators are the only place where the change applied, and no test compared the two sides' rejection rule.
+
+### Fix (the same rule on both sides)
+- **`AiCandidateValidator.meaningRejectionOf(text, {amount})`** (Dart) and **`meaningRejectionOf(text, amount, meaning)`** (`process-ios-sms/meaning_gate.ts`) return:
+  - null when the meaning disposition is `record`;
+  - otherwise `transaction_not_completed` when the meaning kind is `not_completed`, or when the whole text carries a not-completed cue (`TransactionStateCues.isNotCompleted` / `isDeclinedText`, unclipped — over-length texts included);
+  - otherwise null for a tip/fee form answered at the stated total, else `message_meaning_<reason>`.
+- **`AiCandidateValidator.validate` and `validateCaptureCandidate`:**
+  - `transaction_not_completed` is returned at the original early position, before the amount and direction checks.
+  - Any other non-record meaning is rejected just before acceptance. The specific reasons the shared AI fixtures pin (`not_a_transaction`, `amount_not_charged_total`) keep precedence.
+  - A record meaning (a completed reversal) is never rejected on a cue alone (family f is kept).
+- **The use case's pre-AI `notCompleted`** uses the same rule.
+- **`parse-sms`:** a not-completed reading is held first, tip form or not, with `message_type: declined_or_failed`. Otherwise the existing non-record gate applies.
+
+### Tests
+- **`test/engine/ai/movement_amounts_test.dart`:** my earlier "validator rejects not completed exactly when the meaning does" test is replaced by "the validators reject every non-record meaning, not-completed first".
+  - It covers declined, declined plus over-length filler, "approved. Previous attempt declined", a footer case and a completed reversal.
+  - It checks both validators against the rule.
+- **`process-ios-sms/meaning_gate_test.ts`:** the same three texts with the same reasons.
+- **New parity test** "declined table: server meaning rejection matches the device rule on every row", over all 1,565 rows. It checks that:
+  - the device and server columns agree on `not_completed` (0 rows differ);
+  - every review row gets `transaction_not_completed` from the server rule and a non-record server gate;
+  - no other row gets that reason.
+- **`parse-sms/ai_meaning_gate_contract_test.ts`:** the wiring pin now asserts the new gate line and `declined_or_failed`. No assertion was removed.
+- **Fails before, passes after:** the table test failed 7 rows before the fix (as reported) and passes after. The new Dart and Deno tests fail before, because the rule did not exist.
+- The table expectations are unchanged.
+
+### Runs (final tree)
+- **`test/engine/parser/declined_state_cues_table_test.dart`:** all passed (1,567).
+- **Flutter `test/engine`, `test/domain/capture`, `test/domain/usecases`, `test/features/capture`:** 6,220 passed, 1 failed.
+  - The failure is `test/engine/sms_sanitizer_test.dart` "income type strips sender name": it expects «إلى: حسابك *1234» to be removed.
+  - This is pre-existing at HEAD 5a5a1587. I ran the committed HEAD `sms_sanitizer.dart` standalone on that text and it gives the same output, «إلى: حسابك *1234» kept. The cause is the own-destination rule committed in 6f771108 (follow-up 11: the user's own account suffix after «إلى» stays).
+  - The old test and the reviewed redaction contract conflict. I did not loosen the assertion or change the redaction. This needs a decision.
+- **Deno, all:** 1,408 passed, 0 failed, 6 ignored.
+- **`flutter analyze`, whole app:** no issues.
+- **`run.sh 5dae2e2d`:** 0 regressions, 38 to review against a budget of 35 (exit 1). These are the same 38 as in follow-up 12, unchanged by this fix.
+- **`server_diff.sh`:** exit 1 with the same 3 regressions (fu5/DEV084, DEV085, DEV090). Those are completed reversals that the parser's `parse.ts` meaning still reads as `not_completed:declined_or_failed`, so they are the parser's work in progress, not this rule.
+
+## Follow-up 14: LEN-1 on the client
+- The one Dart path to `process-ios-sms` is `CaptureSyncService.retryPendingSend`, which every queued replay, paste/share drain and retry goes through. It now sends `textLength`: the queued `SharedCaptureStore.Payload.textLength` when present (parsed in `NativeCaptureBridge` as a non-negative int), otherwise `text.length` of the raw text. `CaptureBackendClient.processIosSms` omits the key when it is null, so build 147 and old payloads work as today. New tests cover the client body, the replay value both ways, and the bridge parsing; the four test fakes take the new optional parameter.
+- Runs: Deno `process-ios-sms` 460 passed, 0 failed; Flutter `test/features/capture` 1,594 passed; `flutter analyze`, whole app: no issues. The sanitizer test fix is kept as you resolved it.

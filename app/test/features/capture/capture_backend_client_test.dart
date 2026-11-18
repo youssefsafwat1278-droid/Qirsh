@@ -155,4 +155,28 @@ void main() {
       );
     });
   });
+
+  // LEN-1: the raw text length rides on the body when known; a caller that
+  // does not know it (an old path) sends no key, which the server treats as
+  // today.
+  test('process-ios-sms carries textLength only when given', () async {
+    final bodies = <Map<String, dynamic>>[];
+    final client = CaptureBackendClient(
+      supabaseUrl: 'https://example.supabase.co',
+      anonKey: 'anon',
+      httpClient: MockClient((request) async {
+        bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+        return Response('{}', 200);
+      }),
+    );
+    for (final length in [2400, null]) {
+      await client.processIosSms(
+        installId: 'i', deviceSecret: 's', payloadId: 'p', smsText: 't',
+        receivedAt: DateTime.utc(2026), allowAi: false, ownerUid: 'u',
+        ownerGeneration: 1, textLength: length,
+      );
+    }
+    expect(bodies[0]['textLength'], 2400);
+    expect(bodies[1].containsKey('textLength'), isFalse);
+  });
 }

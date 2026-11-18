@@ -157,6 +157,21 @@ function figureValue(m: RegExpExecArray): number {
   return Number.isFinite(v) ? v : Infinity;
 }
 
+// Follow-up 5: every currency figure of [lower] (lower-cased text), with its
+// value and currency word, in order. Mirrors DirectionSignal.currencyFigures.
+const CODED_FIGURE = new RegExp(
+  `(?<![a-z])(${CODES})\\s?(${NUM})|(${NUM})\\s?(${CODES}|ريال|جنيه|درهم|دينار)(?![a-z])`,
+  'g',
+);
+export type CurrencyFigure = { start: number; end: number; code: string; value: number };
+export function currencyFigures(lower: string): CurrencyFigure[] {
+  return [...lower.matchAll(CODED_FIGURE)].map((m) => {
+    const raw = (m[2] ?? m[3]).replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x660));
+    const v = Number(raw.replace(/[,٬]/g, '').replace('٫', '.'));
+    return { start: m.index!, end: m.index! + m[0].length, code: m[1] ?? m[4], value: Number.isFinite(v) ? v : Infinity };
+  });
+}
+
 /** The side-credit clause [from, to) around the flow at [start, end) of [lower], or null. */
 export function sideCreditClause(lower: string, start: number, end: number): [number, number] | null {
   let from = 0;

@@ -13,11 +13,18 @@ const at = (needle: string) => {
 };
 
 Deno.test('parse-sms: the meaning gate runs on the primary path before any provider request', () => {
-  const gate = at("if (meaning.disposition !== 'record') {");
+  // Dev siblings d/e: the gate is the server's gatedMeaning (several
+  // movements held too); only a tip/fee form with a stated total is asked,
+  // and then only an answer equal to that total is accepted.
+  // Follow-up 13: a not-completed reading is held first, tip form or not.
+  const gate = at("if (notCompleted || (meaning.disposition !== 'record' && requiredTotal == null)) {");
+  assert(at("const notCompleted = meaningRejectionOf(reSanitized, null, meaning) === 'transaction_not_completed';") < gate);
   assert(at('if (body.analysis_mode === AI_PRIMARY_MODE) {') < gate);
   assert(gate < at('const result = await runPrimaryAi({'));
-  assert(at('const meaning = messageMeaning(reSanitized);') < gate);
-  assert(/if \(meaning\.disposition !== 'record'\) \{\s*return finish\(\{ is_transaction: false,/.test(src));
+  assert(at('const meaning = gatedMeaning(reSanitized, messageMeaning(reSanitized));') < gate);
+  assert(at("meaning.reason === 'tip_component' || meaning.reason === 'total_with_parts'") < gate);
+  assert(/if \(notCompleted \|\| \(meaning\.disposition !== 'record' && requiredTotal == null\)\) \{\s*return finish\(\{ is_transaction: false,\s*message_type: notCompleted \? 'declined_or_failed'/.test(src));
+  assert(at("return 'amount_not_stated_total';") < at('const result = await runPrimaryAi({'));
 });
 
 Deno.test('parse-sms: held messages are what the gate holds; a completed purchase is not', () => {

@@ -20,6 +20,29 @@ void main() {
   final cases = (jsonDecode(File(_fixturePath).readAsStringSync()) as List)
       .cast<Map<String, dynamic>>();
 
+  group('PRIV-0 labelled leak set (device == server)', () {
+    final labelled = (jsonDecode(File(
+                '../supabase/functions/_shared/fixtures/sms_leak_labelled_cases.json')
+            .readAsStringSync()) as List)
+        .cast<Map<String, dynamic>>();
+    test('set is non-trivial', () => expect(labelled.length, greaterThan(69)));
+    for (final c in labelled) {
+      test('${c['id']}', () {
+        final raw = c['raw'] as String;
+        final out = SmsSanitizer.sanitize(raw);
+        expect(out, c['expected'], reason: 'device and server must agree');
+        for (final s in (c['secrets'] as List).cast<String>()) {
+          expect(out, isNot(contains(s)), reason: '"$s" is a third party\'s');
+        }
+        for (final k in (c['mustKeep'] as List).cast<String>()) {
+          expect(out, contains(k), reason: 'parsing needs "$k"');
+        }
+        expect(sanitizeWithMap(raw).text, out);
+        expect(SmsSanitizer.sanitize(out), out);
+      });
+    }
+  });
+
   group('shared redaction fixture (device == server)', () {
     test('fixture file is non-empty', () => expect(cases, isNotEmpty));
 

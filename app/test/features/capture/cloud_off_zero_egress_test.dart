@@ -115,6 +115,7 @@ class _SpyBackend extends CaptureBackendClient {
     required String ownerUid,
     required int ownerGeneration,
     bool schemaV2 = false,
+    int? textLength,
   }) async {
     calls.add('processIosSms');
   }

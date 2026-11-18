@@ -316,6 +316,32 @@ class DirectionSignal {
   static final RegExp _currencyFigure = RegExp(
       '(?<![a-z])(?:$_codes)\\s?([0-9٠-٩][0-9٠-٩,٬]*(?:[.٫][0-9٠-٩]+)?)'
       '|([0-9٠-٩][0-9٠-٩,٬]*(?:[.٫][0-9٠-٩]+)?)\\s?(?:$_codes|ريال|جنيه|درهم|دينار)(?![a-z])');
+  static final RegExp _codedFigure = RegExp(
+      '(?<![a-z])($_codes)\\s?([0-9٠-٩][0-9٠-٩,٬]*(?:[.٫][0-9٠-٩]+)?)'
+      '|([0-9٠-٩][0-9٠-٩,٬]*(?:[.٫][0-9٠-٩]+)?)\\s?($_codes|ريال|جنيه|درهم|دينار)(?![a-z])');
+
+  /// Follow-up 5: every currency figure of [lower] (lower-cased text), with
+  /// its value and currency word, in order.
+  static List<({int start, int end, String code, double value})> currencyFigures(
+      String lower) {
+    return [
+      for (final m in _codedFigure.allMatches(lower))
+        (
+          start: m.start,
+          end: m.end,
+          code: m.group(1) ?? m.group(4)!,
+          value: _valueOf(m.group(2) ?? m.group(3)!),
+        )
+    ];
+  }
+
+  static double _valueOf(String raw) {
+    raw = raw.replaceAllMapped(
+        RegExp('[٠-٩]'), (d) => '${d[0]!.codeUnitAt(0) - 0x660}');
+    return double.tryParse(raw.replaceAll(RegExp('[,٬]'), '').replaceAll('٫', '.')) ??
+        double.infinity;
+  }
+
   static double _figureValue(RegExpMatch m) {
     final raw = (m.group(1) ?? m.group(2)!).replaceAllMapped(
         RegExp('[٠-٩]'), (d) => '${d[0]!.codeUnitAt(0) - 0x660}');

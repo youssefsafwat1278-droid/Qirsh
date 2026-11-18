@@ -852,6 +852,33 @@ class RunnerTests: XCTestCase {
     XCTAssertTrue(json.contains("\"receivedAtInferred\":true"))
   }
 
+  // LEN-1: the queued payload carries the message's UTF-16 length as received
+  // (trimmed, before redaction), so a replay can send the server the same
+  // measure the Shortcut sends. Arabic letters and an emoji (2 UTF-16 units)
+  // make `count` and `utf16.count` differ.
+  func testQueuedPayloadCarriesUtf16TextLength() throws {
+    SharedCaptureStore.purgeUserOwnedState()
+    defer { resetCapSeams() }
+    try publish(ownerA)
+    let text = "  شراء 4.00 ريال 💳 ACME  "
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    XCTAssertNotEqual(trimmed.count, trimmed.utf16.count)
+    _ = SharedCaptureStore.enqueue(text: text, sender: "ACME")
+    let json = try XCTUnwrap(try SharedCaptureStore.peekPendingPayloadsJSON())
+    XCTAssertTrue(json.contains("\"textLength\":\(trimmed.utf16.count)"), json)
+    if #available(iOS 16.0, *) {
+      XCTAssertEqual(BackendCaptureClient.textLength(text), trimmed.utf16.count)
+    }
+  }
+
+  func testShortcutUploadBodySendsTextLengthMeasuredBeforeRedaction() throws {
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let source = try String(
+      contentsOf: root.appendingPathComponent("BankMessageShortcuts/BankMessageShortcuts.swift"))
+    // Measured on the raw request text, not on `sanitized`.
+    XCTAssertTrue(source.contains("\"textLength\": Self.textLength(request.smsText),"))
+  }
+
 
   // ── CAP-6: queue v3 (owner record, stamping, quotas, claim CAS, barrier) ───
   //
@@ -5770,6 +5797,38 @@ final class SmsRedactionParityTests: XCTestCase {
       }
       for drop in c.mustDrop {
         XCTAssertFalse(out.contains(drop), "\(c.id): \"\(drop)\" is personal and leaked")
+      }
+      XCTAssertEqual(try BackendCaptureClient.sanitize(out), out, "\(c.id): not idempotent")
+    }
+  }
+
+  // PRIV-0 (closure FU12): the labelled leak set. Every tagged third-party
+  // name word, account number, IBAN group and phone number must be gone, the
+  // amount, tense/status words, dates and own suffix kept, and the output must
+  // equal the server's byte for byte.
+  private struct LabelledLeakCase: Decodable {
+    let id: String
+    let raw: String
+    let expected: String
+    let secrets: [String]
+    let mustKeep: [String]
+  }
+
+  func testShortcutSanitizerRemovesEveryTaggedLeak() throws {
+    guard #available(iOS 16.0, *) else { throw XCTSkip("App Intents need iOS 16") }
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let url = root.appendingPathComponent(
+      "../../supabase/functions/_shared/fixtures/sms_leak_labelled_cases.json")
+    let cases = try JSONDecoder().decode([LabelledLeakCase].self, from: Data(contentsOf: url))
+    XCTAssertGreaterThanOrEqual(cases.count, 70)
+    for c in cases {
+      let out = try BackendCaptureClient.sanitize(c.raw)
+      XCTAssertEqual(out, c.expected, "\(c.id): Shortcut and server disagree")
+      for secret in c.secrets {
+        XCTAssertFalse(out.contains(secret), "\(c.id): \"\(secret)\" leaked")
+      }
+      for keep in c.mustKeep {
+        XCTAssertTrue(out.contains(keep), "\(c.id): lost \"\(keep)\"")
       }
       XCTAssertEqual(try BackendCaptureClient.sanitize(out), out, "\(c.id): not idempotent")
     }

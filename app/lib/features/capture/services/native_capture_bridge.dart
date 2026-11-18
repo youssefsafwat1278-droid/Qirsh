@@ -24,6 +24,7 @@ class SharedCapturedMessage {
     this.receivedAtInferred,
     this.ownerUid,
     this.localOnly,
+    this.textLength,
   });
 
   final String? id;
@@ -49,6 +50,11 @@ class SharedCapturedMessage {
   /// CAP-6 §4.3: bound by an explicit claim. Import it with the local
   /// deterministic parser only: no upload, no AI.
   final bool? localOnly;
+
+  /// LEN-1: the UTF-16 length of the trimmed raw text before redaction, as the
+  /// native queue stored it (`SharedCaptureStore.Payload.textLength`); null
+  /// from a build that does not store it.
+  final int? textLength;
 }
 
 /// The active capture owner `{uid, uidHash, generation}` held natively (§4.2).
@@ -2886,6 +2892,7 @@ class NativeCaptureBridge {
       final rawInferred = item['receivedAtInferred'];
       final rawOwnerUid = (item['ownerUid'] as String?)?.trim();
       final rawLocalOnly = item['localOnly'];
+      final rawTextLength = item['textLength'];
       final sender = _firstNonEmpty([rawSenderId, rawSender, rawSenderName]);
       messages.add(
         SharedCapturedMessage(
@@ -2903,6 +2910,9 @@ class NativeCaptureBridge {
           receivedAtInferred: rawInferred is bool ? rawInferred : null,
           ownerUid: _emptyToNull(rawOwnerUid),
           localOnly: rawLocalOnly is bool ? rawLocalOnly : null,
+          textLength: rawTextLength is int && rawTextLength >= 0
+              ? rawTextLength
+              : null,
           // MALI-068n §11 — native epoch is authoritative; the ISO string is a
           // legacy fallback; unknown → null (never `now`).
           receivedAt: resolveCapturedReceivedAt(

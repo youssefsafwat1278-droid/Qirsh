@@ -359,6 +359,10 @@ enum SharedCaptureStore {
     var localOnly: Bool? = nil
     /// Remove-data barrier tag (§4.4); swept with its barrier.
     var barrierNonce: String? = nil
+    /// LEN-1: `text.utf16.count` of the queued (trimmed, unredacted) message —
+    /// the measure `process-ios-sms` reads as `textLength`. Optional so older
+    /// records still decode; replays forward it unchanged.
+    var textLength: Int? = nil
   }
 
   /// §4.2 active owner record, held in the shared Keychain.
@@ -466,7 +470,7 @@ enum SharedCaptureStore {
       source: cleanSource,
       receivedAt: receivedAtString
     )
-    let payload = Payload(
+    var payload = Payload(
       id: payloadID,
       text: trimmed,
       sender: cleanSender ?? cleanSenderID ?? cleanSenderName,
@@ -481,6 +485,7 @@ enum SharedCaptureStore {
       createdAt: createdAtString,
       receivedAtInferred: receivedAtInferred
     )
+    payload.textLength = trimmed.utf16.count
 
     do {
       return try withQueueLock {

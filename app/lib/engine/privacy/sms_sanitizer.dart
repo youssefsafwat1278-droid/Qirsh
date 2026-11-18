@@ -101,6 +101,30 @@ class SmsSanitizer {
   // real account numbers are 10+.
   static final _accountNumber = RegExp('$_nb$_dc{10,20}$_nbEnd');
 
+  // An IBAN written in groups ("SA88 1234 5678 9012 3456 9898"). The unspaced
+  // rule cannot see it and the card rule used to eat the middle 16 digits,
+  // leaving the country, check digits and last group behind. Every group
+  // after the check digits holds a digit. Runs before the card rule
+  // (PRIV-0). Server twin: SPACED_IBAN_PATTERN.
+  static final _spacedIban = RegExp(
+    '$_nb[A-Za-z]{2}$_dc{2}(?:[ \\-](?=[A-Za-z0-9٠-٩۰-۹]{0,3}$_dc)[A-Za-z0-9٠-٩۰-۹]{4}){3,7}'
+    '(?:[ \\-](?=[A-Za-z0-9٠-٩۰-۹]{0,3}$_dc)[A-Za-z0-9٠-٩۰-۹]{1,3})?$_nbEnd',
+  );
+
+  // A number of 5 to 9 digits right after an account label ("account
+  // 60181590", «حساب ٦٠١٨١٥٩٠», "a/c no. 1234567") is an account number,
+  // even though it is shorter than the generic rule. A partial suffix of 4
+  // digits or fewer stays, and a figure followed by a currency or a decimal
+  // part is an amount and stays (PRIV-0). Server twin:
+  // LABELLED_ACCOUNT_PATTERN.
+  static final _labelledAccount = RegExp(
+    r'((?<![\p{L}\p{M}])(?:account|acct|a\/c|ac|حساب|الحساب|لحساب|للحساب|بحساب|حسابك|لحسابك|حسابكم|حسابي)'
+    r'(?![\p{L}\p{M}])\.?(?:[ \t]+(?:no|number|num|رقم)(?![\p{L}\p{M}])\.?)?[ \t]*[:#]?[ \t]*)'
+    '[*xX•#]*$_dc{5,9}(?!$_dc|[.,٫٬]$_dc|[ \\t]*(?:sar|egp|aed|usd|eur|gbp|kwd|qar|bhd|omr|jod|le|sr|riyals?|pounds?|dirhams?|dinars?|dollars?|ريال|جنيه|جم|درهم|دينار|دولار|يورو|ر\\.س)(?![\\p{L}\\p{M}])(?![ \\t]*$_dc))',
+    caseSensitive: false,
+    unicode: true,
+  );
+
   // ── Beneficiary / transfer recipient ─────────────────────────────────────
   // The name after إلى: / الى: / To: (and the account or card object before
   // it), never a tense, status, amount, currency or date word, an amount, a
@@ -142,7 +166,7 @@ class SmsSanitizer {
     unicode: true,
   );
   static final _beneficiaryEn = RegExp(
-    '\\bTo\\s*:\\s*$_beneficiaryRun',
+    '\\bTo(?:[ \\t]+name)?\\s*:\\s*$_beneficiaryRun',
     caseSensitive: false,
     unicode: true,
   );
@@ -184,7 +208,7 @@ class SmsSanitizer {
     '(?<!(?<![\\p{L}\\p{M}])$_currencyWord[ \\t]*)'
     '(?:[A-Z]{2}(?=$_dc))?[*xX•#]*$_dc+(?:-$_dc+)*'
     '(?![0-9A-Za-z٠-٩۰-۹]|[.,٫٬/:\\-]$_dc|[ \\t]*$_currencyWord(?![ \\t]*$_dc))'
-    '(?<=(?:إلى|الى|\\bTo\\s*:)(?:(?!$_sentenceEnd).)*)',
+    '(?<=(?:إلى|الى|\\bTo(?:[ \\t]+name)?\\s*:)(?:(?!$_sentenceEnd).)*)',
     caseSensitive: false,
     unicode: true,
   );
@@ -282,6 +306,10 @@ class SmsSanitizer {
     'لم', 'تمت', 'بنجاح', 'يرجى', 'الرجاء', 'إذا', 'اذا', 'مستحق', 'مستحقة',
     // Account types (own-account moves keep «from Savings to Current»).
     'savings', 'saving', 'current', 'checking', 'chequing',
+    'iban', 'الآيبان', 'الايبان', 'آيبان', 'ايبان',
+    // A failure reason after "due to" is never a name (L_L58).
+    'insufficient', 'funds', 'limit', 'reason', 'technical', 'error',
+    'request', 'lack',
     'التوفير', 'توفير', 'الادخار', 'ادخار', 'الجاري',
   ];
 
@@ -300,7 +328,8 @@ class SmsSanitizer {
   };
 
   static final String _nameToken =
-      "(?!(?:${nameStopwords.join('|')})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]))"
+      // A one-letter stopword before ". Name" is an initial («A. Ali Hassan»).
+      "(?!(?:${nameStopwords.join('|')})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]|(?<=(?<![\\p{L}\\p{M}])\\p{L})\\.[ \\t]+\\p{L}))"
       // SM-07: a sentence-ending period is never part of a name (server twin
       // NAME_TOKEN); an initial or title keeps its period. A lone star
       // before digits is a masked number, and letters glued to digits
@@ -328,11 +357,11 @@ class SmsSanitizer {
   // ("Transfer received from AHMED ALI", «حوالة واردة من محمد أحمد»), so they
   // are applied only when [isCounterpartyContext] holds.
   static final _counterparty = RegExp(
-    r'((?<![\p{L}\p{M}])(?:from|to|by|beneficiary(?:[ \t]+name)?|'
+    r'((?<![\p{L}\p{M}])(?:from|to(?:[ \t]+name)?|by|beneficiary(?:[ \t]+name)?|'
     r'sender(?:[ \t]+name)?|remitter(?:[ \t]+name)?|'
     r'recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|'
     r'in[ \t]+favou?r[ \t]+of|mrs|mr|ms|dr|من[ \t]+قبل|اسم[ \t]+المستفيد|'
-    r'اسم[ \t]+المرسل|المستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|'
+    r'اسم[ \t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|'
     r'الي)'
     '\\.?(?![\\p{L}\\p{M}])$_cueSep)($_name)',
     caseSensitive: false,
@@ -342,7 +371,8 @@ class SmsSanitizer {
   static final _transferContext = RegExp(
     r'transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|'
     r'\bsent\b|حوال|تحويل|حول|وارد|استلام|استلمت|إيداع|ايداع|أودع|اودع|'
-    r'مستفيد|المرسل|انستا|لصالح',
+    r'مستفيد|المرسل|انستا|لصالح|standing\s+order|أمر\s+(?:مستديم|دائم)|'
+    r'امر\s+(?:مستديم|دائم)',
     caseSensitive: false,
     unicode: true,
   );
@@ -386,6 +416,8 @@ class SmsSanitizer {
   static RegExp get ibanPattern => _iban;
   static RegExp get otpPattern => _otp;
   static RegExp get accountNumberPattern => _accountNumber;
+  static RegExp get spacedIbanPattern => _spacedIban;
+  static RegExp get labelledAccountPattern => _labelledAccount;
   static RegExp get beneficiaryArPattern => _beneficiaryAr;
   static RegExp get beneficiaryEnPattern => _beneficiaryEn;
   static RegExp get ownDestinationNumberPattern => _ownDestinationNumber;
@@ -414,6 +446,9 @@ class SmsSanitizer {
     // 0. E-mail addresses (before the phone rule can split a local part)
     text = text.replaceAll(_email, '[EMAIL]');
 
+    // 0a. IBANs written in groups (before the card rule eats their middle)
+    text = text.replaceAll(_spacedIban, '[IBAN]');
+
     // 1. Full card numbers (before broad account pattern to avoid overlap)
     text = text.replaceAll(_cardNumber, '[CARD]');
 
@@ -430,6 +465,8 @@ class SmsSanitizer {
 
     // 5. Long digit sequences not already replaced (account substrings)
     text = text.replaceAll(_accountNumber, '[ACCOUNT]');
+    text = text.replaceAllMapped(
+        _labelledAccount, (m) => '${m.group(1)!}[ACCOUNT]');
 
     // 5a. Shorter reference numbers, cue-anchored (10+ digits are already
     // [ACCOUNT] above)

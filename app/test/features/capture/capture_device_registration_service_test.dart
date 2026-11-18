@@ -92,6 +92,7 @@ class _RotatingCaptureClient implements CaptureBackendClient {
     required String ownerUid,
     required int ownerGeneration,
     bool schemaV2 = false,
+    int? textLength,
   }) async {}
 
   @override

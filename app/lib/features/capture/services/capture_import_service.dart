@@ -480,7 +480,10 @@ class CaptureImportService {
     final result = results[id];
     // Closure round (parser meaning): what the device reads the message to be
     // decides before any server result is imported (Smart Inbox + reason).
-    final held = meaningHoldReason(item.text);
+    // A tip/fee form may be recorded at the total it states (dev siblings, e).
+    final heldAmount = result?.parsed['amount'];
+    final held = meaningHoldReason(item.text,
+        amount: heldAmount is num ? heldAmount : null);
     if (aiPrimary) {
       if (result?.parsed['parserSource'] == 'ai_ignored') {
         // Only the device's deterministic OTP/promo filter may drop a capture.

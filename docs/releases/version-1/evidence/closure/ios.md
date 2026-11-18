@@ -195,3 +195,74 @@ Do not pass `QIRSH_ADS_ENABLED` or any `ADMOB_*` define for iOS. A store/TestFli
 10. Share a message that contains a URL (V1-038): routed as a bank message, not a link.
 11. Legacy path (capture_notify_v2 off): English banner for English users.
 12. Low-storage device: release build shows no disk-space warning (probe is debug only) and capture still works.
+
+---
+
+## Follow-up (2026-11-18): native redaction parity (PRIV-0) and LEN-1
+
+### What the native path sends, and where
+
+- **Endpoint:** `POST {backendURL}/functions/v1/process-ios-sms`, built in `BackendCaptureClient.process` (`app/ios/BankMessageShortcuts/BankMessageShortcuts.swift`). It goes only through `SharedCaptureStore.gatedUpload`: ephemeral session, redirects refused, admitted under the queue lock. Callers are the Shortcut App Intent (`ProcessBankSMSIntent`). The Share extension does not upload; it only queues on the device.
+- **Message text:** `smsText` and `sanitizedText`, both set to `BackendCaptureClient.sanitize(request.smsText)`.
+- **Sender fields, sent unredacted:** `sender` / `senderName` / `senderId`. These are the bank's sender ID; the server keeps or masks them with `redactSenderForAi`.
+- **Other fields:** `payloadId`, `installId`, `deviceSecret`, `receivedAt`, `tzOffsetMinutes`, `locale`, `source`, `localNotification`, `notificationDetails`, `allowAi`, `owner_uid`, `owner_generation`, optional `schema_version`/`analysis_mode`/`backgroundAnalysis`, and now `textLength`.
+- **Queue:** the trimmed, **unredacted** text is kept in the App Group queue on the device (`SharedCaptureStore.Payload.text`) for the Flutter import and replay. That replay is Dart (`CaptureBackendClient.processIosSms`), owned by `ai`.
+
+### (1) Swift sanitizer brought to parity
+
+`BackendCaptureClient.sanitize` is now a rule-for-rule port of the server's `redactPii` + `redactThirdPartyNames` (`supabase/functions/_shared/sms_redaction.ts`), followed by `trim`. The fixtures use the server's output as the expected result. The word lists (stopwords, beneficiary object words, currencies, months) are copied verbatim from the TS file. Rules added that Swift lacked:
+- spaced IBAN;
+- labelled 5–9 digit account numbers;
+- the beneficiary rule that stops at the name and includes the third party's number;
+- the own-destination number;
+- numbers in the beneficiary's sentence;
+- standing-order transfer context;
+- "To Name:" / «مستفيد» cues;
+- the initial rule;
+- the new tense, status, account-type and failure-reason stopwords;
+- SM-07 sentence ends.
+
+Translation notes are in the code comment:
+- JS's ASCII `\b` is written explicitly, because ICU's `\b` is Unicode-aware.
+- ICU needs a bounded look-behind. Each bound errs toward masking more, except the beneficiary-sentence span, which is bounded at 4,000 characters (twice the server's limit).
+
+Results (standalone `swiftc` harness on macOS, same Foundation regex engine as iOS; then XCTest on the simulator):
+| Set | Old Swift | New Swift |
+|---|---|---|
+| `sms_redaction_cases.json` (54) | 19 differ from server | **0 differ** |
+| `sms_leak_labelled_cases.json` (72) | 62 differ; **33 leak a tagged secret** (e.g. "Standing order to Sara Ali …") | **0 differ, 0 leaks**, all mustKeep kept, idempotent |
+| Every text in `tools/parser_diff/cases/*.json`, `process-ios-sms/*_cases.json` and both fixtures (2,607 texts; server output produced with Deno from the working-tree `sms_redaction.ts`) | 200 differ | **0 differ** |
+
+**Full parity reached; no fixture rows still differ.** The existing XCTest `testShortcutSanitizerMatchesSharedRedactionFixture` was already failing against the current fixture (19 rows) before this change.
+
+**Decided behaviour change (does not weaken digit masking).** The old Swift beneficiary rule deleted everything from «إلى»/"To:" to the end of the line. The new one, like the server since FU10/FU11, keeps the words after the name. Over the 2,607 texts, 200 outputs change. In 49 of them the new output contains a digit run the old one removed. Every one of those 49 is the user's own suffix of at most 4 digits, an amount, or a date or time. I checked this with the same allowed-context rules as the server's `sms_redaction_head_diff_test.ts`: 0 runs outside those classes. No third-party number, IBAN group or tagged name survives (the labelled set proves names and numbers). What the new rule keeps that the old one removed: the user's own account word and suffix («إلى حسابك *5678»), tense and status words, amounts, dates, and following sentences.
+
+Performance: about 30 ms per message on the Mac (patterns compiled per call). That is well inside the Shortcut's 8-second budget.
+
+Tests:
+- New XCTest `testShortcutSanitizerRemovesEveryTaggedLeak` reads `../../supabase/functions/_shared/fixtures/sms_leak_labelled_cases.json` from the repo path, as the existing fixture test does. It asserts output equals the server, no secret survives, mustKeep is kept, and output is idempotent.
+- Existing `testShortcutSanitizerMatchesSharedRedactionFixture` now passes.
+- Before-proof: the old function fails both, as in the table above.
+
+### (2) LEN-1 `textLength`
+
+- **Field name: `textLength`** (JSON, camelCase), in both the upload body and the queued payload.
+- Upload body: `"textLength": BackendCaptureClient.textLength(request.smsText)`, which is `trimmed.utf16.count` of the raw text, measured before redaction. Same unit as Dart/JS `String.length`.
+- Queue: `SharedCaptureStore.Payload.textLength: Int?` is set in `enqueue` to `trimmed.utf16.count`, the same text as the stored `text`. The field is optional, so older records decode with it missing. Both `SharedCaptureStore.swift` copies are identical (`cmp`).
+- For `ai`: the Dart replay should send the queued `textLength` when present, or `text.length` of the queued text otherwise (identical value).
+- Tests:
+  - `testQueuedPayloadCarriesUtf16TextLength` uses Arabic text plus an emoji, so `count` ≠ `utf16.count`.
+  - `testShortcutUploadBodySendsTextLengthMeasuredBeforeRedaction` is a source pin.
+
+### Runs
+
+- Dart source-contract tests that read the Swift or iOS files:
+  - privacy attack, CAP-0/CAP-6, H3/G3 egress, native bridge, entry points, notify v2, build50, ios_source_integrity, `test/ios/*` and others: **365 passed**;
+  - `sync_diagnostics_report`, `broadcast_push_route`, `apns_open_telemetry` run alone: **46 passed**.
+- XCTest (iPhone 17 Pro simulator, `xcodebuild test`, after `flutter build ios --config-only`): **200 passed, 0 failed** (197 + 3 new); `testShortcutSanitizerMatchesSharedRedactionFixture` and `testShortcutSanitizerRemovesEveryTaggedLeak` pass. Scratch DerivedData removed; no `app/build/ios` left.
+
+### Compatibility
+
+- Queued records from build 147 have no `textLength`. They decode, and the replay can compute it from `text`.
+- An old server ignores the extra key.
+- Build 147 against the new server: no `textLength` is sent, and the server falls back to its own measure.

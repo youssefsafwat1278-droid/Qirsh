@@ -143,9 +143,16 @@ void main() {
         sms,
         detectedType: TransactionType.income,
       );
-      // Income is treated like transfer — strip إلى: content
-      expect(sanitized, isNot(contains('حسابك')),
-          reason: 'Income also strips the إلى: portion');
+      // Income is treated like transfer: the payer's name is removed. Since
+      // the round-3 redaction contract (shared fixtures, device == server ==
+      // Swift) the words «إلى: حسابك» and the user's OWN suffix of at most
+      // four digits are kept — they are not third-party data, and the
+      // direction of the movement is read from them. This assertion used to
+      // require the whole «إلى:» tail to be removed.
+      expect(sanitized, isNot(contains('محمد')),
+          reason: 'the payer may be a person: the name must not be sent');
+      expect(sanitized, isNot(contains('الغامدي')));
+      expect(sanitized, contains('حسابك'));
       expect(sanitized, contains('8500.00'));
     });
   });

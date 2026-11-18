@@ -1,5 +1,5 @@
 import { AI_PRIMARY_MODE, checkPrimaryAmount, runPrimaryAi } from '../_shared/ai_primary.ts';
-import { REDACTION_PLACEHOLDER, validateAiCandidate } from '../_shared/ai_candidate_validator.ts';
+import { REDACTION_PLACEHOLDER, statedTotal, validateAiCandidate } from '../_shared/ai_candidate_validator.ts';
 import { geminiRequestBody } from '../_shared/gemini_request.ts';
 import { bumpCaptureEndpointRateLimit, corsHeaders, readString, serviceClient } from '../_shared/capture_auth.ts';
 import {
@@ -29,6 +29,7 @@ import { resolveGeminiRoute } from '../_shared/proof_contract.ts';
 import { amountFromText, groundedModelAmount } from './money.ts';
 import { reserveAiBudget } from '../_shared/ai_budget_gate.ts';
 import { messageMeaning } from '../process-ios-sms/parse.ts';
+import { gatedMeaning, meaningRejectionOf } from '../process-ios-sms/meaning_gate.ts';
 
 /** A held message meaning as the structured response's bounded message_type. */
 const MEANING_MESSAGE_TYPE: Record<string, string> = {
@@ -39,6 +40,9 @@ const MEANING_MESSAGE_TYPE: Record<string, string> = {
   offer: 'marketing',
   summary: 'other_non_transaction',
   otp_code: 'otp_or_security',
+  own_accounts: 'own_account_transfer',
+  card_repayment: 'own_account_transfer',
+  multiple_amounts: 'multiple_transactions',
 };
 
 const MAX_BODY_BYTES = 8192;
@@ -500,9 +504,18 @@ Return ONLY valid JSON. No markdown, no explanation.`;
     // movements) is never a transaction because the model says so. No
     // provider request is made; old clients keep it for review (an AI "not a
     // transaction" verdict is never an intentional drop on the device).
-    const meaning = messageMeaning(reSanitized);
-    if (meaning.disposition !== 'record') {
-      return finish({ is_transaction: false, message_type: MEANING_MESSAGE_TYPE[meaning.reason] ?? 'ambiguous' });
+    const meaning = gatedMeaning(reSanitized, messageMeaning(reSanitized));
+    // Dev siblings (family e): a tip/fee form with a stated total is asked;
+    // only an answer equal to that total is accepted (validate below).
+    const requiredTotal = meaning.reason === 'tip_component' || meaning.reason === 'total_with_parts'
+      ? statedTotal(reSanitized)
+      : null;
+    // Follow-up 13: a not-completed reading (the meaning's, or a non-record
+    // meaning with a not-completed cue) comes first, tip form or not.
+    const notCompleted = meaningRejectionOf(reSanitized, null, meaning) === 'transaction_not_completed';
+    if (notCompleted || (meaning.disposition !== 'record' && requiredTotal == null)) {
+      return finish({ is_transaction: false,
+        message_type: notCompleted ? 'declined_or_failed' : MEANING_MESSAGE_TYPE[meaning.reason] ?? 'ambiguous' });
     }
     const meta = { model: GEMINI_MODEL, promptVersion: UNDERSTANDING_PROMPT_VERSION };
     const validate = (value: Record<string, unknown>) => {
@@ -510,6 +523,10 @@ Return ONLY valid JSON. No markdown, no explanation.`;
       if (typeof value.category_key !== 'string' || !value.category_key) return 'category_required';
       const checked = validateAiCandidate({ candidate: value, sanitizedText: reSanitized,
         receivedAt: new Date().toISOString(), local: null, accountCurrency: hints.accountCurrency });
+      if (checked.accepted && requiredTotal != null &&
+        !(typeof value.amount === 'number' && Math.abs(value.amount - requiredTotal) < 0.005)) {
+        return 'amount_not_stated_total';
+      }
       return checked.accepted ? checkPrimaryAmount(value, reSanitized) : checked.reason;
     };
     const result = await runPrimaryAi({

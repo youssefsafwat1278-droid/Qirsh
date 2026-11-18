@@ -15,8 +15,10 @@ row (a booking or silence is wrong). `amt`/`cur` (and `alt` = an accepted
 Exit status 1 on a regression (right at base -> wrong or silent, a throw, a
 base not-completed message now recorded) or when the messages that moved
 from right (labelled) or recorded (unlabelled) to a review row exceed the
-review budget: PARSER_DIFF_REVIEW_BUDGET (default 35 messages, the justified set at Follow-up 4). Each such
-move is listed and must be justified in the closure record.
+review budget: PARSER_DIFF_REVIEW_BUDGET (default 38 messages: the 35 justified at Follow-up 4
+plus the 3 ACCEPTED review moves below). Each such move is listed and must be
+justified in the closure record. The ACCEPTED list (coordinator decision,
+Follow-up 5) is printed on every run; anything not on it still fails.
 """
 import collections, glob, json, os, re, sys
 
@@ -25,7 +27,27 @@ WRONG = {'WDIR', 'WAMT', 'WCUR', 'WREC', 'WOWN', 'WNEU', 'THROW'}
 TEXP = {'completed_payment': 'd', 'completed_withdrawal': 'd', 'completed_income': 'c',
         'completed_credit': 'c', 'completed_transfer_in': 'c', 'completed_transfer_own': 't',
         'not_completed': 'n', 'ignored': 'n'}
-REVIEW_BUDGET = int(os.environ.get('PARSER_DIFF_REVIEW_BUDGET', '35'))
+REVIEW_BUDGET = int(os.environ.get('PARSER_DIFF_REVIEW_BUDGET', '38'))
+# Accepted moves (coordinator decision, Follow-up 5), each with its reason.
+# ACCEPTED_REVIEW: right/recorded -> review moves counted inside the budget.
+# ACCEPTED_SERVER: server rows right at base and rejected now; only a
+# not-completed rejection of exactly these ids is accepted.
+ACCEPTED_REVIEW = {
+    'fu5/DEV072': 'tip form (stated total with a tip part): review, never the base figure',
+    'corpus/K062_contract/cases[15]/text': 'two distinct movement amounts, held by the AI gate (hold:multiple_amounts)',
+    'corpus/K126_ai[12]/sanitized_text': 'two distinct movement amounts, held by the AI gate (hold:multiple_amounts)',
+}
+ACCEPTED_SERVER = {
+    'fu5/DEV084': 'policy-held completed reversal: device reviews, server rejects (known review cost)',
+    'fu5/DEV085': 'policy-held completed reversal: device reviews, server rejects (known review cost)',
+    'fu5/DEV090': 'policy-held completed reversal: device reviews, server rejects (known review cost)',
+}
+
+
+def print_accepted(items, seen):
+    print('\n== ACCEPTED (coordinator decision, Follow-up 5):')
+    for rid, why in items.items():
+        print(f'- {rid} [{"present" if rid in seen else "not present this run"}] {why}')
 CASH = ('atm', 'صراف', 'cash deposit', 'إيداع نقدي', 'ايداع نقدي', 'cash deposited')
 
 
@@ -167,6 +189,7 @@ def compare(cases, base, work):
     bad += len(nc_recorded)
     print(f'\nREGRESSIONS (right at base -> wrong/silent, a throw, or base not-completed now recorded): {bad}')
     to_review = {i[1]['id'] for c in ('right -> review', 'unlabelled record -> review') for i in moved.get(c, [])}
+    print_accepted(ACCEPTED_REVIEW, to_review)
     print(f'TO REVIEW (labelled right or unlabelled recorded -> review, any path): {len(to_review)} messages, '
           f'budget {REVIEW_BUDGET}' + (' -- OVER BUDGET' if len(to_review) > REVIEW_BUDGET else ''))
     return bad + (1 if len(to_review) > REVIEW_BUDGET else 0)
@@ -209,6 +232,9 @@ def server_compare(cases, base, work):
         if w['c'] != 'THROW' and gw == 'SILENT' and r['text'] in held and 'not_completed' in w['p']:
             if b['c'] != w['c']: moves['recorded -> rejected (pre-round not-completed invariant)'].append((r, b, w, gb, gw))
             continue
+        if (w['c'] != 'THROW' and gb == 'OK' and gw == 'SILENT' and r['id'] in ACCEPTED_SERVER
+                and 'not_completed' in w['p']):
+            moves['accepted'].append((r, b, w, gb, gw)); continue
         if w['c'] == 'THROW' or (gb == 'OK' and gw in WRONG | {'SILENT'}):
             bad += 1; moves['REGRESSION'].append((r, b, w, gb, gw)); continue
         pb, pw = b['c'] in ('IN', 'OUT', 'NEU'), w['c'] in ('IN', 'OUT', 'NEU')
@@ -223,7 +249,10 @@ def server_compare(cases, base, work):
         for r, b, w, gb, gw in items:
             lab = f' [{gb}->{gw}]' if r.get('truth') else ' [unlabelled]'
             print(f'- {r["id"]}{lab} {outcome(b)} -> {outcome(w)} ({w["p"]}) {r["text"][:150]!r}')
-    print(f'\nSERVER REGRESSIONS (work throws, or right at base -> wrong/silent): {bad}')
+    print_accepted(ACCEPTED_SERVER, {i[0]['id'] for i in moves.get('accepted', [])})
+    for r, b, w, gb, gw in moves.get('accepted', []):
+        print(f'  {r["id"]} [{gb}->{gw}] {outcome(b)} -> {outcome(w)} ({w["p"]})')
+    print(f'\nSERVER REGRESSIONS (work throws, or right at base -> wrong/silent; accepted ids excluded): {bad}')
     return bad
 
 

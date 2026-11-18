@@ -228,3 +228,26 @@ No product code was changed for either failure.
 - `flutter test --no-pub -j 2 test/features/app test/features/transactions test/features/consent test/features/onboarding`: **559 passed, 1 skipped, 0 failed**.
 - Synthetic-define stage, run exactly as in `tools/ci_gates.sh`: the 5 files with the three defines and `--concurrency=1` gave **91 passed, 12 skipped, 0 failed**. The group command (`bootstrap_remove_data_integration_test.dart --plain-name 'configured real sender bootstrap receivers'`) gave **0 failed, 10 skipped**, the same as the existing gate; I did not touch it.
 - `flutter analyze --no-pub` on both test files: no issues.
+
+## Follow-up: the bank-message sentence now promises only what redaction does (decision 3.8; `ai.md` Follow-up 12)
+
+The earlier sentence said numbers and codes "are removed" and names masked. `ai.md` Follow-up 12 lists what still gets through:
+- names with no cue, or in purchase, refund or bill messages;
+- unlabelled 5–9 digit numbers outside the transfer sentence;
+- phone numbers in other formats;
+- one-time codes with no cue word.
+
+On iOS, the native Shortcut sends text with fewer rules applied, and the server redacts again when the message arrives. The new text claims only removal of what Qirsh recognises, on the device and again on the server. It says this can miss some, and that the rest of the message is sent as written.
+
+**Final sentences for `ops` to mirror** (consent panel, `smartConsentBullet1`; the rest of that paragraph is unchanged):
+- EN: "Bank messages: bank messages you capture are sent to Qirsh servers. Qirsh automatically removes the card numbers, long or labelled account numbers, IBANs, mobile numbers and verification codes it recognises, and masks the names of people it detects, on your device and again on its servers. Because this is automatic, it can miss some, and the rest of the message is sent as written."
+- AR: «رسائل البنوك: تُرسل رسائل البنوك التي تلتقطها إلى خوادم قرش. يحذف قِرش تلقائيًا ما يتعرّف عليه من أرقام البطاقات وأرقام الحسابات الطويلة أو المسبوقة بكلمة «حساب» وأرقام IBAN وأرقام الجوال ورموز التحقق، ويُخفي أسماء الأشخاص التي يكتشفها، على جهازك ثم مرة أخرى على خوادمه. ولأن ذلك يتم آليًا فقد يفوته بعضها، ويُرسَل باقي نص الرسالة كما هو.»
+
+**The same overclaim was fixed on Settings → Privacy** (`privCloudProcessingBody`, `privAiAnalysisBody`):
+- EN: "…with the card and account numbers, IBANs, mobile numbers and codes Qirsh recognises removed (this is automatic and can miss some)…". The AI string adds "…and the names, e-mails and reference numbers it recognises masked…".
+- AR: «…بعد حذف ما يتعرّف عليه قِرش من أرقام البطاقات والحسابات وأرقام IBAN والجوال والرموز (يتم ذلك آليًا وقد يفوته بعضها)…»
+- `onbCloudBullet1` and `onbAiBullet1` carry the old wording but no code uses them. I left them, and the copy test still pins them; whoever owns the ARB can delete them.
+
+**Tests updated** (decided change, 3.8): the pinned phrases in `test/l10n/privacy_copy_test.dart` and `test/l10n/consent_disclosure_copy_test.dart`, which now require "it recognises" and "can miss some", and the find in `test/features/transactions/smart_inbox_card_test.dart`. The privacy copy test also asserts that the old "after card, account and phone numbers" claim is absent. `gen-l10n` ran.
+
+**Run:** `flutter test --no-pub -j 2` on test/l10n, test/features/common/large_text_overflow_test.dart (the large-text gate), smart_inbox_card_test, test/features/consent, privacy_consent_management_test and setup_consent_step_test: 368 passed, 0 failed. `flutter analyze --no-pub` on the changed tests: no issues.

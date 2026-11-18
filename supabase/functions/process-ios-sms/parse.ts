@@ -13,6 +13,7 @@ import {
   EXPLICIT_OWN_TRANSFER,
   isOwnAccountMove,
   MAX_TEXT_LENGTH,
+  partsTotal,
   meaningOf,
   type MessageMeaning,
   withoutNoticeTails,
@@ -585,7 +586,11 @@ export function deterministicParse(
   // transfer; the server has no neutral type, so it leaves it unresolved.
   const reviewMeaning = meaning.disposition === 'review' || meaning.disposition === 'no_movement' ||
     (isOwnAccountMove(lower) && EXPLICIT_OWN_TRANSFER.some((w) => lower.includes(w)));
-  const direction = reviewMeaning || isPurchaseCode(lower) ||
+  // Follow-up 5 (e): a total stated with its parts is resolved only as the
+  // total, never as a part (else review).
+  const total = partsTotal(lower);
+  const partRead = total !== null && amount != null && Math.abs(amount - total) > 0.005;
+  const direction = reviewMeaning || partRead || isPurchaseCode(lower) ||
       isNonTransactionShaped(normalized, amountSentence(masked))
     ? 'unknown'
     : meaning.direction !== 'unknown'

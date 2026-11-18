@@ -10,7 +10,7 @@
 # PARSER_DIFF_SCRATCH sets the scratch folder (default: a new temp folder).
 # Exit status 1 when a labelled message the base got right is wrong or silent
 # on any path, when any path throws, or when more messages than the review
-# budget (PARSER_DIFF_REVIEW_BUDGET, default 35) moved from right (labelled)
+# budget (PARSER_DIFF_REVIEW_BUDGET, default 38: see ACCEPTED in diff.py) moved from right (labelled)
 # or recorded (unlabelled) to a review row; diff.py lists every such move.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)

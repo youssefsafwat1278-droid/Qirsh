@@ -1,0 +1,1033 @@
+[
+ {
+  "id": "en_00_0",
+  "raw": "Standing order to Sara Ali SAR 500.00 will be executed tomorrow",
+  "expected": "Standing order to [NAME] SAR 500.00 will be executed tomorrow",
+  "secrets": [
+   "Sara",
+   "Ali"
+  ],
+  "mustKeep": [
+   "500.00",
+   "tomorrow",
+   "executed"
+  ]
+ },
+ {
+  "id": "en_00_1",
+  "raw": "Standing order to Omar Khalid SAR 1,250.00 will be executed tomorrow",
+  "expected": "Standing order to [NAME] SAR 1,250.00 will be executed tomorrow",
+  "secrets": [
+   "Omar",
+   "Khalid"
+  ],
+  "mustKeep": [
+   "1,250.00",
+   "tomorrow",
+   "executed"
+  ]
+ },
+ {
+  "id": "en_00_2",
+  "raw": "Standing order to Mona Hassan SAR 300 will be executed tomorrow",
+  "expected": "Standing order to [NAME] SAR 300 will be executed tomorrow",
+  "secrets": [
+   "Mona",
+   "Hassan"
+  ],
+  "mustKeep": [
+   "300",
+   "tomorrow",
+   "executed"
+  ]
+ },
+ {
+  "id": "en_00_3",
+  "raw": "Standing order to A. Ali Hassan SAR 75.50 will be executed tomorrow",
+  "expected": "Standing order to [NAME] SAR 75.50 will be executed tomorrow",
+  "secrets": [
+   "Ali",
+   "Hassan"
+  ],
+  "mustKeep": [
+   "75.50",
+   "tomorrow",
+   "executed"
+  ]
+ },
+ {
+  "id": "en_01_0",
+  "raw": "Standing order of SAR 500.00 to Sara Ali executed on 05/11",
+  "expected": "Standing order of SAR 500.00 to [NAME] executed on 05/11",
+  "secrets": [
+   "Sara",
+   "Ali"
+  ],
+  "mustKeep": [
+   "500.00",
+   "executed",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_01_1",
+  "raw": "Standing order of SAR 1,250.00 to Omar Khalid executed on 05/11",
+  "expected": "Standing order of SAR 1,250.00 to [NAME] executed on 05/11",
+  "secrets": [
+   "Omar",
+   "Khalid"
+  ],
+  "mustKeep": [
+   "1,250.00",
+   "executed",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_01_2",
+  "raw": "Standing order of SAR 300 to Mona Hassan executed on 05/11",
+  "expected": "Standing order of SAR 300 to [NAME] executed on 05/11",
+  "secrets": [
+   "Mona",
+   "Hassan"
+  ],
+  "mustKeep": [
+   "300",
+   "executed",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_01_3",
+  "raw": "Standing order of SAR 75.50 to A. Ali Hassan executed on 05/11",
+  "expected": "Standing order of SAR 75.50 to [NAME] executed on 05/11",
+  "secrets": [
+   "Ali",
+   "Hassan"
+  ],
+  "mustKeep": [
+   "75.50",
+   "executed",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_02_0",
+  "raw": "Transfer SAR 500.00 To Name: Sara Ali completed",
+  "expected": "Transfer SAR 500.00 To: [REDACTED] completed",
+  "secrets": [
+   "Sara",
+   "Ali"
+  ],
+  "mustKeep": [
+   "500.00",
+   "completed"
+  ]
+ },
+ {
+  "id": "en_02_1",
+  "raw": "Transfer SAR 1,250.00 To Name: Omar Khalid completed",
+  "expected": "Transfer SAR 1,250.00 To: [REDACTED] completed",
+  "secrets": [
+   "Omar",
+   "Khalid"
+  ],
+  "mustKeep": [
+   "1,250.00",
+   "completed"
+  ]
+ },
+ {
+  "id": "en_02_2",
+  "raw": "Transfer SAR 300 To Name: Mona Hassan completed",
+  "expected": "Transfer SAR 300 To: [REDACTED] completed",
+  "secrets": [
+   "Mona",
+   "Hassan"
+  ],
+  "mustKeep": [
+   "300",
+   "completed"
+  ]
+ },
+ {
+  "id": "en_02_3",
+  "raw": "Transfer SAR 75.50 To Name: A. Ali Hassan completed",
+  "expected": "Transfer SAR 75.50 To: [REDACTED] completed",
+  "secrets": [
+   "Ali",
+   "Hassan"
+  ],
+  "mustKeep": [
+   "75.50",
+   "completed"
+  ]
+ },
+ {
+  "id": "en_03_0",
+  "raw": "Transfer SAR 500.00 To: Sara Ali account 55443322 completed on 05/11",
+  "expected": "Transfer SAR 500.00 To: [REDACTED] completed on 05/11",
+  "secrets": [
+   "Sara",
+   "Ali",
+   "55443322"
+  ],
+  "mustKeep": [
+   "500.00",
+   "completed",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_03_1",
+  "raw": "Transfer SAR 1,250.00 To: Omar Khalid account ٦٠١٨١٥٩٠ completed on 05/11",
+  "expected": "Transfer SAR 1,250.00 To: [REDACTED] completed on 05/11",
+  "secrets": [
+   "Omar",
+   "Khalid",
+   "٦٠١٨١٥٩٠"
+  ],
+  "mustKeep": [
+   "1,250.00",
+   "completed",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_03_2",
+  "raw": "Transfer SAR 300 To: Mona Hassan account 1234567 completed on 05/11",
+  "expected": "Transfer SAR 300 To: [REDACTED] completed on 05/11",
+  "secrets": [
+   "Mona",
+   "Hassan",
+   "1234567"
+  ],
+  "mustKeep": [
+   "300",
+   "completed",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_03_3",
+  "raw": "Transfer SAR 75.50 To: A. Ali Hassan account ٧٧٨٨٩٩ completed on 05/11",
+  "expected": "Transfer SAR 75.50 To: [REDACTED] completed on 05/11",
+  "secrets": [
+   "Ali",
+   "Hassan",
+   "٧٧٨٨٩٩"
+  ],
+  "mustKeep": [
+   "75.50",
+   "completed",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_04_0",
+  "raw": "SAR 500.00 transferred to Sara Ali account 60181590 on 05/11",
+  "expected": "SAR 500.00 transferred to [NAME] account [ACCOUNT] on 05/11",
+  "secrets": [
+   "Sara",
+   "Ali",
+   "60181590"
+  ],
+  "mustKeep": [
+   "500.00",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_04_1",
+  "raw": "SAR 1,250.00 transferred to Omar Khalid account ١٢٣٤٥٦٧ on 05/11",
+  "expected": "SAR 1,250.00 transferred to [NAME] account [ACCOUNT] on 05/11",
+  "secrets": [
+   "Omar",
+   "Khalid",
+   "١٢٣٤٥٦٧"
+  ],
+  "mustKeep": [
+   "1,250.00",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_04_2",
+  "raw": "SAR 300 transferred to Mona Hassan account 778899 on 05/11",
+  "expected": "SAR 300 transferred to [NAME] account [ACCOUNT] on 05/11",
+  "secrets": [
+   "Mona",
+   "Hassan",
+   "778899"
+  ],
+  "mustKeep": [
+   "300",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_04_3",
+  "raw": "SAR 75.50 transferred to A. Ali Hassan account ٥٥٤٤٣٣٢٢ on 05/11",
+  "expected": "SAR 75.50 transferred to [NAME] account [ACCOUNT] on 05/11",
+  "secrets": [
+   "Ali",
+   "Hassan",
+   "٥٥٤٤٣٣٢٢"
+  ],
+  "mustKeep": [
+   "75.50",
+   "05/11"
+  ]
+ },
+ {
+  "id": "en_05_0",
+  "raw": "SAR 500.00 sent to Sara Ali, a/c no. 1234567. Your account ***4521 balance SAR 3,000.00",
+  "expected": "SAR 500.00 sent to [NAME], a/c no. [ACCOUNT]. Your account ***4521 balance SAR 3,000.00",
+  "secrets": [
+   "Sara",
+   "Ali",
+   "1234567"
+  ],
+  "mustKeep": [
+   "500.00",
+   "***4521",
+   "SAR 3,000.00"
+  ]
+ },
+ {
+  "id": "en_05_1",
+  "raw": "SAR 1,250.00 sent to Omar Khalid, a/c no. ٧٧٨٨٩٩. Your account ***4521 balance SAR 3,000.00",
+  "expected": "SAR 1,250.00 sent to [NAME], a/c no. [ACCOUNT]. Your account ***4521 balance SAR 3,000.00",
+  "secrets": [
+   "Omar",
+   "Khalid",
+   "٧٧٨٨٩٩"
+  ],
+  "mustKeep": [
+   "1,250.00",
+   "***4521",
+   "SAR 3,000.00"
+  ]
+ },
+ {
+  "id": "en_05_2",
+  "raw": "SAR 300 sent to Mona Hassan, a/c no. 55443322. Your account ***4521 balance SAR 3,000.00",
+  "expected": "SAR 300 sent to [NAME], a/c no. [ACCOUNT]. Your account ***4521 balance SAR 3,000.00",
+  "secrets": [
+   "Mona",
+   "Hassan",
+   "55443322"
+  ],
+  "mustKeep": [
+   "300",
+   "***4521",
+   "SAR 3,000.00"
+  ]
+ },
+ {
+  "id": "en_05_3",
+  "raw": "SAR 75.50 sent to A. Ali Hassan, a/c no. ٦٠١٨١٥٩٠. Your account ***4521 balance SAR 3,000.00",
+  "expected": "SAR 75.50 sent to [NAME], a/c no. [ACCOUNT]. Your account ***4521 balance SAR 3,000.00",
+  "secrets": [
+   "Ali",
+   "Hassan",
+   "٦٠١٨١٥٩٠"
+  ],
+  "mustKeep": [
+   "75.50",
+   "***4521",
+   "SAR 3,000.00"
+  ]
+ },
+ {
+  "id": "en_06_0",
+  "raw": "Transfer of SAR 500.00 to IBAN SA88 1234 5678 9012 3456 9898 beneficiary Sara Ali pending",
+  "expected": "Transfer of SAR 500.00 to IBAN [IBAN] beneficiary [NAME] pending",
+  "secrets": [
+   "Sara",
+   "Ali",
+   "SA88",
+   "1234",
+   "5678",
+   "9012",
+   "3456",
+   "9898"
+  ],
+  "mustKeep": [
+   "500.00",
+   "pending"
+  ]
+ },
+ {
+  "id": "en_06_1",
+  "raw": "Transfer of SAR 1,250.00 to IBAN SA٤٤٢٠٠٠٠٠٠١٢٣٤٥٦٧٨٩١٢٣٤ beneficiary Omar Khalid pending",
+  "expected": "Transfer of SAR 1,250.00 to IBAN [IBAN] beneficiary [NAME] pending",
+  "secrets": [
+   "Omar",
+   "Khalid",
+   "SA٤٤٢٠٠٠٠٠٠١٢٣٤٥٦٧٨٩١٢٣٤"
+  ],
+  "mustKeep": [
+   "1,250.00",
+   "pending"
+  ]
+ },
+ {
+  "id": "en_06_2",
+  "raw": "Transfer of SAR 300 to IBAN EG38 0019 0005 0000 0000 2631 8000 2 beneficiary Mona Hassan pending",
+  "expected": "Transfer of SAR 300 to IBAN [IBAN] beneficiary [NAME] pending",
+  "secrets": [
+   "Mona",
+   "Hassan",
+   "EG38",
+   "0019",
+   "0005",
+   "0000",
+   "0000",
+   "2631",
+   "8000"
+  ],
+  "mustKeep": [
+   "300",
+   "pending"
+  ]
+ },
+ {
+  "id": "en_06_3",
+  "raw": "Transfer of SAR 75.50 to IBAN SA٨٨ ١٢٣٤ ٥٦٧٨ ٩٠١٢ ٣٤٥٦ ٩٨٩٨ beneficiary A. Ali Hassan pending",
+  "expected": "Transfer of SAR 75.50 to IBAN [IBAN] beneficiary [NAME] pending",
+  "secrets": [
+   "Ali",
+   "Hassan",
+   "SA٨٨",
+   "١٢٣٤",
+   "٥٦٧٨",
+   "٩٠١٢",
+   "٣٤٥٦",
+   "٩٨٩٨"
+  ],
+  "mustKeep": [
+   "75.50",
+   "pending"
+  ]
+ },
+ {
+  "id": "en_07_0",
+  "raw": "Transfer received from Sara Ali SAR 500.00 to your account ***4521 on 05/11",
+  "expected": "Transfer received from [NAME] SAR 500.00 to your account ***4521 on 05/11",
+  "secrets": [
+   "Sara",
+   "Ali"
+  ],
+  "mustKeep": [
+   "500.00",
+   "05/11",
+   "***4521"
+  ]
+ },
+ {
+  "id": "en_07_1",
+  "raw": "Transfer received from Omar Khalid SAR 1,250.00 to your account ***4521 on 05/11",
+  "expected": "Transfer received from [NAME] SAR 1,250.00 to your account ***4521 on 05/11",
+  "secrets": [
+   "Omar",
+   "Khalid"
+  ],
+  "mustKeep": [
+   "1,250.00",
+   "05/11",
+   "***4521"
+  ]
+ },
+ {
+  "id": "en_07_2",
+  "raw": "Transfer received from Mona Hassan SAR 300 to your account ***4521 on 05/11",
+  "expected": "Transfer received from [NAME] SAR 300 to your account ***4521 on 05/11",
+  "secrets": [
+   "Mona",
+   "Hassan"
+  ],
+  "mustKeep": [
+   "300",
+   "05/11",
+   "***4521"
+  ]
+ },
+ {
+  "id": "en_07_3",
+  "raw": "Transfer received from A. Ali Hassan SAR 75.50 to your account ***4521 on 05/11",
+  "expected": "Transfer received from [NAME] SAR 75.50 to your account ***4521 on 05/11",
+  "secrets": [
+   "Ali",
+   "Hassan"
+  ],
+  "mustKeep": [
+   "75.50",
+   "05/11",
+   "***4521"
+  ]
+ },
+ {
+  "id": "en_08_0",
+  "raw": "Beneficiary Sara Ali mobile 01012345678 added. Transfer SAR 500.00 scheduled tomorrow",
+  "expected": "Beneficiary [NAME] mobile [PHONE] added. Transfer SAR 500.00 scheduled tomorrow",
+  "secrets": [
+   "Sara",
+   "Ali",
+   "01012345678"
+  ],
+  "mustKeep": [
+   "500.00",
+   "tomorrow"
+  ]
+ },
+ {
+  "id": "en_08_1",
+  "raw": "Beneficiary Omar Khalid mobile ٠٥٥١٢٣٤٥٦٧ added. Transfer SAR 1,250.00 scheduled tomorrow",
+  "expected": "Beneficiary [NAME] mobile [PHONE] added. Transfer SAR 1,250.00 scheduled tomorrow",
+  "secrets": [
+   "Omar",
+   "Khalid",
+   "٠٥٥١٢٣٤٥٦٧"
+  ],
+  "mustKeep": [
+   "1,250.00",
+   "tomorrow"
+  ]
+ },
+ {
+  "id": "en_08_2",
+  "raw": "Beneficiary Mona Hassan mobile +966551234567 added. Transfer SAR 300 scheduled tomorrow",
+  "expected": "Beneficiary [NAME] mobile [PHONE] added. Transfer SAR 300 scheduled tomorrow",
+  "secrets": [
+   "Mona",
+   "Hassan",
+   "966551234567"
+  ],
+  "mustKeep": [
+   "300",
+   "tomorrow"
+  ]
+ },
+ {
+  "id": "en_08_3",
+  "raw": "Beneficiary A. Ali Hassan mobile ٠١٠١٢٣٤٥٦٧٨ added. Transfer SAR 75.50 scheduled tomorrow",
+  "expected": "Beneficiary [NAME] mobile [PHONE] added. Transfer SAR 75.50 scheduled tomorrow",
+  "secrets": [
+   "Ali",
+   "Hassan",
+   "٠١٠١٢٣٤٥٦٧٨"
+  ],
+  "mustKeep": [
+   "75.50",
+   "tomorrow"
+  ]
+ },
+ {
+  "id": "en_09_0",
+  "raw": "Standing order to Sara Ali acct 1234567 SAR 500.00 failed",
+  "expected": "Standing order to [NAME] acct [ACCOUNT] SAR 500.00 failed",
+  "secrets": [
+   "Sara",
+   "Ali",
+   "1234567"
+  ],
+  "mustKeep": [
+   "500.00",
+   "failed"
+  ]
+ },
+ {
+  "id": "en_09_1",
+  "raw": "Standing order to Omar Khalid acct ٧٧٨٨٩٩ SAR 1,250.00 failed",
+  "expected": "Standing order to [NAME] acct [ACCOUNT] SAR 1,250.00 failed",
+  "secrets": [
+   "Omar",
+   "Khalid",
+   "٧٧٨٨٩٩"
+  ],
+  "mustKeep": [
+   "1,250.00",
+   "failed"
+  ]
+ },
+ {
+  "id": "en_09_2",
+  "raw": "Standing order to Mona Hassan acct 55443322 SAR 300 failed",
+  "expected": "Standing order to [NAME] acct [ACCOUNT] SAR 300 failed",
+  "secrets": [
+   "Mona",
+   "Hassan",
+   "55443322"
+  ],
+  "mustKeep": [
+   "300",
+   "failed"
+  ]
+ },
+ {
+  "id": "en_09_3",
+  "raw": "Standing order to A. Ali Hassan acct ٦٠١٨١٥٩٠ SAR 75.50 failed",
+  "expected": "Standing order to [NAME] acct [ACCOUNT] SAR 75.50 failed",
+  "secrets": [
+   "Ali",
+   "Hassan",
+   "٦٠١٨١٥٩٠"
+  ],
+  "mustKeep": [
+   "75.50",
+   "failed"
+  ]
+ },
+ {
+  "id": "ar_00_0",
+  "raw": "أمر مستديم بمبلغ 500.00 ريال إلى سارة الاسمري سينفذ غدا",
+  "expected": "أمر مستديم بمبلغ 500.00 ريال إلى: [REDACTED] سينفذ غدا",
+  "secrets": [
+   "سارة",
+   "الاسمري"
+  ],
+  "mustKeep": [
+   "500.00",
+   "سينفذ غدا"
+  ]
+ },
+ {
+  "id": "ar_00_1",
+  "raw": "أمر مستديم بمبلغ ١,٢٥٠.٠٠ ريال إلى عمر خالد سينفذ غدا",
+  "expected": "أمر مستديم بمبلغ ١,٢٥٠.٠٠ ريال إلى: [REDACTED] سينفذ غدا",
+  "secrets": [
+   "عمر",
+   "خالد"
+  ],
+  "mustKeep": [
+   "١,٢٥٠.٠٠",
+   "سينفذ غدا"
+  ]
+ },
+ {
+  "id": "ar_00_2",
+  "raw": "أمر مستديم بمبلغ 300 ريال إلى منى حسن سينفذ غدا",
+  "expected": "أمر مستديم بمبلغ 300 ريال إلى: [REDACTED] سينفذ غدا",
+  "secrets": [
+   "منى",
+   "حسن"
+  ],
+  "mustKeep": [
+   "300",
+   "سينفذ غدا"
+  ]
+ },
+ {
+  "id": "ar_00_3",
+  "raw": "أمر مستديم بمبلغ ٧٥.٥٠ ريال إلى محمد علي سينفذ غدا",
+  "expected": "أمر مستديم بمبلغ ٧٥.٥٠ ريال إلى: [REDACTED] سينفذ غدا",
+  "secrets": [
+   "محمد",
+   "علي"
+  ],
+  "mustKeep": [
+   "٧٥.٥٠",
+   "سينفذ غدا"
+  ]
+ },
+ {
+  "id": "ar_01_0",
+  "raw": "أمر دائم إلى سارة الاسمري حساب 1234567 بمبلغ 500.00 ريال",
+  "expected": "أمر دائم إلى: [REDACTED] بمبلغ 500.00 ريال",
+  "secrets": [
+   "سارة",
+   "الاسمري",
+   "1234567"
+  ],
+  "mustKeep": [
+   "500.00"
+  ]
+ },
+ {
+  "id": "ar_01_1",
+  "raw": "أمر دائم إلى عمر خالد حساب ٧٧٨٨٩٩ بمبلغ ١,٢٥٠.٠٠ ريال",
+  "expected": "أمر دائم إلى: [REDACTED] بمبلغ ١,٢٥٠.٠٠ ريال",
+  "secrets": [
+   "عمر",
+   "خالد",
+   "٧٧٨٨٩٩"
+  ],
+  "mustKeep": [
+   "١,٢٥٠.٠٠"
+  ]
+ },
+ {
+  "id": "ar_01_2",
+  "raw": "أمر دائم إلى منى حسن حساب 55443322 بمبلغ 300 ريال",
+  "expected": "أمر دائم إلى: [REDACTED] بمبلغ 300 ريال",
+  "secrets": [
+   "منى",
+   "حسن",
+   "55443322"
+  ],
+  "mustKeep": [
+   "300"
+  ]
+ },
+ {
+  "id": "ar_01_3",
+  "raw": "أمر دائم إلى محمد علي حساب ٦٠١٨١٥٩٠ بمبلغ ٧٥.٥٠ ريال",
+  "expected": "أمر دائم إلى: [REDACTED] بمبلغ ٧٥.٥٠ ريال",
+  "secrets": [
+   "محمد",
+   "علي",
+   "٦٠١٨١٥٩٠"
+  ],
+  "mustKeep": [
+   "٧٥.٥٠"
+  ]
+ },
+ {
+  "id": "ar_02_0",
+  "raw": "تحويل 500.00 ريال إلى سارة الاسمري حساب 778899 تم بنجاح",
+  "expected": "تحويل 500.00 ريال إلى: [REDACTED] تم بنجاح",
+  "secrets": [
+   "سارة",
+   "الاسمري",
+   "778899"
+  ],
+  "mustKeep": [
+   "500.00",
+   "تم بنجاح",
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "ar_02_1",
+  "raw": "تحويل ١,٢٥٠.٠٠ ريال إلى عمر خالد حساب ٥٥٤٤٣٣٢٢ تم بنجاح",
+  "expected": "تحويل ١,٢٥٠.٠٠ ريال إلى: [REDACTED] تم بنجاح",
+  "secrets": [
+   "عمر",
+   "خالد",
+   "٥٥٤٤٣٣٢٢"
+  ],
+  "mustKeep": [
+   "١,٢٥٠.٠٠",
+   "تم بنجاح",
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "ar_02_2",
+  "raw": "تحويل 300 ريال إلى منى حسن حساب 60181590 تم بنجاح",
+  "expected": "تحويل 300 ريال إلى: [REDACTED] تم بنجاح",
+  "secrets": [
+   "منى",
+   "حسن",
+   "60181590"
+  ],
+  "mustKeep": [
+   "300",
+   "تم بنجاح",
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "ar_02_3",
+  "raw": "تحويل ٧٥.٥٠ ريال إلى محمد علي حساب ١٢٣٤٥٦٧ تم بنجاح",
+  "expected": "تحويل ٧٥.٥٠ ريال إلى: [REDACTED] تم بنجاح",
+  "secrets": [
+   "محمد",
+   "علي",
+   "١٢٣٤٥٦٧"
+  ],
+  "mustKeep": [
+   "٧٥.٥٠",
+   "تم بنجاح",
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "ar_03_0",
+  "raw": "حوالة واردة من سارة الاسمري بمبلغ 500.00 ريال إلى حسابك ***4521 في 05/11",
+  "expected": "حوالة واردة من [NAME] بمبلغ 500.00 ريال إلى حسابك ***4521 في 05/11",
+  "secrets": [
+   "سارة",
+   "الاسمري"
+  ],
+  "mustKeep": [
+   "500.00",
+   "05/11",
+   "***4521"
+  ]
+ },
+ {
+  "id": "ar_03_1",
+  "raw": "حوالة واردة من عمر خالد بمبلغ ١,٢٥٠.٠٠ ريال إلى حسابك ***4521 في 05/11",
+  "expected": "حوالة واردة من [NAME] بمبلغ ١,٢٥٠.٠٠ ريال إلى حسابك ***4521 في 05/11",
+  "secrets": [
+   "عمر",
+   "خالد"
+  ],
+  "mustKeep": [
+   "١,٢٥٠.٠٠",
+   "05/11",
+   "***4521"
+  ]
+ },
+ {
+  "id": "ar_03_2",
+  "raw": "حوالة واردة من منى حسن بمبلغ 300 ريال إلى حسابك ***4521 في 05/11",
+  "expected": "حوالة واردة من [NAME] بمبلغ 300 ريال إلى حسابك ***4521 في 05/11",
+  "secrets": [
+   "منى",
+   "حسن"
+  ],
+  "mustKeep": [
+   "300",
+   "05/11",
+   "***4521"
+  ]
+ },
+ {
+  "id": "ar_03_3",
+  "raw": "حوالة واردة من محمد علي بمبلغ ٧٥.٥٠ ريال إلى حسابك ***4521 في 05/11",
+  "expected": "حوالة واردة من [NAME] بمبلغ ٧٥.٥٠ ريال إلى حسابك ***4521 في 05/11",
+  "secrets": [
+   "محمد",
+   "علي"
+  ],
+  "mustKeep": [
+   "٧٥.٥٠",
+   "05/11",
+   "***4521"
+  ]
+ },
+ {
+  "id": "ar_04_0",
+  "raw": "تحويل 500.00 ريال إلى الآيبان SA4420000001234567891234 المستفيد سارة الاسمري قيد التنفيذ",
+  "expected": "تحويل 500.00 ريال إلى الآيبان [IBAN] المستفيد [NAME] قيد التنفيذ",
+  "secrets": [
+   "سارة",
+   "الاسمري",
+   "SA4420000001234567891234"
+  ],
+  "mustKeep": [
+   "500.00",
+   "قيد التنفيذ"
+  ]
+ },
+ {
+  "id": "ar_04_1",
+  "raw": "تحويل ١,٢٥٠.٠٠ ريال إلى الآيبان EG٣٨ ٠٠١٩ ٠٠٠٥ ٠٠٠٠ ٠٠٠٠ ٢٦٣١ ٨٠٠٠ ٢ المستفيد عمر خالد قيد التنفيذ",
+  "expected": "تحويل ١,٢٥٠.٠٠ ريال إلى الآيبان [IBAN] المستفيد [NAME] قيد التنفيذ",
+  "secrets": [
+   "عمر",
+   "خالد",
+   "EG٣٨",
+   "٠٠١٩",
+   "٠٠٠٥",
+   "٠٠٠٠",
+   "٠٠٠٠",
+   "٢٦٣١",
+   "٨٠٠٠"
+  ],
+  "mustKeep": [
+   "١,٢٥٠.٠٠",
+   "قيد التنفيذ"
+  ]
+ },
+ {
+  "id": "ar_04_2",
+  "raw": "تحويل 300 ريال إلى الآيبان SA88 1234 5678 9012 3456 9898 المستفيد منى حسن قيد التنفيذ",
+  "expected": "تحويل 300 ريال إلى الآيبان [IBAN] المستفيد [NAME] قيد التنفيذ",
+  "secrets": [
+   "منى",
+   "حسن",
+   "SA88",
+   "1234",
+   "5678",
+   "9012",
+   "3456",
+   "9898"
+  ],
+  "mustKeep": [
+   "300",
+   "قيد التنفيذ"
+  ]
+ },
+ {
+  "id": "ar_04_3",
+  "raw": "تحويل ٧٥.٥٠ ريال إلى الآيبان SA٤٤٢٠٠٠٠٠٠١٢٣٤٥٦٧٨٩١٢٣٤ المستفيد محمد علي قيد التنفيذ",
+  "expected": "تحويل ٧٥.٥٠ ريال إلى الآيبان [IBAN] المستفيد [NAME] قيد التنفيذ",
+  "secrets": [
+   "محمد",
+   "علي",
+   "SA٤٤٢٠٠٠٠٠٠١٢٣٤٥٦٧٨٩١٢٣٤"
+  ],
+  "mustKeep": [
+   "٧٥.٥٠",
+   "قيد التنفيذ"
+  ]
+ },
+ {
+  "id": "ar_05_0",
+  "raw": "تم تحويل 500.00 ريال لصالح سارة الاسمري رقم الجوال 01012345678",
+  "expected": "تم تحويل 500.00 ريال لصالح [NAME] رقم الجوال [PHONE]",
+  "secrets": [
+   "سارة",
+   "الاسمري",
+   "01012345678"
+  ],
+  "mustKeep": [
+   "500.00"
+  ]
+ },
+ {
+  "id": "ar_05_1",
+  "raw": "تم تحويل ١,٢٥٠.٠٠ ريال لصالح عمر خالد رقم الجوال ٠٥٥١٢٣٤٥٦٧",
+  "expected": "تم تحويل ١,٢٥٠.٠٠ ريال لصالح [NAME] رقم الجوال [PHONE]",
+  "secrets": [
+   "عمر",
+   "خالد",
+   "٠٥٥١٢٣٤٥٦٧"
+  ],
+  "mustKeep": [
+   "١,٢٥٠.٠٠"
+  ]
+ },
+ {
+  "id": "ar_05_2",
+  "raw": "تم تحويل 300 ريال لصالح منى حسن رقم الجوال +966551234567",
+  "expected": "تم تحويل 300 ريال لصالح [NAME] رقم الجوال [PHONE]",
+  "secrets": [
+   "منى",
+   "حسن",
+   "966551234567"
+  ],
+  "mustKeep": [
+   "300"
+  ]
+ },
+ {
+  "id": "ar_05_3",
+  "raw": "تم تحويل ٧٥.٥٠ ريال لصالح محمد علي رقم الجوال ٠١٠١٢٣٤٥٦٧٨",
+  "expected": "تم تحويل ٧٥.٥٠ ريال لصالح [NAME] رقم الجوال [PHONE]",
+  "secrets": [
+   "محمد",
+   "علي",
+   "٠١٠١٢٣٤٥٦٧٨"
+  ],
+  "mustKeep": [
+   "٧٥.٥٠"
+  ]
+ },
+ {
+  "id": "ar_06_0",
+  "raw": "تحويل 500.00 ريال من حسابك ***4521 إلى سارة الاسمري سينفذ غدا",
+  "expected": "تحويل 500.00 ريال من حسابك ***4521 إلى: [REDACTED] سينفذ غدا",
+  "secrets": [
+   "سارة",
+   "الاسمري"
+  ],
+  "mustKeep": [
+   "500.00",
+   "***4521",
+   "سينفذ غدا"
+  ]
+ },
+ {
+  "id": "ar_06_1",
+  "raw": "تحويل ١,٢٥٠.٠٠ ريال من حسابك ***4521 إلى عمر خالد سينفذ غدا",
+  "expected": "تحويل ١,٢٥٠.٠٠ ريال من حسابك ***4521 إلى: [REDACTED] سينفذ غدا",
+  "secrets": [
+   "عمر",
+   "خالد"
+  ],
+  "mustKeep": [
+   "١,٢٥٠.٠٠",
+   "***4521",
+   "سينفذ غدا"
+  ]
+ },
+ {
+  "id": "ar_06_2",
+  "raw": "تحويل 300 ريال من حسابك ***4521 إلى منى حسن سينفذ غدا",
+  "expected": "تحويل 300 ريال من حسابك ***4521 إلى: [REDACTED] سينفذ غدا",
+  "secrets": [
+   "منى",
+   "حسن"
+  ],
+  "mustKeep": [
+   "300",
+   "***4521",
+   "سينفذ غدا"
+  ]
+ },
+ {
+  "id": "ar_06_3",
+  "raw": "تحويل ٧٥.٥٠ ريال من حسابك ***4521 إلى محمد علي سينفذ غدا",
+  "expected": "تحويل ٧٥.٥٠ ريال من حسابك ***4521 إلى: [REDACTED] سينفذ غدا",
+  "secrets": [
+   "محمد",
+   "علي"
+  ],
+  "mustKeep": [
+   "٧٥.٥٠",
+   "***4521",
+   "سينفذ غدا"
+  ]
+ },
+ {
+  "id": "ar_07_0",
+  "raw": "إضافة مستفيد سارة الاسمري رقم الحساب 55443322 بنجاح، تحويل 500.00 ريال",
+  "expected": "إضافة مستفيد [NAME] رقم الحساب [ACCOUNT] بنجاح، تحويل 500.00 ريال",
+  "secrets": [
+   "سارة",
+   "الاسمري",
+   "55443322"
+  ],
+  "mustKeep": [
+   "500.00",
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "ar_07_1",
+  "raw": "إضافة مستفيد عمر خالد رقم الحساب ٦٠١٨١٥٩٠ بنجاح، تحويل ١,٢٥٠.٠٠ ريال",
+  "expected": "إضافة مستفيد [NAME] رقم الحساب [ACCOUNT] بنجاح، تحويل ١,٢٥٠.٠٠ ريال",
+  "secrets": [
+   "عمر",
+   "خالد",
+   "٦٠١٨١٥٩٠"
+  ],
+  "mustKeep": [
+   "١,٢٥٠.٠٠",
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "ar_07_2",
+  "raw": "إضافة مستفيد منى حسن رقم الحساب 1234567 بنجاح، تحويل 300 ريال",
+  "expected": "إضافة مستفيد [NAME] رقم الحساب [ACCOUNT] بنجاح، تحويل 300 ريال",
+  "secrets": [
+   "منى",
+   "حسن",
+   "1234567"
+  ],
+  "mustKeep": [
+   "300",
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "ar_07_3",
+  "raw": "إضافة مستفيد محمد علي رقم الحساب ٧٧٨٨٩٩ بنجاح، تحويل ٧٥.٥٠ ريال",
+  "expected": "إضافة مستفيد [NAME] رقم الحساب [ACCOUNT] بنجاح، تحويل ٧٥.٥٠ ريال",
+  "secrets": [
+   "محمد",
+   "علي",
+   "٧٧٨٨٩٩"
+  ],
+  "mustKeep": [
+   "٧٥.٥٠",
+   "بنجاح"
+  ]
+ }
+]
