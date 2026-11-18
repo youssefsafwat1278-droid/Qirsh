@@ -2,7 +2,7 @@
 
 Model: claude-opus-5-5 (Claude Opus 5.5) · Date: 2026-11-17 · Branch `release-readiness/v1` (worktree `v1-readiness`). Round 1 is committed; round 2 (same model) is committed as `34ccc9e9`, referred to below as commit "round 2".
 
-Assessed at: the commit recorded in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md) (`50957c06` at the time of writing). No UI file changed after `34ccc9e9` except the RT-01 fix (`45ea901a`) and the paste and email-code strings (`0095a239`, `1be44623`); the three parser commits after `c8cef416` touched no screen or string file (`git diff --name-only c8cef416 50957c06`, this editor). They do change how many captures wait in the Smart Inbox (ISSUES V1-085); that list was not re-checked on screen. Status reconciliation (§2a, §7) was done by a release-records editor (AI agent, `claude-opus-5-5`) from the runtime runs J and M; the editor ran nothing.
+Assessed at: the candidate **`a157e68e`** ([RELEASE-MANIFEST.md](RELEASE-MANIFEST.md)). Round 3 changed the UI substantially; see §8. Sections 1–7 describe rounds 1 and 2 as written (originally assessed at `50957c06`).
 
 How each item is verified is labelled: **widget test** (Flutter test harness, no device), **simulator** (rendered on an iOS simulator), or **computed** (ratio from tokens). Round 2 itself used widget tests and computation only. Afterwards, runtime verifier J walked the signed-in app on iOS simulators at `8e953d14` (which contains round 2), and runtime verifier M checked the RT-01 fix at `0095a239` (§2a). No device was used.
 
@@ -295,3 +295,24 @@ Updated after the simulator runs J and M (§2a). Seen on a simulator since round
 - Real photo pixels behind header subtitles (contrast is computed for the worst case only).
 - The UX-10 4 px overflow on a device (not reproduced in widget tests).
 - Text scales above 1.25x on any screen not listed in §5.
+
+## 8. Round 3 (closure round, 2026-11-17 to 2026-11-18)
+
+Implemented by the accessibility and consent specialists (AI agents, `claude-opus-5-5`); details in [`evidence/closure/a11y.md`](evidence/closure/a11y.md) and [`evidence/closure/consent.md`](evidence/closure/consent.md). Reviewed by T at `7577f347` and `7dd6efa8` (accessibility: ACCEPT at `7dd6efa8`). Verification is widget tests and computed contrast only; **nothing in round 3 was seen on a simulator or a device.**
+
+| Item | Round-3 state | Verification |
+|---|---|---|
+| UX-09 text scale | **Cap removed** (`clamp(minScaleFactor: 0.8)`); §5 and §3a "cap kept" are superseded. A gate over 32 screens at 1.0×–3.1×, Arabic and English, fails on any ellipsis truncation; 3 collapsed navigation titles allowlisted | 128/128 (a11y); T re-ran it and a planted truncation failed it. Clipping **without** an ellipsis is not detected (V1-105) |
+| UX-05 tap targets | 80 of 80 measured targets ≥ 44 pt | widget test |
+| UX-07 contrast for new text | Hero "Manually entered balance" fixed 3.91 → 5.25:1; other new texts 4.52–8.58:1 | computed |
+| UX-02 legal links | Privacy Policy and Terms open with Cloud off, before consent (decision 3.5) | unit tests |
+| UX-11 country step | All countries with a verified-coverage note (3.7) | tests |
+| UX-15 consent step | First-run consent with "Agree and enable" / "Continue locally" (3.8) | tests; T probed both panels at 3.1× (no layout error) |
+| UX-13 / RT-04 digits | Western digits in Arabic dates on Home and charts (V1-068) | tests |
+| Balance labels | "Manually entered balance" / "Last balance reported by the bank" with time (3.14) | tests |
+| Move to review | New control on transaction details | tests |
+| Stacked selectors at large text | Keep button semantics and selection (SP-13) | `stacked_choices_test` (implementer only) |
+| FR-12 | Legacy `all_expenses` row fixed; label/hint colour, income/transfer tests, overlap not done | test |
+
+Not exercised in round 3: VoiceOver, any device, the native tab bar and system UI at large sizes, onboarding sub-steps on a running app. Device checks: MANUAL-DEVICE-TESTS.md MDT-IOS-31 (new expectations) and MDT-IOS-R3-14 … -16.
+

@@ -2,7 +2,7 @@
 
 Rewritten 2026-11-17 (closure round) by the backend-privacy-ops specialist (model `claude-opus-5-5`, as stated by the harness) from a second read-only pass over production ([`evidence/production-comparison.md`](evidence/production-comparison.md) §7), the owner decisions D-20 ([`OWNER-BRIEF-ROUND3.md`](OWNER-BRIEF-ROUND3.md) §3, recorded in `docs/project/DECISIONS.md`), and the closure-round work. It replaces the round-2 plan; the round-2 facts that still hold are carried forward. **Regenerated 2026-11-18 from commit `f4dcabd3`** (clean tree) with `tools/deploy_set.sh b6fc0dad f4dcabd3` and the read-only `tools/prod_compare.sh` (production-comparison §8): sections (a), (b), (d), the 147 × new row in (c), the call-site contract in (g) and recovery in (h).
 
-**Candidate.** Commit **`f4dcabd3`**. Every count, version and rollback source below was measured against it on 2026-11-18. If the orchestrator records a later commit in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md), re-run the two commands in (a) there; any difference from the numbers below is a stop condition for P0 until this plan is updated.
+**Candidate.** Commit **`a157e68e`** (corrected 2026-11-18 by the records editor; this plan was measured at `f4dcabd3`, the previous candidate). Every count, version and rollback source below was measured against `f4dcabd3` on 2026-11-18. At `a157e68e`, `bash tools/deploy_set.sh b6fc0dad a157e68e` was re-run (records editor, 2026-11-18): the same 8 CHANGED names, so the set in (b) is unchanged; between the two commits only `bank-discovery`, `enrich-merchant`, `merchant-category-contribution`, `parse-sms` and `process-ios-sms` changed (shared redaction and meaning-gate code), all already in the set, and no migration changed. `prod_compare.sh` was **not** re-run at `a157e68e` (no production access was used); 16 IDENTICAL / 12 DIFFERS is expected by inference and P0 checks it. If the orchestrator records a later commit in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md), re-run the two commands in (a) there; any difference from the numbers below is a stop condition for P0 until this plan is updated.
 
 **Nothing in this plan has been executed.** No function was deployed, no migration applied, no flag changed, no grant revoked, no backup taken, no build uploaded. Every production step is an owner-approved action.
 
@@ -14,7 +14,7 @@ How production changes are approved: production mutations are collected into **o
 
 Read-only, 2026-11-17 and 2026-11-18 (production-comparison §1, §4, §7, §8). Function versions were re-listed on 2026-11-18 and are unchanged since 2026-11-17.
 
-| Area | Production | Candidate `f4dcabd3` | Consequence |
+| Area | Production | Candidate `a157e68e` (measured at `f4dcabd3`; no migration differs) | Consequence |
 |---|---|---|---|
 | Migrations | 134 applied (`0001`–`0117`, 17 timestamped through `20261117010000`) | 134 + **`20261117120000_ai_global_spend_guard`** | One migration in the package (b, M1). Fresh apply of `f4dcabd3`: 135 migrations, 13 SQL proofs pass (`tools/backend_behaviour.sh`, 2026-11-18) |
 | Schema content | Fingerprint equal to a fresh apply of the 134 files except `anon` EXECUTE on `public.set_default_account(uuid)` (§7.2) | Differs from production only by M1's objects | The extra grant goes to the grants package (e) |
@@ -39,9 +39,9 @@ Read-only, 2026-11-17 and 2026-11-18 (production-comparison §1, §4, §7, §8).
 **Commands (read-only) and their 2026-11-18 results.**
 
 ```bash
-bash tools/deploy_set.sh b6fc0dad f4dcabd3
+bash tools/deploy_set.sh b6fc0dad a157e68e
 SUPABASE_PROJECT_REF=<production ref> BACKEND_PG_HOST=127.0.0.1 BACKEND_PG_PORT=<port> \
-  bash tools/prod_compare.sh f4dcabd3 b6fc0dad
+  bash tools/prod_compare.sh a157e68e b6fc0dad
 ```
 
 - `deploy_set.sh` prints CHANGED for exactly 8 functions: `bank-discovery`, `enrich-merchant`, `merchant-category-contribution`, `parse-sms`, `process-ios-sms`, `process-notification-retries`, `send-push-broadcast`, `sync-captures`.
@@ -53,7 +53,7 @@ SUPABASE_PROJECT_REF=<production ref> BACKEND_PG_HOST=127.0.0.1 BACKEND_PG_PORT=
 
 ## (b) Deployment set
 
-Seven functions and one migration, all from `f4dcabd3`.
+Seven functions and one migration, all from `a157e68e`.
 
 **Rollback sources.** For every function in the set, the deployed version and a commit whose source (the function's whole import closure, JSON included) is byte-identical to it, verified with `tools/prod_compare.sh` on 2026-11-18. A rollback is a redeploy from a clean checkout of that commit. P0 also archives the deployed bundles themselves, so a rollback does not depend on this table alone.
 
@@ -117,7 +117,7 @@ Build 147 = commit `b6fc0dad` (iOS, `ios-signed`, internal TestFlight). "Old bac
 > Limits of this measurement: synthetic messages by one author, not real bank traffic; the set was used earlier in the round to find failing families, which were then fixed with fresh sibling examples, so it is weaker evidence than a first run. The independent reviewer's separate probe sets found, at `6f771108`, 2 of 578 messages where a 147 user is worse because the new server holds a message for review and build 147 falls back to its own old parse ("Credit card payment … received" booked as spend; a purchase with an injected salary sentence booked as income); see `evidence/audits/S-review-money-correctness.md` for the check at `f4dcabd3`. A 147 user keeps every defect of build 147's own parser on the local path until they update.
 
 **If that number is not zero**, the owner chooses one of:
-1. **Hold the parser functions** (`process-ios-sms`, `parse-sms`) until the new build from `f4dcabd3` has reached every internal tester and build 147 is no longer used (TestFlight expiry or tester confirmation). `process-notification-retries` is then also not needed yet and can wait with them.
+1. **Hold the parser functions** (`process-ios-sms`, `parse-sms`) until the new build from `a157e68e` has reached every internal tester and build 147 is no longer used (TestFlight expiry or tester confirmation). `process-notification-retries` is then also not needed yet and can wait with them.
 2. **Ship now only the functions that do not change build-147 results:** M1, `account-deletion-worker`, `bank-discovery`, `enrich-merchant`, `merchant-category-contribution` (and `process-notification-retries`, which is backward-compatible with old notification rows, though it only matters once the new `process-ios-sms` writes `captureOutcome`). None of these decides whether a 147 user's message is recorded, its amount or its direction: `bank-discovery` only identifies banks, `enrich-merchant` only adds merchant details, `merchant-category-contribution` only accepts or refuses shared-learning keys, and the deletion worker and the migration have no client involvement. Effect of the gate on 147: when the ceiling is reached, `parse-sms` returns the existing retryable error and 147 falls back to local parsing (no new failure mode).
 
 In both cases P3 is split: the non-parser functions go in the window, the parser functions go in a later window under the same smoke tests (S1–S4).
@@ -139,7 +139,7 @@ In both cases P3 is split: the non-parser functions go in the window, the parser
 Operator: `______` (owner fills). Window: `______`. Estimated operator time (not measured): 1–2 hours plus the observation window.
 
 **Preconditions (none is a production action)**
-1. The release commit is `f4dcabd3` (or a later commit for which (a) has been re-run and this plan updated); the strict gate passed at it, and the opt-in backend stage passed at it (`BACKEND_PG_HOST=… REQUIRE_ALL_GATES=1 bash tools/ci_gates.sh`; JSON field `backend_behaviour: passed` — passed at `f4dcabd3` on 2026-11-18: 135 migrations, 13 proofs).
+1. The release commit is `a157e68e` (or a later commit for which (a) has been re-run and this plan updated); the strict gate passed at it, and the opt-in backend stage passed at it (`BACKEND_PG_HOST=… REQUIRE_ALL_GATES=1 bash tools/ci_gates.sh`; JSON field `backend_behaviour: passed` — passed at `f4dcabd3` on 2026-11-18: 135 migrations, 13 proofs; **not re-run at `a157e68e`**, where no migration and no SQL changed — run it at `a157e68e` before P1).
 2. The build-147 parser condition in (c) is filled. If it is not zero, the parser functions leave P3 (see (c)).
 3. Parser/AI conditions for P3 (DECISIONS-NEEDED B28–B30 and the bounded real-model evaluation), and a new app build from the same commit ready for testers in the same window (V1-087).
 4. A clean checkout of the release commit **and** clean checkouts (or `git worktree add`) of the rollback commits `4bde299a`, `a106bd6f`, `b6fc0dad`; Supabase CLI signed in, project ref `<ref>`.
@@ -160,12 +160,12 @@ for fn in account-deletion-worker process-notification-retries process-ios-sms p
 done
 tar czf "$ARCHIVE.tar.gz" -C "$(dirname "$ARCHIVE")" "$(basename "$ARCHIVE")"
 shasum -a 256 "$ARCHIVE.tar.gz" > "$ARCHIVE.tar.gz.sha256"
-SUPABASE_PROJECT_REF="$REF" bash tools/prod_compare.sh f4dcabd3 b6fc0dad 4bde299a a106bd6f
+SUPABASE_PROJECT_REF="$REF" bash tools/prod_compare.sh a157e68e b6fc0dad 4bde299a a106bd6f
 ```
 
-Expected: every download succeeds; `functions-list.json` shows `account-deletion-worker` v5, `process-notification-retries` v12, `process-ios-sms` v27, `parse-sms` v15, `bank-discovery` v10, `enrich-merchant` v8, `merchant-category-contribution` v3; `prod_compare.sh` prints IDENTICAL for each function against its rollback source in (b), 16 IDENTICAL / 12 DIFFERS against `f4dcabd3`. The archive holds function source, not user data; keep it with the backup and delete it with the backup when the observation window ends.
+Expected: every download succeeds; `functions-list.json` shows `account-deletion-worker` v5, `process-notification-retries` v12, `process-ios-sms` v27, `parse-sms` v15, `bank-discovery` v10, `enrich-merchant` v8, `merchant-category-contribution` v3; `prod_compare.sh` prints IDENTICAL for each function against its rollback source in (b), 16 IDENTICAL / 12 DIFFERS against `a157e68e` (measured against `f4dcabd3`; expected unchanged, see the Candidate note). The archive holds function source, not user data; keep it with the backup and delete it with the backup when the observation window ends.
 
-**Stop P0 (do not start P1) if:** any download fails; any version differs from the list above (someone deployed since 2026-11-18 — re-run (a) and update this plan); any function in the set is not IDENTICAL to its rollback source; the counts against `f4dcabd3` differ from 16/12; a secret or Vault name in (a) is missing; schema drift beyond the expected kinds in (a).
+**Stop P0 (do not start P1) if:** any download fails; any version differs from the list above (someone deployed since 2026-11-18 — re-run (a) and update this plan); any function in the set is not IDENTICAL to its rollback source; the counts against `a157e68e` differ from 16/12; a secret or Vault name in (a) is missing; schema drift beyond the expected kinds in (a).
 
 Other P0 read-only checks: `supabase secrets list --project-ref "$REF"` (names only); `select name from vault.secrets order by name;`; monitoring baseline queries M1–M7 (g). Record results in `evidence/` (counts and names only).
 
@@ -174,7 +174,7 @@ Other P0 read-only checks: `supabase secrets list --project-ref "$REF"` (names o
 | **P0** | Archive and verify (above) | above | Archive and checksum exist; expected output | Stop conditions above |
 | **P1** | Deploy `account-deletion-worker` | `supabase functions deploy account-deletion-worker --project-ref <ref>` (`config.toml` keeps `verify_jwt = false`) | (b) verification | Deploy error; a `failed` worker run → redeploy from `4bde299a` |
 | **P2** | Apply M1 | `supabase db push --linked --dry-run` must list exactly `20261117120000_ai_global_spend_guard.sql`; then `supabase db push --linked`. (Alternative: paste the file into the SQL editor and record the version with `insert into supabase_migrations.schema_migrations(version, name) values ('20261117120000','ai_global_spend_guard');`) | (b) verification | Dry run lists any other file; any error |
-| **P3** | Deploy, in this order, after P2: `process-notification-retries`, `process-ios-sms`, `parse-sms`, `bank-discovery`, `enrich-merchant`, `merchant-category-contribution` | `supabase functions deploy <fn> --project-ref <ref>` for each, one at a time, from the `f4dcabd3` checkout. **If the build-147 condition (c) is not zero, skip `process-ios-sms` and `parse-sms` (and optionally `process-notification-retries`) and deploy them in a later window** | Smoke tests S1–S6 below; MDT-IOS-07b/-07d on the new build | Any condition in the smoke-test table; then roll back that function (and, for `process-notification-retries`, `process-ios-sms` first) |
+| **P3** | Deploy, in this order, after P2: `process-notification-retries`, `process-ios-sms`, `parse-sms`, `bank-discovery`, `enrich-merchant`, `merchant-category-contribution` | `supabase functions deploy <fn> --project-ref <ref>` for each, one at a time, from the `a157e68e` checkout. **If the build-147 condition (c) is not zero, skip `process-ios-sms` and `parse-sms` (and optionally `process-notification-retries`) and deploy them in a later window** | Smoke tests S1–S6 below; MDT-IOS-07b/-07d on the new build | Any condition in the smoke-test table; then roll back that function (and, for `process-notification-retries`, `process-ios-sms` first) |
 | **P4** | Advertising flags off (D-20) | SQL below | Read-back query below | Any other flag changed; the function raises (stale `updated_at` → re-read and stop) |
 | **P5** | Observe | Section (g) daily | Recorded daily, window `______` (proposed 7 days) | Any stop condition in (g) |
 

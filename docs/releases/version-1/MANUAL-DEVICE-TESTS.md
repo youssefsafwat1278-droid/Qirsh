@@ -1,6 +1,6 @@
 # Version 1 — manual device test script
 
-Candidate: the final candidate commit recorded in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md) (local branch `release-readiness/v1`; not pushed, built by CI, deployed or submitted). First written at `23499229`; round-2 tests added 2026-11-17 (MDT-IOS-06a, -07d, -07e, -07f, -18a, -30, -31, and simulator notes on -21 and -22). The final candidate is `50957c06` at the time of writing. "Fixed in code at 23499229" below still refers to that commit; later fixes name their own commit.
+Candidate: **`a157e68e`** ([RELEASE-MANIFEST.md](RELEASE-MANIFEST.md); local branch `release-readiness/v1`; not pushed, built by CI, deployed or submitted). **Round 3 (2026-11-18):** the owner's decisions (OWNER-BRIEF-ROUND3.md §3) change several expected results; they are listed in "Round 3 — expected results changed by the owner's decisions" and override the older Expected lines. New checks MDT-IOS-R3-01 … -16 are at the end of Part 1. Android (Part 2) is out of V1 by decision 3.1 and is kept for a later release. First written at `23499229`; round-2 tests added 2026-11-17 (MDT-IOS-06a, -07d, -07e, -07f, -18a, -30, -31, and simulator notes on -21 and -22). The final candidate is `50957c06` at the time of writing. "Fixed in code at 23499229" below still refers to that commit; later fixes name their own commit.
 
 Status of every test in this file: **NOT TESTED**. No physical device, no Android toolchain (no Java, no `adb`) and no production access were available during the assessment, so none of these steps has been run. Gate G5 (device verification) is unmet until a human runs this script on the release artifact and fills in the result lines.
 
@@ -650,6 +650,53 @@ Allowed results: `PASS`, `FAIL`, `NOT TESTED`, `NOT APPLICABLE` (with a reason).
 - Expected: app content renders at no more than 1.25× and is not clipped, overlapped or truncated at that scale; native and system parts follow the system size without breaking the layout around them. Record, as a fact for the owner's decision G UX-09, that app text does not grow beyond 1.25× at the largest sizes — not as a pass.
 - Evidence: screenshots of each screen at the maximum size; a note of which parts follow the system size.
 - Result: NOT TESTED · Tester: ______ · Device: ______ · OS: ______ · Build: ______ · Date: ______
+
+### Round 3 — expected results changed by the owner's decisions
+
+Where an older Expected line says "follows the owner decision" or "Known at ab5dc10a", use this table.
+
+| Test | New expected result | Decision |
+|---|---|---|
+| MDT-IOS-01 | No language is preselected on first launch; the country list offers every country with a note that verified bank formats cover Saudi Arabia and Egypt; the consent step offers "Agree and enable" and "Continue locally"; sign-in shows Apple, Google and email code | 3.6, 3.7, 3.8, 3.11 |
+| MDT-IOS-02 | Language, consent choices and shared-learning state are kept on upgrade; a user who had Cloud and AI on is asked once about shared learning; stored transactions are unchanged (no re-analysis) | 3.6, 3.8, 3.10, 3.15 |
+| MDT-IOS-07c | Rows stored before the fix stay as they are; no review list appears | 3.15 |
+| MDT-IOS-12 | One control turns Cloud and AI off together; the text says so and does not promise to recall a request already sent | 3.9 |
+| MDT-IOS-18, -18a | Restore merges: newer rows, deletions and manual edits on the device are kept; rows only in the backup return without duplicates; backup-only merchant rules are not added; the confirmation says whether this restore merges or fully applies | 3.3 |
+| MDT-IOS-19 | Deletion is final; no undo or 30-day text anywhere; the text does not promise that server work has already finished; profile photo and backups gone (operator check) | 3.4 |
+| MDT-IOS-20 | Banner shows amount, currency, merchant, status and masked last four within the OS preview setting; "Show Previews: When Unlocked / Never" hides them when locked; nothing says "recorded" unless it was saved | 3.12 |
+| MDT-IOS-21 | The cover appears on resign-active (app switcher, Control Center, Face ID, system prompts) and is removed on return | engineering choice (B24) |
+| MDT-IOS-22 | iPhone only, portrait: rotation does not change the layout; on an iPad the app runs in iPhone compatibility mode (MDT-IOS-R3-09) | 3.1 |
+| MDT-IOS-31 | The 1.25× cap is gone: app text follows the system size up to the largest accessibility size; record any text clipped **without** an ellipsis (the automated gate cannot see it, V1-105) | UX-09 fix |
+
+### MDT-IOS-R3-01 … -12 — Round-3 iPhone checks from the iOS specialist
+
+Same format as above: each needs the G4 artifact (or a build of `a157e68e`), synthetic messages only, and one result line per check.
+
+| ID | Check | Expected | Issues |
+|---|---|---|---|
+| MDT-IOS-R3-01 | Signed out, run the bank-message Shortcut | Shortcuts shows the sign-in error and a Qirsh banner says the message was not saved; after signing in to another account nothing is imported | V1-037 (3.13) |
+| MDT-IOS-R3-02 | Signed out, share a bank message to Qirsh | The alert says to open Qirsh and sign in; nothing appears after signing in | V1-037 |
+| MDT-IOS-R3-03 | Signed in, English UI, then Arabic: capture banner | Title, merchant, card ending, time and the status line are in the UI language | V1-035, V1-036 |
+| MDT-IOS-R3-04 | A message the server marks as needing review | Banner says it needs review; no category shown | 3.12 |
+| MDT-IOS-R3-05 | Settings › Notifications › Show Previews = When Unlocked, then Never | Locked banner shows no amount or merchant | V1-036 |
+| MDT-IOS-R3-06 | App switcher, Control Center, Face ID, Sign in with Apple and a permission prompt | Cover appears and is removed on return; never stuck | V1-034 |
+| MDT-IOS-R3-07 | Rotate on every main screen | Stays portrait | V1-014 |
+| MDT-IOS-R3-08 | With all production ad flags ON, proxy the build on a test network from launch through report export | No request to Google ad or UMP endpoints; no consent form, banner or interstitial | V1-005, V1-063 |
+| MDT-IOS-R3-09 | Install on an iPad | Launches in compatibility mode; sign-in and capture work; layout usable | V1-014 |
+| MDT-IOS-R3-10 | Share a message that contains a URL | Routed as a bank message, not a link | V1-038 |
+| MDT-IOS-R3-11 | Legacy path (`capture_notify_v2` off), English UI | English banner | V1-035 |
+| MDT-IOS-R3-12 | Low-storage device | No disk-space warning in the release build; capture still works | B16 |
+
+### MDT-IOS-R3-13 … -16 — Round-3 consent, legal and accessibility checks
+
+| ID | Check | Expected | Issues |
+|---|---|---|---|
+| MDT-IOS-R3-13 | Fresh install, choose "Continue locally"; open Privacy Policy and Terms from onboarding and Settings while proxying | Both pages open; Cloud and AI stay off; no bank message or financial data leaves the device; only the two legal URLs are requested | V1-007 (3.5), 3.8 |
+| MDT-IOS-R3-14 | Consent screen at the largest accessibility size, Arabic and English, with VoiceOver | "Agree and enable" and "Continue locally" are both reachable, named and not truncated; the text matches the approved wording | 3.8, V1-105 |
+| MDT-IOS-R3-15 | Accounts: a manually entered balance and a bank-reported balance | Labels "Manually entered balance" and "Last balance reported by the bank" with its time; neither reads as a verified current balance | V1-032 (3.14) |
+| MDT-IOS-R3-16 | Transaction detail → "Move to review" with VoiceOver | Moves the row to the Smart Inbox, keeps amount and category; control named and at least 44 pt | 4.6 |
+
+Result for each: NOT TESTED · Tester: ______ · Device: ______ · OS: ______ · Build: ______ · Date: ______
 
 ---
 

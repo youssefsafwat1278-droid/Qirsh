@@ -1,14 +1,14 @@
 # Version 1 — closure of independent-review and runtime findings
 
-One row for every finding of the independent reviews (I, K, L, N, O, P, Q, R) and the signed-in runtime run (J), as of the final candidate. Written 2026-11-17 by a release-records editor (AI agent, model `claude-opus-5-5`) from the review files in [`evidence/audits/`](evidence/audits/), [`evidence/ROUND2-FACTS.md`](evidence/ROUND2-FACTS.md), the commit messages and `git log`; brought to the final candidate the same day after three more parser commits and three more reviews. This editor ran no test and changed no code.
+One row for every finding of the independent reviews (I, K, L, N, O, P, Q, R; in round 3 S and T) and the signed-in runtime run (J). **Brought to round 3 and the candidate `a157e68e` on 2026-11-18** by a records editor (AI agent, `claude-opus-5-5`), who ran no test; the round-2 rows are kept as written, and the section 'Round 3 — status changes' overrides them where they differ. Round-2 note: Written 2026-11-17 by a release-records editor (AI agent, model `claude-opus-5-5`) from the review files in [`evidence/audits/`](evidence/audits/), [`evidence/ROUND2-FACTS.md`](evidence/ROUND2-FACTS.md), the commit messages and `git log`; brought to the final candidate the same day after three more parser commits and three more reviews. This editor ran no test and changed no code.
 
-**No review is an approval, and none covers code committed after the commit it reviewed.** The owner has accepted no limitation and approved no scope proposal; "owner decision" below means the decision is still open.
+**No review is an approval, and none covers code committed after the commit it reviewed.** The owner approved the product decisions in OWNER-BRIEF-ROUND3.md §3 (2026-11-17) and has accepted no limitation. In the round-2 rows, "owner decision" means a decision that was open then; the round-3 table says which are now decided.
 
-**Every code commit up to and including the final one has been independently reviewed.** K covers every commit up to `0f90003f`, including the UI, restore and pipeline commits; L covers `42a0fd0c`, `45ea901a` and `0095a239`; N, O, P, Q and R each cover one parser commit (`1be44623`, `c8cef416`, `5583cbea`, `75dab61a`, `50957c06`). R is the review of the final code. These reviews were made by AI agents, they are not approvals, and they found open defects (the rows below).
+**Round 2:** every code commit up to `50957c06` was independently reviewed. **Round 3:** S reviewed money correctness at `7577f347`, `7dd6efa8`, `6f771108`, `f4dcabd3` and `a157e68e`; T reviewed platform, data, consent, iOS, ops and records at `7577f347` and `7dd6efa8` only. Round-2 text: K covers every commit up to `0f90003f`, including the UI, restore and pipeline commits; L covers `42a0fd0c`, `45ea901a` and `0095a239`; N, O, P, Q and R each cover one parser commit (`1be44623`, `c8cef416`, `5583cbea`, `75dab61a`, `50957c06`). R is the review of the final code. These reviews were made by AI agents, they are not approvals, and they found open defects (the rows below).
 
 ## Candidate and what each review saw
 
-Assessed at: the commit recorded in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md) (`50957c06` at the time of writing).
+Assessed at: **`a157e68e`** ([RELEASE-MANIFEST.md](RELEASE-MANIFEST.md)). `50957c06` and `5dae2e2d` are history.
 
 | Name | Commit | Relationship |
 |---|---|---|
@@ -17,7 +17,10 @@ Assessed at: the commit recorded in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md) (
 | Round-1 code candidate | `23499229` | Baseline + 11 fix commits (history) |
 | Round-1 final code | `af675aec` | `23499229` + one updated test expectation; last full strict gate (15/15) (history) |
 | Round-1 records commit | `d830855e` | Documentation only, on top of `af675aec` |
-| **Final candidate** | **`50957c06`** | `d830855e` + 15 round-2 code commits. Every earlier name is an ancestor; they are history, not alternative candidates |
+| Round-2 final code | `50957c06` | `d830855e` + 15 round-2 code commits (history) |
+| Round-2 candidate | `5dae2e2d` | `50957c06` + one test-only commit (history) |
+| Round-3 reviewed states | `7577f347`, `7dd6efa8`, `6f771108`, `f4dcabd3` | Reviewed by S and/or T, then changed (history) |
+| **Candidate** | **`a157e68e`** | Last code commit of round 3 |
 
 `git log --oneline ab5dc10a..50957c06` lists **28 commits**: 12 round-1 code commits, 1 records commit, 15 round-2 code commits (checked by this editor; it agrees with ROUND2-FACTS §1).
 
@@ -32,7 +35,9 @@ Assessed at: the commit recorded in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md) (
 | O | `c8cef416` | The seventh parser commit | **ACCEPT WITH FOLLOW-UP**; the fixer's acceptance criterion NOT met; OR-01…09 |
 | P | `5583cbea` | The eighth parser commit | **ACCEPT WITH FOLLOW-UP**; three outcomes worse than the baseline (PR-01, PR-02, PR-04, each S1); PR-01…08 |
 | Q | `75dab61a` | The ninth parser commit | **REJECT**: outgoing debits imported as confirmed income (QR-01, S1); QR-01…06 |
-| R | `50957c06` | The tenth parser commit, the final code; includes a statement on the state of the parser against the baseline | **ACCEPT WITH FOLLOW-UP**; no S1; no regression from this commit on the device or the effective iOS-Cloud path; RR-01…07 |
+| R | `50957c06` | The tenth parser commit, the round-2 final code | **ACCEPT WITH FOLLOW-UP**; no S1; RR-01…07 |
+| S | `7577f347` → `a157e68e` (five checks) | Money correctness of round 3: parser, AI gates, import, redaction | REJECT, REJECT (narrow), then ACCEPT WITH FOLLOW-UP three times; 27 findings |
+| T | `7577f347`, `7dd6efa8` | Restore, deletion, consent, iOS, accessibility, backend/ops, legal and records | Restore REJECT, then ACCEPT WITH FOLLOW-UP; SP-01…15 |
 
 Parser commit chain for V1-001: `d35fc044` (1) → `668f4d64` (2) → `0de54a2b` (3) → `84f2fe41` (4) → `42a0fd0c` (5, introduced regressions LR-01 and LR-03) → `1be44623` (6, removed those, introduced NR-01; rejected by N) → `c8cef416` (7, answers N; O found the S1 regression OR-01 narrowed but not removed) → `5583cbea` (8, answers O; fixed the pre-existing limit-figure amounts; P found it introduced PR-01 and left PR-02 and PR-04, all worse than the baseline) → `75dab61a` (9, answers P; removed PR-01, PR-02, PR-04 but added credit words, a broad deposit rule and a verb-after-figure rule that turned debits into confirmed income; **rejected by Q**) → `50957c06` (10, subtractive: removes round 9's direction words, deposit rule and verb-after-figure rule and round 8's money-word list, keeps round 9's "informational words never silence" and whole-word currency codes; R: accept with follow-up). No fix round was made after R.
 
@@ -156,9 +161,9 @@ Answered by `50957c06` (round 10).
 | QR-05 · S3 · Table coverage: 941 rows carry no currency; the four tip/VAT rows are left out and hide a pre-existing understatement | None | — | R §5: the four tip/VAT rows still not in the table; outputs identical at the baseline | **OPEN** — V1-080 |
 | QR-06 · S4 · The Dart preview mirror now differs from the Swift preview | None | — | — | **OPEN** — V1-061 |
 
-## R — review of `50957c06`, the final code (ACCEPT WITH FOLLOW-UP)
+## R — review of `50957c06`, the round-2 final code (ACCEPT WITH FOLLOW-UP)
 
-Raised on the final commit; no commit after it exists. Every row is open until a later commit or an owner decision answers it.
+Raised on the round-2 final commit. Round-3 status changes are in the section after J.
 
 | Finding | Action taken | Commit(s) | Verification | Remaining limitation |
 |---|---|---|---|---|
@@ -180,26 +185,107 @@ Raised on the final commit; no commit after it exists. Every row is open until a
 | RT-04 · S4 · Dates use Arabic-Indic digits next to Western amounts | None — not done | — | — | **OPEN** — V1-068 |
 | RT-05 · S4 · Email code sheet mixes Egyptian and Modern Standard Arabic | Sentence rewritten in MSA | `0095a239` | Reviewer L read the strings | **CLOSED** for the text. On-screen rendering NOT TESTED at runtime after the fix |
 
+## Round 3 — status changes to the findings above
+
+The rows above keep their round-2 text. These earlier findings changed status because of round-3 commits or owner decisions (brief §3). Where this table and a row above differ, this table wins.
+
+| Finding | Was | Now | Why (commit; verification) |
+|---|---|---|---|
+| REV-01 · S1 | OPEN | **OPEN** (unchanged word, new evidence) | Meaning-first parsing (`bae159e2` … `a157e68e`). Held-out set (753, synthetic, eval specialist): 0 declined or pending saved on every path. Review S at `a157e68e`: iOS import wrong / silent / review 11 / 3 / 62 of 708 (75 / 3 / 62 at `5dae2e2d`). Not deployed, no build, no device; residual CUE-1 and PRE-* (V1-094, V1-098) |
+| REV-05 · S3 | OPEN | **CLOSED** (decision) | Owner decision 3.15: no historical re-analysis; the review-list proposal is not pursued. The stored rows themselves are unchanged (V1-056) |
+| FR-05 · S1 | OPEN | **PARTLY** | Ads compiled out of the V1 build; store workflows carry no AdMob values (`640562f6`; tests; reviewer T read every SDK entry). Production flags still ON (plan P4, not executed); network silence of the linked SDK NOT TESTED |
+| FR-06 · S3 | OPEN | **CLOSED** | Owner decision 3.3 (merge). R1–R9b on a local stack, reviewer T `+24 ~2` at `7dd6efa8`; the confirmation names the case that applies (`6f771108`, not re-reviewed). Remaining limits: SP-12 (V1-102) |
+| FR-07 · S2 | OPEN | **PARTLY** | Strict gate 15/15 at `a157e68e` (local). Functions compared with production at `f4dcabd3` (ops, read-only); not re-compared at `a157e68e` |
+| FR-12 · S4 | OPEN | **PARTLY** | Legacy `all_expenses` row fixed with a test (a11y specialist only); the rest not done |
+| LR-04 · S2 | OPEN | **PARTLY** | Notices are not movements (`bae159e2`, `f4dcabd3`). Held-out: 0 non-transactions saved. CUE-1 remains (V1-094) |
+| NR-07 · S4 | OPEN | **PARTLY** | Batch paste label and hold wording changed (a11y specialist; tests). Not reviewed, not seen at runtime |
+| PR-08 · S2 | OPEN | **PARTLY** | Direction classes fixed in code (parser specialist); held-out 0 wrong direction; RF009 remains (V1-098); ATM deposit → review is an engineering choice (V1-090) |
+| RR-01 · S2 | OPEN | **PARTLY** | All four classes fixed in code for the measured shapes (S: 0 right → wrong across four checks). Residual: AT008, RF009, CUE-1 |
+| RR-03 · S3 | OPEN | **PARTLY** | Notice-sentence rejection fixed (AI specialist). Held-out A8a device 7.5 % by the letter (V1-103) |
+| RR-04 · S3 | OPEN | **PARTLY** | Cashback reversal deducted is spending on the server (parser specialist). Server-only rejections remain (held-out 102 recovered by the device; S: FT-1, NEW-2r) |
+| RR-05 · S3 | OPEN | **PARTLY** | ATM cash deposit → review: an engineering choice the owner may reverse |
+| RT-03 · S3 | OPEN | **PARTLY** | Cloud-off sign-out sentence (engineering choice B26 (a)); tests by the fixer only (V1-067) |
+| RT-04 · S4 | OPEN | **PARTLY** | Western digits in Arabic dates on Home and charts; tests by the fixer only (V1-068) |
+
+Unchanged in word but with new facts: REV-04 and QR-06 (the Swift preview no longer drives any outcome claim in the new build; build 147's banner still does), REV-08 (cover on resign-active, device check owed), REV-09 (probe compiled out by the iOS specialist; Privacy Report needs a signed archive), FR-10 (XCTest 200/200 on a simulator, implementer only), REV-18 (gate 15/15 at `a157e68e`; nothing built by CI, signed, deployed or on a device), FR-04 (fix verified on local stacks by T; deploy not done).
+
+## S — money correctness, round 3 (reviews at `7577f347`, `7dd6efa8`, `6f771108`, `f4dcabd3`, `a157e68e`)
+
+Reviewer `review-money`, model `claude-opus-5-5` (self-reported), synthetic data only, scratch worktrees; file [`evidence/audits/S-review-money-correctness.md`](evidence/audits/S-review-money-correctness.md). Verdicts: `7577f347` **REJECT**; `7dd6efa8` **REJECT** (one narrow S1 class, NEW-1); `6f771108` **ACCEPT WITH FOLLOW-UP**; `f4dcabd3` **ACCEPT WITH FOLLOW-UP** (VAL-1 S2); `a157e68e` **ACCEPT WITH FOLLOW-UP** (PRIV-1r S2). Not checked by S at any point: real AI calls, the Swift XCTest, timing on an iPhone, any deployed server, the held-out set; build 147 not re-checked at `a157e68e`.
+
+| Finding | Action taken | Commit(s) | Verification | Remaining limitation |
+|---|---|---|---|---|
+| SM-01 · S1 · REGRESSION: declined or pending recorded as completed spending | Status sentences never treated as footers | `7dd6efa8` | S at `7dd6efa8`: 0 recorded across 77 probes; no outcome change later (S at `a157e68e`) | **CLOSED** by S |
+| SM-02 · S2 · REGRESSION: parser throws on "charged"/"deducted" | No-throw parsing | `7dd6efa8` | S: 0 exceptions; Dart fuzz 45,000 texts × 22 entry points, Deno 40,000 × 7, 0 throws | **CLOSED** by S |
+| SM-03 · S1 · REGRESSION: purchase with a reward clause booked as income | Reward points not income; primary-clause direction | `7dd6efa8`, `6f771108` | S at `6f771108` (as NEW-1): all 24 + 8 + 35 probes correct or review | **CLOSED** by S |
+| SM-04 · S2 · REGRESSION: real purchases with an offer, future or due tail become "no movement" | Tail rules | `7dd6efa8`, `6f771108`, `f4dcabd3` | S: server-silent purchases 63 → 30 → 12 | **SUPERSEDED** by NEW-2 → NEW-2r |
+| SM-05 · S3 · `chargedTotal` rejects correct candidates | Total labels narrowed | `7dd6efa8` | S | **CLOSED** by S |
+| SM-06 · S3 · footers sent to review as multiple events | Footer rules | `7dd6efa8`, `6f771108` | S at `6f771108` | **CLOSED** by S |
+| SM-07 · S3/S4 · "both sides identical" overstated | Parity work | `7dd6efa8`, `6f771108` | S: 2 disposition differences of 2,193 | **SUPERSEDED** by PAR-1 |
+| SM-08 · S4 · allowlist headroom | Ceiling equals count | `7dd6efa8` | S | **CLOSED** by S. The newer harness has the same weakness (HAR-1) |
+| SM-09 · S3 · REGRESSION: parse time over the 2-second limit on long input | Bounded linear parsing; 2,000-character bound | `7dd6efa8`, `6f771108` | S on a Mac: 20k "Avl. Bal." 11,592 → 29 ms; worst 392 ms at 2,000 characters at `6f771108`; server ≤ 42 ms | **CLOSED** by S. Timing on an iPhone not measured |
+| NEW-1 · S1 · reward or cashback clause → income (SM-03 residual) | Primary-clause rules | `6f771108` | S at `6f771108` | **CLOSED** by S |
+| NEW-2 · S2 · completed purchase dropped by a tail (SM-04 residual) | Tail rules | `6f771108` | S: mostly fixed | **SUPERSEDED** by NEW-2r |
+| NEW-3 · S3 · status cue in the dropped middle of long text | Over 2,000 characters → review | `6f771108` | S | **CLOSED** by S (gap carried as LEN-1) |
+| NEW-2r · S3 · 6 completed shapes are no-movement on the server | Claimed fixed at `f4dcabd3` | `f4dcabd3` | S at `f4dcabd3` and `a157e68e`: still open; the device sends them to review | **OPEN** — V1-097 |
+| CR-1 · S3 · a bill paid with a credit card read as card repayment | Rule narrowed | `f4dcabd3` | S at `f4dcabd3`: CR010 fixed | **CLOSED** by S |
+| B147-1 · S3 · build 147 books wrongly what the new server holds (2 of 578) | New server holds pending refunds and scheduled orders as not movements | `f4dcabd3` | Held-out mixed run: 0 worse in total-changing classes (eval specialist, at `f4dcabd3` and `a157e68e`). S's own probes not re-measured | **PARTLY** — V1-087, V1-098 |
+| PAR-1 · S4 · 2 device/server disposition differences | — | — | Not re-measured by S | **OPEN** — V1-098 |
+| LEN-1 · S4 · 2,001-character Arabic text recorded on the server, reviewed on the device | Device sends `textLength`; server applies the over-length rule to the raw length | `f4dcabd3` | S at `f4dcabd3`: LN010 fixed | **CLOSED** by S |
+| PRIV-0 · S2 · pre-existing: names and account numbers reach the server and model | Redaction rules | `6f771108`, `f4dcabd3` | S | **SUPERSEDED** by PRIV-1 |
+| VAL-1 · S2 · the server's total rule released declined, pending or failed tip/VAT totals as processed when the model answered the total | `meaningRejectionOf` is the one source of "processed" | `a157e68e` | S at `a157e68e`: 68 → 7 of 96; the 7 are cue-word gaps (CUE-1) | **CLOSED** by S |
+| PRIV-1 / PRIV-1r · S2 · names after "From <Name>:", "Attn", "Name:", "Customer", «إلى حساب <name>» under the `payment` hint still reach the server and model | Four narrowing rounds, device, server and Swift | `6f771108`, `f4dcabd3`, `a157e68e` | S: 0 new leaks; device == server on 246 texts; Swift read, XCTest run by the implementer only (200/200) | **OPEN** — V1-091 (S2) |
+| HOLD-1 · S3 · completed messages over-held for review | — | — | S at `f4dcabd3`, `a157e68e` | **OPEN** — V1-095 |
+| FT-1 · S3 · purchase with a standing-order footer silent on the server | — | — | S | **OPEN** — V1-096 |
+| CUE-1 · S3 · recorded although no money moved (wording gaps) | — | — | S | **OPEN** — V1-094 |
+| PRE-* · S3 · AT008 own-account as spend; RF009 Arabic refund direction | — | — | S | **OPEN** — V1-098 |
+| HAR-1 · S4 · harness review budget equals the count (38/38); cases miss HOLD-1; `.pyc` committed | `.pyc` removed | `0eafa897` | S at `a157e68e` | **PARTLY** — V1-099 |
+| MASK-1 · S3 · NEW at `a157e68e`: merchant after "paid to" masked as a person | — | — | S | **OPEN** — V1-092 |
+| MASK-0 · S3 · merchant and own card suffix masked in "Purchase To:" forms | — | — | S | **OPEN** — V1-093 |
+
+## T — platform, data, consent, iOS, ops and records, round 3 (reviews at `7577f347` and `7dd6efa8`)
+
+Reviewer `review-platform`, model `claude-opus-5-5` (self-reported); own local stack, scratch copies; file [`evidence/audits/T-review-platform-and-records.md`](evidence/audits/T-review-platform-and-records.md). Verdicts at `7577f347`: restore **REJECT**, every other area ACCEPT WITH FOLLOW-UP. At `7dd6efa8`: accessibility **ACCEPT**; restore, deletion, consent, iOS, backend/ops (plan to be regenerated), legal/records and test integrity **ACCEPT WITH FOLLOW-UP**. **T did not review any commit after `7dd6efa8`**; the fixes for SP-11 … SP-15 below are on the implementers' word or this editor's reading. T re-checked the round-2 V1-020 evidence: `+2` at `0f90003f` with and without the defines; the round-2 claim stands for R1/R2.
+
+| Finding | Action taken | Commit(s) | Verification | Remaining limitation |
+|---|---|---|---|---|
+| SP-01 · S2 · merge restore brought back merchant rules removed after the backup | Merge never takes backup rules; device deletions stay deleted | `7dd6efa8` | T: reproduction passes | **CLOSED** by T. Consequence: SP-12 |
+| SP-02 · S3 · full apply wiped accounts created before the restore | Any account, card, rule or custom category makes the device "has data" → merge | `7dd6efa8` | T | **CLOSED** by T |
+| SP-03 · S3 · deploy set missed `process-notification-retries` | Derived deploy set (`tools/deploy_set.sh`) | `98e8e56d`, `7dd6efa8` | T: tool correct; the plan's recorded set was stale | **SUPERSEDED** by SP-11 |
+| SP-04 · S3 · build 147 cannot handle the 105 new storable currencies | Written into RELEASE-PLAN (c) with options | records | T at `7dd6efa8`: partly; repair path not traced | **PARTLY** — V1-100 |
+| SP-05 · S4 · migration comments said fail-closed; the guard fails open | Comments corrected | `7dd6efa8` | T | **CLOSED** by T |
+| SP-06 · S3 · two-device sync cases have no passing end-to-end run | Harness fixed; S9/S9b skipped by manifest | `7dd6efa8` | T: `+24 ~2` | **PARTLY** — V1-101 |
+| SP-07 · S4 · records drift; code comments call B24/B26 decisions | Records corrected; comments not edited | records | T: partly | **PARTLY** — V1-104 |
+| SP-08 · S4 · restore rollback at the delete phase no longer exercised | All 9 fault points asserted | `7dd6efa8` | T | **CLOSED** by T |
+| SP-09 · S3 · large-text gate omitted onboarding, consent, privacy, deletion, backup | Twelve more screens | `7dd6efa8` | T | **CLOSED** by T |
+| SP-10 · S2 · clipped text at supported sizes not recorded | Gate fails on ellipsis truncation; allowlist of 3 | `7dd6efa8` | T: planted truncation fails | **CLOSED** by T. Residual (S4): clipping without an ellipsis undetected — V1-105 |
+| SP-11 · S3 · plan's deploy set stale (8 changed, not 6) | Plan regenerated at `f4dcabd3` with 8 changed and 7 proposed | `4c428719` | This editor: `deploy_set.sh b6fc0dad a157e68e` gives the same 8 names; commit id corrected to `a157e68e`. Not re-reviewed by T; `prod_compare.sh` not re-run at `a157e68e` | **PARTLY** |
+| SP-12 · S4 · merge drops backup-only rules; a mistaken deletion is not recoverable by merge | Restore confirmation names which case applies (`6f771108`); stated in KNOWN-LIMITATIONS | `6f771108`, records | Not re-reviewed by T | **PARTLY** — V1-102 |
+| SP-13 · S4 · no committed test for stacked selector semantics | `stacked_choices_test` (12 tests) | `6f771108` | Implementer only | **PARTLY** |
+| SP-14 · S3 · P0 did not check the `process-notification-retries` rollback source | P0 command now passes the v12 source `a106bd6f` and stops if not IDENTICAL | `4c428719` | This editor read P0. Not re-reviewed by T | **PARTLY** |
+| SP-15 · S4 · stale plan text | Plan regenerated | `4c428719` | Not re-reviewed by T | **PARTLY** |
+
 ## Status roll-up
 
-Counted from the rows above.
+Counted from the rows above, with the round-3 status changes applied. Status at the candidate `a157e68e`.
 
 | Review (commit) | Findings | Closed | Partly | Open | Superseded |
 |---|---|---|---|---|---|
-| I (`d35fc044`) | 18 | 6 | 6 | 5 | 1 |
-| K (`0f90003f`) | 13 | 0 | 6 | 7 | 0 |
-| L (`0095a239`) | 12 | 4 | 6 | 2 | 0 |
-| N (`1be44623`) | 7 | 2 | 3 | 2 | 0 |
+| I (`d35fc044`) | 18 | 7 | 6 | 4 | 1 |
+| K (`0f90003f`) | 13 | 1 | 9 | 3 | 0 |
+| L (`0095a239`) | 12 | 4 | 7 | 1 | 0 |
+| N (`1be44623`) | 7 | 2 | 4 | 1 | 0 |
 | O (`c8cef416`) | 9 | 4 | 4 | 1 | 0 |
-| P (`5583cbea`) | 8 | 3 | 1 | 4 | 0 |
+| P (`5583cbea`) | 8 | 3 | 2 | 3 | 0 |
 | Q (`75dab61a`) | 6 | 3 | 0 | 3 | 0 |
-| R (`50957c06`) | 7 | 0 | 1 | 6 | 0 |
-| J (`8e953d14`, runtime) | 5 | 1 | 2 | 2 | 0 |
-| **All** | **85** | **23** | **29** | **32** | **1** |
+| R (`50957c06`) | 7 | 0 | 5 | 2 | 0 |
+| J (`8e953d14`, runtime) | 5 | 1 | 4 | 0 | 0 |
+| S (`7577f347` … `a157e68e`) | 27 | 12 | 2 | 9 | 4 |
+| T (`7577f347`, `7dd6efa8`) | 15 | 6 | 8 | 0 | 1 |
+| **All** | **127** | **43** | **51** | **27** | **6** |
 
-- Changed since the previous reconciliation (at `c8cef416`): NR-01 PARTLY → CLOSED; OR-01, OR-02, OR-05, OR-06 OPEN → CLOSED; OR-03, OR-04, OR-07, OR-08 OPEN → PARTLY; P, Q and R added.
-- The four L findings counted closed (LR-01, LR-03, LR-06, LR-09) were confirmed by reviewer N at `1be44623`; LR-01 and LR-06 were re-checked through R at `50957c06`, LR-03 through O; LR-09 was not re-checked after N.
-- A finding closed for a regression the branch introduced (NR-01, OR-01, PR-01, PR-02, QR-01…03) never reached users. A finding closed for a pre-existing defect (OR-03 limit part, OR-05, PR-04) is closed in code only: build 147 and the deployed server still have it until a deploy and a new build.
-- Closures in P, Q and R rest on synthetic probe sets run by the reviewers' own harnesses against the code, not on the app, a device or real bank traffic.
-- S1 findings not closed: REV-01 (V1-001), FR-05, OR-03 (partly), OR-04 (partly). RR-01 is rated S2 by R with impact class S1.
-- Every runtime confirmation above is on an iOS simulator. None is on a device.
+- Round-2 roll-up was 85 findings: 23 closed, 29 partly, 32 open, 1 superseded. Round 3 changed the status word of 14 earlier rows (table "Round 3 — status changes"; REV-01 is listed there with new evidence but stays OPEN) and added S (27) and T (15).
+- Open S1 findings: REV-01 (V1-001). PARTLY S1: FR-05, OR-03, OR-04. No S1 from reviews S or T is open. Open S2 from round 3: PRIV-1r (V1-091).
+- Closures in S rest on the reviewer's synthetic probe sets run against the code in scratch worktrees, not on the app, a device or real bank traffic. Closures in T rest on T's own local stack and scratch copies; T did not see any commit after `7dd6efa8`.
+- A finding closed for a pre-existing defect is closed in code only: build 147 and the deployed server keep it until a deploy and a new build.
+- Every runtime confirmation in any review is on an iOS simulator or a local stack. None is on a device.

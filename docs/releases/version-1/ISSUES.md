@@ -1,33 +1,159 @@
 # Version 1 — issues register
 
-Consolidated from the specialist audits, the independent reviews (I, K, L, N, O, P, Q, R) and the runtime runs (J, M) in [`evidence/audits/`](evidence/audits/). Each row keeps its source IDs; the audits hold the evidence. Finding-by-finding closure is in [REVIEW-CLOSURE.md](REVIEW-CLOSURE.md).
+Consolidated from the specialist audits, the independent reviews (I, K, L, N, O, P, Q, R, and in round 3 S and T), the runtime runs (J, M) and the round-3 closure reports, in [`evidence/audits/`](evidence/audits/) and [`evidence/closure/`](evidence/closure/). Each row keeps its source IDs. Finding-by-finding closure is in [REVIEW-CLOSURE.md](REVIEW-CLOSURE.md).
 
-- Assessed at: the commit recorded in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md) (`50957c06` at the time of writing). Audit baseline `ab5dc10a`; 28 commits after it (12 round-1 code, 1 records `d830855e`, 15 round-2 code). `23499229`, `af675aec`, `0095a239`, `1be44623`, `c8cef416`, `5583cbea` and `75dab61a` are earlier points on the same line, not alternative candidates.
+- **Assessed at: the candidate `a157e68e`** ([RELEASE-MANIFEST.md](RELEASE-MANIFEST.md)). Brought to round 3 on 2026-11-18 by a records editor (AI agent, `claude-opus-5-5`) from the closure reports, reviews S and T, the evaluation record and the gate summaries. This editor ran no test.
 - Last distributed build: iOS 1.0.0 (147) from `b6fc0dad`, which contains none of the fixes below.
-- Severity and class definitions: [`docs/release-process/SEVERITY-AND-GATES.md`](../../release-process/SEVERITY-AND-GATES.md). Severity is as rated by the audit or review named in the row; re-ratings are shown with their source. Where no review rated an item, the row says so.
+- Severity and class definitions: [`docs/release-process/SEVERITY-AND-GATES.md`](../../release-process/SEVERITY-AND-GATES.md). Severity is as rated by the audit or review named in the row. **No severity was lowered in round 3.**
 - Status values:
-  - `FIXED IN CODE` — committed on the local branch `release-readiness/v1`; unreleased, not pushed, not built by CI, not deployed.
-  - `VERIFIED (how)` — the stated check was run at a named commit by a named actor. Simulator is not device.
-  - `OPEN` — not done.
-  - `OWNER DECISION` — waiting for the owner (DECISIONS-NEEDED.md row given). The owner has accepted no limitation and approved no proposal.
+  - `FIXED IN CODE (commit)` — committed on the local branch; unreleased, not pushed, not built by CI, not deployed, not on a device.
+  - `VERIFIED (how, by whom)` — the stated check was run by the named actor. Simulator is not device; local stack is not production; local gate is not CI; synthetic messages are not real bank traffic.
+  - `OPEN` — not done, or done only in part.
+  - `DECIDED BY OWNER (brief §3.x)` — settled by the owner's approved decisions of 2026-11-17 ([OWNER-BRIEF-ROUND3.md](OWNER-BRIEF-ROUND3.md) §3, recorded as D-20 in `docs/project/DECISIONS.md`). The owner decided the product question; the owner did not accept any remaining defect.
+  - `ENGINEERING CHOICE` — chosen by an engineer in round 3 where no owner decision exists; the owner may reverse it ([DECISIONS-NEEDED.md](DECISIONS-NEEDED.md) table D).
   - `NEEDS ACCESS` / `NEEDS DEVICE` — cannot be done from this machine.
-  - `DECIDED BY PROJECT RECORD` — settled by an existing owner record found by DECISIONS-NEEDED table A, not by this assessment.
-- The final parser commit `50957c06` was reviewed by reviewer R (`evidence/audits/R-review-of-tenth-parser-commit.md`): **ACCEPT WITH FOLLOW-UP** — no S1, no regression from that commit on the device or the effective iOS-Cloud path; open defects carried from the baseline (RR-01). The ninth parser commit `75dab61a` was **rejected** by reviewer Q, and `50957c06` removed its additions. Every code commit after the baseline has had an independent review (REVIEW-CLOSURE.md). A review is by an AI agent, is not an approval, and covers only the commit it names.
+- A row fixed in code that still needs a deploy, a signed build or a device run is **not closed**.
+- Round-3 reviews: S (money correctness) gave ACCEPT WITH FOLLOW-UP at `a157e68e` with one open S2 (PRIV-1r); T (platform and records) gave ACCEPT or ACCEPT WITH FOLLOW-UP in every area at `7dd6efa8` and did not re-review later commits. Reviews are by AI agents and are not approvals.
 
 ## Totals (counted from the rows below)
 
-| Severity | Rows | Of which still open in some part | Closed or not applicable |
+| Severity | Rows | Open in some part | Closed, decided out of scope, or not applicable |
 |---|---|---|---|
-| S1 | 13 | 10: V1-001, V1-003, V1-005, V1-007, V1-014, V1-015, V1-020, V1-063, V1-072, V1-078 | V1-002 (closed for the migration ledger), V1-004 (Android out of V1 by project record), V1-077 (a branch-only regression, fixed in code and verified by reviewers Q and R) |
-| S2 | 31 | 27 | V1-010, V1-018 (fixed in code with tests), V1-054 (verified in a configured harness; device part is MDT), V1-027 (follows Android, out of V1 by project record) |
-| S3 | 43 | not counted | — |
-| S4 | 3 rows + backlog list | not counted | — |
+| S1 | 13 | **10**: V1-001, V1-003, V1-005, V1-007, V1-014, V1-015, V1-020, V1-063, V1-072, V1-078 | 3: V1-002 (ledger known), V1-004 (Android out of V1, brief §3.1), V1-077 (branch-only regression, closed in round 2) |
+| S2 | 32 (31 + V1-091) | **26** | 6: V1-010, V1-017, V1-018, V1-019, V1-027 (Android, brief §3.1), V1-054 |
+| S3 | 54 (43 + 11 new) | not counted | — |
+| S4 | 7 rows (3 + 4 new) + backlog list | not counted | — |
 
-90 numbered rows in all (V1-001 … V1-090). "Closed" here never means released: nothing is deployed, built by CI or run on a device.
+**106 numbered rows** (V1-001 … V1-106). New in round 3: V1-091 … V1-106. "Closed" never means released.
 
-S1 IDs: V1-001, V1-002, V1-003, V1-004, V1-005, V1-007, V1-014, V1-015, V1-020, V1-063, V1-072, V1-077, V1-078. Open S1: V1-001, V1-003, V1-005, V1-007, V1-014, V1-015, V1-020, V1-063, V1-072, V1-078.
+Of the 10 open S1 rows, 7 are fixed in code and wait only for a signed build, a device run and (for the parser rows) the server deploy: V1-001, V1-005, V1-007, V1-014, V1-020, V1-072, V1-078. Three wait for an owner action outside the code: V1-003 (App Store Connect privacy answers), V1-015 (reviewer notes submitted with the build), V1-063 (production ad flags off, plan step P4). V1-001 and V1-072 also carry open residual defects measured by review S (V1-094, V1-098).
 
-## S1 — blockers
+S2 open: V1-006, V1-008, V1-009, V1-011, V1-012, V1-013, V1-016, V1-021, V1-022, V1-023, V1-024, V1-025, V1-026, V1-055, V1-062, V1-065, V1-071, V1-073, V1-074, V1-076, V1-079, V1-082, V1-083, V1-084, V1-087, V1-091.
+
+## Status at the candidate `a157e68e` (every row)
+
+This table is the current status. The detailed tables further down keep the round-2 text as history; where they differ, this table wins.
+
+| ID | Sev | Status at `a157e68e` |
+|---|---|---|
+| V1-001 | S1 | FIXED IN CODE (`bae159e2`, `640562f6`, `b6f102b4`, `7dd6efa8`, `6f771108`, `f4dcabd3`, `a157e68e`: meaning before amount on device and server). VERIFIED on synthetic sets only: held-out set of 753 (evaluation specialist; one author; failing families were tuned with sibling examples, so weaker evidence) — 0 declined/pending saved, 0 wrong amount/currency/direction on the three deterministic and oracle paths; review S at `a157e68e`: 11 wrong / 3 silent / 62 review of 708 on the iOS import, 9 / 26 / 77 on the server alone (75 / 3 / 62 and 52 / 21 / 107 at `5dae2e2d`). Real AI model never run. **NOT CLOSED**: not deployed, no build, no device run with real messages; residual classes V1-094 (CUE-1), V1-098 (PRE-*) |
+| V1-002 | S1 | CLOSED for the ledger (round 2). Production has 134 of the candidate's 135 migrations; the new one is plan step P2 |
+| V1-003 | S1 | OPEN — NEEDS ACCESS. Answers drafted (ops, STORE-READINESS closure section); App Store Connect entry and the release archive's Privacy Report are the owner's |
+| V1-004 | S1 | DECIDED BY OWNER (brief §3.1): Android release readiness is outside V1. Android code kept |
+| V1-005 | S1 | FIXED IN CODE (`640562f6`): ads compiled out of the V1 build, store workflows attach no AdMob values; VERIFIED by tests and read by reviewer T. NOT CLOSED: the linked SDKs' network silence NOT TESTED (device check MDT-IOS-R3-08); production flags still ON (V1-063); declarations must still describe the linked SDK truthfully |
+| V1-006 | S2 | DECIDED BY OWNER (brief §3.4): deletion is final. FIXED IN CODE and in the repository policy text (`640562f6`, `7cab5e8b`, `4c428719`); D1–D4 deletion tests pass on a local stack (data specialist; reviewer T). OPEN: the live legal site still shows the old text (redeploy after release, owner); worker deploy (V1-062) |
+| V1-007 | S1 | DECIDED BY OWNER (brief §3.5). FIXED IN CODE (`640562f6`): exact legal URLs allowed with Cloud off; VERIFIED by unit tests (consent specialist) and read by reviewer T. NOT CLOSED: no build, no device |
+| V1-008 | S2 | FIXED IN CODE (`d70ba396`, `640562f6`): disk-space probe compiled out of release builds and its manifest entry removed (ENGINEERING CHOICE for B16); VERIFIED by a release-like unsigned build (iOS specialist: symbol absent). OPEN: the archive Privacy Report needs a signed archive |
+| V1-009 | S2 | OPEN. `ios-signed-release` hardened (round 2) and now enforces the sign-in variables; contract tests only; **never run on Codemagic** |
+| V1-010 | S2 | CLOSED in code (round 2) |
+| V1-011 | S2 | OPEN residual (FR-11 bypasses). Skip manifest satisfied in gate run 4 |
+| V1-012 | S2 | OPEN. XCTest **200 passed, 0 failed** on an iPhone 17 Pro simulator on the tree that became `a157e68e` (iOS specialist, implementer only). Not on Codemagic |
+| V1-013 | S2 | FIXED IN CODE (`bae159e2`): opt-in backend stage `tools/backend_behaviour.sh`; ran at `f4dcabd3` (ops: 135 migrations, 13 proofs). OPEN: not run in the strict gate (status `not-run`), not run at `a157e68e`, not CI |
+| V1-014 | S1 | DECIDED BY OWNER (brief §3.1). FIXED IN CODE (`640562f6`): iPhone only, portrait; contract-tested; read by reviewer T. NOT CLOSED: no signed build; iPad compatibility-mode behaviour NOT TESTED (MDT-IOS-R3-09) |
+| V1-015 | S1 | DECIDED BY OWNER (brief §3.11): reviewer uses Sign in with Apple; no blocker found (ops). OPEN until the notes go with a build (owner) |
+| V1-016 | S2 | DECIDED BY OWNER (brief §3.11): keep Apple, Google and email code. Store workflows fail if the variables are missing (`640562f6`). OPEN — NEEDS ACCESS: Codemagic values not visible |
+| V1-017 | S2 | DECIDED BY OWNER (brief §3.9). FIXED IN CODE (`640562f6`): copy says both turn off together; tests; reviewer T: policy matches. CLOSED in code |
+| V1-018 | S2 | CLOSED in code (round 1) |
+| V1-019 | S2 | DECIDED BY OWNER (brief §3.7). FIXED IN CODE (`640562f6`): 249 countries, coverage note separate from country; tests; reviewer T accepted. CLOSED in code. Follow-on: V1-100 |
+| V1-020 | S1 | DECIDED BY OWNER (brief §3.3, merge). FIXED IN CODE (`640562f6`, `7dd6efa8`, `6f771108`); VERIFIED on local stacks by the data specialist and by reviewer T (restore + sync `+24 ~2`). NOT CLOSED: S9/S9b two-device cases not run (V1-101); limits V1-102; no device |
+| V1-021 | S2 | OPEN in part. Deploy order written as one package (RELEASE-PLAN, regenerated at `f4dcabd3`, commit id corrected to `a157e68e`). Auth hook and Vault values unknown |
+| V1-022 | S2 | FIXED IN CODE (`bae159e2`): global AI budget guard (migration `20261117120000`, four call sites); local tests. OPEN: not deployed; provider budget alert not set (owner) |
+| V1-023 | S2 | OPEN. PITR off, no backups (ops re-read 2026-11-18). Owner-run `pg_dump` before P1/P2 proposed, not run |
+| V1-024 | S2 | OPEN. Monitoring queries, thresholds and actions written (RELEASE-PLAN (g)); no alerting exists; monitoring owners not named |
+| V1-025 | S2 | FIXED IN CODE (`bae159e2`): Next 15.5.29, `npm audit --omit=dev` 0 (ops); build and auth tests pass. OPEN: signed-in admin NOT TESTED; deployment unknown |
+| V1-026 | S2 | OPEN — owner and counsel. Ops: `ITSAppUsesNonExemptEncryption = false` is not supportable as written; question for counsel prepared (France declaration included) |
+| V1-027 | S2 | DECIDED BY OWNER (brief §3.1): Android out of V1 |
+| V1-028 | S3 | Unchanged: fixed; REV-11 (S4) open |
+| V1-029 | S3 | Unchanged: fixed |
+| V1-030 | S3 | Unchanged: fixed |
+| V1-031 | S3 | FIXED IN CODE in part (`bae159e2`, `640562f6`): an absent currency is filled only from a confidently matched account, otherwise review; unit tests (AI specialist). No persistent "currency source" column (PARTIAL) |
+| V1-032 | S3 | DECIDED BY OWNER (brief §3.14). FIXED IN CODE (`640562f6`): "Manually entered balance" / "Last balance reported by the bank" with time; tests; contrast measured. Not on a device |
+| V1-033 | S3 | OPEN. Not addressed; schema still v43 |
+| V1-034 | S3 | FIXED IN CODE: cover on resign-active (ENGINEERING CHOICE for B24). NEEDS DEVICE (MDT-IOS-R3-06) |
+| V1-035 | S3 | FIXED IN CODE (`640562f6`): legacy banner bilingual; XCTest. NEEDS DEVICE (MDT-IOS-R3-11) |
+| V1-036 | S3 | DECIDED BY OWNER (brief §3.12): details shown, OS preview settings respected, only masked last four in APNs. FIXED IN CODE; NEEDS DEVICE (MDT-IOS-R3-05) |
+| V1-037 | S3 | DECIDED BY OWNER (brief §3.13). FIXED IN CODE: signed-out capture reports failure, nothing retained; XCTest. NEEDS DEVICE (MDT-IOS-R3-01/-02) |
+| V1-038 | S3 | OPEN. Not changed; device check MDT-IOS-R3-10 |
+| V1-039 | S3 | Unchanged: fixed; REV-10 open |
+| V1-040 | S3 | Unchanged: OPEN |
+| V1-041 | S3 | Unchanged: fixed |
+| V1-042 | S3 | Unchanged: OPEN (B18) |
+| V1-043 | S3 | Unchanged: OPEN |
+| V1-044 | S3 | DECIDED BY OWNER (brief §3.6). FIXED IN CODE: no preselection; existing choice kept; tests |
+| V1-045 | S3 | ENGINEERING CHOICE for B14: no catalog request with Cloud off; repository policy corrected (`7cab5e8b`). Live site not redeployed. Cloud-off users still get no force-update notice |
+| V1-046 | S3 | Unchanged: OPEN (B25) |
+| V1-047 | S3 | Unchanged: OPEN. Client re-checks consent before each send (brief §3.9; reviewer T) |
+| V1-048 | S3 | DECIDED BY OWNER (brief §3.10), superseding record A3: shared learning on only with the explicit activation; a missing preference reads OFF and existing users are asked once (orchestrator's reading of §3.10 and §3.8; the owner may reverse the re-ask) |
+| V1-049 | S3 | Unchanged: fixed (document); rollback unrehearsed |
+| V1-050 | S3 | Unchanged: OPEN |
+| V1-051 | S3 | Unchanged: OPEN |
+| V1-052 | S3 | Unchanged: OPEN |
+| V1-053 | S3 | DECIDED BY OWNER (brief §3.1): Android out of V1 |
+| V1-054 | S2 | CLOSED (round 2); still in the gate (run 4) |
+| V1-055 | S2 | OPEN. Strict gate 15/15 at `a157e68e` (local Mac, not CI). Nothing pushed, built by CI, signed, deployed or on a device |
+| V1-056 | S3 | DECIDED BY OWNER (brief §3.15): stored transactions are not re-analysed or rewritten; the review-list proposal is not pursued. Rows stored by build 147 from declined messages stay as they are unless the user edits them |
+| V1-057 | S3 | Unchanged: fixed in code; server not deployed |
+| V1-058 | S3 | FIXED IN CODE (`bae159e2`): prompt version recorded with each result; no migration |
+| V1-059 | S3 | Unchanged: fixed (records) |
+| V1-060 | S3 | Unchanged: fixed in code; not deployed |
+| V1-061 | S3 | PARTLY. The Swift preview no longer drives any outcome claim in the new build (iOS specialist). Build 147's Shortcut banner still says a purchase was captured with the parsed category until users update |
+| V1-062 | S2 | OPEN — NEEDS ACCESS: deploy `account-deletion-worker` (plan P1), then a read-only count of orphaned profile photos. Fix VERIFIED on a local stack (D1–D4, data specialist and reviewer T) |
+| V1-063 | S1 | OPEN — NEEDS ACCESS. Brief §3.2 decides "no advertising". The V1 build cannot show ads, but the eight production flags are still ON; the change is plan step P4, not executed |
+| V1-064 | S4 | Unchanged: OPEN |
+| V1-065 | S2 | Unchanged: fixed for email sign-in on a simulator; NEEDS DEVICE |
+| V1-066 | S3 | FIXED IN CODE (`640562f6`): batch label and hold wording; tests. Not seen at runtime |
+| V1-067 | S3 | FIXED IN CODE: Cloud-off sign-out sentence (ENGINEERING CHOICE B26 (a)); tests. Code comments call it a decision (V1-104) |
+| V1-068 | S4 | FIXED IN CODE: Western digits in Arabic dates on Home and charts; tests |
+| V1-069 | S4 | Unchanged: fixed; not seen on screen |
+| V1-070 | S3 | DECIDED BY OWNER (brief §3.3). FIXED IN CODE: confirmation names merge or full apply (`6f771108`); local stack. Limits V1-102 |
+| V1-071 | S2 | OPEN in part. Held-out: 0 lost silently on every path. Review S at `a157e68e`: 3 silent on the iOS import, 26 on the server alone (V1-096, V1-097) |
+| V1-072 | S1 | FIXED IN CODE for the measured classes (notices, bills due, expected salary, adverts → not movements). Held-out: 0 non-transactions saved on every path. NOT CLOSED: residual CUE-1 (V1-094); not deployed; no device. Build 147 after the server deploy: 24 non-transactions still saved on its cloud path (44 today) |
+| V1-073 | S2 | FIXED IN CODE for pending refunds and scheduled orders (`f4dcabd3`), VAL-1 closed (`a157e68e`, reviewer S). Held-out: 0 declined/pending saved. OPEN: CUE-1 wordings (V1-094); not deployed |
+| V1-074 | S2 | OPEN. The real AI model was never run (no authorized key; the command is ready in `evidence/closure/eval.md` §5). Validators tested against an oracle and against reviewer S's forged answers |
+| V1-075 | S3 | OPEN. Held-out completed messages sent to review: 27.2 % without Cloud (fails A7), 8.8 % deterministic cloud, 3.1 % oracle. Review S: HOLD-1 (V1-095) |
+| V1-076 | S2 | OPEN in part. Shared rules identical on both sides (parser specialist); held-out cloud path: 4 wrong type with the right direction |
+| V1-077 | S1 | CLOSED (round 2) |
+| V1-078 | S1 | Unchanged: FIXED IN CODE (`5583cbea`); NOT CLOSED until deploy, build and device |
+| V1-079 | S2 | Unchanged: FIXED IN CODE; NOT CLOSED until deploy and build |
+| V1-080 | S3 | PARTLY. Differential harness `tools/parser_diff` added; its review budget is a count set at 38 of 38 (V1-099) |
+| V1-081 | S3 | PARTLY. Shared rules aligned (parser specialist); not re-checked by a reviewer |
+| V1-082 | S2 | FIXED IN CODE for the measured direction classes (`bae159e2` … `6f771108`); held-out: 0 wrong direction. OPEN: RF009 Arabic refund wrong direction (V1-098); not deployed |
+| V1-083 | S2 | FIXED IN CODE: own-account transfers go to review on every path (`f4dcabd3`). OPEN: AT008 still booked as spending (V1-098); not deployed |
+| V1-084 | S2 | FIXED IN CODE: charged amount, not the foreign figure; held-out: 0 wrong currency. Not deployed |
+| V1-085 | S3 | OPEN — owner risk tolerance not decided (B29). See V1-075, V1-103 |
+| V1-086 | S3 | PARTLY. Notice-sentence rejection fixed (AI specialist). Held-out A8a: server 1.3 % pass; device 7.5 % fails by the letter (V1-103) |
+| V1-087 | S2 | MEASURED: build 147 with the new server is worse in 0 total-changing classes on the held-out set at `a157e68e` (deploy condition met; synthetic). OPEN: nothing deployed; the reverse pair (new build, old server) not measured |
+| V1-088 | S3 | OPEN. Server alone rejects 102 completed held-out messages that the matching device recovers (A6 stays 0); review S: 26 silent server-side |
+| V1-089 | S3 | FIXED IN CODE (class 3, cashback reversal deducted is spending; parser specialist, shared cases). Not separately re-checked by S |
+| V1-090 | S3 | ENGINEERING CHOICE: ATM cash deposit → review (interim; owner may reverse). Truth labels in the shared table still say income |
+| V1-091 … V1-106 | — | New rows, below |
+
+## New in round 3 (open)
+
+| ID | Title | Source | Sev (by) | Class | Platforms | Status |
+|---|---|---|---|---|---|---|
+| V1-091 | PRIV-1r: some person names still reach the server and the AI model after redaction — after "From <Name>:", "Attn", "Name:", "Customer", and «إلى حساب <name>» under the `payment` hint (14 cases) | S at `a157e68e` | **S2** (S) | REPRODUCED (synthetic) | iOS, Backend | OPEN. Narrowed four times (`f4dcabd3`, `a157e68e`); 0 new leaks; device == server on 246 texts. Pre-existing. Consent text says sanitized text is not guaranteed anonymous (brief §3.8). Needs a fix or an owner-signed exception |
+| V1-092 | MASK-1: "Card *4521: SAR 85.00 paid to <Merchant>" with no purchase word masks the merchant as a person; the model loses the merchant and category | S at `a157e68e` | S3 (S) | REPRODUCED | iOS, Backend | OPEN. New at `a157e68e`; amount, acceptance and date unchanged |
+| V1-093 | MASK-0: "Purchase To: <Merchant>" and «شراء … إلى <Merchant> بطاقة NNNN» mask the merchant and the user's own card suffix | S | S3 (S) | REPRODUCED | iOS, Backend | OPEN. Pre-existing |
+| V1-094 | CUE-1: recorded although no money moved — "Awaiting merchant confirmation", "Attempted purchase", "will receive … cashback on <date>", "… will be charged tomorrow", "awaiting authorization", Arabic «عملية معكوسة:» before a total | S | S3 (S) | REPRODUCED | iOS, Backend | OPEN. Pre-existing; wording gaps, not the gate |
+| V1-095 | HOLD-1: completed messages held for review — "expected/pending refund … credited", purchase with a refund footer, third-party transfer naming two account types, "Bill + VAT = total paid", FX-fee total | S | S3 (S) | REPRODUCED | iOS, Backend | OPEN since `f4dcabd3`. No wrong total; spending or income understated until the user acts |
+| V1-096 | FT-1: a purchase with a "Standing orders will be executed…" footer is silent on the server; the device reviews it | S | S3 (S) | REPRODUCED | Backend (iOS recovers) | OPEN |
+| V1-097 | NEW-2r: 6 completed shapes are no-movement on the server (bill-reminder tail, month-total tail, "as scheduled") | S | S3 (S) | REPRODUCED | Backend (iOS recovers) | OPEN. Claimed fixed at `7dd6efa8`; S found it still open |
+| V1-098 | PRE-*: own-account transfer booked as spending (AT008); Arabic refund booked in the wrong direction (RF009); B147-1 and PAR-1 not re-measured | S | S3 (S) | REPRODUCED | iOS, Backend | OPEN. Pre-existing |
+| V1-099 | HAR-1: the differential harness's review budget is a message count set exactly at 38 of 38; its cases do not cover the HOLD-1 shapes | S | S4 (S) | CODE-SUPPORTED | Tools | PARTLY: committed bytecode removed (`0eafa897`) |
+| V1-100 | SP-04: build 147 knows 50 currencies; rows in the 105 new currencies are quarantined or parked on a phone still on 147, so a user with two phones sees them missing there | T | S3 (T) | CODE-SUPPORTED | iOS | PARTLY: written into RELEASE-PLAN (c) with options; whether 147's planning repair rewrites the server row is not traced |
+| V1-101 | SP-06: two-device pull-conflict and stale-owner cases (S9/S9b) have no passing end-to-end run against a real server; the sync suite is not in the gate | T | S3 (T) | REPRODUCED | All | PARTLY: harness fixed, `+24 ~2` on T's stack with S9/S9b skipped by manifest |
+| V1-102 | SP-12: on a merge restore, rules only in the backup are not added; a transaction deleted by mistake cannot be recovered by merge (only by a full apply that loses newer data) | T | S4 (T) | CODE-SUPPORTED | All | OPEN as a limitation of decision 3.3; stated in the restore confirmation and KNOWN-LIMITATIONS. A merchant-rule tombstone (schema v44) is an optional owner decision |
+| V1-103 | Held-out evaluation fails two engineering criteria at `a157e68e`: A7 without Cloud 27.2 % (bar 15 %; 119 of 123 already reviewed at build 147); A8a device 7.5 % by the letter (1.8 % on rows that must be saved) | eval §§12–13 | S3 (rated here by analogy to V1-085, V1-086; no reviewer rated it) | REPRODUCED (synthetic) | iOS, Backend | OPEN. Criteria are engineering bars, not owner-approved risk tolerances, and were not relaxed |
+| V1-104 | SP-07: code comments cite "decision B24" and "decision B26 (a)" as owner decisions (`sign_out_sheet.dart`, its test, `SceneDelegate.swift`); they are engineering choices | T | S4 (T) | CODE-SUPPORTED | iOS | OPEN (comments not edited) |
+| V1-105 | Large text: text clipped without an ellipsis is not detected; 3 collapsed navigation titles allowlisted; nothing checked on a device, VoiceOver or the largest accessibility sizes | T (SP-10 residual), a11y | S4 (T) | CODE-SUPPORTED | iOS | OPEN. SP-10 itself fixed and verified by T |
+| V1-106 | Production (read-only): one account has 540 failed iOS notifications in 7 days (error 2003) and 2 captures stuck in `processing` for over an hour | ops §9 | S3 (rated here: one account, delivery only; not rated by a reviewer) | REPRODUCED (production read-only) | Backend, iOS | OPEN. Not investigated; no production write is authorized |
+
+## Round-2 rows (history; the status table above is current)
+
+Status words in these tables ("OWNER DECISION", "OPEN", and the B-row references) are as they stood at `5dae2e2d`. Owner decisions that were open then were settled on 2026-11-17 where the status table says DECIDED BY OWNER.
+
+### S1 — blockers (round-2 text)
 
 | ID | Title | Sources | Class | Platforms | Status |
 |---|---|---|---|---|---|
@@ -45,7 +171,7 @@ S1 IDs: V1-001, V1-002, V1-003, V1-004, V1-005, V1-007, V1-014, V1-015, V1-020, 
 | V1-077 | OR-01: a completed movement with a notice word (card renewal, e-statement, card activated), no listed money word and an amount the device cannot read is silent on every path | OR-01; PR-02 | REPRODUCED (deterministic legs; AI leg not run); frequency SUSPECTED | iOS, Backend | **CLOSED (branch-only regression, fixed in code).** Introduced by `1be44623`, narrowed by `c8cef416` (3 of O's 186) and `5583cbea` (P: 25 of 182 with unlisted currency forms, PR-02); removed by `75dab61a` (informational words can never silence a message), kept in `50957c06`. VERIFIED by reviewers Q (25 → 0) and R (0 completed messages silent on the device and effective path on O's, P's, N's and corpus sets). Never in an installed build or the deployed server. Separate server-only rejections: V1-088 |
 | V1-078 | OR-03: a limit or balance figure recorded as the transaction amount (`POS 4521 Test Mart 89.50. Credit limit: SAR 20,000` → payment 20,000); also a code figure as the amount | OR-03; PR-03, PR-06 | REPRODUCED (server and device); import acceptance CODE-SUPPORTED | iOS, Backend | Pre-existing at `ab5dc10a` (build 147, deployed server). **FIXED IN CODE `5583cbea`** (a figure after a limit, balance, remaining, due or code label is never the amount on device or server; an AI amount equal to it is rejected; an import whose server amount differs from the device's reading is not confirmed; table amounts asserted). VERIFIED by reviewers P (0 correct → wrong amount on any set; G007–G009 9,000 / 1,234.56 / 20,000 → the true 8 / 14 / 0.1) and R (0 wrong-amount regressions; wrong amounts 27 → 6 on the effective path, the 6 being foreign-currency figures, V1-084). Cost: label-led correct payments wait in review (PR-03, V1-085). **Not closed:** needs the server deploy with a new build (V1-087) and a device check (MDT-IOS-07f). The incoming-wording-as-payment part formerly listed here is V1-082 |
 
-## S2 — must fix or be accepted by the owner
+### S2 (round-2 text)
 
 | ID | Title | Sources | Class | Platforms | Status |
 |---|---|---|---|---|---|
@@ -81,7 +207,7 @@ S1 IDs: V1-001, V1-002, V1-003, V1-004, V1-005, V1-007, V1-014, V1-015, V1-020, 
 | V1-084 | RR-01 class 4: a foreign-currency purchase records the foreign figure instead of the amount charged (e.g. `Purchase of USD 20.00 … Charged SAR 75.00` → USD 20); also `SR1,250.00` read as 250 and `…at USD Store` read as USD | RR-01; PR-06 | REPRODUCED (reviewer harness, synthetic) | iOS, Backend | **OPEN — open defect, not accepted.** Rated S2 by R (impact class S1). R at `50957c06`: **6** foreign figures recorded (effective path, bank sender) plus 1 wrong currency, each as at the baseline; spending recorded in the wrong currency and amount. PR-06's import change (`75dab61a`) is on the fixer's word only. Owner decision (B28) |
 | V1-087 | The server functions and the new app build must ship together: the server at `50957c06` alone rejects 21 completed messages (V1-088) and reads one wording as a refund (V1-089) that only the matching device build recovers into review; a mixed pair (new server with build 147, or the reverse) was not measured | RR-04; R §9 conditions | CODE-SUPPORTED (build 147's fallback); mixed pair NOT TESTED | iOS, Backend | Not rated by a review; rated here S2 because R's "nothing worse than the baseline" holds only for the matched pair. OPEN. By code (RELEASE-PLAN (b)): build 147 re-parses a server-rejected capture with its own old parser and confirms it, so for these 21 messages build 147's result becomes its old local parse — what that gives for each message was not measured. Deploy order and timing are part of RELEASE-PLAN (b) and DECISIONS-NEEDED B28 |
 
-## S3 — fix if cheap and safe
+### S3 (round-2 text)
 
 | ID | Title | Sources | Class | Platforms | Status |
 |---|---|---|---|---|---|
@@ -129,7 +255,7 @@ S1 IDs: V1-001, V1-002, V1-003, V1-004, V1-005, V1-007, V1-014, V1-015, V1-020, 
 | V1-089 | RR-04 (b): the server reads `Cashback reversal: SAR 15.00 deducted…` as a **refund** (the baseline server left it unresolved); the shared-table pin T1330 says "as at the baseline or better", which is untrue on the server | RR-04; RR-07 | REPRODUCED (reviewer harness, synthetic) | Backend | Rated S3 by R. Wrong direction on the server alone (spending understated by the amount on any path that reads only the server row); the device read it as a refund already at the baseline, so the effective path is unchanged (wrong at every version, counted in V1-082). OPEN; pin text uncorrected |
 | V1-090 | RR-05: an ATM cash deposit is booked as **income** (golden G014 ×13, corpus K014), while the use case's own accounting comment calls it a neutral transfer | RR-05; PR-08 | REPRODUCED (reviewer harness, synthetic) | iOS, Backend | Rated S3 by R. Introduced in `75dab61a`, narrowed in `50957c06`. At `c8cef416` the same message was read as a withdrawal. Whether a cash deposit is income or a neutral transfer is an owner policy decision (not yet a DECISIONS-NEEDED row). OPEN |
 
-## S4 — backlog
+### S4 (round-2 text)
 
 | ID | Title | Sources | Status |
 |---|---|---|---|
@@ -139,23 +265,23 @@ S1 IDs: V1-001, V1-002, V1-003, V1-004, V1-005, V1-007, V1-014, V1-015, V1-020, 
 
 Also S4, unchanged: PROD-13, PROD-14, PROD-15 / BE-12 / AND-12 / REL-21, PROD-16, PROD-17, PROD-18, IOS-11, IOS-12, SEC-09, SEC-10, SEC-11, SEC-12, SEC-13, BE-13; FR-12 (UI gaps); LR-10 (no test that "refund pending" is rejected); LR-12 (observer notes; "keep both" copy); NR-07 (copy and test backlog); REV-11 (see V1-028); the 26 production functions with a mutable `search_path` (advisor; not cross-checked).
 
-## UI/UX items still open
+## UI/UX items
 
-From [UI-UX-REVIEW.md](UI-UX-REVIEW.md) (audit G IDs) and review K.
+From [UI-UX-REVIEW.md](UI-UX-REVIEW.md) (audit G IDs) and review K. Status at `a157e68e`.
 
 | ID | Sev | Status |
 |---|---|---|
-| UX-02 Terms/Privacy links on sign-in | S3 | OWNER DECISION |
-| UX-05 tap targets | S3 | PARTLY: fixed on the 10 primary screens (widget test, `34ccc9e9`); sheets and secondary screens not scanned |
-| UX-09 text-scale cap 1.25× | S3 | OWNER DECISION (cap kept). Capped rendering seen on a simulator (J); full accessibility sizes unsupported and NOT TESTED |
-| UX-11 setup step controls | S3 | OWNER DECISION |
-| UX-14 manual source shows "Unspecified" | S4 | OWNER DECISION |
-| UX-15 consent-step order and prominence | S3 | OWNER DECISION |
-| UX-19, UX-20 design consistency | S4 | OWNER DECISION |
-| UX-21 What's new text | S4 | OWNER DECISION |
+| UX-02 Terms/Privacy links on sign-in | S3 | DECIDED BY OWNER (brief §3.5); legal pages reachable with Cloud off, before consent (`640562f6`); tests. Not on a device |
+| UX-05 tap targets | S3 | FIXED IN CODE: 80 of 80 measured targets ≥ 44 pt (a11y specialist, widget tests). Not on a device |
+| UX-09 text-scale cap | S3 | FIXED IN CODE: cap removed; gate covers 32 screens at up to 3.1× and fails on ellipsis truncation (planted truncation fails — reviewer T). Residual V1-105. Not on a device |
+| UX-11 setup step controls | S3 | Country step: DECIDED BY OWNER (brief §3.7), done. Other step controls unchanged: OPEN |
+| UX-14 manual source shows "Unspecified" | S4 | Unchanged |
+| UX-15 consent-step order and prominence | S3 | DECIDED BY OWNER (brief §3.8): first-run consent with "Agree and enable" and "Continue locally"; done; tests |
+| UX-19, UX-20 design consistency | S4 | Unchanged |
+| UX-21 What's new text | S4 | Unchanged |
 | UX-22 debug-only onboarding limit | S4 | OPEN (no user impact) |
 | UX-23 documentation drift | S4 | OPEN |
-| FR-12 label/hint share a colour; legacy `all_expenses` row shows an empty category when edited; no income/transfer test; target overlap untested | S4 | OPEN |
+| FR-12 label/hint share a colour; legacy `all_expenses` row; no income/transfer test; target overlap untested | S4 | PARTLY (a11y specialist): legacy `all_expenses` row fixed with a test; label/hint colour, income/transfer tests and target overlap not done |
 
 ## Baseline (pre-existing) test failures
 

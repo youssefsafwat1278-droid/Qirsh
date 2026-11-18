@@ -1,36 +1,32 @@
-# Version 1 — proposed scope
+# Version 1 — scope
 
-Assessed at: the commit recorded in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md) (`50957c06` at the time of writing; local branch `release-readiness/v1`, not pushed, built by CI, deployed or submitted). `23499229`, `af675aec`, `c8cef416`, `5583cbea` and `75dab61a` are earlier points on the same line, not alternative candidates.
+Assessed at: the candidate **`a157e68e`** ([RELEASE-MANIFEST.md](RELEASE-MANIFEST.md); local branch `release-readiness/v1`, not pushed, built by CI, deployed or submitted).
 
-**Status: PROPOSAL. Nothing in this document has been approved by the owner.** It records what the code at the candidate does and what the specialist audits recommend. Every item under "Open scope decisions" is still the owner's call, and the IN / IN-BUT-OFF / OUT lists change if those decisions go another way.
+**Status: the scope questions are decided by the owner** in [OWNER-BRIEF-ROUND3.md](OWNER-BRIEF-ROUND3.md) §3 (approved 2026-11-17; D-20). This file records what those decisions are and what the code at the candidate does. The owner decided the scope; the owner has not accepted any open defect. Questions still open are in §4 and in [DECISIONS-NEEDED.md](DECISIONS-NEEDED.md) table C.
 
-- Audit baseline: `ab5dc10a` (2026-11-17). 28 commits follow it: 12 round-1 code commits (through `af675aec`), 1 records commit (`d830855e`) and 15 round-2 code commits (through `50957c06`). They fix defects and harden the release workflow; they add no feature, route or flag. Last distributed build: TestFlight 1.0.0 (147) from `b6fc0dad` (internal testing only), which has none of those fixes. No public release exists yet.
-- Sources: product-scope audit [`A-product-scope.md`](evidence/audits/A-product-scope.md) (§2.6, §2.7, "Proposed V1 scope"), the other audits in [`evidence/audits/`](evidence/audits/), and the issue register [`ISSUES.md`](ISSUES.md). Owner decisions cited are those in `docs/project/DECISIONS.md` and `docs/v1-release/V1_MASTER_PLAN.md` as quoted by the audits; several of those documents are stale (A §2.8). Decisions found in existing project records are listed in [DECISIONS-NEEDED.md](DECISIONS-NEEDED.md) table A. Production facts are from a read-only comparison ([`evidence/production-comparison.md`](evidence/production-comparison.md)).
-- Compiled by: AI agent (release-records compiler), claude-opus-5-5, 2026-11-17; reconciled to `c8cef416` and then to `50957c06` by a release-records editor (same model). No code was run for this document.
+- In short: **iPhone only; no advertising; all countries; Arabic and English with no preselected language; restore merges; deletion is final; legal pages open with Cloud off; first-run consent; no historical rewrite.**
+- Audit baseline: `ab5dc10a` (2026-11-17). Last distributed build: TestFlight 1.0.0 (147) from `b6fc0dad` (internal testing only), which has none of the changes. No public release exists yet.
+- Sources: product-scope audit [`A-product-scope.md`](evidence/audits/A-product-scope.md), the closure reports in [`evidence/closure/`](evidence/closure/), the issue register [`ISSUES.md`](ISSUES.md), and production facts from read-only checks ([`evidence/production-comparison.md`](evidence/production-comparison.md)).
+- Compiled 2026-11-17 by an AI agent (claude-opus-5-5); brought to round 3 on 2026-11-18 by a records editor (same model). No code was run for this document.
 
 ## 1. Audience, markets, languages, platforms, devices
 
 | Dimension | What the code / decisions say | Evidence | Unresolved |
 |---|---|---|---|
 | Audience | Individuals who receive bank SMS in Arabic or English and want automatic expense tracking. Sign-in is mandatory; no guest mode is reachable. | A §2.1, §2.6 | — |
-| Markets (store notes) | "Saudi and Egyptian markets" | `docs/v1-release/V1_APP_STORE_SUBMISSION.md:77` via A §2.6 | App Store availability territories not checked (no console access). |
-| Markets (app) | Onboarding offers 8 countries: SA, AE, EG, KW, QA, BH, OM, JO. Bundled bank catalog: 12 banks, EG ×8 and SA ×4 only. | `setup_screen.dart:83-92`, `assets/catalog/banks.json` via A §2.6 | **V1-019.** Production `banks` catalog not inspected. |
-| Languages | Arabic (template) and English, both complete (2092/2092 keys). Language screen preselects English. | A §2.3, `language_screen.dart:23` | **V1-044** (default language). iOS declares no `CFBundleLocalizations` / `ar.lproj` (H REL-19b), so system dialogs and the store listing may read as English-only. |
-| Platform: iOS | In V1 per `V1_MASTER_PLAN.md` and `auth_screen.dart:36` ("V1 is iOS-only by decision"). | A §2.6 | — |
-| Platform: Android | **Out of V1, decided by project record, not by this assessment** (`V1_EXTERNAL_BLOCKERS.md` EB-003 and `V1_MASTER_PLAN.md` §1, 2026-09-15; DECISIONS-NEEDED A1). Code-complete for SMS capture, never built as a release, never run on a device, Play declarations not submitted. DECISIONS D-1 still calls Android SMS capture a required core feature. | D §2, AND-01; A §2.6; DECISIONS-NEEDED A1 | V1-004 follows the record; reopens if the owner reopens Android. |
+| Markets | **All countries** (decision 3.7). App Store territories are set in the console (owner); France needs the encryption declaration or exclusion (DECISIONS-NEEDED C1) | brief §3.7; STORE-READINESS | Territories not checked (no console access) |
+| Markets (app) | Onboarding offers 249 countries (maintained ISO list). Verified bank coverage: SA and EG only, stated separately from the country choice. 155 storable currencies; 50 recognized in message text | consent closure report; `640562f6` | Build 147 knows 50 currencies (V1-100). Production `banks` catalog not inspected |
+| Languages | Arabic and English. First launch asks for a language with none preselected; existing users keep theirs (decision 3.6) | brief §3.6; `640562f6` | iOS declares no `CFBundleLocalizations` / `ar.lproj` (H REL-19b) |
+| Platform: iOS | **iPhone** (decision 3.1) | brief §3.1 | — |
+| Platform: Android | **Out of V1 by owner decision 3.1.** Android code is kept and must not regress | brief §3.1 | V1-004, V1-027, V1-053 move to the Android release |
 | iOS minimum OS | `IPHONEOS_DEPLOYMENT_TARGET = 16.0` on all targets; `Podfile` says 15.0. No V1 document states the OS floor. | A PROD-17; C §2 "Release config" | OS floor not recorded (PROD-17, S4). |
-| iOS device classes | `TARGETED_DEVICE_FAMILY = "1,2"` (iPhone and iPad); iPhone landscape enabled; no orientation lock in Dart. Only iPhone 6.9" screenshots exist. | A PROD-01, C IOS-08, H REL-08 | **V1-014.** |
+| iOS device classes | **iPhone only, portrait** (decision 3.1): `TARGETED_DEVICE_FAMILY = 1` in all six configurations (`640562f6`). On an iPad the app runs in iPhone compatibility mode | brief §3.1; iOS closure report | Compatibility mode NOT TESTED |
 | Android levels (if in scope) | minSdk 24, targetSdk 36, compileSdk 36 (implicit Flutter defaults). | D §2 | Pinning (AND-12, S4). |
-| Sign-in providers | Apple on iOS always; Google and email (one-time code) only if `QIRSH_GOOGLE_AUTH_ENABLED` / `QIRSH_EMAIL_AUTH_ENABLED` are true in Codemagic (default false). `android-release` passes neither, so an Android release has no sign-in method. Email sign-in worked on a simulator against a local stack (J, M); after it the tab bar was missing until `45ea901a` (RT-01, V1-065). | A §2.5, PROD-03/04; H REL-01 | **V1-016** (owner decision B6). Production Codemagic values unknown. |
+| Sign-in providers | **Apple, Google and email one-time code**, as available to existing users (decision 3.11). The store workflow fails unless all three variables are set (`640562f6`). Reviewer uses Sign in with Apple; no backdoor | brief §3.11 | Codemagic values not visible (owner) |
 
-Assumptions this proposal makes that the owner has not confirmed:
-1. V1 is iOS only. This is now settled by project record (DECISIONS-NEEDED A1), not by this assessment.
-2. V1 ships to the App Store, not only TestFlight, which needs a pipeline that does not exist yet (V1-009).
-3. The target markets are Saudi Arabia and Egypt as the store notes say; the six other onboarding countries are an open question (V1-019).
-4. Ads stay off at launch (V1-005). Production currently has every advertising flag ON at 100% (V1-063), contrary to decision D-19; whether ads appear depends on the build carrying AdMob IDs.
-5. The production backend has the candidate's migrations: a read-only check found exactly its 134 migrations (V1-002 closed for the ledger; names, not content). Three changed functions still need an owner-authorized deploy: `process-ios-sms`, `parse-sms`, `account-deletion-worker`.
+Settled by the owner on 2026-11-17 (formerly assumptions of this file): iOS only (3.1); no ads (3.2); all countries (3.7); sign-in methods kept (3.11). Still assumed: V1 ships to the App Store, which needs the never-run `ios-signed-release` workflow (V1-009, DECISIONS-NEEDED C2). Production has 134 of the candidate's 135 migrations; the package in RELEASE-PLAN deploys one migration and seven functions.
 
-## 2. Feature inventory (release build; inventory taken at `ab5dc10a`, behaviour changes from later commits noted)
+## 2. Feature inventory (release build; inventory taken at `ab5dc10a`, behaviour changes up to `a157e68e` noted)
 
 Status: **reachable** · **flagged off** (remote flag, default off) · **incomplete** (code ships, no entry point) · **dev-only** (debug builds only) · **unreachable** (dead code). Taken from A §2.7 (code inspection, not run); defaults from `app/lib/data/catalog/feature_flag_service.dart` via A §2.4. Production flag values are unknown.
 
@@ -48,14 +44,14 @@ Status: **reachable** · **flagged off** (remote flag, default off) · **incompl
 | Achievements / gamification | reachable | `/achievements` |
 | Help and coach marks | reachable | `/help` |
 | What's new, announcements, update banner | reachable (`enable_announcements` has no reader) | A §2.7 |
-| Consent: combined Smart Analysis & Cloud Sync grant and combined withdrawal (one control withdraws both; the copy still says separate, V1-017), re-ask, resume banner | reachable | setup step 1; Privacy |
+| Consent: first-run screen with "Agree and enable" and "Continue locally"; one control turns Cloud and AI off together; shared learning only after the activation, existing users asked once (decisions 3.8–3.10) | reachable | `640562f6` |
 | Capture, iOS: Shortcuts App Intent "Process Bank SMS", Share extension | reachable | C §2 |
 | Capture, Android: `RECEIVE_SMS` receiver, share intent | reachable in an Android build; Android is out of V1 by project record | D §2 |
 | Manual paste | reachable | `/paste` |
 | Cloud sync of ledger and planning entities, conflicts sheet | reachable (compiled on, gated by consent and server capability; the `ledger_*` / `planning_*_sync` flags have no reader) | A §2.4; `app_providers.dart:680-697` |
 | Data transfer: CSV / ZIP import and export, PDF | reachable (ZIP is not password-protected) | A §2.7, PROD-06 |
 | Learned rules, currency repair, sign-in methods, privacy, delete account | reachable | Settings tiles |
-| Legacy encrypted backup restore | reachable only when a legacy backup exists. Since `0f90003f` restore reconciles with cloud sync (V1-020, fixed in code); replace vs merge is owner decision B10, and the confirmation says "replace" under the merge default (V1-070) | `data_transfer_screen.dart:346-352` |
+| Legacy encrypted backup restore | reachable only when a legacy backup exists. **Merges** (decision 3.3); a device with no user data gets a full apply; the confirmation names the case (V1-020, V1-070; limits V1-102) | `640562f6`, `6f771108` |
 | Encrypted cloud backup enablement (`BackupScreen`) | incomplete (no caller; `/backup` redirects) | A PROD-09 |
 | Savings ledger (`/savings`, confirm sheet) | incomplete | A PROD-09 |
 | Bank-discovery confirmation sheet | incomplete (stream has no listener) | A PROD-09 |
@@ -63,84 +59,58 @@ Status: **reachable** · **flagged off** (remote flag, default off) · **incompl
 | Merchant offers / personalization | flagged off (`enable_offers_merchants`) | A §2.4 |
 | Affiliate click gateway | flagged off (`enable_affiliate_links` + cloud consent) | A §2.4 |
 | Referrals | flagged off by default (`enable_referrals`); **ON in production** | A §2.4; production-comparison §4.3 |
-| Ads: 6 banner placements + report interstitial (AdMob / UMP SDK linked) | flagged off by default (`enable_banner_ads` + 6 placement flags, `enable_report_ads`); **all ON at 100% in production** (V1-063); AdMob IDs injected only by workflows that attach the `admob` group: `ios-signed-release` and `android-release` attach it, `ios-signed` (which built TestFlight 147) does not | A §2.4; E SEC-01; `codemagic.yaml` |
-| UMP privacy-options tile | reachable when UMP requires it | `settings_screen.dart:515-524` |
+| Ads: 6 banner placements + report interstitial | **compiled out of the V1 build** (decision 3.2; `QIRSH_ADS_ENABLED` off; no remote flag can turn them on). GMA and UMP still linked, never started; network silence NOT TESTED. Production flags still ON until RELEASE-PLAN P4 (V1-063) | `640562f6`; iOS closure report |
+| UMP privacy-options tile | not reachable in the V1 build (UMP never started) | `640562f6` |
 | Proof-carrying engine | flagged off (shadow mode, records only; `enable_proof_autocommit` cannot be armed server-side) | A §2.7; B DATA-01 |
 | Capture pipeline switches: `capture_ai_fallback_enabled`, `capture_import_v3`, `capture_notify_v2`, `local_auto_confirm_v2`, `ai_sender_mapping_auto` | flagged off | A §2.4 |
 | `android_capture_ai_enabled` | on by default | A §2.4 |
-| Shared category learning | reachable; on by default once Cloud and AI are accepted | E §2.1, SEC-14 |
+| Shared category learning | on only with the explicit Cloud/AI activation; a missing preference reads OFF (decision 3.10, orchestrator's reading) | `640562f6` |
 | Design gallery, sync diagnostics, Developer settings group | dev-only (`kDebugMode`) | A §2.2 |
 | `foundation_home_screen.dart` | unreachable (no route, no caller) | A §2.2 |
-| Admin panel (Next.js): affiliate, announcements, banks, campaigns, categories, coupons, dashboard, flags, merchants, parser-lab, parsers, push, referrals | reachable for operators; deployment reported loopback-only, not verified. Next.js 14.2.35 with image optimization off (`f6dc5076`); 25 advisories remain (V1-025, owner decision B17) | A §2.7; F BE-07 |
-| Backend Edge Functions (33 function directories, plus the `_shared` library) | 28 deployed in production. `process-ios-sms`, `parse-sms` (V1-001, V1-060) and `account-deletion-worker` (V1-062) differ from the candidate and need an owner-authorized deploy. `process-ios-sms` uses its default model `gemini-3.8-flash`. Point-in-time recovery is off and no backups are listed (V1-023) | `supabase/functions/`; production-comparison §1–§4 |
+| Admin panel (Next.js): affiliate, announcements, banks, campaigns, categories, coupons, dashboard, flags, merchants, parser-lab, parsers, push, referrals | reachable for operators; deployment reported loopback-only, not verified. Next.js 15.5.29; production `npm audit` 0 (V1-025) | A §2.7; F BE-07 |
+| Backend Edge Functions (33 function directories, plus the `_shared` library) | 28 deployed in production. Seven functions and one migration are in the owner-approved-only package (RELEASE-PLAN). `process-ios-sms` uses its default model `gemini-3.8-flash`. Point-in-time recovery is off and no backups are listed (V1-023) | `supabase/functions/`; production-comparison §1–§4 |
 
-## 3. Proposed lists
+## 3. Lists (as decided)
 
-Grounded in A "Proposed V1 scope" and the decisions it cites. Each list assumes the assumptions in §1.
-
-### IN (ships enabled) — iOS only
-- Onboarding and sign-in: Apple; Google and email only if the owner confirms them (V1-016).
+### IN (ships enabled) — iPhone only
+- Onboarding with language choice (none preselected), all countries, Apple / Google / email sign-in.
 - Arabic and English.
-- Consent: combined Smart Analysis & Cloud Sync grant and combined withdrawal (V1-017 copy fix).
-- Capture: iOS Shortcuts App Intent and Share extension; manual entry; paste.
-- Smart Inbox, categories, learned rules.
-- Transactions, accounts, cards; budgets, goals, subscriptions / bills, plans; reports including annual and PDF; achievements.
-- Notifications (including the daily reminder).
-- Data transfer (CSV / ZIP / PDF).
+- First-run consent ("Agree and enable" / "Continue locally"); combined withdrawal; shared learning with the activation.
+- Capture: iOS Shortcuts App Intent and Share extension; manual entry; paste. Signed-out capture fails visibly and keeps nothing.
+- Smart Inbox (including "Move to review"), categories, learned rules.
+- Transactions, accounts (balances labelled by source and time), cards; budgets, goals, subscriptions / bills, plans; reports including annual and PDF; achievements.
+- Notifications with details within the OS preview setting.
+- Data transfer (CSV / ZIP / PDF); legacy backup restore by merge.
 - Ledger and planning cloud sync behind consent.
-- Sign out, delete account, Privacy screen.
-- Help and coach marks, What's new, announcements and update banner, force update.
+- Sign out; delete account (final); Privacy screen; Privacy Policy and Terms reachable with Cloud off.
+- Help, What's new, announcements and update banner, force update (Cloud users only).
 - App lock.
-- Shared category learning (default subject to V1-048).
 
 ### IN-BUT-OFF (ships dormant, remote-flag gated)
-- Coupons, merchant offers and personalization, affiliate tracking (D-14), referrals.
-- All 6 banner placements and the report interstitial (D-18/D-19). Shipping the SDK dormant still requires disclosure (V1-005, V1-003).
+- Coupons, merchant offers and personalization, affiliate tracking (D-14), referrals. Coupons and referrals are **ON in production** (production-comparison §4.3).
 - Proof gate (shadow, D-13).
 - Capture v3, notify v2, auto-confirm v2, AI fallback, sender mapping.
 
 ### OUT
-- Android / Google Play distribution — out of V1 by project record (DECISIONS-NEEDED A1), not by this assessment.
+- Advertising in any form in the V1 build (decision 3.2); the SDKs stay linked but are never started.
+- Android / Google Play (decision 3.1); iPad and landscape (decision 3.1).
+- Historical re-analysis of stored transactions (decision 3.15).
 - Safari extension (D-15).
-- Savings ledger UI, encrypted cloud-backup enablement screen, bank-discovery confirmation UI (V1-042; code stays).
+- Savings ledger UI, encrypted cloud-backup enablement screen, bank-discovery confirmation UI (V1-042; code stays; DECISIONS-NEEDED C3).
 - Design gallery and sync diagnostics (debug only); `foundation` screen (dead code).
-- iPad and landscape, if V1-014 is decided as iPhone portrait only.
 
-## 4. Open scope decisions for the owner
+## 4. Scope questions still open
 
-Each row gives the options the audits set out and the recommendation the audit gave. "No recommendation" means the audit left it to the owner.
+| Issue | Question | Where |
+|---|---|---|
+| V1-026 | Export compliance and France | DECISIONS-NEEDED C1 |
+| V1-042 | Orphaned features recorded as out | C3 |
+| V1-046 | Backup passphrase minimum | C4 |
+| V1-085, V1-103 | How much review volume is acceptable | C6 |
+| V1-100 | Build 147 and the new currencies | C8 |
+| PROD-14, PROD-17, UX-14, UX-19…21 | What's new text, OS floor (16.0 in the project), small UI choices | UI-UX-REVIEW |
 
-| Issue | Decision | Options | Audit recommendation |
-|---|---|---|---|
-| V1-004 (S1; decided by project record A1, listed for reopening only) | Android in or out of V1 | (a) V1 = iOS only, Android follows after Play approval and device QA; (b) Android in V1, then AND-02..AND-08, REL-01, REL-15 and a device matrix become blockers | D AND-01: no recommendation; record a decision in DECISIONS.md. A proposes OUT, citing V1_MASTER_PLAN. D-1 still says Android SMS capture is a required core feature. |
-| V1-014 (S1, re-rated by REV-13) | iPad and iPhone landscape | (a) iPhone only, `TARGETED_DEVICE_FAMILY = 1`, portrait only; (b) keep iPad, add iPad screenshots, run a layout pass | A PROD-01: restricting is the smaller change. All three audits (A, C, H) note that iPad support cannot be dropped after first release, so decide before submission. |
-| V1-016 (S2) | Sign-in providers | Apple only; Apple + Google; Apple + Google + email | A PROD-03: record the set in DECISIONS; make the release workflow print the resolved booleans. Apple-only needs no code change. |
-| V1-019 (S2) | Supported countries | (a) limit onboarding and App Store territories to SA and EG; (b) keep 8 countries and state limited bank support for six | A PROD-08: no recommendation between (a) and (b); also align App Store territories. |
-| V1-005 (S1 for any store build carrying AdMob IDs, FR-05; production ad flags ON, V1-063) | Ads at launch | (a) disclose AdMob/UMP in policy, consent sheet and store labels, keep flags off until disclosures are live; (b) build without the `admob` group or strip the SDK | E SEC-01: either; (b) needs no app change if the workflow is confirmed. H REL-13: add the policy row or remove the SDK. |
-| V1-006 (S2) | Account-deletion semantics | Rewrite policy to immediate permanent deletion; or restore a 30-day undo | E SEC-03: rewrite policy §5/§6 to describe immediate deletion. |
-| V1-007 (S1, re-rated by REV-12) | Legal pages while Cloud is off | Allowlist exact policy/terms URLs; or bundle the text in-app | E SEC-02: allowlist fixed URLs (smallest). |
-| V1-017 (S2) | Consent withdrawal granularity | Change copy to "withdrawn together"; or build AI-only withdrawal | A PROD-05: change copy (smallest). |
-| V1-020 (S1, reproduced on a local stack; reconciliation fixed in `0f90003f`) | Restore vs cloud semantics (B10: replace vs merge; V1-070) | Restore replaces cloud too; or restore is local-only and cloud re-enable is blocked or warned | B DATA-02: owner decision; smallest safe step is clearing outboxes in the restore transaction plus an explicit "replace cloud" choice. |
-| V1-026 (S2) | Export compliance answer | Keep `ITSAppUsesNonExemptEncryption = false`; or answer the questionnaire for app-level crypto | C IOS-09, H REL-11: owner answers with export-control advice, then align the plist. |
-| V1-027 (S2, Android) | Force-stopped Android capture loss | Add OEM battery guidance and document the limitation | D AND-03: guidance + documentation, no manifest change. |
-| V1-031 (S3) | Currency-less message | Treat as needs review; or accept account currency | B DATA-05: treat `currencyDefaulted` as review. |
-| V1-032 (S3) | Account "current balance" | Hide; label "as of import"; derive from transactions | B DATA-06: no recommendation among the three. |
-| V1-036 (S3) | Lock-screen detail | Default hide; or record decision and add policy wording about APNs carrying detail | C IOS-05: privacy-preserving default is hide. |
-| V1-037 (S3) | Signed-out Shortcut captures | Keep silent drop; add one-time "sign in to keep recording" notice | C IOS-06: at least a one-time notice and accurate share copy. |
-| V1-042 (S3) | Orphaned features | Record OUT; code stays | A PROD-09: record OUT. |
-| V1-044 (S3) | Default language | Preselect from device locale; or 'ar' | A PROD-12: device locale, or 'ar' if Arabic-first. |
-| V1-045 (S3) | Force-update reach for Cloud-off users; policy wording | Add an anonymous data-free catalog exception; or correct policy §3 | E SEC-05: owner decides. |
-| V1-046 (S3) | Backup passphrase minimum | Raise to 10–12 or generate one | E SEC-06: raise. Note: the screen that sets it is orphaned (V1-042), see COVERAGE-MATRIX SEC-04. |
-| V1-048 (S3) | Shared category learning default and threshold | Keep; raise threshold; require account age or Apple-only voters; opt-in | E SEC-14, F BE-09: owner confirms; ensure production email confirmation is on. |
-| V1-021 / BE-02 | Google sign-up Auth hook | Enable `require_google_enrollment_intent` after `google-enrollment` is deployed; or leave unwired | F BE-02: enable only after functions deploy and only if every client offering Google sign-up calls `google-enrollment`. |
-| V1-050 / BE-10 | Engagement webhooks | Leave `engagement_worker_secret` unset for V1; or rework triggers | F BE-10: either; record the decision. |
-| V1-056 (S3) | Declined purchases stored before the fix | Leave as a known limitation; or add a one-off review list for matching confirmed rows (changes stored financial data) | REV-05: owner decision. |
-| UI/UX owner items (UI-UX-REVIEW.md) | Terms/Privacy links on sign-in (G UX-02); brand green for the "On track" chip (G UX-07 item 1); text-scale cap 1.25x (G UX-09); onboarding step controls (G UX-11); "manual" transaction source (G UX-14); consent-step order and prominence (G UX-15); design consistency (G UX-19, UX-20) | Per finding | G: no single recommendation; UX-09: keep 1.25x as a known limitation unless all primary screens get overflow tests at a higher cap. |
-| PROD-14 (S4) | 1.0.0 What's new text | Rewrite as launch highlights | A PROD-14; also G UX-21. |
-| PROD-17 (S4) | iOS OS floor | Record iOS 16.0+; align Podfile | A PROD-17. |
+## 5. What this file does not settle
 
-## 5. What this proposal does not settle
-
-- Production values of remote flags, Codemagic auth defines and the bank catalog (A §5).
-- Whether the production backend matches the repository (V1-002, V1-023).
-- UI/UX acceptance: audit G and both fix rounds are recorded in [UI-UX-REVIEW.md](UI-UX-REVIEW.md). The signed-in shell was walked on iOS simulators (J, M); VoiceOver, devices and Android were not exercised.
+- Production values of remote flags beyond the read-only checks, Codemagic variables and the production bank catalog.
+- Whether the build behaves as described on a device: nothing in this file was observed on a device.

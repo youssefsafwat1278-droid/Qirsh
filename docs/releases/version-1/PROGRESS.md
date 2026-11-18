@@ -54,13 +54,25 @@ Resume from here after an interruption. Newest entries at the bottom.
 
 Local stack `qirsh_v1_verify` (Docker, ports 56321–56330, synthetic data): see `evidence/local-stack.md`. Stop it with the command recorded there when it is no longer needed. The other Docker stacks on the machine were not created by this work.
 
+## Round 3 (owner brief of 2026-11-17)
+
+| What | State |
+|---|---|
+| Owner decisions 3.1–3.15 implemented | done locally (`bae159e2`, `640562f6`), recorded as D-20 |
+| Held-out evaluation built and run at every reviewed commit | done; real model BLOCKED (no authorized key) |
+| Strict gate | run 1 at `7cab5e8b` failed 3 stages → `b6f102b4`; run 2 failed `analyze` → `7577f347`; run 3 at `f4dcabd3` 15/15; **run 4 at `a157e68e` 15/15** |
+| Reviews S and T and fix rounds | `7577f347` rejected → `7dd6efa8` → `6f771108` → `f4dcabd3` → **`a157e68e`** (S: accept with follow-up, PRIV-1r S2 open); T last reviewed `7dd6efa8` |
+| XCTest | 200/200 on an iPhone 17 Pro simulator (implementer) |
+| Production package | regenerated at `f4dcabd3` by ops; candidate id corrected to `a157e68e` by the records editor; nothing executed |
+| Records | reconciled to `a157e68e` (this update) |
+
 ## Next (for whoever resumes)
 
-1. Owner decisions in DECISIONS-NEEDED.md and the action package in RELEASE-PLAN.md.
-2. Push and merge `release-readiness/v1` only when the owner authorizes it.
-3. CI build of the merged commit → physical-device run of MANUAL-DEVICE-TESTS.md.
-4. Device run with real bank messages before any wide release (parser measurements are on synthetic messages only).
-5. Open parser defects RR-01 — only after the owner decides how notices and ambiguous credits should be treated.
+1. Owner: read RELEASE-DECISION.md; answer DECISIONS-NEEDED table C; decide on V1-091 (fix or exception).
+2. Owner authorizes push of `release-readiness/v1` to a `release/*` branch → Codemagic `ios-signed-release` build of `a157e68e` → artifact check (G4).
+3. Physical-iPhone run of MANUAL-DEVICE-TESTS.md, including the round-3 checks MDT-IOS-R3-01 … -12 and real bank messages.
+4. Owner-run `pg_dump`, then the production package (RELEASE-PLAN P0–P5), with the backend stage re-run at `a157e68e` first.
+5. Real-model evaluation run when an authorized test key and budget exist (`evidence/closure/eval.md` §5).
 
 ## Not done, by design
 

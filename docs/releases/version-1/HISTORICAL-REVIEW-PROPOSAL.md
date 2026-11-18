@@ -1,6 +1,8 @@
 # Proposal: reviewing transactions stored before the declined-transaction fix
 
-Status: PROPOSAL ONLY. Nothing here is implemented. It answers V1-056 / REV-05 and needs an owner decision before any work starts.
+**Status: NOT PURSUED.** The owner decided on 2026-11-17 (OWNER-BRIEF-ROUND3.md §3.15, D-20) that parser corrections apply only to newly processed messages, that previously recorded transactions are not re-analysed, recategorized or silently marked for review, and that any historical clean-up stays outside this release. Nothing here is implemented, and nothing will be under V1. The text below is kept as written for a possible later decision (D-20 leaves historical clean-up undecided).
+
+Original status: PROPOSAL ONLY. It answered V1-056 / REV-05.
 
 ## Problem
 

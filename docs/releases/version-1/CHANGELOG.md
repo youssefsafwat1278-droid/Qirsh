@@ -1,6 +1,6 @@
 # Version 1 — changes made during release readiness
 
-Changes on the local branch `release-readiness/v1` after the audit baseline `ab5dc10a`, up to the final candidate: the commit recorded in [RELEASE-MANIFEST.md](RELEASE-MANIFEST.md) (`50957c06` at the time of writing). 28 commits: 12 round-1 code commits (through `af675aec`), the round-1 records commit `d830855e`, and 15 round-2 code commits. None is pushed, built by CI, deployed, or on a device. Build 147 contains none of them. Issue IDs refer to [ISSUES.md](ISSUES.md); UX IDs to [UI-UX-REVIEW.md](UI-UX-REVIEW.md); finding IDs to [REVIEW-CLOSURE.md](REVIEW-CLOSURE.md).
+Changes on the local branch `release-readiness/v1` after the audit baseline `ab5dc10a`, up to the candidate **`a157e68e`** ([RELEASE-MANIFEST.md](RELEASE-MANIFEST.md)): 46 commits in `git log ab5dc10a..a157e68e` across three rounds. None is pushed, built by CI, signed, deployed, or on a device. Build 147 contains none of them. Issue IDs refer to [ISSUES.md](ISSUES.md); UX IDs to [UI-UX-REVIEW.md](UI-UX-REVIEW.md); finding IDs to [REVIEW-CLOSURE.md](REVIEW-CLOSURE.md). Rounds 1 and 2 are kept as written; round 3 is at the end.
 
 # Round 1 (`64e571e5` … `af675aec`)
 
@@ -65,7 +65,7 @@ The final parser commit `50957c06` was reviewed by reviewer R: **ACCEPT WITH FOL
 - **Round 9 (`75dab61a`) — rejected by independent review.** It made informational words unable to silence any message (only the original ignore set can), matched currency codes as whole words, added credit wordings and a cash-deposit rule, distrusted a server direction the wording contradicts, and let a labelled figure be the amount when a completed-movement verb acted on it. Reviewer Q **rejected** it: under the server's earliest-word rule the new credit words turned outgoing transfers, fees and wages paid out into **confirmed income** (QR-01, S1); the deposit rule and the verb-after-figure rule produced wrong directions and amounts on the device (QR-02); some notices became confirmed money (QR-03).
 - **Round 10 (`50957c06`) — removes round 9's additions.** The credit words, the broad deposit rule and the verb-after-figure rule were taken out, together with round 8's added money-word list; direction and type went back to round 8. An inflow phrase with no other direction evidence now sends the message to review instead of recording income, and a figure in a due-or-scheduled clause goes to review. Round 9's sound parts stay: informational words never silence a message, and currency codes match whole words. Reviewer R: no S1; no regression from this commit on the device or effective path; nothing worse than the baseline there. On R's 1,758 synthetic messages, wrong total-changing outcomes on the effective path with a bank sender fell from 509 at the baseline to 71. The cost is review volume (below).
 
-User-visible behavior at the final candidate, once a new build and the server deploy are in place (none of it is on build 147 or the deployed server):
+User-visible behavior at the round-2 code (`50957c06`), once a new build and the server deploy are in place (none of it is on build 147 or the deployed server):
 - A limit, balance or code figure is never recorded as the amount.
 - More messages wait in the Smart Inbox for the user to confirm: up to about 15% of correct completed messages on R's probe set (0% on the repository corpus), mostly ones with a notice footer, a label-led amount, a code or a less common verb; with AI consent, 353 of 1,306 correct AI candidates are rejected and kept for review. No total changes because of this, but spending and income stay understated until the user acts (V1-085, V1-086; owner decision B29).
 - Currency codes are matched as whole words, which fixed misreadings such as "Mada" and "Saudi Riyals" taken as currency codes (Q: 14 currency fixes, 0 regressions on 59 probes).
@@ -94,7 +94,7 @@ Behavior changes a user or the owner would notice:
 | Pasting a declined payment (single message) | "Could not be read — add it manually" | "Declined or not completed — nothing was recorded". Batch paste still says "Not understood" | `0095a239`, `1be44623` |
 | Restore with Cloud on | Restored rows lost their server identity; device and cloud stayed different, and a configured build duplicated rows | Identity kept; restored rows pushed; pull cursors reset. Cloud rows absent from the backup are kept and pulled back (merge default; replace-vs-merge is owner decision B10). The confirmation text still says "replace" (V1-070) | `0f90003f` |
 
-Not protected: rows already stored; installed builds (147 and older); the deployed server until `process-ios-sms` and `parse-sms` are redeployed. The server at the final candidate must ship together with the new build: alone it rejects 21 completed messages that only the new device build keeps for review (V1-087, V1-088).
+Not protected: rows already stored; installed builds (147 and older); the deployed server until `process-ios-sms` and `parse-sms` are redeployed. The server at the round-2 code must ship together with the new build: alone it rejects 21 completed messages that only the new device build keeps for review (V1-087, V1-088).
 
 ## Sign-in and navigation
 
@@ -166,3 +166,60 @@ Reviewers K, L and N read the removed lines of these files for the commits they 
 ## Not changed, deliberately
 
 Consent flows and their text, privacy defaults, the privacy policy, store disclosure drafts, sign-in screens other than the code-sheet sentence, feature flags, any production system, and any stored data. These need owner decisions listed in [DECISIONS-NEEDED.md](DECISIONS-NEEDED.md).
+
+# Round 3 (`bae159e2` … `a157e68e`, 2026-11-17 to 2026-11-18)
+
+The owner approved fifteen product decisions on 2026-11-17 ([OWNER-BRIEF-ROUND3.md](OWNER-BRIEF-ROUND3.md) §3; `docs/project/DECISIONS.md` D-20) and asked for them to be implemented and for message understanding to be rebuilt. Specialists (AI agents) implemented; reviews S and T (AI agents) challenged the result four and two times. Every item below is **implemented locally**; "verified" means on this Mac, a simulator or a local stack. Nothing is deployed or on a device.
+
+## Approved decisions implemented
+
+- **iPhone only, portrait** (3.1; V1-014; `640562f6`). Android code untouched.
+- **No ads in the V1 build** (3.2; V1-005; `640562f6`). Compile-time switch, off in store workflows; a remote flag cannot turn ads on. The ad SDKs remain linked but are never started. The production flag change is prepared (RELEASE-PLAN P4), not made.
+- **Restore merges** (3.3; V1-020, V1-070; `640562f6`, `7dd6efa8`, `6f771108`). Newer data, server identity, deletions and manual edits are kept; the confirmation names whether this restore merges or fully applies. Verified on local stacks (data specialist, reviewer T).
+- **Deletion is final** (3.4; V1-006; `640562f6`, `bae159e2`). Copy and policy say so; the worker's retry and resume paths are tested on a local stack (D1–D4).
+- **Legal pages open with Cloud off** (3.5; V1-007; `640562f6`). Exact-URL allowlist.
+- **Language chosen on first launch** (3.6; V1-044).
+- **All 249 countries; 155 storable currencies; verified bank coverage stated separately** (3.7; V1-019; `640562f6`, `bae159e2`).
+- **First-run consent with "Agree and enable" / "Continue locally"; combined disabling; shared learning tied to the activation** (3.8–3.10; V1-017, V1-048; `640562f6`; text reworded in `f4dcabd3` to say what redaction really does).
+- **Sign-in methods kept** (3.11; V1-016): store workflows require the Apple, Google and email variables.
+- **Honest notifications** (3.12; V1-035, V1-036): details shown within the OS preview setting, masked last four in APNs, the server push never says "recorded".
+- **Signed-out capture fails visibly and keeps nothing** (3.13; V1-037).
+- **Balances labelled by source and time** (3.14; V1-032).
+- **No historical rewrite** (3.15; V1-056).
+
+## Message understanding
+
+- **Meaning before amount, on device and server** (V1-001, V1-072, V1-073, V1-082 … V1-084; `bae159e2`, `640562f6`, then `b6f102b4`, `7dd6efa8`, `6f771108`, `f4dcabd3`, `a157e68e`): completed, declined, pending or scheduled, pending refund, notice, bill due, expected salary, marketing, own-account, several movements and over-length text each get their own disposition; only a completed movement is recorded.
+- **AI answers are structured and evidence-based** (`bae159e2`): the model must quote evidence; the server and device validators reject any answer whose meaning is not a completed movement; the prompt version is recorded (V1-058).
+- **One source of "processed" on the server** (`a157e68e`): a stated total can never release a declined, pending, failed or reversed message (VAL-1).
+- **Redaction** (`6f771108`, `f4dcabd3`, `a157e68e`): more person names, beneficiary forms, spaced IBANs and third-party account numbers are masked on device, server and the native Shortcut path. Some names still pass (V1-091, S2).
+- **Global AI budget guard** (V1-022; `bae159e2`): one migration, four call sites; fails open by design if the database function is missing.
+- Measured on synthetic data only: TEST-EVIDENCE.md §7.5–7.6.
+
+## Accessibility and UI
+
+- Text-size cap removed; a gate over 32 screens at up to 3.1× fails on cut-off text (UX-09; SP-09, SP-10). "Move to review" on a transaction. Batch-paste and hold wording, Cloud-off sign-out sentence, Western digits in Arabic dates (V1-066 … V1-068). Stacked selectors keep their semantics (SP-13).
+
+## Backend, privacy, operations
+
+- Admin on Next.js 15.5.29; production `npm audit` 0 (V1-025).
+- Legal text rewritten in the repository for the approved decisions (`7cab5e8b`, `4c428719`); not published.
+- Opt-in backend behaviour stage (V1-013); derived deploy set (`tools/deploy_set.sh`); read-only production comparison script (`tools/prod_compare.sh`).
+- RELEASE-PLAN regenerated at `f4dcabd3` as one package (seven functions, one migration). **Records correction (this round):** the plan named `f4dcabd3` as the candidate; it now names `a157e68e`. `deploy_set.sh b6fc0dad a157e68e` gives the same set; `prod_compare.sh` was not re-run.
+
+## Tooling (not shipped)
+
+- Held-out message evaluation `tools/message_eval` (753 synthetic messages, criteria fixed before the first run) and differential harnesses `tools/parser_diff`.
+
+## Rejected or superseded on the way
+
+`7577f347` (S: REJECT — declined messages recorded, reward points as income, parser exceptions, slow parsing; T: restore REJECT — removed rules returned, accounts wiped), `7dd6efa8` (S: REJECT on reward-clause income), `6f771108` and `f4dcabd3` (S: accepted with follow-up; VAL-1 at `f4dcabd3`). Each was answered by the next commit; the findings and their closure are in REVIEW-CLOSURE.md.
+
+## Tests changed because the approved behaviour changed
+
+Listed and accepted by reviewer T for `7577f347`: backup (replace → merge), restore identity and backfill tests, privacy and delete-account screens, Smart Inbox label and status cycle (no UMP), the iOS store-pipeline and Android compile contracts (no iOS AdMob), the capture queue and notification contracts. Later changes are listed in the closure reports (`evidence/closure/*.md`, sections "Changed expectations"). Reviewer T found one weakening (SP-08), fixed in `7dd6efa8`.
+
+## Not changed, deliberately
+
+Production (nothing deployed, no flag changed, no data touched); transactions already stored (3.15); Android release work (3.1); the device database schema (v43).
+

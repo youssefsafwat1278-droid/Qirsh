@@ -1,66 +1,109 @@
-# Version 1 — owner decisions: already decided vs. still open
+# Version 1 — owner decisions: approved, still open, and engineering choices the owner may reverse
 
-First prepared 2026-11-17 and brought up to date the same day (round 2) by a documentation agent (Claude Opus 5.5), using [`evidence/ROUND2-FACTS.md`](evidence/ROUND2-FACTS.md), [`evidence/production-comparison.md`](evidence/production-comparison.md) and the reviews K, L and N; B28–B30 added after reviews P, Q and R of the last three parser commits (final candidate `50957c06`).
+First prepared 2026-11-17 (rounds 1 and 2). **Brought to round 3 on 2026-11-18** by a records editor (AI agent, `claude-opus-5-5`) from [OWNER-BRIEF-ROUND3.md](OWNER-BRIEF-ROUND3.md) §3, `docs/project/DECISIONS.md` D-20, the closure reports in [`evidence/closure/`](evidence/closure/) and reviews S and T. Candidate `a157e68e`.
 
-**No decision is made here.** The owner has accepted no limitation and approved no scope proposal. Recommendations in table B are proposals.
+**What the owner decided:** only the fifteen product decisions in brief §3 (approved 2026-11-17, recorded as D-20). D-20 itself says what it does **not** decide: risk tolerances for AI accuracy, any historical clean-up, and the ad position after V1. **The owner has accepted no open defect and signed no exception.** Nothing in this file records an acceptance.
 
-Rule applied: a record decides a question only if it states the decision explicitly, is the latest statement on that question, and is not contradicted by code **or by production state**. Code comments that claim an owner decision do not count as a record.
+Rule applied, unchanged: a record decides a question only if it states the decision explicitly, is the latest statement on that question, and is not contradicted by code or production state. Code comments that claim an owner decision do not count (V1-104).
 
-Records searched: `docs/project/DECISIONS.md` (D-1…D-19), `docs/v1-release/V1_MASTER_PLAN.md`, `V1_CURRENT_STATE.md`, `V1_EXTERNAL_BLOCKERS.md`, `docs/ANDROID_SMS_CAPTURE_DECISION.md`, `docs/USER_DELETION_DECISION_BRIEF.md`, `docs/privacy/*`, `docs/legal/*`, `docs/project/MASTER_ROADMAP.md`, with dates from `git log`.
+## A. Approved by the owner on 2026-11-17 (brief §3)
 
-Owner's instruction applied to the "work blocked" column: an open decision blocks only the work that genuinely depends on it. Local fixes that do not depend on it go ahead.
+"Status" says what is implemented and verified, not whether the decision is good.
 
-## A. Already decided by project records
-
-| # | Question (issue) | Decision | Record (file, section, date) | Code and production match? | Engineering consequence |
-|---|---|---|---|---|---|
-| A1 | Is Android in Version 1? (V1-004) | **No Play publication in V1.** "Publication postponed for budget reasons. Not a V1 blocker." | `docs/v1-release/V1_EXTERNAL_BLOCKERS.md` EB-003 (commit `55763d16`, 2026-09-15); `V1_MASTER_PLAN.md` §1 "Explicitly out of scope: Google Play submission (owner-deferred)" (2026-09-15). Not contradicted later: the privacy policy (2026-11-16) says the Android app has not been released | Yes — no release bundle exists; Android source is kept buildable; nothing Android is in production | Android leaves the V1 decision; V1-004, V1-027, V1-053 move to the Android release. The owner may reopen it; then every Play item in `evidence/official-doc-checks.md` §d applies. Android scope does not block any iOS or backend work |
-| A2 | Ads: personalized with ATT, or non-personalized without? (part of V1-005) | Non-personalized only; no ATT prompt; no `NSUserTrackingUsageDescription` | `docs/project/DECISIONS.md` D-6 (file history 2026-09) | Yes — `NSPrivacyTracking` false, no ATT key. Production flag state does not bear on this choice | Store declarations say "not used for tracking" by Qirsh, and still list the Google Mobile Ads data types Google discloses (official-doc-checks §b) |
-| A3 | Shared category learning on by default? (V1-048) | On by default once Smart Analysis & Cloud Sync is on; can be turned off; pooled at ≥6 users and ≥75% or admin review | `docs/legal/PRIVACY_POLICY.md` §3 and §4 (wording added `3fc1ce73`, 2026-11-12; policy dated 2026-11-16) | Yes — `20261116170000_shared_learning_auto_approve.sql` is in the production ledger; client default matches | V1-048 can be closed as decided. Decided by the published policy, not a DECISIONS.md entry |
-
-## A′. Recorded decision not reflected in production — owner to confirm which is intended
-
-| # | Record | Production | Status |
+| # | Decision (brief §3) | Where implemented (commit) | Status at `a157e68e` |
 |---|---|---|---|
-| A′1 | `DECISIONS.md` D-19 (owner decision 2026-09-19): AdMob configuration is out of scope and not to be modified; every ad flag is seeded OFF and fail-closed; "Activation is a separate owner action" | **All eight advertising flags are ON at 100%** (`production-comparison.md` §4.3). No record of an activation decision was found | **Not settled.** Either the flags were turned on deliberately and the record is out of date, or the production state is unintended. Owner to confirm which is intended; the follow-on choice is B1. A read-only look at `public.feature_flag_admin_audit` (flag key, field, new value, date; not the actor) can show when they were turned on. The part of D-19 that keeps AdMob configuration unchanged is not contradicted |
+| 3.1 | V1 targets iPhone; iPad and Android release readiness out of scope; Android code kept | `640562f6`: `TARGETED_DEVICE_FAMILY = 1` in six configurations, portrait | Implemented; contract-tested; reviewer T read it. iPad compatibility mode NOT TESTED (needs a signed build and an iPad) |
+| 3.2 | No advertising in V1; a remote flag must not reactivate it; prepare, do not execute, the production flag change | `640562f6`: compile-time define off in store workflows; GMA 13.3.0 and UMP 3.1.0 linked but never started; RELEASE-PLAN P4 turns the eight flags off | Implemented in code; tests; T read every SDK entry. Network silence NOT TESTED. **Production flags still ON** (P4 not executed) |
+| 3.3 | Restore merges; keep newer data, server identity, deletions and manual edits; explain in the UI; verify with sync | `640562f6`, `7dd6efa8`, `6f771108` | Implemented; verified on local stacks (data specialist; T `+24 ~2`). Limits: device rules win, backup-only rules are not added, a mistaken deletion is not recoverable by merge (SP-12, V1-102); two-device cases S9/S9b not run (V1-101). Not on a device |
+| 3.4 | Deletion is final; copy and policy aligned; worker and retries verified; no production clean-up authorized | `640562f6`, `bae159e2`; policy text `7cab5e8b`, `4c428719` | Implemented; D1–D4 pass on local stacks (data specialist; T). The deployed worker still lacks photo erasure until plan P1 is executed; the live legal site still has the old text |
+| 3.5 | Privacy Policy and Terms open with Cloud off, before consent, without enabling anything | `640562f6`: exact-URL allowlist | Implemented; unit tests; T found no bypass. Not on a device |
+| 3.6 | Language chosen on first launch without preselection; existing choices kept | `640562f6` | Implemented; tests |
+| 3.7 | All countries; country separate from verified bank coverage; currency not assumed from country; honest disposition | `640562f6`, `bae159e2`: 249 countries, coverage note, 155 storable currencies (50 detected in text) | Implemented; tests. **Limit:** build 147 knows 50 currencies (SP-04, V1-100). Antarctica has no default currency; the user chooses |
+| 3.8 | First-run consent with "Agree and enable" and "Continue locally"; nothing sent before consent; honest text; no silent opt-in | `640562f6`, text reworded `f4dcabd3` to say what redaction really does | Implemented; tests; T. GDPR granular-consent question not assessed (counsel). Redaction still lets some names through (V1-091) |
+| 3.9 | One action turns Cloud and AI off together; dispatch and retries stop; consent re-checked | `640562f6` | Implemented; tests; T |
+| 3.10 | Shared learning enabled with the explicit activation; contribution explained and minimized | `640562f6` | Implemented. **Reading by the orchestrator, not by the owner:** a missing preference reads OFF, and existing users are asked once. The owner may reverse this reading |
+| 3.11 | Keep the current sign-in methods; no reviewer backdoor; check reviewer access | `640562f6`: store workflow keeps Apple, Google and email code and fails if the variables are missing | Implemented in the workflow; Codemagic values not visible (owner). Reviewer access via Sign in with Apple: no blocker found (ops) |
+| 3.12 | Notifications show available details; respect preview settings; never claim a save that did not happen | `640562f6`, `bae159e2`: native banners, masked last four in APNs, server push never says "recorded" | Implemented; XCTest and Deno tests. Not on a device. **Build 147's Shortcut banner** still says a purchase was captured with the parsed category until users update |
+| 3.13 | Signed-out capture: no silent success; nothing attached to the next account; no retention promise | `640562f6` | Implemented; nothing retained while signed out; XCTest. Not on a device |
+| 3.14 | Balance labelled by its source with its time | `640562f6` | Implemented; tests; contrast measured |
+| 3.15 | Parser changes apply to new messages only; no historical re-analysis or silent review marking | No historical code path added | Respected. The historical review-list proposal is not pursued (HISTORICAL-REVIEW-PROPOSAL.md) |
 
-## B. Genuinely unresolved
+## B. Earlier questions: where each stands now
 
-Ordered by how much work each blocks, most first.
+| # | Question (issue) | Now |
+|---|---|---|
+| A1 | Android in V1 (V1-004) | Decided again by the owner: 3.1 |
+| A2 | Non-personalized ads only (D-6) | Moot for V1: no ads (3.2) |
+| A3 | Shared learning on by default (V1-048) | Superseded by 3.10 |
+| A′1 | D-19 vs production ad flags | Intent settled by 3.2 (D-20 supersedes D-19's ad position); **production still ON** until P4 |
+| B1 | Ads at launch; production flags | Decided: 3.2. Flag change prepared (P4), not executed |
+| B2 | Refund or reversal of a declined original | Engineering choice: a completed reversal "… credited" goes to review (table D) |
+| B3 | Disputed shared-case labels | Engineering choice: truth labels left unchanged; outcomes graded as review where acceptable (table D) |
+| B4 | iPhone-only (V1-014) | Decided: 3.1 |
+| B5 | Reviewer access (V1-015) | Decided: 3.11 (Sign in with Apple) |
+| B6 | Sign-in providers (V1-016) | Decided: 3.11 |
+| B7 | Export compliance (V1-026) | **Still open** (C1) |
+| B8 | Legal pages with Cloud off (V1-007) | Decided: 3.5 |
+| B9 | Deletion wording (V1-006) | Decided: 3.4 |
+| B10 | Restore replace or merge (V1-020) | Decided: 3.3 |
+| B11 | Historical declined rows (V1-056) | Decided: 3.15 — not pursued |
+| B12 | Countries (V1-019) | Decided: 3.7 |
+| B13 | Withdrawal sentence (V1-017) | Decided: 3.9 |
+| B14 | Catalog and force-update with Cloud off (V1-045) | Engineering choice (table D) |
+| B15 | Store-capable pipeline (V1-009) | **Still open** (C2) |
+| B16 | Disk-space probe in release builds | Engineering choice: compiled out (table D) |
+| B17 | Admin panel (V1-025) | Overtaken by engineering: upgraded to Next 15.5.29 (`bae159e2`). Whether the admin is internet-exposed is still unknown |
+| B18 | Unreachable features in the binary (V1-042) | **Still open** (C3) |
+| B19 | Lock-screen detail (V1-036) | Decided: 3.12 |
+| B20 | Signed-out Shortcut captures (V1-037) | Decided: 3.13 |
+| B21 | Language preselection (V1-044) | Decided: 3.6 |
+| B22 | No-currency message in the account currency (V1-031) | Implemented under 3.7 as an engineering rule: only a confidently matched account's currency is used, otherwise review |
+| B23 | "Current balance" (V1-032) | Decided: 3.14 |
+| B24 | App-switcher cover timing | Engineering choice: resign-active (table D) |
+| B25 | Backup passphrase minimum (V1-046) | **Still open** (C4) |
+| B26 | Sign-out sentence with Cloud off (RT-03) | Engineering choice: option (a) (table D) |
+| B27 | Auto-confirm only on a catalog match | **Still open** (C5); no change made |
+| B28 | Ship the round-2 parser | Overtaken: brief §4 directed the round-3 parser work. Shipping it is now part of approving the production package (C7) |
+| B29 | Review volume vs wrong totals (V1-085, V1-086) | **Still open** (C6): D-20 leaves AI-accuracy risk tolerances undecided |
+| B30 | Notices with an amount (V1-072) | Brief §4.1 requires notices to be distinguished; implemented as "not a movement" (server) and review (device). The residual wordings are V1-094 |
 
-| # | Question (issue) | Available options | Recommendation (proposal) | Consequences | Work blocked |
-|---|---|---|---|---|---|
-| B1 | Is any ad shown at launch, and what should the production ad flags be now? (V1-005, V1-063, FR-05 S1; follows A′1) | (a) Flags off now, no ad at launch, disclose the dormant SDK; (b) ads on at launch; (c) keep flags on but build store artifacts without `admob` values | (a) | (a) one admin flag change (RELEASE-PLAN P5 option A); declarations still cover the SDK's data types. (b) privacy policy §1/§7, consent line, App privacy details with Google's types, manifest, UMP flow verified, report-an-ad UI (Guideline 2.5.18) — all before any build with AdMob IDs. (c) no ad revenue; relies on Codemagic configuration staying empty | Any store build from `ios-signed-release` or `android-release` with AdMob values; privacy policy rewrite; App privacy details; reviewer-notes ads sentence. Not blocked: parser, restore, deletion worker deploy, UI fixes |
-| B2 | Should a refund or reversal of an original that was declined (never counted) reduce spend? (V1-001; currently goes to review) | (a) Review (current); (b) record as a credit that reduces spend; (c) ignore | (a) | (a) the user confirms each one; no wrong total. (b) spend understated by the refund amount whenever the original was never recorded. (c) a real refund is lost when the original was recorded | Shared-case expectations, the final parser commit, and therefore the `process-ios-sms` deploy content (RELEASE-PLAN P3) |
-| B3 | The shared-case expectations review N disputes that depend on policy (NR-05; see fix report and N §1 for the list) — completed purchase with a declined word elsewhere ("approved. Previous attempt declined", "declined. Approved on retry", "will be declined if limit exceeded", expired-card or "pending SAR 0.00" lines); a partial reversal that was credited; advisory or security footers on a readable transaction; a bare "Reversal of SAR 99.00 at SHOP" (two cases expect a credit, two similar ones expect review) | (a) Label each as the completed movement it is and tag the current outcome as a known review (N's proposal); (b) keep `review` as the expected outcome by policy | (a) for the completed-purchase and partial-reversal cases; owner's choice for footers; bare reversal follows B2 (review) | (a) the table can count these as false positives and show progress. (b) the table cannot detect a regression in them. Merchant-name cases and the two limit/activation cases N lists are defects, not policy, and are not part of this question | Final parser test table; the claim made in KNOWN-LIMITATIONS |
-| B4 | iPhone-only or iPad too? (V1-014, S1) | (a) iPhone-only: device family 1; (b) support iPad | (a) | (a) small config change; adding iPad later is possible, dropping it later is restricted. (b) iPad 13-inch screenshots are mandatory (official-doc-checks §c, CONFIRMED), layout pass, iPad review device | Device-family setting, screenshot set, reviewer notes, MDT-IOS-22 scope |
-| B5 | Reviewer access when no password sign-in exists (V1-015, S1) | (a) Reviewer uses Sign in with Apple with their own Apple ID plus the sample messages in the notes; (b) a reviewer-only sign-in path; (c) a monitored inbox for the email code | (a), stated plainly in the notes | (a) no code; reviewer starts with an empty account. (b) code plus security review. (c) unreliable. Whether Supabase can issue a fixed code for one address: unconfirmed | App Review submission (Guideline 2.1); REVIEWER-NOTES-DRAFT Part 1 sign-in paragraph |
-| B6 | Sign-in providers in the store build (V1-016) | (a) Apple + Google + email code; (b) Apple only; (c) Apple + email | Record whichever the store build uses; keep Apple whenever Google is on (Guideline 4.8) | Each changes the auth screen and reviewer notes. `ios-signed-release` defaults Google and email to `false` unless the Codemagic variables are set | Codemagic variables; reviewer notes; MDT-IOS-01 and -30 expectations |
-| B7 | Export compliance (V1-026) | (a) Keep `ITSAppUsesNonExemptEncryption=false` after a written exemption determination; (b) `true` + documentation + compliance code | Get export-control advice | Apple: `NO` only if all encryption, including libraries, is exempt (CONFIRMED). The app implements SQLCipher, AES-GCM and Argon2id itself. A wrong answer is an attestation on every upload | Every upload's plist value; App Store Connect answers |
-| B8 | Policy and Terms reachable while Cloud is off (V1-007, S1) | (a) Allow the two fixed legal URLs through the egress gate; (b) bundle the texts in the app | (a) | (a) small allowlist change and test; (b) larger, works offline | Guideline 5.1.1(i); consent sheet |
-| B9 | Deletion wording (V1-006) — brief (2026-07-16) approved a 30-day grace; code changed to immediate (`9b1f4bbf`, 2026-10-24); policy still says 30 days | (a) Rewrite the policy to immediate; (b) restore the 30-day scheme | (a) | (a) text only; mark the brief superseded. (b) app and backend change, retest deletion | Policy §5/§6; reviewer-notes deletion paragraph |
-| B10 | Restore: replace or merge cloud rows absent from the backup? (V1-020; FR-06) | (a) Merge (current default): cloud rows absent from the backup are kept and pulled back; nothing is deleted. (b) Replace: rows absent from the backup are removed from the cloud on the next sync | (a), with the confirmation copy corrected for Cloud users and a test for an unsynced post-backup row | (a) a row created after the backup and not yet synced comes back after restore (FR-06); the current text "The backup will replace your current data on this device" is not true for a Cloud user. (b) destructive: removes data other devices may have added; orphan create intents must be dropped in the restore transaction; needs its own tests | Restore confirmation copy; FR-06 test; MDT-IOS-18a expected results; closing V1-020. Not blocked: the identity fix already in `0f90003f` |
-| B11 | Transactions already stored from declined messages (V1-056) | (a) The one-off on-device review list in `HISTORICAL-REVIEW-PROPOSAL.md` (candidates found from raw text kept on the device; nothing changes without the user); (b) a known limitation | (a) | (a) a small feature; rows without raw text (pulled from the cloud, restored from backup) cannot be found. (b) exception record | Full closure of V1-001 for upgraded users; MDT-IOS-07c expected result |
-| B12 | Countries in onboarding vs. the SA/EG bank catalog (V1-019) | (a) Limit choice and territories to SA and EG; (b) keep 8 with "limited bank support" text | (a) | (a) small UI change plus territory setting; (b) copy and support burden | Onboarding, store territories, reviewer notes |
-| B13 | Consent withdrawal sentence (V1-017) | (a) Copy says both permissions are withdrawn together; (b) separate controls | (a) | (a) ar/en copy; (b) new consent state, backend and policy work | Consent copy (Guideline 5.1.1(ii)) |
-| B14 | Catalog and force-update with Cloud off (V1-045) — policy §3 says ungated and anonymous; code gates it on Cloud consent | (a) An anonymous, data-free catalog exception; (b) correct policy §3 | Decide which is intended, then fix the other | (a) egress-gate change; Cloud-off users get notices. (b) text only; Cloud-off users never get notices or flag changes | Policy §3; reach of force-update |
-| B15 | Store-capable pipeline (V1-009) | (a) Harden `ios-signed-release`; (b) repoint `ios-signed` without `testFlightInternalTestingOnly` | (a) — implemented locally in `4fc2ecd6`, never run on Codemagic; the owner has not approved it | `testFlightInternalTestingOnly` builds cannot go to external TestFlight or the App Store (CONFIRMED) | Any submittable build; RELEASE-PLAN (f) |
-| B16 | Compile the disk-space probe out of release builds? (privacy manifest, V1-008 follow-up) | (a) Compile `deviceCapacityState()` out of release builds and remove the DiskSpace entry from both manifests; (b) keep the `85F4.1` declaration | (a) | (a) small Swift change, manifest change, XCTest re-run. (b) `85F4.1` is correct only narrowly (value shown only on a debug screen); the clipboard question stays COULD-NOT-CONFIRM | Final privacy manifests; Xcode privacy report from the release archive |
-| B17 | Admin panel: Next.js major upgrade, or keep the admin off the internet? (V1-025) | (a) Upgrade; (b) written constraint: admin never internet-exposed | (b) for V1, (a) after | (a) migration work; (b) an operational constraint the owner must enforce; exposure today unknown | Exception record for V1-025; admin deployment (excluded from the RELEASE-PLAN package) |
-| B18 | Unreachable features shipped in the binary (V1-042) | (a) Record each as out of V1, leave code, describe as inactive; (b) wire them up | (a) | (a) docs and reviewer notes (Guideline 2.5.19); (b) new scope | Reviewer notes, Help copy |
-| B19 | Lock-screen detail in capture notifications (V1-036) | (a) Hide detail by default; (b) keep detail and say in the policy that APNs carries it | (a) | (a) default flip and copy; (b) policy text | Notification defaults, policy |
-| B20 | Signed-out Shortcut captures dropped silently (V1-037) — a code comment cites an owner decision; no record holds it | (a) Keep the silent drop and record it; (b) a one-time "sign in to keep recording" notice | (a) if that is the owner's intent, recorded in DECISIONS.md; else (b) | (a) record and known limitation; (b) new copy | Known-limitations text |
-| B21 | Language preselection (V1-044) | (a) From device locale; (b) Arabic; (c) keep English | (a) | Small change each | First-run flow, screenshots |
-| B22 | Message with no currency auto-confirmed in the account currency (V1-031) | (a) Send to review; (b) accept | (a) | (a) more review items; (b) wrong-currency risk | Exception or fix |
-| B23 | "Current balance" not derived from transactions (V1-032) | (a) Relabel as user-entered; (b) derive it | (a) | Copy vs. logic change | Exception or fix |
-| B24 | App-switcher cover timing (V1-034 residual) | (a) Cover on resign-active; (b) accept the current timing | (a) | (a) small Swift change and device check | MDT-IOS-21 expected result |
-| B25 | Backup passphrase minimum of 6 characters (V1-046) | (a) Raise the minimum; (b) accept | (a) | (a) UI validation change; existing backups unaffected | Exception or fix |
-| B26 | Sign-out sentence when Cloud is off (RT-03) — the sheet says unsynced changes "sync when you sign back in", which is not true with Cloud off | (a) With Cloud off, say the changes stay on this device and are not synced while Smart Analysis & Cloud Sync is off; (b) omit the sentence when Cloud is off | (a) | (a) ar/en copy; (b) less information for the user | Sign-out sheet copy only |
-| B27 | Auto-confirm only when a catalog rule or bank profile matches? (structural measure, ROUND2 §3; N "Structural alternative") | (a) Require the match before auto-confirming; (b) keep the current rule | (b) for V1 | (a) changes no corpus outcome with a known sender; with no sender (paste, unknown short codes) almost every correct transaction goes to review (N: 63 of 64); prevents none of NR-01. (b) unknown senders and paste keep auto-confirming | None today |
-| B28 | Ship the candidate parser (`50957c06`) in V1, or not? (V1-001, RR-01) | (a) Ship it: deploy `process-ios-sms` and `parse-sms` from the candidate together with a new build, after the device check MDT-IOS-07f; (b) keep the baseline parser (build 147's) for V1; (c) another fix round on RR-01 first, with its own independent review | (a), with RR-01 kept open as defects and the device check before wide release | (a) review R: wrong total-changing outcomes 509 → 71 on the effective path with a bank sender (1,758 synthetic messages), nothing worse than the baseline on the device or effective path; still wrong: 34 notices recorded as money, 18 wrong directions, 8 own-account transfers, 6 foreign figures; more messages wait for review (B29); the server must ship with the new build (V1-087). (b) all 509 baseline wrong outcomes stay, including declined purchases counted (174) and limit figures as amounts. (c) every round from 5 to 9 introduced at least one regression that a later review found; time and another independent review | P3–P4 of the RELEASE-PLAN action package; the release build's content; MDT-IOS-07f; closing V1-001 |
-| B29 | How much review volume is acceptable in exchange for fewer wrong totals? (V1-085, V1-086; RR-02, RR-03) | (a) Keep the current strictness: ambiguous messages wait in the Smart Inbox; (b) relax selected cases toward recording (R names: restore a whole-word money list for `authorised`, `approved`, `posted`, `direct debit`, `standing order` only where no limit line follows); (c) stricter still | (a) for V1, with Smart Inbox volume watched after release once a way to measure it exists | (a) R: 0% of correct corpus/golden messages in review, but 6.8–14.7% of correct probe messages by path; AI validator rejects 353 of 1,306 correct candidates; no wrong total, but spending and income understated until the user confirms; no monitoring exists today. (b) fewer review items, risk of wrong totals returning — round 8's money-word list contributed to PR-01; needs a fix round and a review. (c) more manual work for the user | RELEASE-PLAN (g) monitoring definition; Smart Inbox and Help copy if the volume is explained to users; any further parser round |
-| B30 | Should notices that name an amount — due or scheduled bills, expected salary, deposit adverts — be recorded, ignored or sent to review? (V1-072, RR-01 class 1) | (a) Review: hold any message whose figure sits in a notice clause; (b) ignore: no record and no review item; (c) record (current outcome for the remaining 34) | (a) | (a) no wrong total from notices; more review items (adds to B29); a fix round and an independent review are needed. (b) the earlier attempts to ignore informational messages (`1be44623`, `c8cef416`, `5583cbea`) silently dropped real completed transactions (NR-01, OR-01, PR-02) and were removed; any new ignore rule carries that risk. (c) today's state: 34 of 194 notice probes recorded as money, in or out, as at the baseline | Notice handling in the parser; shared-case expectations for notices; MDT-IOS-07d and -07f expected results |
+## C. Still open (owner)
 
-**Count:** 3 decided by records (A1–A3); 1 recorded decision contradicted by production (A′1, D-19); 30 open (B1–B30). New in the round-2 update: B2, B3, B10, B16, B26, B27, and B1 widened to the production flag state; B5, B11 and B17 existed and were updated. New in the final update: B28, B29, B30. Not yet a row: whether an ATM cash deposit is income or a neutral transfer (V1-090, RR-05).
+Ordered by how much each blocks.
 
-Not counted as decisions: V1-027 and V1-053 (follow A1); LR-10's six "DATA-01 policy flips" (refund-pending and declined-with-refund wording to review) are covered by B2 and B3.
+| # | Question (issue) | Options | Recommendation (proposal) | Blocks |
+|---|---|---|---|---|
+| C1 | Export compliance (V1-026) | (a) `ITSAppUsesNonExemptEncryption = true`, answer "standard algorithms", French declaration or exclude France; (b) keep `false` after a written exemption determination | (a), after counsel answers the prepared question (STORE-READINESS A14). Ops: `false` as written is not supportable | Every upload; App Store Connect answers |
+| C2 | Store pipeline (V1-009, B15) | (a) Use the hardened `ios-signed-release`; (b) another workflow | (a); it has never run on Codemagic | Any submittable build (G4) |
+| C3 | Unreachable features shipped in the binary (V1-042, B18) | (a) Record as out of V1, leave code; (b) wire them up | (a) | Reviewer notes, Help copy |
+| C4 | Backup passphrase minimum of 6 (V1-046, B25) | (a) Raise; (b) keep | (a) | Exception or fix |
+| C5 | Auto-confirm only on a catalog match (B27) | (a) Require; (b) keep | (b) for V1 | None today |
+| C6 | Risk tolerance for review volume and AI accuracy (V1-085, V1-086, V1-103; D-20 "not decided") | (a) Keep current strictness (27.2 % of completed messages to review without Cloud; 8.8 % deterministic cloud); (b) relax named cases; (c) stricter | (a) for V1, with monitoring once it exists | Whether V1-103 is a defect or within tolerance; the engineering criteria A1–A8 are not owner-approved |
+| C7 | Approve the production package as a whole (RELEASE-PLAN), separately the grants clean-up | Approve / edit / reject | Approve after the pre-flight items in RELEASE-PLAN (pg_dump, Codemagic sign-in variables, backend stage at `a157e68e`) | Every deploy step P0–P5 |
+| C8 | Build 147 and the 105 new currencies (SP-04, V1-100) | Options in RELEASE-PLAN (c) | As the plan proposes | Mixed-build users |
+| C9 | Whether evaluation criterion A8a should exclude rows labelled review-acceptable (eval §12) | (a) Exclude; (b) keep the letter | No recommendation; the criterion was not changed | V1-103 grading |
+| C10 | Optional: merchant-rule tombstone so a merge can bring back backup-only rules safely (schema v44) | (a) Later version; (b) now | (a) | V1-102 |
+| C11 | Remove the dormant `cancel_account_deletion` and `purge-scheduled-deletions` pieces | (a) Remove in a later migration; (b) keep | (a) | None for V1 |
+| C12 | One production account: 540 failed iOS notifications (error 2003) and 2 captures stuck in `processing` (V1-106) | (a) Investigate read-only in P0; (b) leave | (a) | None for the package; no production write is authorized |
+| C13 | Legal site redeploy and GDPR granular-consent question (counsel) | — | Redeploy after release; ask counsel | G6 (public text must match the build) |
+
+## D. Engineering choices made in round 3 that the owner may reverse
+
+Not owner decisions. Each was chosen by an engineer because no owner decision covered it, and each errs toward review rather than recording money.
+
+| Choice | Where | Effect |
+|---|---|---|
+| ATM cash deposit → review (V1-090, RR-05) | parser, device and server | No income booked; the user confirms. Truth labels in the shared table still say income |
+| Credit-card repayment "… received" → review | parser | No direction guess |
+| Completed English reversal "… credited" → review (old B2) | parser, device validator | 4 held-out messages to review that build 147 recorded |
+| Sanitizer keeps the user's own ≤4-digit card suffix and «حسابك» | device, server, Swift | Needed for account matching; the suffix still reaches the server |
+| Shared learning: missing preference = OFF, existing users asked once | consent | Reading of 3.8/3.10 |
+| Device rules win on merge; backup-only rules not added | restore | SP-12 limit |
+| Text over 2,000 characters → review | device and server | No parse of very long text |
+| Disk-space probe compiled out of release builds (B16) | iOS | Manifest entry removed |
+| App-switcher cover on resign-active (B24) | iOS | Device check owed |
+| Cloud-off sign-out sentence, option (a) (B26) | app | Code comments wrongly call it a decision (V1-104) |
+| No catalog, flag or update request with Cloud off (B14) | app, policy | Cloud-off users get no force-update notice |
+| Evaluation criterion A8a reported failing by its letter, not changed | eval | See C9 |
+
+**Count:** 15 approved by the owner (table A, 3.1–3.15). Of the 34 earlier questions (A1–A3, A′1, B1–B30): 21 settled by the approved decisions or overtaken (A1–A3, A′1, B1, B4–B6, B8–B13, B17, B19–B21, B23, B28, B30); 7 handled by engineering choices the owner may reverse (B2, B3, B14, B16, B22, B24, B26); 6 still open and carried as C1–C6 (B7, B15, B18, B25, B27, B29). **Open now: 13 (C1–C13)**, of which 7 are new in round 3 (C7–C13). Engineering choices the owner may reverse: 12 (table D).
