@@ -130,4 +130,35 @@ void main() {
       expect(text, isNot(contains('يدوي')));
     }
   });
+
+  // V1-066 — the batch list said "Not understood" for a declined message; it
+  // now uses the same distinction as the single-message path.
+  test('the batch label matches the single-message outcome', () {
+    for (final locale in AppL10n.supportedLocales) {
+      final l10n = lookupAppL10n(locale);
+      const declined = 'Purchase of SAR 250.00 at Test Shop was declined.';
+      expect(
+          pasteBatchNotTransactionLabel(l10n,
+              message: declined, savedForAnalysis: false),
+          l10n.pasteNotCompletedShort);
+      expect(
+          pasteBatchNotTransactionLabel(l10n,
+              message: declined, savedForAnalysis: true),
+          l10n.pasteSavedForAnalysisShort);
+      expect(
+          pasteBatchNotTransactionLabel(l10n,
+              message: 'Hello from Test Shop 123', savedForAnalysis: false),
+          l10n.pasteNotUnderstood);
+    }
+  });
+
+  test('the not-completed wording covers holds and pending, not only '
+      'declines', () {
+    final en = lookupAppL10n(const Locale('en')).pasteNotCompleted;
+    final ar = lookupAppL10n(const Locale('ar')).pasteNotCompleted;
+    expect(en, contains('on hold'));
+    expect(en, contains('nothing was recorded'));
+    expect(ar, contains('معلّقة'));
+    expect(ar, contains('لم يُسجَّل شيء'));
+  });
 }

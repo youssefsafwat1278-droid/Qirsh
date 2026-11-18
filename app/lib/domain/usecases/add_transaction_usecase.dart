@@ -3,6 +3,7 @@ import '../../data/catalog/catalog_daos.dart';
 import '../../engine/ai/ai_candidate_validator.dart';
 import '../../engine/ai/ai_parser_client.dart';
 import '../../engine/ai/ai_sender_failure_tracker.dart';
+import '../../engine/ai/grounding_check.dart';
 import '../../engine/categorization/category.dart';
 import '../../engine/categorization/categorizer.dart';
 import '../../engine/intelligence/merchant_intelligence_store.dart';
@@ -20,6 +21,7 @@ import '../../data/db/planning_cutover.dart';
 import '../../engine/parser/capture_money.dart';
 import '../../engine/parser/direction_signal.dart';
 import '../../engine/parser/local_validity.dart';
+import '../../engine/parser/message_meaning.dart';
 import '../../engine/parser/parser_engine.dart';
 import '../../engine/parser/parser_isolate.dart';
 import '../../engine/parser/parse_result.dart';
@@ -100,13 +102,16 @@ class AddTransactionResult {
     this.secondary,
     this.suspectedDuplicateId,
     this.duplicateReason,
+    this.currencyFromAccount = false,
+    this.reviewReason,
   });
 
   const AddTransactionResult.added(
       TransactionEntity transaction, ParseResult parseResult,
       {bool isNewMerchant = false,
       AddTransactionResult? secondary,
-      String? aiFailureReason})
+      String? aiFailureReason,
+      bool currencyFromAccount = false})
       : this._(
           outcome: AddTransactionOutcome.added,
           transaction: transaction,
@@ -114,6 +119,7 @@ class AddTransactionResult {
           isNewMerchant: isNewMerchant,
           secondary: secondary,
           aiFailureReason: aiFailureReason,
+          currencyFromAccount: currencyFromAccount,
         );
 
   const AddTransactionResult.duplicate(TransactionEntity transaction,
@@ -136,12 +142,15 @@ class AddTransactionResult {
         );
 
   const AddTransactionResult.notTransaction(ParseResult parseResult,
-      {bool droppedByParser = false, String? aiFailureReason})
+      {bool droppedByParser = false,
+      String? aiFailureReason,
+      String? reviewReason})
       : this._(
           outcome: AddTransactionOutcome.notTransaction,
           parseResult: parseResult,
           droppedByParser: droppedByParser,
           aiFailureReason: aiFailureReason,
+          reviewReason: reviewReason,
         );
 
   final AddTransactionOutcome outcome;
@@ -154,6 +163,15 @@ class AddTransactionResult {
   final String? aiFailureReason;
   final String? suspectedDuplicateId;
   final String? duplicateReason;
+
+  /// 4.4: the message named no currency; the transaction carries the currency
+  /// of the one existing account the message was matched to by number.
+  final bool currencyFromAccount;
+
+  /// Why a not-recorded capture goes to Smart Inbox, when the parser's message
+  /// meaning decided it (`cash_deposit`, `own_accounts`, `multiple_amounts`,
+  /// `bill_due`, `pending`, …): stored as the row's `review_reason`.
+  final String? reviewReason;
 
   /// A second transaction extracted from the same SMS — currently a fee/tax
   /// line charged in a different currency than the main amount. Null when the
@@ -200,8 +218,10 @@ class _AppliedAiParse {
     required this.transaction,
     required this.categoryKey,
     required this.direction,
+    this.currencyFromAccount = false,
   });
 
+  final bool currencyFromAccount;
   final ParsedTransaction transaction;
   final String? categoryKey;
   final TransactionDirectionEntity? direction;
@@ -287,6 +307,26 @@ Future<AccountEntity?> _accountForCurrency(
       updatedAt: now,
     ),
   );
+}
+
+/// 4.4 — the ONE existing account whose number the message names (exact, or a
+/// 4+ digit suffix). Two candidates are not a confident match: null.
+Future<AccountEntity?> _confidentAccountByNumber(
+  AccountRepository? repository,
+  String? parsedAccountNumber,
+) async {
+  if (repository == null) return null;
+  final needle = parsedAccountNumber?.replaceAll(RegExp(r'[^0-9]'), '');
+  if (needle == null || needle.length < 4) return null;
+  final matches = <AccountEntity>[];
+  for (final account in await repository.getAll()) {
+    final stored = account.bankAccountNumber?.replaceAll(RegExp(r'[^0-9]'), '');
+    if (stored == null || stored.length < 4) continue;
+    final shorter = stored.length <= needle.length ? stored : needle;
+    final longer = stored.length <= needle.length ? needle : stored;
+    if (stored == needle || longer.endsWith(shorter)) matches.add(account);
+  }
+  return matches.length == 1 ? matches.single : null;
 }
 
 /// يطابق رقم الحساب المُستخرَج من الرسالة مع bank_account_number لحساب موجود.
@@ -855,18 +895,53 @@ class AddTransactionUseCase {
     // A declined/failed purchase is never sent to AI: the validator would
     // reject it anyway, and each rejection counts against the sender.
     final notCompleted = TransactionStateCues.isNotCompleted(rawMessage);
-    final aiFirstAttempt = wasIgnored || onDeviceOnly || notCompleted
+    // 4.3 / 4.4: what the device knows goes with the request as evidence the
+    // model may overrule: the local reading, and — only when the message
+    // names no currency — the currency of the one account it names by number.
+    final localTxn = parseResult.isTransaction ? parseResult.transaction : null;
+    final matchedAccount = parseResult.currencyDefaulted
+        ? await _confidentAccountByNumber(
+            _accountRepository, parseResult.transaction?.accountNumber)
+        : null;
+    final aiContext = AiParseContext(
+      localAmountText: localTxn?.amountText,
+      localCurrency: localTxn == null || parseResult.currencyDefaulted
+          ? null
+          : localTxn.currency.trim().toUpperCase(),
+      localDirection: switch (
+          localTxn == null ? null : _directionFromType(localTxn.type)) {
+        TransactionDirectionEntity.credit => 'credit',
+        TransactionDirectionEntity.debit => 'debit',
+        _ => null,
+      },
+      accountCurrency: matchedAccount?.currency.trim().toUpperCase(),
+    );
+    // Closure round (parser meaning, owner brief 4.1 / §5): a message the
+    // parser reads as no movement (a bill due, an expected salary, an offer),
+    // an OTP, or a review kind (not completed, an ATM cash deposit, a move
+    // between the user's own accounts, several movements) is never money —
+    // not from the local reading and not because a model said so. No AI
+    // request is made; review and no-movement kinds keep the message in Smart
+    // Inbox with the reason, an OTP is dropped like the OTP filter's.
+    final meaning = parseResult.meaning ?? ParserEngine.meaningOf(rawMessage);
+    final meaningHold =
+        !wasIgnored && meaning.disposition != MessageDisposition.record;
+    final aiFirstAttempt = wasIgnored || onDeviceOnly || notCompleted ||
+            meaningHold
         ? _AiFirstAttempt.skipped(
             wasIgnored
                 ? 'message_ignored'
                 : onDeviceOnly
                     ? 'on_device_only'
-                    : 'transaction_not_completed',
+                    : notCompleted
+                        ? 'transaction_not_completed'
+                        : 'message_meaning_${meaning.reason}',
           )
         : await _tryAiParseFirst(
             rawMessage: rawMessage,
             senderId: senderId,
             beforeRequest: () => _requireSameAccountIdentity(identityAtStart),
+            context: aiContext,
           );
 
     // A "no transaction" result is acked away silently UNLESS it is surfaced to
@@ -890,11 +965,12 @@ class AddTransactionUseCase {
     // misread a real bank message, so it becomes a review item (Smart Inbox)
     // unless the DETERMINISTIC OTP/promo filter also rejects the text.
     final intentionallyIgnored = wasIgnored ||
+        meaning.disposition == MessageDisposition.ignore ||
         ((transactionShaped || aiSaysNotTransaction) &&
             ParserEngine.isIgnoredMessage(rawMessage,
                 senderId: senderId, bankProfiles: bankProfiles));
     final droppedByParser = !intentionallyIgnored &&
-        (aiPrimary || isLikelyBank || transactionShaped);
+        (aiPrimary || isLikelyBank || transactionShaped || meaningHold);
 
     BankDiscoveryResult? discovery;
     if (!onDeviceOnly) {
@@ -916,8 +992,9 @@ class AddTransactionUseCase {
 
     // An eligible production AI request owns the result even when the local
     // parser found a different amount/category. It is never replaced on failure.
-    final localParsed =
-        !aiPrimary && localAccepted ? parseResult.transaction : null;
+    final localParsed = !aiPrimary && localAccepted && !meaningHold
+        ? parseResult.transaction
+        : null;
     if (localParsed != null) {
       await _logMetric?.call('parse_success', dimension: parseResult.bankKey);
     }
@@ -927,6 +1004,8 @@ class AddTransactionUseCase {
       rawMessage: rawMessage,
       localParsed: localParsed,
       referenceTime: (smsReceivedAt ?? DateTime.now()).toUtc(),
+      accountCurrency: aiContext.accountCurrency,
+      matchedAccountNumber: parseResult.transaction?.accountNumber,
     );
 
     ParsedTransaction parsed;
@@ -954,7 +1033,8 @@ class AddTransactionUseCase {
           aiFailureReason: aiFirstAttempt.failureReason ??
               (aiFirstAttempt.response == null
                   ? null
-                  : 'ai_response_rejected_by_grounding'));
+                  : 'ai_response_rejected_by_grounding'),
+          reviewReason: meaningHold && droppedByParser ? meaning.reason : null);
     }
     final now = DateTime.now().toUtc();
     final receivedAt = (smsReceivedAt ?? now).toUtc();
@@ -1179,7 +1259,10 @@ class AddTransactionUseCase {
     // direction). If the FINAL type contradicts the wording, treat it as a
     // validator rejection: no transaction.
     if (aiValidated &&
-        DirectionSignal.contradicts(rawMessage, effectiveParsed.type)) {
+        AiCandidateValidator.contradictsBooked(
+            rawMessage, effectiveParsed.type,
+            amount: effectiveParsed.amount,
+            merchant: effectiveParsed.rawMerchant)) {
       AiSenderFailureTracker.instance.recordFailure(aiFirstAttempt.senderId);
       return AddTransactionResult.notTransaction(reportedParse,
           droppedByParser: droppedByParser,
@@ -1517,6 +1600,7 @@ class AddTransactionUseCase {
                 (aiFirstAttempt.response != null
                     ? 'ai_response_rejected_by_grounding'
                     : 'ai_no_answer'),
+        currencyFromAccount: aiParsed?.currencyFromAccount ?? false,
       );
     });
 
@@ -1816,6 +1900,7 @@ class AddTransactionUseCase {
     required String rawMessage,
     required String? senderId,
     required Future<void> Function() beforeRequest,
+    AiParseContext context = const AiParseContext(),
   }) async {
     if (_aiClient == null) return const _AiFirstAttempt.skipped('no_ai_client');
     final consent = await _loadAiConsent?.call() ?? false;
@@ -1826,21 +1911,48 @@ class AddTransactionUseCase {
       rawMessage,
       detectedType: _privacyTypeHint(rawMessage),
     );
+    // The local amount is sent only when it is still a figure of the
+    // sanitized text: a digit run the sanitizer removed (a card or account
+    // number misread as an amount) never leaves the device this way.
+    final localAmount = double.tryParse(
+        (context.localAmountText ?? '').replaceAll(',', ''));
+    if (context.localAmountText != null &&
+        (localAmount == null ||
+            !GroundingCheck.verify(
+                amount: localAmount, sanitizedText: sanitized))) {
+      context = AiParseContext(accountCurrency: context.accountCurrency);
+    }
     // Immediately before the request: the account must be unchanged. Throws
     // (no request, nothing committed) — deliberately outside the catch below.
     await beforeRequest();
     AiParseResponse? response;
     String? failureReason;
     try {
-      response = await _aiClient.parse(
-        sanitizedSms: sanitized,
-        senderId: sid,
-        installId: await _effectiveInstallId(),
-      );
+      final client = _aiClient;
+      response = client is ContextualAiParserClient && !context.isEmpty
+          ? await client.parseWithContext(
+              sanitizedSms: sanitized,
+              senderId: sid,
+              installId: await _effectiveInstallId(),
+              context: context,
+            )
+          : await client.parse(
+              sanitizedSms: sanitized,
+              senderId: sid,
+              installId: await _effectiveInstallId(),
+            );
     } on AiParseException catch (error) {
       failureReason = error.reason;
     } catch (_) {
       failureReason = 'unexpected_ai_error';
+    }
+    // 3.9 / 4.7: before an answer is APPLIED, the account must still be the
+    // one the request was made for (throws: nothing is committed) and AI
+    // consent must still be on. A request already sent cannot be recalled;
+    // its answer is simply not used.
+    await beforeRequest();
+    if (!(await _loadAiConsent?.call() ?? false)) {
+      return const _AiFirstAttempt.skipped('consent_revoked');
     }
     return _AiFirstAttempt(
       senderId: sid,
@@ -1855,6 +1967,8 @@ class AddTransactionUseCase {
     required String rawMessage,
     required ParsedTransaction? localParsed,
     required DateTime referenceTime,
+    String? accountCurrency,
+    String? matchedAccountNumber,
   }) {
     final aiResponse = attempt.response;
     final sanitized = attempt.sanitizedSms;
@@ -1865,6 +1979,7 @@ class AddTransactionUseCase {
       localParsed: localParsed,
       referenceTime: referenceTime,
       messageText: rawMessage,
+      accountCurrency: accountCurrency,
       normalizedType: _normalizeAiType(
         rawMessage: rawMessage,
         categoryKey: aiResponse.categoryKey,
@@ -1892,6 +2007,7 @@ class AddTransactionUseCase {
 
     return _AppliedAiParse(
       categoryKey: aiCategoryKey,
+      currencyFromAccount: validation.currencyFromAccount,
       direction: _parseAiDirection(aiResponse.direction),
       transaction: ParsedTransaction(
         // Null means the old AI backend omitted amount_text: LEGACY_LOSSY and
@@ -1906,7 +2022,9 @@ class AddTransactionUseCase {
             ) ??
             localParsed?.rawMerchant,
         cardLast4: localParsed?.cardLast4,
-        accountNumber: localParsed?.accountNumber,
+        // 4.4: an account-context currency binds the row to that account.
+        accountNumber: localParsed?.accountNumber ??
+            (validation.currencyFromAccount ? matchedAccountNumber : null),
         balanceAfterText: localParsed?.balanceAfterText,
         balanceAfter: localParsed?.balanceAfter,
         occurredAt: validation.occurredAt,

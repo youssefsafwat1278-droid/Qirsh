@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/features/ads/admob_build_config.dart';
 import 'package:money_companion/core/backend/metrics_client.dart';
 import 'package:money_companion/features/ads/ad_placement.dart';
 import 'package:money_companion/features/ads/banner_ads_providers.dart';
@@ -118,6 +119,12 @@ Future<bool?> _mayServe(AdPlacement placement) async {
 }
 
 void main() {
+  // Decision 3.2: advertising is compiled out of Version 1 builds. These tests
+  // exercise the ad pipeline itself, as a build made with
+  // --dart-define=QIRSH_ADS_ENABLED=true runs it. The compiled-out behaviour
+  // is covered by test/features/ads/v1_ads_compiled_out_test.dart.
+  setUp(() => AdMobBuildConfig.debugAdsCompiledInOverride = true);
+  tearDown(() => AdMobBuildConfig.debugAdsCompiledInOverride = false);
   setUp(ReportBannerSuppression.resetForTest);
 
   test('baseline: with no journey running, Reports may serve', () async {

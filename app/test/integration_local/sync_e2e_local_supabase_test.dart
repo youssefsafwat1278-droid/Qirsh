@@ -62,6 +62,20 @@ typedef TestUser = ({String uid, String email, String password});
 
 Future<TestUser> newUser(String label) => remote.createUser(label);
 
+/// [Device.open] admits the database through the real session sign-in, which
+/// records onboarding completion (`mark_onboarding_completed`). That request is
+/// device admission, not sync traffic, so it is removed from the probe's count;
+/// every other request stays counted.
+Future<Device> openDevice() async {
+  final before = probe.log.length;
+  final d = await Device.open();
+  final added = probe.log.sublist(before);
+  probe.log.removeRange(before, probe.log.length);
+  probe.log.addAll(
+      added.where((e) => e != 'POST /rest/v1/rpc/mark_onboarding_completed'));
+  return d;
+}
+
 Future<void> signIn(TestUser u) async {
   final auth = Supabase.instance.client.auth;
   if (auth.currentSession != null) await auth.signOut();
@@ -278,7 +292,7 @@ void main() {
     test('S1 account create -> outbox -> push -> remote exact -> ACK', () async {
       final u = await newUser('s1');
       await signIn(u);
-      final dev = await Device.open();
+      final dev = await openDevice();
       addTearDown(dev.close);
 
       await dev.accounts
@@ -318,7 +332,7 @@ void main() {
         () async {
       final u = await newUser('s2');
       await signIn(u);
-      final d1 = await Device.open();
+      final d1 = await openDevice();
       addTearDown(d1.close);
 
       await d1.accounts.create(acct('acc-s2', isDefault: true));
@@ -363,7 +377,7 @@ void main() {
           4);
 
       // ---- ANOTHER DEVICE: same user, fresh empty local DB ----
-      final d2 = await Device.open();
+      final d2 = await openDevice();
       addTearDown(d2.close);
       final ap = await d2.accountsPull.pull();
       expect(ap.status.name, 'completed');
@@ -396,7 +410,7 @@ void main() {
         () async {
       final u = await newUser('s3');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
 
       await d.budgets.save(budget('bud-s3', '250.500'));
@@ -468,7 +482,7 @@ void main() {
     test('S3b goal contribution via the child RPC is exactly-once', () async {
       final u = await newUser('s3b');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
       await d.goals.save(goal('goal-s3b', '500'));
       await d.planningPush.push();
@@ -504,7 +518,7 @@ void main() {
         () async {
       final u = await newUser('s4');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
 
       await d.accounts.create(acct('acc-s4', isDefault: true));
@@ -543,7 +557,7 @@ void main() {
         'then online -> synced', () async {
       final u = await newUser('s5');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
       await d.accounts.create(acct('acc-s5', isDefault: true));
       await d.transactions.saveTransaction(
@@ -600,7 +614,7 @@ void main() {
         () async {
       final u = await newUser('s6');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
       await d.accounts.create(acct('acc-s6', isDefault: true));
       await d.transactions.saveTransaction(
@@ -662,7 +676,7 @@ void main() {
         'until ACK; lost ack converges', () async {
       final u = await newUser('s7');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
       await d.accounts.create(acct('acc-s7', isDefault: true));
       await d.accounts.create(acct('acc-s7-del', name: 'To delete'));
@@ -751,7 +765,7 @@ void main() {
       final a = await newUser('s8a');
       final b = await newUser('s8b');
       await signIn(a);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
 
       await d.accounts.create(acct('acc-a1', isDefault: true));
@@ -823,8 +837,8 @@ void main() {
         'documented interactive resolution is deterministic', () async {
       final u = await newUser('s9');
       await signIn(u);
-      final d1 = await Device.open();
-      final d2 = await Device.open();
+      final d1 = await openDevice();
+      final d2 = await openDevice();
       addTearDown(d1.close);
       addTearDown(d2.close);
 
@@ -976,7 +990,7 @@ void main() {
         () async {
       final u = await newUser('s10');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
       await d.accounts.create(acct('acc-s10', isDefault: true));
       await d.transactions.saveTransaction(
@@ -1078,7 +1092,7 @@ void main() {
         'DB restored to 0001-0099', () async {
       final u = await newUser('s11');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
       final repo = Directory.current.parent.path;
       final f103 = '$repo/supabase/migrations/0102_awaiting_fx_transactions.sql';
@@ -1174,7 +1188,7 @@ void main() {
         () async {
       final u = await newUser('s12');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
       await d.senderMappings.saveSuggestion(const SenderBankMappingDraft(
         senderId: 'PROOF-BANK',
@@ -1210,7 +1224,7 @@ void main() {
         () async {
       final u = await newUser('s13');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
 
       probe.offline = true;
@@ -1246,8 +1260,8 @@ void main() {
     test('S9b planning keep-remote converges immediately (budget)', () async {
       final u = await newUser('s9b');
       await signIn(u);
-      final d1 = await Device.open();
-      final d2 = await Device.open();
+      final d1 = await openDevice();
+      final d2 = await openDevice();
       addTearDown(d1.close);
       addTearDown(d2.close);
       await d1.budgets.save(budget('bud-s9b', '100.000'));
@@ -1284,7 +1298,7 @@ void main() {
         'missing column/table maps to unsupported', () async {
       final u = await newUser('s14');
       await signIn(u);
-      final d = await Device.open();
+      final d = await openDevice();
       addTearDown(d.close);
 
       // The real production provider graph (nothing injected but the database

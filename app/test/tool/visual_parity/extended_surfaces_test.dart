@@ -812,6 +812,9 @@ void main() {
       'SELECT cloud_consent_state, ai_consent_state FROM user_settings').getSingle();
     await open(tester, 'consentManagement');
     expect(find.byKey(const Key('consentManageCancel')), findsOneWidget);
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('consentManageCancel')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('consentManageCancel')));
     await tester.pumpAndSettle();
     final after = await db.customSelect(

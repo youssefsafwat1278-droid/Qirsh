@@ -139,9 +139,9 @@ void main() {
     final wipe = _NoopDataWipeService();
     await tester.pumpWidget(_app(service, wipe));
     await tester.pumpAndSettle();
-    await _tapEnsuringVisible(tester, find.text('إلغاء الحذف').first);
+    await _tapEnsuringVisible(tester, find.text(lookupAppL10n(const Locale('ar')).privCancelDeletion).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('إلغاء الحذف').last);
+    await tester.tap(find.text(lookupAppL10n(const Locale('ar')).privCancelDeletion).last);
     await tester.pumpAndSettle();
     expect(service.cancelCalls, 1);
     expect(service.scheduledAt, scheduled);
@@ -165,7 +165,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('2026-08-14'), findsOneWidget);
-    expect(find.text('إلغاء الحذف'), findsWidgets);
+    expect(find.text(lookupAppL10n(const Locale('ar')).privCancelDeletion), findsWidgets);
   });
 
   testWidgets(
@@ -177,10 +177,10 @@ void main() {
     await tester.pumpWidget(_app(service, _NoopDataWipeService()));
     await tester.pumpAndSettle();
 
-    await _tapEnsuringVisible(tester, find.text('إلغاء الحذف').first);
+    await _tapEnsuringVisible(tester, find.text(lookupAppL10n(const Locale('ar')).privCancelDeletion).first);
     await tester.pumpAndSettle();
     // Confirmation dialog.
-    await tester.tap(find.text('إلغاء الحذف').last);
+    await tester.tap(find.text(lookupAppL10n(const Locale('ar')).privCancelDeletion).last);
     await tester.pumpAndSettle();
 
     expect(service.cancelCalls, 1);
@@ -194,7 +194,7 @@ void main() {
     await tester.pumpWidget(_app(service, _NoopDataWipeService()));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('حسابك مجدول للحذف'), findsNothing);
+    expect(find.textContaining('لن يُنفَّذ طلب حذف'), findsNothing);
   });
 
   testWidgets(
@@ -265,7 +265,7 @@ void main() {
       expect(find.byType(DeleteAccountScreen),findsOneWidget);
       expect(GoRouterState.of(tester.element(find.byType(DeleteAccountScreen))).uri.path,'/delete-account');
       expect(find.text(lookupAppL10n(const Locale('ar')).deleteAccountFailedFinal),findsOneWidget);
-      expect(find.textContaining('حسابك مجدول للحذف'),findsNothing);
+      expect(find.textContaining('لن يُنفَّذ طلب حذف'),findsNothing);
     }finally{
       await tester.pump(const Duration(seconds:3));
       await tester.pumpWidget(const SizedBox());await tester.pump();

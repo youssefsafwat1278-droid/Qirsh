@@ -446,10 +446,12 @@ class LegacyCaptureDrain {
           disposition: result.disposition,
           transactionId: result.transactionId,
           // A temporary AI failure reads "awaiting analysis", not
-          // "unsupported", and keeps the retry action.
+          // "unsupported", and keeps the retry action. Otherwise a message
+          // the parser holds keeps its meaning reason (cash_deposit,
+          // own_accounts, bill_due, …), as capture_import_service does.
           reviewReason: isTemporaryAiFailure(aiFailure)
               ? SmartInboxReviewReason.analysisUnavailable
-              : null,
+              : result.addTransactionResult.reviewReason,
         );
         if (handoffOutcome == SharedCaptureHandoffOutcome.acknowledged) {
           await onAcknowledged?.call(message);

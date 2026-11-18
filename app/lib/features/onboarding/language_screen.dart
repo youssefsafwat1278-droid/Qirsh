@@ -20,22 +20,25 @@ class OnboardingLanguageScreen extends ConsumerStatefulWidget {
 }
 
 class _LanguageState extends ConsumerState<OnboardingLanguageScreen> {
-  String _selected = 'en';
+  // Nothing is preselected (owner decision 3.6): Continue stays disabled
+  // until the user picks a language explicitly.
+  String? _selected;
   bool _saving = false;
   Future<void> _continue() async {
-    if (_saving) return;
+    final selected = _selected;
+    if (_saving || selected == null) return;
     setState(() => _saving = true);
     try {
       try {
-        await ref.read(saveLanguageUseCaseProvider).call(_selected);
+        await ref.read(saveLanguageUseCaseProvider).call(selected);
         ref.invalidate(userSettingsProvider);
       } catch (_) {
         // Signed-out settings may be read-only. This device mirror seeds the
         // account's settings after sign-in; it grants no account authority.
-        await LockPromptLanguage.set(_selected);
+        await LockPromptLanguage.set(selected);
       }
       if (!mounted) return;
-      ref.read(preSignInLanguageProvider.notifier).state = _selected;
+      ref.read(preSignInLanguageProvider.notifier).state = selected;
       await AppSession.instance.markOnboardingLanguageChosen();
       if (mounted) context.go('/welcome');
     } catch (_) {
@@ -85,10 +88,14 @@ class _LanguageState extends ConsumerState<OnboardingLanguageScreen> {
                       const SizedBox(height: 32),
                       FilledButton(
                           key: const ValueKey('language-first-continue'),
-                          onPressed: _saving ? null : _continue,
+                          onPressed:
+                              _saving || _selected == null ? null : _continue,
                           style: FilledButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: AppBrandBlue.brand,
+                              disabledBackgroundColor:
+                                  Colors.white.withValues(alpha: .24),
+                              disabledForegroundColor: Colors.white70,
                               minimumSize: const Size.fromHeight(54),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(18))),

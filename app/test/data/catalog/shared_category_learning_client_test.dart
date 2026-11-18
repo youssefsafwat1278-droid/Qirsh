@@ -61,7 +61,7 @@ TransactionEntity _tx({
 class _Harness {
   /// [optedIn]: the "Help improve categories for everyone" switch for the
   /// signed-in account, as an explicit choice. Null leaves it unset, which is
-  /// the real default (ON).
+  /// OFF (decision 3.10 transition: an update opts nobody in).
   _Harness({bool cloud = true, bool ai = true, bool? optedIn = false})
       : settings = _settings(cloud: cloud, ai: ai) {
     if (optedIn != null) {
@@ -97,20 +97,24 @@ class _Harness {
 
 void main() {
   group('opt-in (Help improve categories for everyone)', () {
-    test('ON by default: with Cloud and AI on, an unset switch sends',
-        () async {
+    // Decided behaviour change (owner decision 3.10, round 3): an unset
+    // switch used to mean ON. The consent existing users accepted did not
+    // mention shared learning, so unset is now OFF and unanswered; ON is
+    // recorded only by "Agree and enable", the one-time question, or the
+    // Privacy switch.
+    test('unset is OFF: with Cloud and AI on, nothing is sent', () async {
       final h = _Harness(optedIn: null);
-      expect(await h.preference.isOn('uid-a'), isTrue);
+      expect(await h.preference.isOn('uid-a'), isFalse);
+      expect(await h.preference.isAnswered('uid-a'), isFalse);
       await h.client.offer(_tx(), 'shopping');
-      expect(h.sent, [
-        {'merchant_key': 'HALA BOUTIQUE', 'category_key': 'shopping'}
-      ]);
+      expect(h.sent, isEmpty);
+      expect(h.client.queuedCount, 0);
     });
 
-    test('ON by default still needs Cloud and AI consent', () async {
+    test('a recorded ON still needs Cloud and AI consent', () async {
       for (final h in [
-        _Harness(optedIn: null, cloud: false),
-        _Harness(optedIn: null, ai: false),
+        _Harness(optedIn: true, cloud: false),
+        _Harness(optedIn: true, ai: false),
       ]) {
         await h.client.offer(_tx(), 'shopping');
         expect(h.sent, isEmpty);
@@ -192,6 +196,7 @@ void main() {
 
     test('each account keeps its own choice on a shared device', () async {
       final h = _Harness(optedIn: false);
+      await h.preference.set('uid-b', true);
       h.uid = 'uid-b';
       expect(await h.preference.isOn('uid-b'), isTrue,
           reason: 'uid-a turning it off does not turn it off for uid-b');

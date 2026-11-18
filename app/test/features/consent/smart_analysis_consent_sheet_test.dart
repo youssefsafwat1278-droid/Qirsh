@@ -62,6 +62,9 @@ void main() {
       expect(find.byKey(const Key('initialConsentAccept')), findsOneWidget);
       expect(find.byKey(const Key('initialConsentDecline')), findsOneWidget);
       expect(find.textContaining('Google Gemini'), findsOneWidget);
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pumpAndSettle();
       expect(repo.settings.cloudConsentState, ConsentState.accepted);
@@ -73,6 +76,9 @@ void main() {
 
   testWidgets('decline persists both denials and returns local use', (tester) async {
     await open(tester);
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentDecline')));
     await tester.pumpAndSettle();
     expect(repo.settings.cloudConsentState, ConsentState.declined);
@@ -84,6 +90,9 @@ void main() {
   testWidgets('save failure grants nothing and does not complete', (tester) async {
     await open(tester);
     repo.failSave = true;
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pumpAndSettle();
     expect(repo.settings.cloudConsentState, ConsentState.unset);

@@ -26,6 +26,7 @@ import '../../core/theme/app_typography.dart';
 import '../../core/utils/l10n_ext.dart';
 import '../../core/theme/widgets/app_toast.dart';
 import '../../core/utils/app_lucide_icons.dart';
+import '../consent/legal_links.dart';
 
 // v2: auth is always-dark art in BOTH themes — the art dissolves into true
 // black, not navy (spec §3.0 row 01).
@@ -447,6 +448,8 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
         Text(l.authTermsNotice,
             textAlign: TextAlign.center,
             style: AppTypography.caption(muted).copyWith(height: 20 / 13)),
+        // UX-02 / decision 3.5: both documents open here, Cloud OFF included.
+        const LegalLinks(color: Color(0xFFF4CB6C)),
       ],
     );
   }

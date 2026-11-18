@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/features/ads/admob_build_config.dart';
 import 'package:money_companion/core/backend/metrics_client.dart';
 import 'package:money_companion/core/theme/app_theme.dart';
 import 'package:money_companion/features/ads/ad_placement.dart';
@@ -180,6 +181,12 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
+  // Decision 3.2: advertising is compiled out of Version 1 builds. These tests
+  // exercise the ad pipeline itself, as a build made with
+  // --dart-define=QIRSH_ADS_ENABLED=true runs it. The compiled-out behaviour
+  // is covered by test/features/ads/v1_ads_compiled_out_test.dart.
+  setUp(() => AdMobBuildConfig.debugAdsCompiledInOverride = true);
+  tearDown(() => AdMobBuildConfig.debugAdsCompiledInOverride = false);
   setUp(() {
     _CountingLoader.reset();
     BannerAdController.resetThrottleForTest();

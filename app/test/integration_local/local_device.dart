@@ -8,9 +8,7 @@
 // push/pull are `verifiedExact` build constants in production; planning
 // currency is a runtime probe, exercised through the REAL providers in S14)
 // and the owner accessor.
-import 'package:drift/native.dart';
 import 'package:money_companion/data/db/app_database.dart';
-import 'package:money_companion/data/db/database_key_store.dart';
 import 'package:money_companion/data/db/planning_cutover.dart';
 import 'package:money_companion/data/repositories/drift_account_repository.dart';
 import 'package:money_companion/data/repositories/drift_bill_repository.dart';
@@ -34,12 +32,7 @@ import 'package:money_companion/features/planning_sync/services/planning_pull_se
 import 'package:money_companion/features/planning_sync/services/planning_push_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-class _MemoryKeyStore implements DatabaseKeyStore {
-  @override
-  Future<String> readOrCreateKey() async => 'test-key';
-  @override
-  Future<String?> readStoredKey() async => 'test-key';
-}
+import '../features/capture/ledger_admission_fixture.dart';
 
 const _canonical =
     FixedPlanningCutoverCoordinator(PlanningCutoverState.canonical);
@@ -51,16 +44,25 @@ class Device {
   Device._(this.db);
 
   /// A new device = a new empty local database (what "another phone, same
-  /// account" or "fresh install" looks like).
+  /// account" or "fresh install" looks like), admitted for the signed-in user
+  /// by the REAL account-fence host — the push services only deliver from an
+  /// admitted database (`*DeliveryStopped:unbound` otherwise). The fence admits
+  /// one database per process, as on a phone: opening a second device closes
+  /// the previous one (that phone has left), so a scenario cannot keep using
+  /// two devices side by side.
   static Future<Device> open() async {
-    final db = await AppDatabase.open(
-      executor: NativeDatabase.memory(),
-      keyStore: _MemoryKeyStore(),
-    );
-    final d = Device._(db);
+    final uid = await signedInUid();
+    if (uid == null) throw StateError('Device.open needs a signed-in user');
+    await _current?.close();
+    final fixture = await LedgerAdmissionFixture.open(uid);
+    final d = Device._(fixture.database).._fixture = fixture;
     d._wire();
+    _current = d;
     return d;
   }
+
+  static Device? _current;
+  LedgerAdmissionFixture? _fixture;
 
   /// Wires the same real services over a database the caller already opened
   /// (e.g. one admitted by the account-fence host). The caller owns closing it.
@@ -237,5 +239,10 @@ class Device {
         'UPDATE planning_sync_outbox SET next_retry_at = NULL;');
   }
 
-  Future<void> close() => db.close();
+  Future<void> close() async {
+    if (identical(_current, this)) _current = null;
+    final fixture = _fixture;
+    if (fixture == null) return db.close();
+    await fixture.finish();
+  }
 }

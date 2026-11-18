@@ -65,11 +65,14 @@ struct PostBankStatusIntent: AppIntent {
       SharedCaptureStore.recordShortcutSetupProbe()
       return .result()
     }
-    // Signed out: nothing is captured. No queue entry, no upload and no
-    // notification (silent by the owner's decision): a bank message is only
-    // recorded for an account that is signed in.
+    // Signed out: nothing is captured or kept — no queue entry and no upload,
+    // so the message can never attach to whichever account signs in next.
+    // Owner decision 3.13: never report success. The run fails with the
+    // signed-out copy (Shortcuts shows it), and one content-free banner with
+    // the same copy is posted (replaced, not stacked, on repeat runs).
     if SharedCaptureStore.isSignedOutForCertain() {
-      return .result()
+      await Self.postSignedOutNotification()
+      throw ProcessBankSMSError.captureFailed(.signedOut)
     }
     let receivedAt = dateReceived ?? Date()
     let request = BankSMSCaptureRequest(
@@ -186,7 +189,8 @@ struct PostBankStatusIntent: AppIntent {
           response.pushAttempted == true || response.pushSent ? false : savedCapture
           ? await scheduleGenericCaptureNotification(
             payloadID: payloadID,
-            aiDetail: response.aiDetail
+            aiDetail: response.aiDetail,
+            status: response.notification.type == "needs_review" ? .needsReview : .queued
           )
           : await scheduleNotification(
             response.notification,
@@ -361,10 +365,11 @@ struct PostBankStatusIntent: AppIntent {
   @discardableResult
   private func scheduleGenericCaptureNotification(
     payloadID: String,
-    aiDetail: CaptureDetail? = nil
+    aiDetail: CaptureDetail? = nil,
+    status: CaptureBannerStatus = .queued
   ) async -> Bool {
     await scheduleNotification(
-      detailedCaptureNotification(aiDetail: aiDetail)
+      detailedCaptureNotification(aiDetail: aiDetail, status: status)
         ?? BackendNotification(
           title: "",
           body: Self.genericCaptureBody(),
@@ -380,63 +385,96 @@ struct PostBankStatusIntent: AppIntent {
   /// message with confidence.
   private func detailedCaptureNotification(
     aiDetail: CaptureDetail? = nil,
+    status: CaptureBannerStatus = .queued,
     preferredLanguage: String? = SharedCaptureStore.notificationLanguage
   ) -> BackendNotification? {
     // The user's "hide lock-screen content" preference keeps it generic.
     guard !SharedCaptureStore.hidesCaptureDetails,
           let detail = aiDetail ?? localDetail() else { return nil }
-    let ar = (preferredLanguage ?? "").hasPrefix("ar")
-    let isCredit = detail.isCredit
-    let title: String
-    switch (isCredit, detail.kind) {
-    case (true, _): title = ar ? "تم رصد إيداع 💰" : "Deposit received 💰"
-    case (_, "withdrawal"): title = ar ? "تم رصد سحب نقدي 🏧" : "Cash withdrawal 🏧"
-    case (_, "transfer"): title = ar ? "تم رصد تحويل 🔁" : "Transfer sent 🔁"
-    case (_, "refund"): title = ar ? "تم رصد استرداد ↩️" : "Refund received ↩️"
-    default: title = ar ? "تم رصد عملية شراء 🛒" : "New purchase 🛒"
-    }
-    var lines = [ar
-      ? "المبلغ: \(detail.amount) \(detail.currency)"
-      : "Amount: \(detail.amount) \(detail.currency)"]
-    if let merchant = detail.merchant {
-      lines.append(ar
-        ? (isCredit ? "المصدر: \(merchant)" : "التاجر: \(merchant)")
-        : (isCredit ? "From: \(merchant)" : "Merchant: \(merchant)"))
-    }
-    if let category = detail.category {
-      lines.append(ar ? "التصنيف: \(Self.categoryLabel(category, arabic: true))"
-        : "Category: \(Self.categoryLabel(category, arabic: false))")
-    }
-    if let last4 = detail.last4 {
-      lines.append(ar ? "البطاقة: ****\(last4)" : "Card: ****\(last4)")
-    }
-    let time = Self.timeLabel(for: dateReceived ?? Date(), arabic: ar)
-    lines.append(ar ? "الوقت: \(time)" : "Time: \(time)")
-    return BackendNotification(
-      title: title,
-      body: lines.joined(separator: "\n"),
-      type: "new_transaction"
+    return Self.captureBanner(
+      detail: detail,
+      fromServerAnalysis: aiDetail != nil,
+      status: status,
+      receivedAt: dateReceived ?? Date(),
+      arabic: (preferredLanguage ?? "").hasPrefix("ar")
     )
   }
 
-  static func categoryLabel(_ key: String, arabic: Bool) -> String {
-    let labels: [String: (String, String)] = [
-      "restaurants": ("Restaurants", "مطاعم"), "cafes": ("Cafés", "مقاهي"),
-      "groceries": ("Groceries", "بقالة"), "transport": ("Transport", "مواصلات"),
-      "fuel": ("Fuel", "وقود"), "bills": ("Bills", "فواتير"),
-      "shopping": ("Shopping", "تسوق"), "health": ("Health", "صحة"),
-      "education": ("Education", "تعليم"), "entertainment": ("Entertainment", "ترفيه"),
-      "subscriptions": ("Subscriptions", "اشتراكات"), "transfers": ("Transfers", "تحويل"),
-      "cash": ("Cash", "كاش"), "travel": ("Travel", "سفر"),
-      "gifts": ("Gifts", "هدايا"), "kids": ("Kids", "أطفال"),
-      "home": ("Home", "منزل"), "maintenance": ("Maintenance", "صيانة"),
-      "fitness": ("Fitness", "رياضة"), "beauty": ("Beauty", "جمال"),
-      "charity": ("Charity", "خيرية"), "pets": ("Pets", "حيوانات"),
-      "insurance": ("Insurance", "تأمين"), "income": ("Income", "دخل"),
-      "other": ("Other", "أخرى"),
-    ]
-    guard let label = labels[key] else { return key }
-    return arabic ? label.1 : label.0
+  /// Owner decision 3.12: what a native capture banner may say. Built here, at
+  /// capture time, BEFORE the app has imported the message — so it never says
+  /// the transaction was recorded, never names a category (the final category
+  /// is chosen on import: manual > saved rule > AI) and states the real status:
+  /// queued for Qirsh to check, or waiting for the user's review. A type is
+  /// shown only from the server's validated analysis; the on-device preview
+  /// only matches keywords, so it claims no outcome (V1-061). The amount is in
+  /// the title (visible collapsed); the details are in the multi-line body
+  /// (visible expanded). Nothing else from the message is copied: no sender,
+  /// no raw text, a bounded merchant name, and a card/account hint only when
+  /// it is exactly four digits. iOS hides title and body when the user turned
+  /// notification previews off (no category here opts into showing them).
+  static func captureBanner(
+    detail: CaptureDetail,
+    fromServerAnalysis: Bool,
+    status: CaptureBannerStatus,
+    receivedAt: Date,
+    arabic ar: Bool
+  ) -> BackendNotification {
+    var lines: [String] = []
+    if fromServerAnalysis, let type = typeLabel(detail, arabic: ar) {
+      lines.append(ar ? "النوع: \(type)" : "Type: \(type)")
+    }
+    if let merchant = boundedMerchant(detail.merchant) {
+      let label: String
+      if fromServerAnalysis {
+        label = detail.isCredit ? (ar ? "المصدر" : "From") : (ar ? "التاجر" : "Merchant")
+      } else {
+        label = ar ? "الجهة" : "Merchant/source"
+      }
+      lines.append("\(label): \(merchant)")
+    }
+    if let last4 = detail.last4, last4.count == 4,
+       last4.allSatisfy({ ("0"..."9").contains($0) }) {
+      lines.append(ar ? "البطاقة/الحساب: ••••\(last4)" : "Card/account ending \(last4)")
+    }
+    let time = timeLabel(for: receivedAt, arabic: ar)
+    lines.append(ar ? "الوقت: \(time)" : "Time: \(time)")
+    switch status {
+    case .queued:
+      lines.append(ar
+        ? "لم تُسجَّل بعد: يتحقق منها قِرش قبل إضافتها."
+        : "Not recorded yet: Qirsh checks it before adding it.")
+    case .needsReview:
+      lines.append(ar
+        ? "تحتاج مراجعتك في قِرش قبل تسجيلها."
+        : "Needs your review in Qirsh before it is recorded.")
+    }
+    return BackendNotification(
+      title: ar
+        ? "رسالة بنك: \(detail.amount) \(detail.currency)"
+        : "Bank message: \(detail.amount) \(detail.currency)",
+      body: lines.joined(separator: "\n"),
+      type: status == .needsReview ? "needs_review" : "new_transaction"
+    )
+  }
+
+  private static func typeLabel(_ detail: CaptureDetail, arabic ar: Bool) -> String? {
+    if detail.isCredit && detail.kind != "refund" { return ar ? "إيداع" : "Deposit" }
+    switch detail.kind {
+    case "payment": return ar ? "شراء" : "Purchase"
+    case "withdrawal": return ar ? "سحب نقدي" : "Cash withdrawal"
+    case "transfer": return ar ? "تحويل" : "Transfer"
+    case "refund": return ar ? "استرداد" : "Refund"
+    case "income": return ar ? "إيداع" : "Deposit"
+    default: return nil
+    }
+  }
+
+  /// A merchant name is short; anything longer is more of the message than a
+  /// name, so it is cut rather than shown whole.
+  private static func boundedMerchant(_ raw: String?) -> String? {
+    guard let clean = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !clean.isEmpty else { return nil }
+    return clean.count > 40 ? String(clean.prefix(40)) + "…" : clean
   }
 
   private func localDetail() -> CaptureDetail? {
@@ -487,30 +525,14 @@ struct PostBankStatusIntent: AppIntent {
       await scheduleGenericCaptureNotification(payloadID: payloadID)
       return
     }
-    if let parser = PreviewParser.shared {
-      let result = parser.parse(smsText)
-      if result.isHighConfidence, let amount = result.amount, let currency = result.currency {
-        let isCredit = result.outcome == .credit
-        let title = isCredit ? "تم رصد إيداع 💰" : "تم رصد عملية شراء 🛒"
-        var lines = ["المبلغ: \(PreviewParser.format(amount)) \(currency)"]
-        if let merchant = result.merchant {
-          lines.append(isCredit ? "المصدر: \(merchant)" : "التاجر: \(merchant)")
-        }
-        if let last4 = result.last4 {
-          lines.append("البطاقة: ****\(last4)")
-        }
-        lines.append("الوقت: \(Self.timeLabel(for: dateReceived ?? Date()))")
-        await scheduleNotification(
-          BackendNotification(
-            title: title,
-            body: lines.joined(separator: "\n"),
-            type: "new_transaction"
-          ),
-          payloadID: payloadID,
-          identifierPrefix: "capture_fallback"
-        )
-        return
-      }
+    // V1-035: the same localized banner as the v2 path (it was Arabic-only).
+    if let banner = detailedCaptureNotification() {
+      await scheduleNotification(
+        banner,
+        payloadID: payloadID,
+        identifierPrefix: "capture_fallback"
+      )
+      return
     }
     await scheduleGenericFallbackNotification(
       payloadID: payloadID,
@@ -519,7 +541,7 @@ struct PostBankStatusIntent: AppIntent {
   }
 
   /// "اليوم ٩:٤١ م" بأسلوب صريح: اليوم/أمس/د‏/‏ش — بتوقيت الجهاز.
-  private static func timeLabel(for date: Date, arabic: Bool = true) -> String {
+  static func timeLabel(for date: Date, arabic: Bool = true) -> String {
     let calendar = Calendar.current
     let comps = calendar.dateComponents([.hour, .minute], from: date)
     let hour24 = comps.hour ?? 0
@@ -588,6 +610,30 @@ struct PostBankStatusIntent: AppIntent {
     }
     return nil
   }
+
+  /// Owner decision 3.13: the signed-out banner. Content-free (no amount, no
+  /// sender, no message text); one stable identifier, so a repeat run replaces
+  /// it instead of stacking banners.
+  static let signedOutNotificationId = "capture_signed_out"
+
+  private static func postSignedOutNotification() async {
+    let content = UNMutableNotificationContent()
+    content.title = SharedCaptureStore.notificationLanguage == "ar" ? "قِرش" : "Qirsh"
+    content.body = SharedCaptureStore.FailureKind.signedOut.userMessage
+    content.sound = .default
+    let request = UNNotificationRequest(
+      identifier: signedOutNotificationId, content: content, trigger: nil)
+    // Best effort: the thrown error carries the same copy if banners are off.
+    try? await UNUserNotificationCenter.current().add(request)
+  }
+}
+
+/// Owner decision 3.12: the status a native capture banner states.
+enum CaptureBannerStatus {
+  /// Stored on the device; Qirsh still checks it before recording it.
+  case queued
+  /// The analysis asked for the user's review before anything is recorded.
+  case needsReview
 }
 
 /// Registers Mali shortcuts with the Shortcuts app and Siri.

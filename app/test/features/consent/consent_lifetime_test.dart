@@ -181,6 +181,9 @@ void main() {
       timeout: _bounded, (tester) async {
     await open(tester);
     repo.pauseNextRead();
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pump();
     expect(repo.readPaused, isTrue, reason: 'the read is held, not finished');
@@ -234,6 +237,9 @@ void main() {
       'no retry, no diagnostics widening', timeout: _bounded, (tester) async {
     await open(tester);
     repo.afterSave = () => live = false;
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await _settle(tester);
     expect(service.enableCalls, 1, reason: 'the gate transition was reached');
@@ -248,6 +254,9 @@ void main() {
       'callback is not reported', timeout: _bounded, (tester) async {
     await open(tester);
     service.afterRetry = () => live = false;
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await _settle(tester);
     expect(service.retryCalls, 1);
@@ -259,6 +268,9 @@ void main() {
       timeout: _bounded, (tester) async {
     await open(tester);
     repo.afterSave = () => live = false;
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentDecline')));
     await _settle(tester);
     expect(result, isNull);
@@ -268,6 +280,9 @@ void main() {
   testWidgets('current scope: one explicit accept saves, enables and retries '
       'exactly once', timeout: _bounded, (tester) async {
     await open(tester);
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await _settle(tester);
     expect(repo.saveCalls, 1);
@@ -289,6 +304,9 @@ void main() {
     await _settle(tester);
     live = false; // X revoked...
     source = fakeConsentWork(isCurrent: () => true, uid: 'uid-y');
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await _settle(tester);
     expectNothingHappened(); // ...Y is live but was never asked
@@ -337,6 +355,9 @@ void main() {
       await _settle(tester);
       expect(find.text('Smart Analysis & Cloud Sync'), findsOneWidget);
       live = false;
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentDecline')));
       await _settle(tester);
       expect(markCalls, 0);

@@ -1,6 +1,8 @@
+import '../../engine/ai/ai_candidate_validator.dart';
+import '../finance/currency_scale.dart';
 import '../../engine/parser/direction_signal.dart';
+import '../../engine/parser/message_meaning.dart';
 import '../../engine/models/transaction_type.dart';
-import '../../engine/parser/normalizer.dart';
 import '../../engine/parser/parser_engine.dart';
 import '../../engine/parser/transaction_state_cues.dart';
 
@@ -76,42 +78,9 @@ class CaptureValidation {
   bool get accepted => capture != null;
 }
 
-const List<String> kCaptureCurrencyCodes = [
-  'SAR',
-  'AED',
-  'EGP',
-  'QAR',
-  'OMR',
-  'KWD',
-  'BHD',
-  'JOD',
-  'USD',
-  'EUR',
-  'GBP',
-  'JPY',
-];
-
-const Map<String, int> _minorUnits = {
-  'JPY': 0,
-  'EGP': 2,
-  'SAR': 2,
-  'AED': 2,
-  'USD': 2,
-  'EUR': 2,
-  'GBP': 2,
-  'QAR': 2,
-  'KWD': 3,
-  'BHD': 3,
-  'OMR': 3,
-  'JOD': 3,
-};
-
-const Map<String, List<String>> _extraAliases = {
-  'USD': [r'$'],
-  'EUR': ['€'],
-  'GBP': ['£'],
-  'JOD': ['دينار أردني', 'دينار اردني'],
-};
+/// The parser currency table limited to persistable codes — the same list as
+/// the server CURRENCY_CODES.
+final List<String> kCaptureCurrencyCodes = AiCandidateValidator.currencyCodes;
 
 const Duration _maxAge = Duration(days: 31);
 const Duration _maxFuture = Duration(days: 1);
@@ -127,8 +96,9 @@ String? canonicalCaptureMoneyText(String token, [String? currency]) {
   final m = _canonicalMoney.firstMatch(token);
   if (m == null || m.group(1)!.isNotEmpty) return null;
   final fraction = m.group(4);
-  final scale =
-      currency == null ? null : _minorUnits[currency.trim().toUpperCase()];
+  final scale = currency == null
+      ? null
+      : kDetectionCurrencyScale[currency.trim().toUpperCase()];
   if (scale != null && (fraction?.length ?? 0) > scale) return null;
   final integer = (m.group(2) ?? m.group(3))!.replaceAll(',', '');
   return fraction == null ? integer : '$integer.$fraction';
@@ -178,17 +148,6 @@ bool _amountGrounded(double? amount, String text) {
       .any((t) => ((double.tryParse(t) ?? double.nan) - amount).abs() < 0.005);
 }
 
-bool _currencyGrounded(String iso, String text) {
-  if (iso.isEmpty) return false;
-  final normalized = Normalizer.normalizeCurrencyTokens(text);
-  final code = RegExp(
-    '(?<![A-Za-z])${RegExp.escape(iso)}(?![A-Za-z])',
-    caseSensitive: false,
-  );
-  if (code.hasMatch(normalized)) return true;
-  return (_extraAliases[iso] ?? const <String>[]).any(text.contains);
-}
-
 String _collapse(String v) =>
     v.toLowerCase().replaceAll(RegExp(r'\s+'), ' ').trim();
 
@@ -228,11 +187,22 @@ bool _contradicts(TxnDirection wording, TxnDirection other) =>
 /// transfer) never blocks the server result. An import-path policy applied by
 /// the callers, not part of the ValidatedCapture v1 contract (which the
 /// server mirrors).
+///
+/// Closure round (follow-up 6 (4)): the direction the device would BOOK —
+/// the clause structure of the sentence carrying [amount]
+/// ([AiCandidateValidator.bookedDirection]) — overrules the local type when
+/// it agrees with the server, so a cue word in a merchant name, a points or
+/// footer line, or a deposit word on an outgoing transfer never opposes a
+/// correct answer. It never adds an opposition the type did not have (a
+/// transfer still keeps the server result here; the wording check in
+/// [localParseContradictsServer] still applies).
 bool localParseOpposesDirection({
   required String text,
   String? direction,
   String? type,
   String? senderId,
+  num? amount,
+  String? merchant,
 }) {
   final server = _asDirection(direction) != TxnDirection.unknown
       ? _asDirection(direction)
@@ -247,7 +217,25 @@ bool localParseOpposesDirection({
               localType == TransactionType.income
           ? TxnDirection.credit
           : TxnDirection.unknown;
-  return _contradicts(localDirection, server);
+  if (!_contradicts(localDirection, server)) return false;
+  // The local type opposes the server; the direction the device would book
+  // (the amount's clause structure) agreeing with the server overrules it.
+  final booked = AiCandidateValidator.bookedDirection(text,
+      amount: amount?.toDouble(),
+      merchant: local.transaction!.rawMerchant ?? merchant);
+  return booked != server;
+}
+
+/// Closure round (parser meaning, owner brief 4.1 / §5): the reason a message
+/// is never recorded from ANY reading (a server's or a model's) — a clear
+/// notice, an OTP, or a review kind (not completed, an ATM cash deposit, own
+/// accounts, several movements) — or null when it may be recorded. Import
+/// paths keep such a capture in Smart Inbox with this reason.
+String? meaningHoldReason(String text) {
+  final meaning = ParserEngine.meaningOf(text);
+  return meaning.disposition == MessageDisposition.record
+      ? null
+      : meaning.reason;
 }
 
 /// LR-03 / LR-04 — the device's own reading contradicts a server result for
@@ -267,16 +255,31 @@ bool localParseContradictsServer({
   String? type,
   String? senderId,
   num? amount,
+  String? merchant,
 }) =>
     ParserEngine.isIgnoredMessage(text, senderId: senderId) ||
-    ParserEngine.isNoticeMessage(text, senderId: senderId) ||
+    // V1-086: as the AI candidate validator, a notice line unrelated to the
+    // server's amount (a footer next to a completed movement) does not count.
+    ParserEngine.isNoticeMessage(
+        amount == null || amount.isNaN
+            ? text
+            : AiCandidateValidator.withoutUnrelatedNotices(
+                text, amount.toDouble()),
+        senderId: senderId) ||
     localParseOpposesDirection(
-        text: text, direction: direction, type: type, senderId: senderId) ||
+        text: text,
+        direction: direction,
+        type: type,
+        senderId: senderId,
+        amount: amount,
+        merchant: merchant) ||
     // PR-04 — the wording alone names the opposite direction, even when the
     // device reads no transaction (no sender): "Standing order SAR 1,000.00
     // received from Ali" is never a confirmed payment.
     _contradicts(
-        DirectionSignal.detect(text),
+        AiCandidateValidator.bookedDirection(text,
+            amount: amount == null || amount.isNaN ? null : amount.toDouble(),
+            merchant: merchant),
         _asDirection(direction) != TxnDirection.unknown
             ? _asDirection(direction)
             : _directionOfType(type)) ||
@@ -328,11 +331,17 @@ CaptureValidation validateCaptureCandidate({
     return reject('amount_not_grounded');
   }
   final amount = candidate.amount!;
+  // Closure round (follow-up 6 (5)): a stated total next to a tip/fee/VAT is
+  // the amount — a server (any build) that answered the base is not trusted.
+  final total = AiCandidateValidator.chargedTotal(text);
+  if (total != null && (amount - total).abs() >= 0.005) {
+    return reject('amount_not_charged_total');
+  }
   final currency = (candidate.currency ?? '').trim().toUpperCase();
   if (!kCaptureCurrencyCodes.contains(currency)) {
     return reject('currency_not_whitelisted');
   }
-  if (!_currencyGrounded(currency, text)) {
+  if (!AiCandidateValidator.currencyGrounded(currency, text)) {
     return reject('currency_not_grounded');
   }
 
@@ -347,7 +356,11 @@ CaptureValidation validateCaptureCandidate({
     return reject('amount_text_not_grounded');
   }
 
-  final wording = DirectionSignal.detect(text);
+  final wording = AiCandidateValidator.bookedDirection(text,
+      amount: amount,
+      merchant: _merchantGrounded(candidate.merchant, text)
+          ? candidate.merchant
+          : null);
   final aiDirection = _asDirection(candidate.direction);
   final typeDirection = _directionOfType(candidate.type);
   if (_contradicts(wording, typeDirection) ||

@@ -305,7 +305,16 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                       ],
                                       if (tab == 0) ...[
                                         if (pendingOnly) ...[
-                                          Row(
+                                          // UX-09: wraps «Confirm all» under
+                                          // the filter pill when both do not
+                                          // fit on one line (it overflowed at
+                                          // 320 pt even at 1.0x).
+                                          Wrap(
+                                            alignment:
+                                                WrapAlignment.spaceBetween,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            runSpacing: AppSpacing.s1,
                                             children: [
                                               Container(
                                                 padding:
@@ -333,7 +342,8 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                                         color: context
                                                             .colors.warningText),
                                                     const SizedBox(width: 6),
-                                                    Text(
+                                                    Flexible(
+                                                      child: Text(
                                                         context.l10n
                                                             .txnFilterPending,
                                                         style: AppTypography
@@ -344,23 +354,37 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
                                                                 fontWeight:
                                                                     FontWeight
                                                                         .w700)),
-                                                    const SizedBox(width: 8),
-                                                    GestureDetector(
-                                                      onTap: () => ref
-                                                          .read(
-                                                              transactionsPendingFilterProvider
-                                                                  .notifier)
-                                                          .state = false,
-                                                      child: Icon(
-                                                          AppLucideIcons.x,
-                                                          size: 14,
-                                                          color: context
-                                                              .colors.warningText),
+                                                    ),
+                                                    // UX-05: 44 pt hit area
+                                                    // around the 14 pt glyph.
+                                                    Semantics(
+                                                      button: true,
+                                                      label: MaterialLocalizations
+                                                              .of(context)
+                                                          .closeButtonTooltip,
+                                                      child: GestureDetector(
+                                                        behavior: HitTestBehavior
+                                                            .opaque,
+                                                        onTap: () => ref
+                                                            .read(
+                                                                transactionsPendingFilterProvider
+                                                                    .notifier)
+                                                            .state = false,
+                                                        child: SizedBox(
+                                                          width: 44,
+                                                          height: 44,
+                                                          child: Icon(
+                                                              AppLucideIcons.x,
+                                                              size: 14,
+                                                              color: context
+                                                                  .colors
+                                                                  .warningText),
+                                                        ),
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
                                               ),
-                                              const Spacer(),
                                               if (view.pendingCount > 0)
                                                 TextButton.icon(
                                                   onPressed: () =>
@@ -1207,12 +1231,22 @@ class _CategoryFilterButton extends ConsumerWidget {
       onTap: () => _showCategoryFilterSheet(context, ref),
       leading: CategoryGlyph(
           name: selected?.iconName ?? 'shapes', size: 15, color: fg),
+      // UX-05: 44 pt hit area around the 14 pt clear glyph.
       trailing: active
-          ? GestureDetector(
-              onTap: () => ref
-                  .read(transactionCategoryFilterProvider.notifier)
-                  .state = null,
-              child: Icon(AppLucideIcons.x, size: 14, color: fg),
+          ? Semantics(
+              button: true,
+              label: MaterialLocalizations.of(context).closeButtonTooltip,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => ref
+                    .read(transactionCategoryFilterProvider.notifier)
+                    .state = null,
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: Icon(AppLucideIcons.x, size: 14, color: fg),
+                ),
+              ),
             )
           : null,
     );

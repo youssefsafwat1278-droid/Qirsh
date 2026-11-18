@@ -885,7 +885,10 @@ class RunnerTests: XCTestCase {
     XCTAssertFalse(SharedCaptureStore.isSignedOutForCertain())
   }
 
-  func testIntentCapturesNothingAndStaysSilentWhileSignedOut() async throws {
+  // Owner decision 3.13 (2026-11-17) replaces the earlier silent drop: the run
+  // FAILS with the signed-out copy (never a success), and nothing is stored, so
+  // the message cannot attach to whichever account signs in next.
+  func testIntentRefusesVisiblyAndStoresNothingWhileSignedOut() async throws {
     resetCapSeams()
     defer { resetCapSeams() }
     SharedCaptureStore.purgeUserOwnedState()
@@ -893,7 +896,13 @@ class RunnerTests: XCTestCase {
     intent.smsText = "ACME: purchase 12.00 SAR"
     intent.dateReceived = Date()
 
-    _ = try await intent.perform()   // no error: the automation stays silent
+    do {
+      _ = try await intent.perform()
+      XCTFail("a signed-out capture must not report success")
+    } catch let error as ProcessBankSMSError {
+      XCTAssertEqual(error.errorDescription,
+                     SharedCaptureStore.FailureKind.signedOut.userMessage)
+    }
 
     XCTAssertTrue(try items().isEmpty, "nothing was stored")
     // Signed in again: the same call captures.
@@ -1629,12 +1638,84 @@ class RunnerTests: XCTestCase {
     XCTAssertTrue(source.contains("\"New transaction captured\""))
     let banner = try XCTUnwrap(source.range(of: "private func scheduleGenericCaptureNotification"))
     let body = String(source[banner.lowerBound...].prefix(400))
-    XCTAssertTrue(body.contains("detailedCaptureNotification(aiDetail: aiDetail)"))
+    XCTAssertTrue(body.contains("detailedCaptureNotification(aiDetail: aiDetail, status: status)"))
     XCTAssertTrue(source.contains("aiDetail: response.aiDetail"))
     for forbidden in ["sender", "response.notification"] {
       XCTAssertFalse(body.contains(forbidden), "banner must not touch \(forbidden)")
     }
     XCTAssertTrue(source.contains("await Self.removeDeliveredPushes(payloadID: payloadID)"))
+  }
+
+  // Owner decision 3.13: the signed-out copy is honest and actionable in both
+  // languages, and says the message was not kept.
+  func testSignedOutCopyIsActionableInBothLanguages() {
+    let groupDefaults = UserDefaults(suiteName: SharedCaptureStore.appGroupIdentifier)
+    let previous = groupDefaults?.string(forKey: "capture_notification_language")
+    defer { groupDefaults?.set(previous, forKey: "capture_notification_language") }
+    SharedCaptureStore.setNotificationLanguage("en")
+    let en = SharedCaptureStore.FailureKind.signedOut.userMessage
+    XCTAssertTrue(en.contains("signed out"))
+    XCTAssertTrue(en.contains("sign in"))
+    XCTAssertTrue(en.contains("wasn't kept"))
+    SharedCaptureStore.setNotificationLanguage("ar")
+    let ar = SharedCaptureStore.FailureKind.signedOut.userMessage
+    XCTAssertTrue(ar.contains("سجّل الدخول"))
+    XCTAssertTrue(ar.contains("لم نحتفظ"))
+    XCTAssertNotEqual(en, SharedCaptureStore.FailureKind.storageUnavailable.userMessage)
+  }
+
+  // Owner decision 3.12 / V1-035 / V1-061: what a native capture banner says.
+  @available(iOS 16.0, *)
+  func testCaptureBannerStatesStatusAndNeverClaimsAFinalOutcome() {
+    let at = Date()
+    let local = CaptureDetail(amount: "250", currency: "EGP", merchant: "ACME MART",
+                              last4: "1234", kind: "payment", isCredit: false,
+                              category: "groceries")
+    for arabic in [false, true] {
+      let banner = PostBankStatusIntent.captureBanner(
+        detail: local, fromServerAnalysis: false, status: .queued,
+        receivedAt: at, arabic: arabic)
+      XCTAssertTrue(banner.title.contains("250 EGP"), "amount visible collapsed")
+      XCTAssertTrue(banner.body.contains("ACME MART"))
+      XCTAssertTrue(banner.body.contains("1234"))
+      // The local preview only matches keywords: no type, no outcome claim.
+      for claim in ["Purchase", "شراء", "Deposit", "إيداع", "Type:", "النوع"] {
+        XCTAssertFalse(banner.body.contains(claim) || banner.title.contains(claim),
+                       "local preview claimed \(claim)")
+      }
+      // A category is final only after import (manual > saved rule > AI).
+      for category in ["Groceries", "groceries", "بقالة", "Category", "التصنيف"] {
+        XCTAssertFalse(banner.body.contains(category), "category shown: \(category)")
+      }
+      XCTAssertTrue(banner.body.contains(arabic ? "لم تُسجَّل بعد" : "Not recorded yet"))
+      // English for English users (V1-035): no Arabic letters in the English banner.
+      if !arabic {
+        XCTAssertNil((banner.title + banner.body).range(of: "\\p{Arabic}", options: .regularExpression))
+      }
+    }
+
+    let review = PostBankStatusIntent.captureBanner(
+      detail: local, fromServerAnalysis: true, status: .needsReview,
+      receivedAt: at, arabic: false)
+    XCTAssertTrue(review.body.contains("Type: Purchase"), "validated server type is shown")
+    XCTAssertTrue(review.body.contains("Needs your review"))
+    XCTAssertFalse(review.body.contains("Not recorded yet"))
+    XCTAssertFalse(review.body.contains("Groceries"))
+    XCTAssertEqual(review.type, "needs_review")
+  }
+
+  @available(iOS 16.0, *)
+  func testCaptureBannerNeverCopiesMoreThanBoundedFields() {
+    let long = String(repeating: "X", count: 80)
+    for bad in ["12345", "12a4", "", "١٢٣٤"] {
+      let banner = PostBankStatusIntent.captureBanner(
+        detail: CaptureDetail(amount: "9", currency: "SAR", merchant: long,
+                              last4: bad, kind: "payment", isCredit: false),
+        fromServerAnalysis: false, status: .queued, receivedAt: Date(), arabic: false)
+      XCTAssertFalse(banner.body.contains("ending"), "non-4-digit hint \(bad) shown")
+      XCTAssertFalse(banner.body.contains(long), "merchant not bounded")
+      XCTAssertTrue(banner.body.contains(String(repeating: "X", count: 40) + "…"))
+    }
   }
 
   func testCaptureDetailsPreferenceDefaultsOffAndMirrorsExplicitHide() {

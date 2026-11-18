@@ -50,14 +50,13 @@ class MoneyApp extends ConsumerWidget {
         final mediaQuery = MediaQuery.of(context);
         return MediaQuery(
           data: mediaQuery.copyWith(
-            // The user's system text size is RESPECTED, bounded to the range
-            // the financial layouts are verified against (see the 1.25x
-            // overflow tests). Never a fixed scale — that would silently
-            // disable Dynamic Type for everyone.
-            textScaler: mediaQuery.textScaler.clamp(
-              minScaleFactor: 0.8,
-              maxScaleFactor: 1.25,
-            ),
+            // The user's system text size is RESPECTED up to the largest iOS
+            // accessibility size: there is no upper cap (UX-09). Layouts are
+            // verified at 1.0x, 1.3x, 2.0x and 3.1x by
+            // `test/features/common/large_text_overflow_test.dart`. A widget
+            // that cannot grow bounds its own scale locally, with a reason.
+            // Never a fixed scale — that would disable Dynamic Type.
+            textScaler: mediaQuery.textScaler.clamp(minScaleFactor: 0.8),
           ),
           // Root-level restore loader: one continuous branded screen from
           // launch to data-ready (see [appDataRestoring]) — sits above the

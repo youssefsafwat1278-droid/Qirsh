@@ -2422,6 +2422,10 @@ class AppL10nEn extends AppL10n {
   String get rptTabDetails => 'Details';
 
   @override
+  String get rptPendingNotIncluded =>
+      'Transactions waiting for review are not included in these totals.';
+
+  @override
   String get rptUnusualSpend => 'Unusual spending';
 
   @override
@@ -2814,7 +2818,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String pasteSummaryLine(int added, int duplicate, int review, int failed) {
-    return 'Added $added · duplicate $duplicate · needs review $review · not understood $failed';
+    return 'Added $added · duplicate $duplicate · needs review $review · not recorded $failed';
   }
 
   @override
@@ -2928,7 +2932,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get privSharedLearningBody =>
-      'On by default; you can turn it off at any time. When on, each time you choose “Remember for this merchant”, Qirsh sends only that merchant’s name and the category you chose. Amounts, dates, messages, transfers and names of people are never sent. Choices are pooled with other users’. A choice is added to the categories everyone receives when at least 6 users agree on it and they are a clear majority (75%), or after an admin reviews it; an admin can remove it at any time. Needs Cloud Sync and Smart Analysis on.';
+      'Included when you agree to Cloud Sync and Smart Analysis; you can turn it off at any time. When on, each time you choose “Remember for this merchant”, Qirsh sends only that merchant’s name and the category you chose. Amounts, dates, messages, transfers and names of people are never sent. Choices are pooled with other users’. A choice is added to the categories everyone receives when at least 6 users agree on it and they are a clear majority (75%), or after an admin reviews it; an admin can remove it at any time. Needs Cloud Sync and Smart Analysis on.';
 
   @override
   String get privSharedLearningNeedsConsent =>
@@ -2936,11 +2940,11 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get privDeleteAccountBody =>
-      'Your account and all your data (transactions, goals, budgets, backups) will be scheduled for permanent deletion after 30 days. You can undo the deletion from this same screen at any point before then, by signing in again. You will be signed out on this device now.';
+      'Deleting your account is final and cannot be undone. Your account, the data saved with it, your cloud backups and your profile photo are deleted. Some server steps can take a few minutes to finish.';
 
   @override
   String privScheduledForDeletion(String date) {
-    return 'Your account is scheduled for deletion on $date';
+    return 'A deletion request made in an earlier version of Qirsh (for $date) will not be carried out, and your account is still active. To delete your account, use “Delete my account and all my data”.';
   }
 
   @override
@@ -2981,21 +2985,21 @@ class AppL10nEn extends AppL10n {
       'The deletion could not be scheduled right now. Please try again.';
 
   @override
-  String get privCancelDeleteTitle => 'Cancel the account deletion?';
+  String get privCancelDeleteTitle => 'Clear the earlier request?';
 
   @override
   String get privCancelDeleteBody =>
-      'Your account and data stay exactly as they are.';
+      'This only removes the notice. Your account and data stay exactly as they are.';
 
   @override
   String get privKeepAccount => 'Go back';
 
   @override
-  String get privCancelDeletion => 'Cancel deletion';
+  String get privCancelDeletion => 'Clear this notice';
 
   @override
   String get privCancelFailed =>
-      'The deletion could not be cancelled right now. Please try again.';
+      'The notice could not be cleared right now. Please try again.';
 
   @override
   String get privTitle => 'Privacy & data';
@@ -3213,7 +3217,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get pasteNotCompleted =>
-      'This payment was declined or not completed — nothing was recorded.';
+      'This payment was declined, is on hold or has not completed yet — nothing was recorded. If it did go through, add it as a new transaction.';
 
   @override
   String get pasteNothingToOpen =>
@@ -3243,6 +3247,12 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get pasteNotUnderstood => 'Not understood';
+
+  @override
+  String get pasteNotCompletedShort => 'Not completed';
+
+  @override
+  String get pasteSavedForAnalysisShort => 'Saved for analysis';
 
   @override
   String get pasteSummary => 'Message summary';
@@ -3354,7 +3364,7 @@ class AppL10nEn extends AppL10n {
   String get txdOriginalCurrency => 'In the original currency';
 
   @override
-  String get txdBalanceAfter => 'Balance after';
+  String get txdBalanceAfter => 'Balance reported by the bank';
 
   @override
   String get txdNote => 'Note';
@@ -3397,6 +3407,13 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get txdConfirmedToast => 'Transaction confirmed.';
+
+  @override
+  String get txdMoveToReview => 'Move to review';
+
+  @override
+  String get txdMovedToReviewToast =>
+      'Moved to review. It isn\'t counted in your totals until you confirm it.';
 
   @override
   String get txdDeleteTitle => 'Delete this transaction?';
@@ -3633,7 +3650,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get homeReviewToStayAccurate =>
-      'Review them to keep your balances accurate';
+      'Transactions waiting for review are not counted in your totals until you confirm them.';
 
   @override
   String get homeAvailableFromMonthBudget =>
@@ -5892,7 +5909,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get rpConfirmBody =>
-      'The backup will replace your current data on this device. This cannot be undone once you confirm. Continue?';
+      'The restore merges this backup into the data on this device. Records missing here are brought back. Anything you added, changed or deleted after the backup was made stays as it is now; when a record exists in both, the more recently edited copy is kept. On a device with no records yet, the whole backup is restored, settings included. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?';
 
   @override
   String get rpCancel => 'Cancel';
@@ -6016,15 +6033,15 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get smartConsentBullet1 =>
-      'Captured bank messages, including bank SMS read automatically on Android, are sent to Qirsh servers after card, account and phone numbers and codes are removed. Google Gemini may process this text to identify the amount, merchant and bank; Google Places may receive merchant names. Amounts, merchants and balances remain, so it is not anonymous.';
+      'Bank messages: bank messages you capture are sent to Qirsh servers after card, account and phone numbers and codes are removed, and with people’s names masked where the app detects them. Google Gemini may process this text, with what the app already read from it on your device and the currency of the account it matches, to identify the amount, merchant, date and type. Google Places may receive merchant names. For a bank sender Qirsh does not recognise, the sender’s name may be sent to identify the bank. Qirsh servers keep the message text only until processing finishes, at most 7 days. Amounts, merchants, balances and the last digits of cards remain, so it is not anonymous.';
 
   @override
   String get smartConsentBullet2 =>
-      'Your transactions, accounts, budgets, goals and settings are also synced and backed up to your Qirsh cloud account.';
+      'Your data: your transactions, accounts, cards, budgets, goals, plans, subscriptions, learned category rules, which bank each message sender belongs to, Smart Inbox items and achievements, and your profile (name, phone number, date of birth and photo) and settings are synced to your Qirsh cloud account, together with crash reports and notification delivery events. If you create an encrypted backup, it is stored there too.';
 
   @override
   String get smartConsentBullet3 =>
-      'After you accept, sync and permitted analysis run automatically when available. You can withdraw either permission in Settings → Privacy. Choosing local use sends none of this data.';
+      'After you agree, sync and message analysis run automatically, including retries and background processing when your phone allows it. Agreeing on this device does not turn them on for your other devices.';
 
   @override
   String get smartConsentEnable => 'Enable Smart Analysis & Cloud Sync';
@@ -6219,6 +6236,15 @@ class AppL10nEn extends AppL10n {
   String signOutUnsyncedKeepBody(String list) {
     return 'Some data has not reached the cloud yet: $list. It stays on this device and syncs when you sign back in.';
   }
+
+  @override
+  String signOutUnsyncedCloudOffBody(String list) {
+    return 'Some changes are only on this device: $list. They stay on this device and are not synced while Smart Analysis & Cloud Sync is off.';
+  }
+
+  @override
+  String get signOutCloudOffNote =>
+      'Smart Analysis & Cloud Sync is off, so your changes stay on this device and are not synced.';
 
   @override
   String get removeDataTitle => 'Remove data from this device?';
@@ -6459,7 +6485,7 @@ class AppL10nEn extends AppL10n {
   String get restoreCloudOnly => 'Restore with cloud sync only';
 
   @override
-  String get initialConsentAccept => 'Accept cloud sync and smart analysis';
+  String get initialConsentAccept => 'Agree and enable';
 
   @override
   String get initialConsentDecline => 'Continue locally';
@@ -6527,10 +6553,10 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get consentWithdrawBody =>
-      'Sync and analysis stop right away, both together. Your data stays on this device, and you can turn them on again here at any time.';
+      'Cloud Sync and Smart Analysis turn off together. Qirsh stops sending from this device, including sync, message analysis, retries and new shared-learning contributions. Anything already sent cannot be recalled, and data already in your Qirsh account stays there until you delete your account. Your data stays on this device, and you can turn both on again here at any time.';
 
   @override
-  String get consentWithdrawConfirm => 'Turn off';
+  String get consentWithdrawConfirm => 'Turn off both';
 
   @override
   String get consentWithdrawFailed =>
@@ -6545,7 +6571,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get deleteAccountIntro =>
-      'Permanently and immediately delete your Qirsh account and the data saved with it. You’ll confirm your identity first, with Apple or the method you signed in with.';
+      'Permanently delete your Qirsh account and the data saved with it, including your cloud backups and profile photo. Deletion is final and cannot be undone. You’ll confirm your identity first, with Apple or the method you signed in with.';
 
   @override
   String get deleteAccountAction => 'Delete account';
@@ -6555,7 +6581,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get deleteAccountConfirmBody =>
-      'This permanently and immediately deletes your account and its data. Confirm your identity with Apple or the method you signed in with to continue. This cannot be undone.';
+      'This permanently deletes your account and its data. Deletion starts as soon as you confirm; some server steps can take a few minutes to finish, and we show you when it is done. Confirm your identity with Apple or the method you signed in with to continue. This cannot be undone.';
 
   @override
   String get deleteAccountConfirmAction => 'Delete permanently';
@@ -6568,7 +6594,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get deleteAccountAcceptedBody =>
-      'We received your deletion request, but your account is not deleted yet. You can check or cancel it in Privacy & data.';
+      'We received your deletion request and deletion has started, but your account is not deleted yet. Some server steps can take a few minutes. Deletion is final and cannot be cancelled. Check again in a moment.';
 
   @override
   String get deleteAccountFailed =>
@@ -6857,7 +6883,7 @@ class AppL10nEn extends AppL10n {
   String get homePrivacyToggle => 'Show or hide amounts';
 
   @override
-  String get accTotalBalance => 'Total balance';
+  String get accTotalBalance => 'Total of manually entered balances';
 
   @override
   String get achBadges => 'Badges';
@@ -7081,6 +7107,95 @@ class AppL10nEn extends AppL10n {
   @override
   String get languageFirstBody =>
       'Choose how you would like to use Qirsh. You can change this later.';
+
+  @override
+  String get smartConsentIntro =>
+      'Qirsh works fully on this device without the cloud. If you agree, all of the following is turned on together.';
+
+  @override
+  String get smartConsentHeadSent => 'What is sent';
+
+  @override
+  String get smartConsentHeadWho => 'Who receives it';
+
+  @override
+  String get smartConsentWho =>
+      'Qirsh servers, hosted by Supabase; Google (the Gemini API and the Places API); and Sentry, for crash reports. Supabase, Gemini and Sentry process data on Qirsh’s behalf.';
+
+  @override
+  String get smartConsentHeadWhy => 'Why';
+
+  @override
+  String get smartConsentWhy =>
+      'To read your bank messages more accurately, to keep your data in sync across your devices and restorable after you reinstall, and to fix crashes.';
+
+  @override
+  String get smartConsentHeadSync => 'How sync works';
+
+  @override
+  String get smartConsentHeadShared => 'Shared category learning';
+
+  @override
+  String get smartConsentShared =>
+      'Shared category learning is included. When you choose “Remember for this merchant”, Qirsh sends that merchant’s name and the category you chose, linked to a one-way code instead of your account ID. Amounts, dates, messages, transfers and names of people are never sent. A choice is added to the categories everyone receives when at least 6 users agree on it and they are a clear majority (75%), or after an admin reviews it. You can turn shared learning off on its own in Settings → Privacy.';
+
+  @override
+  String get smartConsentHeadOff => 'Turning it off';
+
+  @override
+  String get smartConsentOff =>
+      'You can turn Cloud Sync and Smart Analysis off together at any time in Settings → Privacy. Sending then stops, including retries and new shared-learning contributions. Anything already sent cannot be recalled, and data already in your Qirsh account stays there until you delete your account.';
+
+  @override
+  String get smartConsentLocal =>
+      'Continue locally: everything stays on this device. Nothing above is sent, messages are read on the device only, and there is no cloud sync or cloud backup.';
+
+  @override
+  String get sharedLearningUpdateTitle => 'Shared category learning';
+
+  @override
+  String get sharedLearningUpdateBody =>
+      'Smart Analysis & Cloud Sync now includes shared category learning. You turned it on before this was part of the choice, so shared learning stays off unless you agree now. Your other settings do not change.';
+
+  @override
+  String get sharedLearningUpdateAgree => 'Agree and include';
+
+  @override
+  String get sharedLearningUpdateKeepOff => 'Keep it off';
+
+  @override
+  String get countryPickerTitle => 'Choose your country';
+
+  @override
+  String get countryPickerSearchHint => 'Search countries';
+
+  @override
+  String get countryPickerNoResults => 'No country matches your search.';
+
+  @override
+  String get countryPickerChoose => 'Choose your country';
+
+  @override
+  String get countryCoverageTested => 'Tested with some banks';
+
+  @override
+  String get countryCoverageNote =>
+      'Qirsh has been tested with messages from some banks in Saudi Arabia and Egypt only, and not with every message format. In other countries, bank messages may not be recognized correctly. You can always add transactions manually.';
+
+  @override
+  String get countryCurrencyChooseNext => 'You choose the currency next';
+
+  @override
+  String get currencyChoiceTitle => 'Choose your currency';
+
+  @override
+  String currencyChoiceUnsupportedBody(String currency) {
+    return 'Qirsh can’t record amounts in $currency yet. Choose the currency you want to track your money in. You can change it later in Settings.';
+  }
+
+  @override
+  String get currencyChoiceNoCurrencyBody =>
+      'This place has no currency of its own. Choose the currency you want to track your money in. You can change it later in Settings.';
 
   @override
   String get coachPasteTitle => 'Read a bank message';
@@ -7361,7 +7476,18 @@ class AppL10nEn extends AppL10n {
       'This Google account is new to Qirsh. Choose Create an account to register.';
 
   @override
-  String get accV2Balance => 'Balance';
+  String get accBalanceManual => 'Manually entered balance';
+
+  @override
+  String get accBalanceManualShort => 'Entered manually';
+
+  @override
+  String get accBankReportedBalance => 'Last balance reported by the bank';
+
+  @override
+  String accBankReportedAt(String date, String time) {
+    return 'Reported $date at $time';
+  }
 
   @override
   String get accV2YourAccounts => 'Your accounts';

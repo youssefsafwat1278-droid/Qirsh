@@ -27,8 +27,8 @@ void main() {
       await pumpDaily(tester, DailySpendBarChart(values: const [12.345, 5.555],
           days: days, average: Money(8950, 'KWD'), averageLabel: 'Daily average'),
           language: language);
-      expect(find.text(DateFormat.MMMd(language).format(days[0])), findsWidgets);
-      expect(find.text(DateFormat.MMMd(language).format(days[1])), findsWidgets);
+      expect(find.text(_axisDate(language, days[0])), findsWidgets);
+      expect(find.text(_axisDate(language, days[1])), findsWidgets);
       expect(find.text('1'), findsNothing);
       final data = tester.widget<BarChart>(find.byType(BarChart)).data;
       expect(data.barGroups, hasLength(2), reason: 'no records are invented for gap days');
@@ -91,7 +91,7 @@ void main() {
         expect((visible[i] - visible[i - 1]) * 311 / 28, greaterThanOrEqualTo(66));
       }
       final labels = [for (final index in visible)
-        find.text(DateFormat.MMMd(language).format(days[index]))];
+        find.text(_axisDate(language, days[index]))];
       for (final label in labels) { expect(label, findsWidgets); }
       final rects = [for (final label in labels) tester.getRect(label.first)];
       for (var i = 0; i < rects.length; i++) {
@@ -151,4 +151,14 @@ void main() {
     expect(find.byType(DailySpendBarChart), findsOneWidget);
     expect(find.byType(CompactSparkline), findsOneWidget);
   });
+}
+
+/// V1-068: the axis dates use Western digits in Arabic too, like the amounts
+/// («11 يناير», not «١١ يناير»). This replaced intl's Arabic `MMMd`.
+String _axisDate(String language, DateTime day) {
+  final label = language == 'en'
+      ? DateFormat.MMMd('en').format(day)
+      : '${day.day} ${DateFormat.MMMM(language).format(day)}';
+  expect(label, isNot(matches(RegExp('[\u0660-\u0669]'))));
+  return label;
 }

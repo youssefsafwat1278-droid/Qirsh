@@ -15,12 +15,12 @@ final class ShareViewController: SLComposeServiceViewController {
           // A merchant link went to its own store; nothing to capture.
           self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
         case .text(let text):
-          // Signed out: nothing is captured. Unlike the automation, a share is
-          // the user's own action, so it is refused visibly (approved copy:
-          // "open Qirsh, then try again"), never reported as saved.
+          // Signed out: nothing is captured or kept (owner decision 3.13). The
+          // share is refused visibly with the signed-out copy ("open Qirsh and
+          // sign in"), never reported as saved.
           if SharedCaptureStore.isSignedOutForCertain() {
             NSLog("[QirshShare] share not persisted: signed_out")
-            self.fail(.storageUnavailable)
+            self.fail(.signedOut)
             return
           }
           if case let .failed(reason, kind) = SharedCaptureStore.enqueue(text: text, sender: nil, source: "share") {

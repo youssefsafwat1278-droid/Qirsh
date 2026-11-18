@@ -876,6 +876,25 @@ class _AlertThresholdField extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // UX-09: at large text the value wraps under the title instead of
+          // pushing past the card's edge.
+          if (MediaQuery.textScalerOf(context).scale(16) > 20)
+            Wrap(
+              spacing: AppSpacing.s2,
+              runSpacing: AppSpacing.s1,
+              children: [
+                Text(
+                  l10n.bfBudgetAlert,
+                  style: AppTypography.cardTitle(c.textMain),
+                ),
+                Text(
+                  l10n.bfBudgetAlertValue(display),
+                  style: _alex(15, FontWeight.w700, 1.2, c.actionText,
+                      tabular: true),
+                ),
+              ],
+            )
+          else
           Row(
             children: [
               Expanded(

@@ -8,6 +8,8 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/utils/currency.dart';
+import '../../core/utils/formatters.dart';
+import '../../domain/finance/money_format.dart';
 import '../../domain/entities/account_entity.dart';
 import '../../domain/entities/card_entity.dart';
 import '../../engine/parser/card_network.dart';
@@ -100,6 +102,7 @@ class AccountDetailScreen extends ConsumerWidget {
             AppSpacing.gutter, 120),
         children: [
           PremiumMotion(child: _AccountHeaderCard(account: account)),
+          _BankReportedBalance(account: account),
           const SizedBox(height: AppSpacing.s5),
           Row(
             children: [
@@ -304,8 +307,20 @@ class _AccountHeaderCard extends StatelessWidget {
           ),
           if (balance != null) ...[
             const SizedBox(height: AppSpacing.s3),
+            // Decision 3.14: this balance is the one the user typed in the
+            // account form (or synced from their own device) — never derived
+            // from bank messages — so it is labelled as such, not as a
+            // verified current balance.
+            Text(
+              context.l10n.accBalanceManual,
+              key: const Key('accountBalanceSource'),
+              // Opaque white: 80% measured 3.91:1 on the light hero's
+              // lightest stop (closure_a11y_contrast_test.dart).
+              style: AppTypography.caption(Colors.white),
+            ),
+            const SizedBox(height: AppSpacing.s1),
             Semantics(
-              label: context.l10n.accV2Balance,
+              label: context.l10n.accBalanceManual,
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: AlignmentDirectional.centerStart,
@@ -314,6 +329,47 @@ class _AccountHeaderCard extends StatelessWidget {
               ),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Decision 3.14: the last balance a bank message reported, labelled as such
+/// and with the time of that message, apart from the manually entered one.
+class _BankReportedBalance extends ConsumerWidget {
+  const _BankReportedBalance({required this.account});
+
+  final AccountEntity account;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final reported =
+        ref.watch(accountReportedBalanceProvider(account.id)).valueOrNull;
+    if (reported == null) return const SizedBox.shrink();
+    final c = context.colors;
+    return Padding(
+      key: const Key('accountBankReportedBalance'),
+      padding: const EdgeInsets.only(top: AppSpacing.s3),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(context.l10n.accBankReportedBalance,
+              style: AppTypography.caption(c.textSecondary)),
+          const SizedBox(height: 2),
+          Text(
+            '${formatMoney(reported.balance)} '
+            '${Currency.label(context, account.currency)}',
+            textDirection: TextDirection.ltr,
+            style: AppTypography.bodyStrong(c.textPrimary),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            context.l10n.accBankReportedAt(
+                Formatters.fullDate(reported.occurredAt, context),
+                Formatters.time(reported.occurredAt, context)),
+            style: AppTypography.caption(c.textSecondary),
+          ),
         ],
       ),
     );

@@ -206,6 +206,12 @@ void main() {
     await tester.ensureVisible(goalCurrency);
     await tester.tap(goalCurrency);
     await tester.pumpAndSettle();
+    // Closure round (decision 3.7): the menu lists every ISO-4217 currency,
+    // so EUR may be off-screen in the lazily built menu.
+    await tester.scrollUntilVisible(find.text('EUR — يورو'), 100,
+        scrollable: find.byType(Scrollable).last);
+    await tester.ensureVisible(find.text('EUR — يورو'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('EUR — يورو').last);
     await tester.pumpAndSettle();
 

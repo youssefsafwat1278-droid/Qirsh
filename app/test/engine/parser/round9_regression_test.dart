@@ -60,10 +60,12 @@ void main() {
         expect(r.amount, amount, reason: text);
       }
     }
-    // An explicit ATM cash deposit is income.
+    // Round 3 closure (owner brief §5, decision on cash deposits): an ATM
+    // cash deposit is not proven income (it may be the user's own cash), so
+    // it is a review row with its amount — never recorded, never silent.
+    // (Was: recorded as income.)
     final atm = parse('Cash deposit SAR 1,500.00 to account *5678 via ATM');
-    expect([atm.recorded, atm.type, atm.amount],
-        [true, TransactionType.income, 1500.0]);
+    expect([atm.recorded, atm.review], [false, true]);
     // A card posting is still spending.
     expect(parse('SAR 300.00 posted to card *4521 - Test Hotel').type,
         isNot(TransactionType.income));

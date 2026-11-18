@@ -283,7 +283,9 @@ void main() {
       expect(rows.first.data['amount'], 150.0);
     });
 
-    test('restore replaces existing data', () async {
+    // Decision 3.3 (restore = merge): a record this device holds that the
+    // backup lacks is kept. Previously pinned "restore replaces existing data".
+    test('restore keeps existing data the backup does not have', () async {
       await db.customInsert(
         "INSERT INTO merchants(id, raw_name, normalized_name, first_seen_at, last_seen_at) "
         "VALUES ('m-old', 'old', 'old_norm', '2024-01-01', '2024-01-01');",
@@ -300,7 +302,7 @@ void main() {
       await RestoreBackupUseCase(db)(emptySnapshot());
 
       final rows = await db.customSelect('SELECT id FROM transactions;').get();
-      expect(rows, isEmpty);
+      expect(rows.map((r) => r.read<String>('id')), ['old-txn']);
     });
 
     test('restore sets raw_message placeholder on transactions', () async {

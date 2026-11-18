@@ -504,6 +504,17 @@ void main() {
       expect(await transactions(), hasLength(1));
     });
 
+    // Parser closure follow-up: a message the parser's meaning step holds
+    // (here an ATM cash deposit, owner brief §5) keeps the reason on its
+    // Smart Inbox row, as capture_import_service does.
+    test('a message the parser holds keeps its meaning reason', () async {
+      await consent(cloud: false, ai: true);
+      native.add('and-15', 'Cash deposit SAR 2,000 via ATM to account *5678');
+      await run(build(android: true));
+      expect(await transactions(), isEmpty);
+      expect(reasonOf((await reviewRows()).single), 'cash_deposit');
+    });
+
     test('the operator kill switch keeps Android on device', () async {
       flags['android_capture_ai_enabled'] = false;
       native.add('and-6', _purchase);

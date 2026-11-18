@@ -8,6 +8,12 @@ import 'package:money_companion/features/ads/admob_build_config.dart';
 /// seam, because a `flutter test` run is always a debug build: asserting on
 /// `appId()` alone could only ever prove the TEST path.
 void main() {
+  // Decision 3.2: advertising is compiled out of Version 1 builds. These tests
+  // exercise the ad pipeline itself, as a build made with
+  // --dart-define=QIRSH_ADS_ENABLED=true runs it. The compiled-out behaviour
+  // is covered by test/features/ads/v1_ads_compiled_out_test.dart.
+  setUp(() => AdMobBuildConfig.debugAdsCompiledInOverride = true);
+  tearDown(() => AdMobBuildConfig.debugAdsCompiledInOverride = false);
   const testApp = AdMobBuildConfig.testAppIdIos;
   const testUnit = AdMobBuildConfig.testInterstitialIos;
   const prodApp = 'ca-app-pub-1234567890123456~9876543210';

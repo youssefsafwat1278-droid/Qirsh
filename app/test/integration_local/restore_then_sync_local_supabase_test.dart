@@ -1,5 +1,5 @@
-// V1-020 — restore a backup, then turn Cloud back on, against a REAL local
-// Supabase. Skipped unless LOCAL_SUPABASE_URL is set (see local-stack.md in
+// V1-020 / V1-070, decision 3.3 (restore = merge) — restore a backup, then
+// turn Cloud back on, against a REAL local Supabase. Skipped unless LOCAL_SUPABASE_URL is set (see local-stack.md in
 // docs/releases/version-1/evidence for the stack and the env file).
 //
 // Real code end to end: the real backup snapshot builder and restore use case,
@@ -14,8 +14,10 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:money_companion/core/backend/supabase_config.dart';
 import 'package:money_companion/core/backup/backup_snapshot_builder.dart';
 import 'package:money_companion/core/backup/restore_backup_usecase.dart';
+import 'package:money_companion/core/sync/outbox_failure.dart';
 import 'package:money_companion/core/sync/pending_sync_reconciler.dart';
 import 'package:money_companion/data/db/planning_cutover.dart';
 import 'package:money_companion/data/sync/exact_transport_capability.dart';
@@ -137,40 +139,22 @@ Future<void> report(String label, Device d, String uid) async {
       '  server all=${await remote.rows('user_transactions', uid, select: 'client_request_id,amount_text:amount::text,status,deleted_at')}');
 }
 
-/// The V1-020 semantics once Cloud is back on and sync has settled:
-///  * every RESTORED value is kept on the device and becomes the cloud copy
-///    (restored rows win over edits synced after the backup);
-///  * no duplicate cloud copies;
-///  * PENDING OWNER DECISION (replace vs merge) — cloud rows ABSENT from the
-///    backup are kept in the cloud and pulled back to the device (merge, the
-///    non-destructive default until the owner decides);
-///  * a restored row whose cloud copy is a tombstone ([cloudTombstoned]
-///    merchants) is never un-deleted in the cloud: it stays on the device and is
-///    surfaced as a sync conflict for the user (keep-mine re-creates it as new).
-Future<void> expectRestoredWinAndCloudOnlyRowsMergedBack(
-    Device d, String uid, Map<String, String> restored,
-    {Set<String> cloudTombstoned = const {}}) async {
-  final local = await localLive(d);
+/// Decision 3.3 once Cloud is back on and sync has settled: the device holds
+/// [expected] (merchant -> amount) and the cloud holds exactly the same live
+/// rows, one copy each, with no sync conflict left on the device.
+Future<void> expectMergedAndConverged(
+    Device d, String uid, Map<String, String> expected) async {
+  expect(await localLive(d), expected, reason: 'device after merge + sync');
   final server = await serverLive(uid);
-  for (final e in restored.entries) {
-    expect(local[e.key], e.value,
-        reason: 'restored ${e.key} must not be overwritten or removed');
-  }
   for (final e in server.entries) {
     expect(e.value, hasLength(1), reason: 'duplicate cloud copies of ${e.key}');
   }
-  for (final m in cloudTombstoned) {
-    expect(server.containsKey(m), isFalse,
-        reason: 'a cloud tombstone is never un-deleted by a restore');
-    final status = await d.sql('SELECT sync_status s FROM transactions '
-        "WHERE raw_merchant = '$m'");
-    expect(status.single['s'], 'conflict',
-        reason: '$m must be surfaced as a conflict, not silently diverge');
-  }
-  expect({for (final e in server.entries) e.key: e.value.first},
-      {...local}..removeWhere((k, _) => cloudTombstoned.contains(k)),
-      reason: 'device and cloud must agree, and cloud rows absent from the '
-          'backup must be merged back (pending decision: merge)');
+  expect({for (final e in server.entries) e.key: e.value.single}, expected,
+      reason: 'device and cloud must agree');
+  expect(
+      await d.sql("SELECT id FROM transactions WHERE sync_status = 'conflict'"),
+      isEmpty,
+      reason: 'a merge leaves nothing for the user to resolve');
 }
 
 Future<Map<String, dynamic>> takeBackup(Device d) async =>
@@ -189,6 +173,10 @@ void main() {
   group('V1-020 restore then Cloud against a local Supabase',
       skip: LocalEnv.enabled ? false : 'LOCAL_SUPABASE_URL not set', () {
     setUpAll(() async {
+      // The startup reconcile backfill is a no-op without the build-time
+      // config; run with --dart-define=SUPABASE_URL/SUPABASE_ANON_KEY.
+      expect(SupabaseConfig.isConfigured, isTrue,
+          reason: 'pass --dart-define=SUPABASE_URL=... SUPABASE_ANON_KEY=...');
       HttpOverrides.global = null;
       env = LocalEnv.load();
       remote = RemoteTruth(env);
@@ -220,7 +208,8 @@ void main() {
       return (d, u.uid);
     }
 
-    test('R1 backup, then edit/delete/add and sync, restore, Cloud on',
+    test('R1 backup, then edit/delete/add and sync, restore, Cloud on: the '
+        'newer edit, the deletion and the new row all survive',
         () async {
       final (d, uid) = await openSignedIn('r1');
       await d.accounts.create(_account('acc-r1'));
@@ -250,22 +239,20 @@ void main() {
       });
 
       await restoreBackup(d, backup);
-      final restored = await localLive(d);
-      expect(restored, {
+      const merged = {
         'Synthetic shop r1-A': '10.000',
-        'Synthetic shop r1-B': '20.000',
-        'Synthetic shop r1-C': '30.000',
-      });
+        'Synthetic shop r1-B': '25.000',
+        'Synthetic shop r1-D': '40.000',
+      };
+      expect(await localLive(d), merged,
+          reason: 'C stays deleted, B keeps the newer edit, D is kept');
       await report('R1 after restore, Cloud off', d, uid);
 
       d.consent = true;
       await syncCycle(d);
       await syncCycle(d);
       await report('R1 after Cloud on + 2 sync cycles', d, uid);
-      await expectRestoredWinAndCloudOnlyRowsMergedBack(d, uid, restored,
-          cloudTombstoned: {'Synthetic shop r1-C'});
-      expect((await localLive(d))['Synthetic shop r1-D'], '40.000',
-          reason: 'D is absent from the backup: kept and merged back');
+      await expectMergedAndConverged(d, uid, merged);
     });
 
     test('R2 backup predates rows that exist on the server', () async {
@@ -284,17 +271,275 @@ void main() {
       });
 
       await restoreBackup(d, backup);
-      final restored = await localLive(d);
-      expect(restored, {'Synthetic shop r2-A': '10.000'});
+      const merged = {
+        'Synthetic shop r2-A': '10.000',
+        'Synthetic shop r2-E': '50.000',
+      };
+      expect(await localLive(d), merged);
       await report('R2 after restore, Cloud off', d, uid);
 
       d.consent = true;
       await syncCycle(d);
       await syncCycle(d);
       await report('R2 after Cloud on + 2 sync cycles', d, uid);
-      await expectRestoredWinAndCloudOnlyRowsMergedBack(d, uid, restored);
-      expect((await localLive(d))['Synthetic shop r2-E'], '50.000',
-          reason: 'E is absent from the backup: kept and merged back');
+      await expectMergedAndConverged(d, uid, merged);
+    });
+
+    test('R3 a row created after the backup and never synced is kept and '
+        'pushed once', () async {
+      final (d, uid) = await openSignedIn('r3');
+      await d.accounts.create(_account('acc-r3'));
+      await d.transactions.saveTransaction(
+          transaction: _txn('r3-A', '10', 'acc-r3'), categoryKey: null);
+      await syncCycle(d);
+      final backup = await takeBackup(d);
+      await d.transactions.saveTransaction(
+          transaction: _txn('r3-D', '40', 'acc-r3'), categoryKey: null);
+      expect(await d.ledgerOutboxCount(), 1, reason: 'D queued, not pushed');
+
+      await restoreBackup(d, backup);
+      const merged = {
+        'Synthetic shop r3-A': '10.000',
+        'Synthetic shop r3-D': '40.000',
+      };
+      expect(await localLive(d), merged);
+      d.consent = true;
+      await syncCycle(d);
+      await syncCycle(d);
+      await report('R3 after Cloud on + 2 sync cycles', d, uid);
+      await expectMergedAndConverged(d, uid, merged);
+    });
+
+    test('R4 a category chosen by hand after the backup keeps the choice and '
+        'its provenance on device and cloud', () async {
+      final (d, uid) = await openSignedIn('r4');
+      await d.accounts.create(_account('acc-r4'));
+      await d.transactions.saveTransaction(
+          transaction: _txn('r4-A', '10', 'acc-r4'), categoryKey: 'shopping');
+      await syncCycle(d);
+      final backup = await takeBackup(d);
+      await d.transactions
+          .updateCategory(transactionId: 'r4-A', categoryKey: 'restaurants');
+      await syncCycle(d);
+
+      await restoreBackup(d, backup);
+      Future<Map<String, Object?>> local() async => (await d.sql(
+              'SELECT c.key k, t.category_source s FROM transactions t '
+              "JOIN categories c ON c.id = t.category_id WHERE t.id = 'r4-A'"))
+          .single;
+      expect(await local(), {'k': 'restaurants', 's': 'user'});
+      d.consent = true;
+      await syncCycle(d);
+      await syncCycle(d);
+      expect(await local(), {'k': 'restaurants', 's': 'user'});
+      final cloud = (await remote.rows('user_transactions', uid,
+              select: 'category_id,category_source'))
+          .single;
+      // ignore: avoid_print
+      print('R4 cloud=$cloud');
+      expect(cloud['category_id'], 'restaurants');
+      expect(cloud['category_source'], 'user');
+    });
+
+    test('R5 a row present only in the cloud arrives through sync, once',
+        () async {
+      final (d, uid) = await openSignedIn('r5');
+      await d.accounts.create(_account('acc-r5'));
+      await d.transactions.saveTransaction(
+          transaction: _txn('r5-A', '10', 'acc-r5'), categoryKey: null);
+      await syncCycle(d);
+      final backup = await takeBackup(d);
+      await d.transactions.saveTransaction(
+          transaction: _txn('r5-E', '50', 'acc-r5'), categoryKey: null);
+      await syncCycle(d);
+      // This device has not pulled E (local copy gone, pull cursors unset).
+      await d.db.customStatement("DELETE FROM transactions WHERE id = 'r5-E'");
+      await d.db.customStatement('DELETE FROM sync_cursors');
+
+      await restoreBackup(d, backup);
+      expect(await localLive(d), {'Synthetic shop r5-A': '10.000'});
+      d.consent = true;
+      await syncCycle(d);
+      await syncCycle(d);
+      await expectMergedAndConverged(d, uid, {
+        'Synthetic shop r5-A': '10.000',
+        'Synthetic shop r5-E': '50.000',
+      });
+    });
+
+    test('R6 a row missing on this device returns from the backup and binds to '
+        'its cloud copy without a duplicate', () async {
+      final (d, uid) = await openSignedIn('r6');
+      await d.accounts.create(_account('acc-r6'));
+      for (final (id, amt) in [('A', '10'), ('B', '20')]) {
+        await d.transactions.saveTransaction(
+            transaction: _txn('r6-$id', amt, 'acc-r6'), categoryKey: null);
+      }
+      await syncCycle(d);
+      final backup = await takeBackup(d);
+      await d.db.customStatement("DELETE FROM transactions WHERE id = 'r6-B'");
+
+      await restoreBackup(d, backup);
+      const merged = {
+        'Synthetic shop r6-A': '10.000',
+        'Synthetic shop r6-B': '20.000',
+      };
+      expect(await localLive(d), merged);
+      d.consent = true;
+      await syncCycle(d);
+      await syncCycle(d);
+      await expectMergedAndConverged(d, uid, merged);
+      expect(await remote.count('user_transactions', uid), 2);
+    });
+
+    test('R9 new device (full apply): a backup row deleted in the cloud after '
+        'the backup stays deleted, with no conflict and no duplicate',
+        () async {
+      final u = await remote.createUser('r9');
+      await Supabase.instance.client.auth
+          .signInWithPassword(email: u.email, password: u.password);
+      final first = await LedgerAdmissionFixture.open(u.uid);
+      addTearDown(first.finish);
+      final d1 = Device.wrap(first.database);
+      await d1.accounts.create(_account('acc-r9'));
+      for (final (id, amt) in [('A', '10'), ('B', '20')]) {
+        await d1.transactions.saveTransaction(
+            transaction: _txn('r9-$id', amt, 'acc-r9'), categoryKey: null);
+      }
+      await syncCycle(d1);
+      final backup = await takeBackup(d1);
+      await d1.transactions.deleteTransaction('r9-B');
+      await syncCycle(d1);
+      expect(await serverLive(u.uid), {
+        'Synthetic shop r9-A': ['10.000'],
+      });
+      await first.finish(); // the first phone is gone
+
+      final second = await LedgerAdmissionFixture.open(u.uid);
+      addTearDown(second.finish);
+      final d2 = Device.wrap(second.database);
+      await restoreBackup(d2, backup);
+      expect(await localLive(d2), {
+        'Synthetic shop r9-A': '10.000',
+        'Synthetic shop r9-B': '20.000',
+      }, reason: 'full apply restores the backup as it was');
+      d2.consent = true;
+      await syncCycle(d2);
+      await syncCycle(d2);
+      await report('R9 new device after Cloud on + 2 sync cycles', d2, u.uid);
+      await expectMergedAndConverged(
+          d2, u.uid, {'Synthetic shop r9-A': '10.000'});
+      expect(await remote.count('user_transactions', u.uid), 2,
+          reason: 'A and the B tombstone; nothing re-inserted');
+    });
+
+    test('R9b as R9, but the first ledger pull after Cloud on is interrupted, '
+        'so the startup backfill meets the cloud tombstone first', () async {
+      final u = await remote.createUser('r9b');
+      await Supabase.instance.client.auth
+          .signInWithPassword(email: u.email, password: u.password);
+      final first = await LedgerAdmissionFixture.open(u.uid);
+      addTearDown(first.finish);
+      final d1 = Device.wrap(first.database);
+      await d1.accounts.create(_account('acc-r9b'));
+      for (final (id, amt) in [('A', '10'), ('B', '20')]) {
+        await d1.transactions.saveTransaction(
+            transaction: _txn('r9b-$id', amt, 'acc-r9b'), categoryKey: null);
+      }
+      await syncCycle(d1);
+      final backup = await takeBackup(d1);
+      await d1.transactions.deleteTransaction('r9b-B');
+      await syncCycle(d1);
+      await first.finish();
+
+      final second = await LedgerAdmissionFixture.open(u.uid);
+      addTearDown(second.finish);
+      final d2 = Device.wrap(second.database);
+      await restoreBackup(d2, backup);
+      d2.consent = true;
+      // Cycle 1 without its final ledger pull (connection dropped): the
+      // account gets bound, the transactions do not.
+      await StartupSyncReconcileService(
+        db: d2.db,
+        getAuthUserId: signedInUid,
+        coordinator: _canonical,
+        pushCapability: () => ExactTransportCapability.verifiedExact,
+        planningCurrencyFor: (_) async => ExactTransportCapability.verifiedExact,
+        mayEgress: () async => d2.consent,
+      ).run();
+      await d2.accountsPush.push();
+      await d2.accountsPull.pull();
+      await syncCycle(d2);
+      await syncCycle(d2);
+      await report('R9b after interrupted pull + 2 sync cycles', d2, u.uid);
+      await expectMergedAndConverged(
+          d2, u.uid, {'Synthetic shop r9b-A': '10.000'});
+      expect(await remote.count('user_transactions', u.uid), 2,
+          reason: 'A and the B tombstone; nothing re-inserted');
+    });
+
+    // Item 3 (account switch / signed out): changes queued for account A on
+    // this device are never sent as, or shown under, account B.
+    Future<void> pushAll(Device d) async {
+      for (final push in [
+        d.accountsPush.push,
+        d.ledgerPush.push,
+        d.planningPush.push,
+      ]) {
+        try {
+          await push();
+        } on AccountFenceDeliveryCancellation {
+          // The fence stopped delivery: also "nothing sent".
+        }
+      }
+    }
+
+    Future<void> expectNothingUnder(String uid) async {
+      for (final t in ['user_accounts', 'user_transactions', 'user_budgets']) {
+        expect(await remote.count(t, uid), 0, reason: '$t under $uid');
+      }
+    }
+
+    test('R7 account switch: A\'s queued changes are never sent as B; '
+        'they deliver to A when A is back', () async {
+      final a = await remote.createUser('r7a');
+      await Supabase.instance.client.auth
+          .signInWithPassword(email: a.email, password: a.password);
+      final fixture = await LedgerAdmissionFixture.open(a.uid);
+      addTearDown(fixture.finish);
+      final d = Device.wrap(fixture.database);
+      final uidA = a.uid;
+      d.ownerUid = () async => uidA; // the local data owner stays A
+      await d.accounts.create(_account('acc-r7'));
+      await d.transactions.saveTransaction(
+          transaction: _txn('r7-A', '10', 'acc-r7'), categoryKey: null);
+      expect(await d.ledgerOutboxCount(), 1);
+
+      final b = await remote.createUser('r7b');
+      await Supabase.instance.client.auth
+          .signInWithPassword(email: b.email, password: b.password);
+      await pushAll(d);
+      await expectNothingUnder(b.uid);
+      await expectNothingUnder(uidA);
+      expect(await d.ledgerOutboxCount(), 1, reason: 'A\'s intent is kept');
+
+      await Supabase.instance.client.auth
+          .signInWithPassword(email: a.email, password: a.password);
+      await syncCycle(d);
+      await expectNothingUnder(b.uid);
+      expect(await serverLive(uidA), {'Synthetic shop r7-A': ['10.000']});
+    });
+
+    test('R8 signed out: queued changes are not sent', () async {
+      final (d, uidA) = await openSignedIn('r8');
+      d.ownerUid = () async => uidA;
+      await d.accounts.create(_account('acc-r8'));
+      await d.transactions.saveTransaction(
+          transaction: _txn('r8-A', '10', 'acc-r8'), categoryKey: null);
+      await Supabase.instance.client.auth.signOut();
+      await pushAll(d);
+      await expectNothingUnder(uidA);
+      expect(await d.ledgerOutboxCount(), 1, reason: 'the intent is kept');
     });
   });
 }

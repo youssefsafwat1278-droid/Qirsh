@@ -26,6 +26,10 @@ class AiParseResponse {
     this.direction,
     this.occurredAt,
     this.modelUsed,
+    this.promptVersion,
+    this.messageType,
+    this.status,
+    this.currencySource,
   });
 
   final double amount;
@@ -37,6 +41,19 @@ class AiParseResponse {
   final String? direction;
   final DateTime? occurredAt;
   final String? modelUsed;
+
+  /// The server's prompt version (V1-058); null from an older server.
+  final String? promptVersion;
+
+  /// 4.2: what kind of message the model read (`transaction`, …) and the
+  /// status of the operation (`completed`, `pending`, …). Null from an older
+  /// server, which never returned them.
+  final String? messageType;
+  final String? status;
+
+  /// 4.4: `account_context` when the message names no currency and the server
+  /// accepted the currency of the account this device matched it to.
+  final String? currencySource;
 
   factory AiParseResponse.fromJson(Map<String, dynamic> json) {
     return AiParseResponse(
@@ -51,6 +68,16 @@ class AiParseResponse {
           ? DateTime.tryParse(json['occurred_at'] as String)
           : null,
       modelUsed: json['model_used'] as String?,
+      promptVersion: json['prompt_version'] is String
+          ? json['prompt_version'] as String
+          : null,
+      messageType: json['message_type'] is String
+          ? json['message_type'] as String
+          : null,
+      status: json['status'] is String ? json['status'] as String : null,
+      currencySource: json['currency_source'] is String
+          ? json['currency_source'] as String
+          : null,
     );
   }
 }
@@ -67,7 +94,48 @@ abstract class AiParserClient {
 /// existing policy unless they explicitly implement this capability.
 abstract class PrimaryAiParserClient implements AiParserClient {}
 
-class SupabaseAiParserClient implements PrimaryAiParserClient {
+/// 4.3 / 4.4: what the device already knows, sent as EVIDENCE the model may
+/// overrule (never as the answer): the on-device parser's reading and the
+/// currency of the one existing account the message was matched to.
+class AiParseContext {
+  const AiParseContext({
+    this.localAmountText,
+    this.localCurrency,
+    this.localDirection,
+    this.accountCurrency,
+  });
+
+  final String? localAmountText;
+  final String? localCurrency;
+  final String? localDirection;
+  final String? accountCurrency;
+
+  bool get isEmpty => localAmountText == null && accountCurrency == null;
+
+  Map<String, Object?> toJson() => {
+        if (localAmountText != null)
+          'local_evidence': {
+            'amount_text': localAmountText,
+            if (localCurrency != null) 'currency': localCurrency,
+            if (localDirection != null) 'direction': localDirection,
+          },
+        if (accountCurrency != null) 'account_currency': accountCurrency,
+      };
+}
+
+/// A client that can pass [AiParseContext]. A separate capability so the
+/// existing [AiParserClient] implementations stay valid.
+abstract class ContextualAiParserClient implements AiParserClient {
+  Future<AiParseResponse?> parseWithContext({
+    required String sanitizedSms,
+    required String senderId,
+    required String installId,
+    required AiParseContext context,
+  });
+}
+
+class SupabaseAiParserClient
+    implements PrimaryAiParserClient, ContextualAiParserClient {
   SupabaseAiParserClient({
     required String edgeFunctionUrl,
     required Future<String?> Function() getAnonJwt,
@@ -92,6 +160,20 @@ class SupabaseAiParserClient implements PrimaryAiParserClient {
     required String sanitizedSms,
     required String senderId,
     required String installId,
+  }) =>
+      parseWithContext(
+        sanitizedSms: sanitizedSms,
+        senderId: senderId,
+        installId: installId,
+        context: const AiParseContext(),
+      );
+
+  @override
+  Future<AiParseResponse?> parseWithContext({
+    required String sanitizedSms,
+    required String senderId,
+    required String installId,
+    required AiParseContext context,
   }) async {
     final jwt = await _getAnonJwt();
     if (jwt == null || jwt.isEmpty) {
@@ -113,6 +195,8 @@ class SupabaseAiParserClient implements PrimaryAiParserClient {
       'request_id': requestId,
       'schema_version': 1,
       'analysis_mode': 'ai_primary_v1',
+      // Optional; an older server ignores them.
+      ...context.toJson(),
     });
     // Up to 2 HTTP attempts with the SAME request id. The server owns bounded
     // provider retries/repair; a replay retrieves its result, never re-pays.

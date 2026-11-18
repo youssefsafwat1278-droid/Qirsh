@@ -65,7 +65,13 @@ class ActivityChip extends StatelessWidget {
             child: AnimatedContainer(
               duration: AppMotion.micro,
               curve: AppMotion.easeOut,
-              constraints: const BoxConstraints(minHeight: 36),
+              // UX-09: never wider than the screen's content width, so at
+              // large text the label wraps inside the pill instead of the
+              // chip overflowing its row.
+              constraints: BoxConstraints(
+                minHeight: 36,
+                maxWidth: MediaQuery.sizeOf(context).width - 2 * AppSpacing.gutter,
+              ),
               padding: EdgeInsets.symmetric(
                   horizontal: label.isEmpty ? 10 : 14, vertical: 6),
               decoration: BoxDecoration(
@@ -87,10 +93,14 @@ class ActivityChip extends StatelessWidget {
                     if (label.isNotEmpty) const SizedBox(width: 6),
                   ],
                   if (label.isNotEmpty)
-                    Text(
-                      label,
-                      style: AppTypography.subhead(fg)
-                          .copyWith(fontWeight: FontWeight.w600),
+                    Flexible(
+                      child: Text(
+                        label,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.subhead(fg)
+                            .copyWith(fontWeight: FontWeight.w600),
+                      ),
                     ),
                   if (count != null) ...[
                     const SizedBox(width: 5),

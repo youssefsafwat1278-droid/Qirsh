@@ -568,8 +568,7 @@ class DailySpendBarChart extends StatelessWidget {
                   }
                   return Text(
                     days != null && index < days!.length
-                        ? DateFormat.MMMd(Localizations.localeOf(context).languageCode)
-                            .format(days![index])
+                        ? _dayMonth(context, days![index])
                         : '${index + 1}',
                     style: AppTypography.overline(c.textMuted),
                   );
@@ -738,3 +737,11 @@ Color _inactiveBar(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark
         ? Colors.white.withValues(alpha: .14)
         : const Color(0xFFD9E0EE);
+
+/// V1-068: «17 نوفمبر» with Western digits in Arabic (intl's Arabic `MMMd`
+/// uses Arabic-Indic digits, unlike the amounts on the same chart).
+String _dayMonth(BuildContext context, DateTime day) {
+  final language = Localizations.localeOf(context).languageCode;
+  if (language == 'en') return DateFormat.MMMd('en').format(day);
+  return '${day.day} ${DateFormat.MMMM(language).format(day)}';
+}

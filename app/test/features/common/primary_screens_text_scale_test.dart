@@ -29,16 +29,10 @@ Future<(List<String>, Set<String>)> _measure(
   return (errors, cut);
 }
 
-// UX-09 (round 2). The app clamps text to 1.25x (`app.dart`), and that cap is
-// kept. These tests do two different things:
-//
-// * At the cap, every primary screen must lay out without a Flutter error
-//   (overflow included) on the smallest and a common phone size. This is the
-//   guard.
-// * Above the cap (1.5x, 2.0x and 3.1x, about the largest iOS accessibility
-//   size) they only MEASURE what breaks, so raising the cap later starts from
-//   a known list. Passing them does not mean those sizes are supported: they
-//   are not, and they are not tested on a device.
+// UX-09 (round 2). These cases were written when the app clamped text to
+// 1.25x. The closure round removed that cap (`app.dart`); the regression gate
+// across 1.0x-3.1x is now `large_text_overflow_test.dart`. The 1.25x cases and
+// the Settings-hub 2.0x case below are kept as they were.
 void main() {
   for (final language in ['en', 'ar']) {
     for (final size in _sizes) {
@@ -63,27 +57,5 @@ void main() {
           size: size, language: 'en', scale: 2.0);
       expect(errors, isEmpty);
     });
-  }
-
-  for (final scale in const [1.5, 2.0, 3.1]) {
-    for (final size in _sizes) {
-      testWidgets('above-cap measurement ${scale}x $size (not a support claim)',
-          (tester) async {
-        final report = StringBuffer();
-        for (final language in ['en', 'ar']) {
-          for (final screen in primaryScreens) {
-            final (errors, cut) = await _measure(tester, screen,
-                size: size, language: language, scale: scale);
-            if (errors.isEmpty && cut.isEmpty) continue;
-            report.writeln('[UX-09 ${scale}x $size $language] ${screen.name}: '
-                '${errors.toSet().join(' | ')}'
-                '${cut.isEmpty ? '' : ' | cut off: ${cut.join(' ; ')}'}');
-            await tester.pumpWidget(const SizedBox.shrink());
-          }
-        }
-        // ignore: avoid_print
-        print(report.isEmpty ? '[UX-09 ${scale}x $size] no breakage' : report);
-      });
-    }
   }
 }

@@ -61,7 +61,7 @@ void main() {
   ///
   /// GROUP A — bulk wipes of user data. The only two, both audited above.
   ///   data_wipe_service (2)        the loop + the custom-categories delete
-  ///   restore_backup_usecase (12)  the table loop + journal/staging cleanup (7),
+  ///   restore_backup_usecase (18)  the table loop + journal/staging cleanup (7),
   ///                                plus the sync-identity rebind added for the
   ///                                restore-then-sync defect (5): two drops of a
   ///                                TEMP identity table, the two outbox deletes
@@ -71,6 +71,14 @@ void main() {
   ///                                so cloud-only rows are pulled back. None
   ///                                deletes a user record; all run inside the
   ///                                restore transaction and roll back with it.
+  ///                                Merge restore (owner decision 3.3) adds 6:
+  ///                                four drops of the TEMP restore_merge /
+  ///                                restore_merge_counts work tables, and the
+  ///                                two outbox deletes, by ONE entity id, for a
+  ///                                row the backup's newer copy just overwrote
+  ///                                (the queued intent carried the superseded
+  ///                                values; the row is re-marked pending). No
+  ///                                user record is deleted; same transaction.
   ///
   /// GROUP B — schema rebuild, atomic and self-contained.
   ///   app_database (4)             cards_new pre-drop, DROP cards, + 2 repairs
@@ -180,7 +188,7 @@ void main() {
   const inventory = <String, int>{
     // A
     'lib/core/privacy/data_wipe_service.dart': 2,
-    'lib/core/backup/restore_backup_usecase.dart': 12,
+    'lib/core/backup/restore_backup_usecase.dart': 18,
     // B
     'lib/data/db/app_database.dart': 4,
     // Fixed classification regex only; audited above. No new destructive action.

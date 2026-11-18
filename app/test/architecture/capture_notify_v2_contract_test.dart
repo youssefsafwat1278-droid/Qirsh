@@ -145,7 +145,8 @@ void main() {
       ]) {
         expect(fn, isNot(contains(forbidden)), reason: forbidden);
       }
-      expect(fn, contains('detailedCaptureNotification(aiDetail: aiDetail)'));
+      expect(fn,
+          contains('detailedCaptureNotification(aiDetail: aiDetail, status: status)'));
       expect(perform, contains('aiDetail: response.aiDetail'));
       expect(fn, contains('title: ""'));
       expect(fn, contains('identifierPrefix: "capture_generic"'));

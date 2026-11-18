@@ -2296,7 +2296,10 @@ class _ReviewSection extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 10),
+                // Owner brief 4.6: say that items awaiting review are not in
+                // the totals (this card shows only when there are some).
                 Text(context.l10n.homeReviewToStayAccurate,
+                    key: const Key('homeReviewNotInTotals'),
                     style: AppTypography.caption(t.textOnCanvasMuted)),
                 const SizedBox(height: 12),
                 Wrap(
@@ -2310,7 +2313,7 @@ class _ReviewSection extends ConsumerWidget {
                         TransactionDetailsScreen.showSheet(context, tx.id);
                       },
                       style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 40),
+                        minimumSize: const Size(0, 44),
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
@@ -2322,7 +2325,7 @@ class _ReviewSection extends ConsumerWidget {
                       onPressed: openAll,
                       style: TextButton.styleFrom(
                         foregroundColor: c.actionText,
-                        minimumSize: const Size(0, 40),
+                        minimumSize: const Size(0, 44),
                       ),
                       child: Text(context.l10n.homeSeeAll),
                     ),

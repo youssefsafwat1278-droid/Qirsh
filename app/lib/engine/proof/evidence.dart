@@ -435,8 +435,9 @@ final List<(RegExp, String)> _currencyRules = [
   (RegExp(r'دينار\s+كويتي'), 'KWD'),
   (RegExp(r'دينار\s+بحريني'), 'BHD'),
   (RegExp(r'جنيه\s+مصري'), 'EGP'),
-  // ISO literals are derived from `kCurrencyScale` — the ONE registry that
-  // decides what this app can persist — rather than from a hand-maintained
+  // ISO literals are derived from `kDetectionCurrencyScale` (closure round:
+  // split from the STORAGE registry `kCurrencyScale`, which now holds every
+  // ISO code — many of them ordinary words) rather than from a hand-maintained
   // list. A hardcoded alternation here had silently drifted from the registry:
   // JPY is a supported currency with a registered scale of 0, but the literal
   // list omitted it, so the evidence layer emitted no CURRENCY node for
@@ -455,7 +456,8 @@ final List<(RegExp, String)> _currencyRules = [
 ///
 ///   sorted  — `Map.keys` iterates in insertion order, so the pattern would
 ///             otherwise change shape whenever someone reordered an entry in
-///             `kCurrencyScale`. This regex is hashed into the Phase-4 seal;
+///             `kDetectionCurrencyScale`. This regex is hashed into the
+///             Phase-4 seal;
 ///             a contract artefact whose bytes depend on the order of an
 ///             unrelated literal is not a contract. Sorting makes the derived
 ///             pattern a pure function of the SET of supported currencies.
@@ -472,8 +474,12 @@ final List<(RegExp, String)> _currencyRules = [
 /// codes are the same length and the boundaries are anchored.
 final RegExp _isoLiteralPattern = _buildIsoLiteralPattern();
 
+/// The exact source of the ISO literal regex, so a test can pin it byte for
+/// byte (currency_storage_detection_split_test.dart).
+String get isoLiteralPatternSource => _isoLiteralPattern.pattern;
+
 RegExp _buildIsoLiteralPattern() {
-  final codes = kCurrencyScale.keys.toList()..sort();
+  final codes = kDetectionCurrencyScale.keys.toList()..sort();
   final escaped = codes.map(RegExp.escape).join('|');
   return RegExp('(?<![A-Za-z])($escaped)(?![A-Za-z])', caseSensitive: false);
 }

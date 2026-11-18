@@ -7,6 +7,7 @@ import 'bank_profile.dart';
 import 'catalog_rule_matcher.dart';
 import 'direction_signal.dart';
 import 'merchant_sanity.dart';
+import 'message_meaning.dart';
 import 'normalizer.dart';
 import 'parse_result.dart';
 import 'transaction_state_cues.dart';
@@ -73,6 +74,24 @@ class ParserEngine {
   // with local conversion.
   static final RegExp _intlParens = RegExp(
     r'\b([A-Z]{3})\s*([\d,.]+)\s*\(([A-Z]{3})\s*([\d,.]+)\)',
+    caseSensitive: false,
+  );
+  // Round 3 (V1-084): "Purchase of USD 20.00 … Charged SAR 75.00" — the
+  // amount after a charged/billed/equivalent marker is what left the
+  // account; the other currency's amount is the original (foreign) one.
+  static final RegExp _chargedAmount = RegExp(
+    r'(?<![a-z])(?:amount charged|charged amount|charged|billed|equivalent(?: to)?|'
+    r'amount in [a-z]{3}|deducted|المبلغ المخصوم|بما يعادل|ما يعادل)'
+    r'\s*(?:amount|of)?\s*:?\s*'
+    r'(?:([A-Za-z]{2,3}|[^\sA-Za-z0-9]{1,3})\s?([0-9][0-9,]*(?:\.[0-9]+)?)|'
+    r'([0-9][0-9,]*(?:\.[0-9]+)?)\s?([A-Za-z]{3}|[^\sA-Za-z0-9]{1,3}))',
+    caseSensitive: false,
+  );
+  // "SAR 52.10 charged to card *4521": the charged figure before its verb.
+  static final RegExp _chargedAmountBefore = RegExp(
+    r'(?:([A-Za-z]{3}|[^\sA-Za-z0-9]{1,3})\s?([0-9][0-9,]*(?:\.[0-9]+)?)|'
+    r'([0-9][0-9,]*(?:\.[0-9]+)?)\s?([A-Za-z]{3}|[^\sA-Za-z0-9]{1,3}))'
+    r'\s+(?:was |has been |have been )?(?:charged|billed|deducted)(?![a-z])',
     caseSensitive: false,
   );
   static final RegExp _intlParensAmountFirst = RegExp(
@@ -160,9 +179,13 @@ class ParserEngine {
       extraProfiles: bankProfiles,
     );
     const engine = ParserEngine();
-    final lower = text.toLowerCase();
-    final outside = outsideMerchant(lower,
-        engine._extractMerchantAndSource(text.split('\n'), bank: bank)
+    // Round 3: an ignore word in a footer sentence never silences a
+    // completed movement ([_ignoreScope]).
+    final lower = _ignoreScope(rawText);
+    final outside = outsideMerchant(
+        lower,
+        engine
+            ._extractMerchantAndSource(text.split('\n'), bank: bank)
             .merchant);
     // PR-02 — only the original ignore words (security, promotions, the
     // ignore markers) can make a message silent. An account notice word
@@ -180,12 +203,19 @@ class ParserEngine {
   /// a card activation, a statement, a PIN change) that names no money
   /// movement anywhere ([moneyWords]). The device never records one; with an
   /// amount it is a review row. Used by the import paths to distrust a
-  /// server result for such a text.
+  /// server result for such a text. Round 3: the notice words of the clause
+  /// core count (a notice footer does not make a movement a notice);
+  /// [wholeText] reads every sentence, as the notification preview does.
+  /// A message whose meaning is a no-movement notice ([meaningOf]: a bill
+  /// due, an expected salary, a scheduled payment, an offer) is one too: the
+  /// device records nothing for it, so no import trusts a server result.
   static bool isNoticeMessage(
     String rawText, {
     String? senderId,
     List<BankProfile> bankProfiles = const [],
+    bool wholeText = false,
   }) {
+    if (meaningOf(rawText).kind == MessageKind.noMovementNotice) return true;
     final text = Normalizer.normalizeCurrencyTokens(
       Normalizer.normalize(rawText),
     );
@@ -195,7 +225,8 @@ class ParserEngine {
       extraProfiles: bankProfiles,
     );
     const engine = ParserEngine();
-    final lower = text.toLowerCase();
+    final scope = clauseScope(rawText);
+    final lower = (wholeText ? scope.text : scope.core).toLowerCase();
     return engine._isNotice(
         lower,
         outsideMerchant(lower,
@@ -236,6 +267,382 @@ class ParserEngine {
   }
 
   static final RegExp _merchantSpanEnd = RegExp(r'[*;!?\n،,]|\.(?=\s|$)');
+
+  // ── Round 3 (owner brief 4.1): meaning before amount ─────────────────────
+
+  /// The text the message's status cues apply to: [rawText] (normalized)
+  /// without its footer sentences. A sentence that carries an unlabelled
+  /// amount is an event sentence; when the message has one, a sentence whose
+  /// only figures are labelled (a balance, a limit, an amount due, a fee)
+  /// and a sentence with no amount that carries a footer cue (security
+  /// advice, an advert, an account notice, a reminder or offer, another
+  /// attempt's status) is a footer: its words never decide the event's
+  /// status or direction ("Purchase completed for EGP 250; card payment due
+  /// EGP 900" is one purchase). A message holding an OTP code keeps every
+  /// sentence. Mirrors `clauseScope` in `process-ios-sms/message_meaning.ts`.
+  static ClauseScope clauseScope(String rawText) {
+    final hit = _scopeCache.remove(rawText);
+    if (hit != null) return _scopeCache[rawText] = hit;
+    final scope = _clauseScope(rawText);
+    if (_scopeCache.length >= 32) _scopeCache.remove(_scopeCache.keys.first);
+    return _scopeCache[rawText] = scope;
+  }
+
+  // A pure function of the text, read several times per capture (status
+  // cues, direction, ignore words): the last few results are kept.
+  static final Map<String, ClauseScope> _scopeCache = {};
+
+  static ClauseScope _clauseScope(String rawText) {
+    final text = Normalizer.separateGluedCurrency(
+        Normalizer.normalizeCurrencyTokens(Normalizer.normalize(rawText)));
+    final lowerAll = text.toLowerCase();
+    final pieces = _sentences(text);
+    final events = <String>[];
+    final roles = <_Role>[];
+    for (final p in pieces) {
+      final s = text.substring(p.start, p.end);
+      final role = _roleOf(s);
+      roles.add(role);
+      if (role == _Role.event) events.add(s);
+    }
+    if (events.isEmpty || _otpCode.hasMatch(lowerAll)) {
+      return ClauseScope(
+          text: text, core: text, eventSentences: events, footerCount: 0);
+    }
+    // An event sentence that names no movement (a reminder, a scheduled
+    // cashback, an offer) is a footer next to one that does.
+    final notices = [
+      for (var i = 0; i < pieces.length; i++)
+        roles[i] == _Role.event &&
+            _noMovementReason(text
+                    .substring(pieces[i].start, pieces[i].end)
+                    .toLowerCase()) !=
+                null
+    ];
+    // A bare field line ("مبلغ:SAR 100.00") states no event of its own: it
+    // details the line above it, whose words (a status, a notice) keep
+    // deciding the message — that header line is never a footer.
+    final field = [
+      for (final p in pieces) isFieldLine(text.substring(p.start, p.end))
+    ];
+    final anyMovement = [
+      for (var i = 0; i < pieces.length; i++)
+        roles[i] == _Role.event && !notices[i] && !field[i]
+    ].any((x) => x);
+    final core = StringBuffer();
+    var footers = 0;
+    for (var i = 0; i < pieces.length; i++) {
+      final p = pieces[i];
+      final s = text.substring(p.start, p.end);
+      final header = !field[i] && _beforeFieldLine(text, pieces, field, i);
+      final footer = !header &&
+          (roles[i] == _Role.figure ||
+              (anyMovement && notices[i]) ||
+              (roles[i] == _Role.text && _footerCue(s.toLowerCase())));
+      if (footer && s.trim().isNotEmpty) footers++;
+      if (!footer) core.write(s);
+      core.write(text.substring(p.end, p.next));
+    }
+    return ClauseScope(
+        text: text,
+        core: core.toString(),
+        eventSentences: events,
+        footerCount: footers);
+  }
+
+  /// The message's meaning ([MessageMeaning]): decided on [clauseScope]
+  /// before any amount is trusted. Mirrors `meaningOf` in
+  /// `process-ios-sms/message_meaning.ts`.
+  static MessageMeaning meaningOf(String rawText) {
+    final scope = clauseScope(rawText);
+    final all = scope.text.toLowerCase();
+    if ((_otpCode.hasMatch(all) && hasIgnoreWord(all)) || isPurchaseCode(all)) {
+      return const MessageMeaning(kind: MessageKind.otp, reason: 'otp_code');
+    }
+    final events = scope.eventSentences.length;
+    final currencyAbsent = !_hasCurrency(scope.text);
+    if (events == 0) {
+      // Follow-up: labelled figures that a future clause acts on ("Annual
+      // fee of SAR 250 will be charged on 1 Dec") or that are due make a
+      // notice — when every sentence with a figure is one (a due footer next
+      // to a fee is not).
+      final figures = [
+        for (final p in _sentences(scope.text))
+          if (_amountWithCurrency.hasMatch(scope.text.substring(p.start, p.end)))
+            _noMovementReason(
+                scope.text.substring(p.start, p.end).toLowerCase())
+      ];
+      final reason = figures.isEmpty ? null : figures.first;
+      if (reason != null && figures.every((r) => r != null)) {
+        return MessageMeaning(
+            kind: MessageKind.noMovementNotice,
+            reason: reason,
+            footerCount: scope.footerCount,
+            currencyAbsent: currencyAbsent);
+      }
+      return MessageMeaning(
+          kind: MessageKind.undetermined,
+          reason: 'no_event_amount',
+          currencyAbsent: currencyAbsent);
+    }
+    final core = scope.core.toLowerCase();
+    MessageMeaning of(MessageKind kind, String reason,
+            [TxnDirection direction = TxnDirection.unknown]) =>
+        MessageMeaning(
+            kind: kind,
+            reason: reason,
+            direction: direction,
+            footerCount: scope.footerCount,
+            eventCount: events,
+            currencyAbsent: currencyAbsent);
+    if (TransactionStateCues.isNotCompleted(rawText)) {
+      return of(
+          MessageKind.notCompleted,
+          _hasAnyWord(core, MessageMeaning.pendingWords)
+              ? 'pending'
+              : 'declined_or_failed');
+    }
+    // Field lines detail a header; the header's sentences say what happened.
+    final stated = scope.eventSentences.where((s) => !isFieldLine(s));
+    final notices = (stated.isEmpty ? scope.eventSentences : stated)
+        .map((s) => _noMovementReason(s.toLowerCase()));
+    if (notices.every((r) => r != null)) {
+      return of(MessageKind.noMovementNotice, notices.first!);
+    }
+    final flow = DirectionSignal.flowOf(scope.core);
+    if (_isOwnAccountMove(core) &&
+        !MessageMeaning.explicitOwnTransfer.any(all.contains)) {
+      return of(MessageKind.ownAccountTransfer, 'own_accounts');
+    }
+    if (_isCashDeposit(core)) {
+      return of(MessageKind.cashDeposit, 'cash_deposit', TxnDirection.credit);
+    }
+    if (_distinctMovementAmounts(scope.eventSentences) > 1 &&
+        const ParserEngine()._extractChargedPair(scope.text, null) == null) {
+      return of(MessageKind.multipleEvents, 'multiple_amounts');
+    }
+    return of(MessageKind.completedMovement,
+        scope.footerCount > 0 ? 'footer_set_aside' : 'single_event', flow);
+  }
+
+  /// Why an event sentence names an amount but no movement that happened
+  /// (null when it reports one): a due bill or reminder, a scheduled,
+  /// upcoming or expected operation, an offer, a summary — with no
+  /// [MessageMeaning.doneVerbs] word outside a future or conditional clause.
+  static String? _noMovementReason(String s) {
+    String? reason;
+    if (_hasAnyWord(s, MessageMeaning.summaryMarkers)) {
+      return 'summary';
+    } else if (_hasAnyWord(s, MessageMeaning.dueMarkers)) {
+      reason = 'bill_due';
+    } else if (_hasAnyWord(s, MessageMeaning.futureMarkers)) {
+      reason = 'scheduled_or_expected';
+    } else if (_hasAnyWord(s, MessageMeaning.offerMarkers)) {
+      reason = 'offer';
+    }
+    if (reason == null) {
+      // Every done verb sits in a future clause ("will be charged").
+      final done = _doneVerb.allMatches(s).toList();
+      if (done.isNotEmpty &&
+          done.every((m) => _hasAnyWord(
+              s.substring(_lastClauseCut(s, m.start), m.start),
+              MessageMeaning.futureTense))) {
+        return 'scheduled_or_expected';
+      }
+      return null;
+    }
+    for (final m in _doneVerb.allMatches(s)) {
+      final clause = s.substring(_lastClauseCut(s, m.start), m.start);
+      if (!_hasAnyWord(clause, MessageMeaning.tenseMarkers)) {
+        return null;
+      }
+    }
+    return reason;
+  }
+
+  static final RegExp _doneVerb = RegExp(
+      '(?<![a-zء-ي])(?:${MessageMeaning.doneVerbs.map(RegExp.escape).join('|')})(?![a-zء-ي])');
+
+  static int _lastClauseCut(String s, int end) {
+    var at = 0;
+    for (final m in RegExp(r'[,،:]|\.(?![0-9])').allMatches(s)) {
+      if (m.end <= end) at = m.end;
+    }
+    return at;
+  }
+
+  /// Money between the user's own accounts: a strong marker (a term deposit,
+  /// "between your accounts", savings → …), or two account references or an
+  /// account-type word with both an outgoing and an incoming clause.
+  static bool _isOwnAccountMove(String core) {
+    if (_hasAnyWord(core, MessageMeaning.ownAccountStrong)) return true;
+    // "from your account *1234 to your account *5678" takes money out of
+    // and puts it into the user's own accounts.
+    final both = (DirectionSignal.hasDebitFlow(core) &&
+            DirectionSignal.hasCreditFlow(core)) ||
+        (MessageMeaning.sourceOfFunds.any(core.contains) &&
+            MessageMeaning.ownDestination.any(core.contains));
+    if (!both) return false;
+    final refs = RegExp(r'\*+\s?([0-9]{4})')
+        .allMatches(core)
+        .map((m) => m.group(1))
+        .toSet();
+    return refs.length >= 2 ||
+        _hasAnyWord(core, MessageMeaning.ownAccountMarkers);
+  }
+
+  /// A cash deposit (ATM / cash): money in that the parser cannot call
+  /// income (owner brief §5: do not assume an ATM cash deposit is income).
+  static bool _isCashDeposit(String core) =>
+      _hasAnyWord(core, MessageMeaning.cashDepositMarkers) ||
+      (_hasAnyWord(core, const ['deposit', 'deposited', 'إيداع', 'ايداع']) &&
+          _hasAnyWord(core, const ['atm', 'صراف', 'cash']) &&
+          !_hasAnyWord(core, const [
+            'withdraw',
+            'withdrawal',
+            'withdrawn',
+            'سحب',
+            'transfer',
+            'تحويل',
+            'راتب',
+            'salary'
+          ]));
+
+  /// Distinct amounts among event sentences that each name a movement.
+  static int _distinctMovementAmounts(List<String> events) {
+    const engine = ParserEngine();
+    final amounts = <String>{};
+    for (final s in events) {
+      if (_noMovementReason(s.toLowerCase()) != null) continue;
+      if (!hasMoneyWord(s.toLowerCase()) &&
+          DirectionSignal.detectWords(s) == TxnDirection.unknown) {
+        continue;
+      }
+      final ex = engine._extractAmounts([s], text: s, bank: null);
+      final a = ex.transactionAmount;
+      if (a != null) amounts.add(a.toStringAsFixed(3));
+    }
+    return amounts.length;
+  }
+
+  /// A Latin phrase as whole words, an Arabic one by substring.
+  static bool _hasAnyWord(String lower, List<String> words) =>
+      words.any((w) => RegExp('[a-z]').hasMatch(w)
+          ? _wordPatterns
+              .putIfAbsent(
+                  w, () => RegExp('(?<![a-z])${RegExp.escape(w)}(?![a-z])'))
+              .hasMatch(lower)
+          : lower.contains(w));
+  static final Map<String, RegExp> _wordPatterns = {};
+
+  /// A footer cue in a sentence with no amount.
+  static bool _footerCue(String s) =>
+      hasIgnoreWord(s) ||
+      _hasAnyWord(s, MessageMeaning.rewardMarkers) ||
+      noticeWords.any((w) => containsIgnoreWord(s, w)) ||
+      (TransactionStateCues.hasCue(s) &&
+          _hasAnyWord(s, MessageMeaning.otherEventMarkers)) ||
+      (!TransactionStateCues.hasCue(s) &&
+          (_hasAnyWord(s, MessageMeaning.dueMarkers) ||
+              _hasAnyWord(s, MessageMeaning.offerMarkers) ||
+              _hasAnyWord(s, MessageMeaning.summaryMarkers)));
+
+  /// The direction of the transaction clause: its flow ([MessageMeaning.direction]),
+  /// else the money words of its factual (not hypothetical) clauses.
+  static TxnDirection _clauseDirection(MessageMeaning meaning, String core) =>
+      meaning.direction != TxnDirection.unknown
+          ? meaning.direction
+          : DirectionSignal.detectWords(_factualClauses(core));
+
+  static _Role _roleOf(String sentence) {
+    final s = sentence.trim();
+    final hit = _roleCache[s];
+    if (hit != null) return hit;
+    if (_roleCache.length >= 256) _roleCache.remove(_roleCache.keys.first);
+    return _roleCache[s] = _readRole(s);
+  }
+
+  static final Map<String, _Role> _roleCache = {};
+
+  static _Role _readRole(String s) {
+    if (s.isEmpty) return _Role.text;
+    const engine = ParserEngine();
+    final ex = engine._extractAmounts([s], text: s, bank: null);
+    if (ex.foreignAmount != null) return _Role.event;
+    if (ex.candidates.any((c) => c.isStrongTransaction && c.value > 0)) {
+      return _Role.event;
+    }
+    if (ex.candidates.any((c) =>
+        c.kind != AmountCandidateKind.dateTime &&
+        c.kind != AmountCandidateKind.cardLast4 &&
+        _hasCurrency(engine._window(c.line, c.line.indexOf(c.raw),
+            before: 12, after: 12)))) {
+      return _Role.figure;
+    }
+    return _Role.text;
+  }
+
+  /// Whether piece [i] sits on the line just above a field line.
+  static bool _beforeFieldLine(
+      String text,
+      List<({int start, int end, int next})> pieces,
+      List<bool> field,
+      int i) {
+    for (var k = i; k + 1 < pieces.length; k++) {
+      if (text.substring(pieces[k].end, pieces[k].next) == '\n') {
+        return field[k + 1];
+      }
+    }
+    return false;
+  }
+
+  /// [value] up to its first sentence end: a period followed by a space and
+  /// more text, unless it ends an abbreviation ("Test Co. Ltd"). A merchant
+  /// name never runs into the next sentence ("Salary Store. Credited points
+  /// 45"). Mirrors `cutAtSentenceEnd` in `process-ios-sms/message_meaning.ts`.
+  static String cutAtSentenceEnd(String value) {
+    for (final m in RegExp(r'([A-Za-z/]*)\.\s+\S').allMatches(value)) {
+      if (MessageMeaning.abbreviations.contains(m.group(1)!.toLowerCase())) {
+        continue;
+      }
+      return value.substring(0, m.start + m.group(1)!.length).trim();
+    }
+    return value;
+  }
+
+  /// A bare field line: a short label, a colon and only an amount with its
+  /// currency ("مبلغ:SAR 100.00", "Amount: 45.00 SAR"). Mirrors
+  /// `isFieldLine` in `process-ios-sms/message_meaning.ts`.
+  static bool isFieldLine(String sentence) =>
+      _fieldLine.hasMatch(sentence.trim());
+
+  static final RegExp _fieldLine = RegExp(
+      r'^[^\d:\n]{1,30}:\s*(?:[a-z\u0600-\u06ff.]{1,6}\s?)?[0-9][0-9.,]*\s*(?:[a-z\u0600-\u06ff.]{1,6})?$',
+      caseSensitive: false);
+
+  static final RegExp _sentenceMark = RegExp(r'[\n!?؟;؛]|\.(?![0-9])');
+  static final RegExp _wordBeforeDot = RegExp(r'([a-z/]+)$');
+
+  /// Sentence spans of [text]: a line break, `! ? ؟ ; ؛`, or a period that
+  /// is not a decimal point and does not end an abbreviation ("Avl. Bal.").
+  static List<({int start, int end, int next})> _sentences(String text) {
+    final out = <({int start, int end, int next})>[];
+    var from = 0;
+    for (final m in _sentenceMark.allMatches(text)) {
+      if (m[0] == '.') {
+        final word = _wordBeforeDot
+            .firstMatch(text.substring(from, m.start).toLowerCase())
+            ?.group(1);
+        if (word != null && MessageMeaning.abbreviations.contains(word)) {
+          continue;
+        }
+      }
+      out.add((start: from, end: m.start, next: m.end));
+      from = m.end;
+    }
+    out.add((start: from, end: text.length, next: text.length));
+    return out;
+  }
 
   /// LR-05 — a sentence (or line) of [lower] that reads as a completed
   /// transaction on its own: a money verb as a whole word ("purchase", not
@@ -511,7 +918,14 @@ class ParserEngine {
     // footer, a link, a complaint line) goes to review (amountDetected),
     // anything else (an advert, a limit or card notice) is dropped below.
     final merchantResult = _extractMerchantAndSource(lines, bank: bank);
-    final ignoreText = outsideMerchant(lower, merchantResult.merchant);
+    // Round 3 (owner brief 4.1): meaning before amount. The status, ignore
+    // and notice cues below apply to the message's clause scope: footer
+    // sentences (security advice, an advert, a notice, a labelled figure,
+    // another attempt's status) never decide a completed movement.
+    final meaning = meaningOf(rawText);
+    final coreLower = clauseScope(rawText).core.toLowerCase();
+    final ignoreText =
+        outsideMerchant(_ignoreScope(rawText), merchantResult.merchant);
     final ignored = _isIgnored(ignoreText, bank);
     if (ignored && _otpCode.hasMatch(lower)) {
       return ParseResult.notTransaction(bankKey: bank?.bankKey);
@@ -526,10 +940,24 @@ class ParserEngine {
     // DATA-01 — a declined/failed purchase moved no money. It is not ignored
     // like an OTP: it stays transaction-shaped so the capture lands in the
     // Smart Inbox review path instead of vanishing (or being auto-confirmed).
-    final notCompleted = TransactionStateCues.isNotCompleted(text);
+    final notCompleted = TransactionStateCues.isNotCompleted(rawText);
     if (notCompleted && !ignored) {
       return ParseResult.notTransaction(
-          bankKey: bank?.bankKey, amountDetected: true);
+          bankKey: bank?.bankKey, amountDetected: true, meaning: meaning);
+    }
+    // A notice that names an amount but no movement (a bill due, a scheduled
+    // or expected operation, an offer, a summary), money between the user's
+    // own accounts, a cash deposit (not proven income) or several movements:
+    // never recorded, never silent — a review row carrying the reason.
+    if (!ignored &&
+        const {
+          MessageKind.noMovementNotice,
+          MessageKind.ownAccountTransfer,
+          MessageKind.cashDeposit,
+          MessageKind.multipleEvents,
+        }.contains(meaning.kind)) {
+      return ParseResult.notTransaction(
+          bankKey: bank?.bankKey, amountDetected: true, meaning: meaning);
     }
 
     // F-016 — catalog rules are the FIRST authority. The winning rule (sender
@@ -545,9 +973,14 @@ class ParserEngine {
       messageText: rawText,
     );
 
+    // The type is read from the transaction clause (footers aside) with the
+    // merchant name masked ("Purchase … at Deposit Mart" is a purchase); the
+    // clause's own flow (debited / credited …) outranks a noun such as
+    // "deposit", "salary" or "payment" (V1-082).
     var type = catalogMatch != null
         ? _catalogRuleType(catalogMatch.rule)
-        : _detectType(lower, bank);
+        : _flowType(_typeOutsideMerchant(coreLower, merchantResult.merchant, bank),
+            meaning.direction, coreLower);
     final amountExtraction = _extractAmounts(lines, text: text, bank: bank);
     final ruleAmount = parseCatalogAmount(catalogMatch?.amountText);
     final amount = ruleAmount ?? amountExtraction.transactionAmount;
@@ -563,13 +996,15 @@ class ParserEngine {
               amountExtraction.candidates.any((c) =>
                   (c.kind == AmountCandidateKind.balance ||
                       c.kind == AmountCandidateKind.referenceNumber) &&
-                  _currency.hasMatch(_window(c.line, c.line.indexOf(c.raw),
+                  _hasCurrency(_window(c.line, c.line.indexOf(c.raw),
                       before: 12, after: 12))));
     }
     // LR-04 / NR-01 — an account notice that names an amount but no money
     // movement ("Your credit limit is SAR 15,000"): never recorded, never
     // dropped silently — a review row.
-    if (!ignored && catalogMatch == null && _isNotice(lower, ignoreText, bank)) {
+    if (!ignored &&
+        catalogMatch == null &&
+        _isNotice(coreLower, ignoreText, bank)) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
@@ -583,7 +1018,7 @@ class ParserEngine {
           return c.kind == AmountCandidateKind.balance &&
               _hasNearbyKeyword(c.line.toLowerCase(), at, _dueWords,
                   before: 32, after: 8) &&
-              _currency.hasMatch(_window(c.line, at, before: 12, after: 12));
+              _hasCurrency(_window(c.line, at, before: 12, after: 12));
         })) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
@@ -656,7 +1091,8 @@ class ParserEngine {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey,
           amountDetected: _hasTransactionSentence(ignoreText, bank) &&
-              (notCompleted || confidence >= pendingThreshold));
+              (notCompleted || confidence >= pendingThreshold),
+          meaning: meaning);
     }
     if (confidence < pendingThreshold) {
       return ParseResult.notTransaction(
@@ -664,12 +1100,11 @@ class ParserEngine {
     }
     // (A transfer the wording does not place is booked as spending by the
     // use case, so the same holds for it.)
-    if ((type == TransactionType.unknown ||
-            type == TransactionType.transfer) &&
-        DirectionSignal.detect(_factualClauses(text)) == TxnDirection.unknown &&
-        !DirectionSignal.debitWords.any(lower.contains) &&
-        _containsAny(lower, _inflowHints) &&
-        !_containsAny(lower, _outgoingMarkers)) {
+    if ((type == TransactionType.unknown || type == TransactionType.transfer) &&
+        _clauseDirection(meaning, coreLower) == TxnDirection.unknown &&
+        !DirectionSignal.debitWords.any(coreLower.contains) &&
+        _containsAny(coreLower, _inflowHints) &&
+        !_containsAny(coreLower, _outgoingMarkers)) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true);
     }
@@ -684,7 +1119,7 @@ class ParserEngine {
       // came in ("Your account was credited by EGP 500 … via IPN"): income.
       type: type != TransactionType.unknown
           ? type
-          : DirectionSignal.detect(_factualClauses(text)) == TxnDirection.credit
+          : _clauseDirection(meaning, coreLower) == TxnDirection.credit
               ? TransactionType.income
               : TransactionType.payment,
       source: source,
@@ -715,6 +1150,7 @@ class ParserEngine {
       amountAmbiguous: amountExtraction.hasAmbiguity,
       dateAmbiguous: dateResult.ambiguous,
       currencyDefaulted: readCurrency == null,
+      meaning: meaning.copyWith(currencyAbsent: readCurrency == null),
     );
   }
 
@@ -725,6 +1161,61 @@ class ParserEngine {
   /// column when both are present.
   TransactionType _catalogRuleType(CatalogParserRule rule) =>
       catalogRuleType(rule);
+
+  /// [type] corrected by the transaction clause's flow: an outgoing clause
+  /// ("Security deposit SAR 1,000 paid to …", "Cashback reversal … deducted")
+  /// is never income or a refund; an incoming one ("Payment received …") is
+  /// never spending.
+  static TransactionType _flowType(
+      TransactionType type, TxnDirection flow, String coreLower) {
+    if (flow == TxnDirection.debit &&
+        (type == TransactionType.income || type == TransactionType.refund)) {
+      return TransactionType.payment;
+    }
+    if (flow == TxnDirection.credit && type == TransactionType.payment) {
+      // Money back for a purchase stays a refund (it nets against spend).
+      return _refundWords.any(coreLower.contains)
+          ? TransactionType.refund
+          : TransactionType.income;
+    }
+    return type;
+  }
+
+  /// The type read outside the merchant name ("Purchase at Deposit Mart" is
+  /// not a deposit); the whole clause core when that reads nothing (the
+  /// merchant span swallowed the keyword: "used at POS for SAR 64").
+  TransactionType _typeOutsideMerchant(
+      String coreLower, String? merchant, BankProfile? bank) {
+    final outside = _detectType(outsideMerchant(coreLower, merchant), bank);
+    return outside != TransactionType.unknown
+        ? outside
+        : _detectType(coreLower, bank);
+  }
+
+  static const List<String> _refundWords = [
+    'refund',
+    'reversal',
+    'reversed',
+    'استرداد',
+    'مسترد',
+    'رد مبلغ',
+    'إعادة مبلغ',
+    'اعادة مبلغ',
+    'عكس قيد',
+    'عكس العملية',
+  ];
+
+  /// The text the ignore words apply to: the clause core when the message
+  /// reports a completed movement (a footer's advert or security advice never
+  /// silences it), otherwise the whole message (an advert that names an
+  /// amount stays an advert).
+  static String _ignoreScope(String rawText) {
+    final scope = clauseScope(rawText);
+    return (meaningOf(rawText).kind == MessageKind.completedMovement
+            ? scope.core
+            : scope.text)
+        .toLowerCase();
+  }
 
   TransactionType _detectType(String lower, BankProfile? bank) {
     if (bank != null) {
@@ -768,6 +1259,8 @@ class ParserEngine {
       'شراء',
       'دفع',
       'خصم',
+      // Round 3: the footer ("حد الشراء") no longer types the event.
+      'مدفوعات',
       'purchase',
       'payment',
       'نقاط بيع',
@@ -818,6 +1311,8 @@ class ParserEngine {
   }) {
     final intl = _extractInternationalParens(text);
     if (intl != null) return intl;
+    final charged = _extractChargedPair(text, bank);
+    if (charged != null) return charged;
 
     final candidates = <AmountCandidate>[];
     for (final line in lines) {
@@ -895,6 +1390,61 @@ class ParserEngine {
       foreignAmountText: null,
       foreignCurrency: null,
     );
+  }
+
+  /// A foreign purchase stated as an original amount and a charged amount in
+  /// another currency (V1-084): the event is counted once, with the charged
+  /// amount and currency; the original is kept as the foreign amount.
+  _AmountExtraction? _extractChargedPair(String text, BankProfile? bank) {
+    final m = _chargedAmount.firstMatch(text) ??
+        _chargedAmountBefore.firstMatch(text);
+    if (m == null) return null;
+    final chargedRaw = m.group(2) ?? m.group(3)!;
+    final chargedCurrency = _extractCurrency(m.group(1) ?? m.group(4)!);
+    if (chargedCurrency == null) return null;
+    final chargedText = normalizeLocalizedDecimal(chargedRaw);
+    final chargedValue = double.tryParse(chargedText);
+    if (chargedValue == null || chargedValue <= 0) return null;
+    // The original amount: the strongest transaction candidate outside the
+    // charged phrase whose own currency is a different one.
+    final rest = text.replaceRange(m.start, m.end, ' ');
+    final lines = rest.split('\n');
+    final others = <AmountCandidate>[];
+    for (final line in lines) {
+      for (final match in _plainNumber.allMatches(line)) {
+        final raw = match.group(1)!;
+        final value = double.tryParse(normalizeLocalizedDecimal(raw));
+        if (value == null) continue;
+        final c = _classifyAmountCandidate(
+            line: line,
+            raw: raw,
+            value: value,
+            start: match.start,
+            end: match.end,
+            bank: bank);
+        if (c.isStrongTransaction) others.add(c);
+      }
+    }
+    others.sort((a, b) => b.score.compareTo(a.score));
+    for (final c in others) {
+      final at = c.line.indexOf(c.raw);
+      final cur = _extractCurrency(_window(c.line, at, before: 6, after: 6));
+      if (cur == null || cur == chargedCurrency) continue;
+      final balance = _extractBalanceFromText(text);
+      return _AmountExtraction(
+        transactionAmount: chargedValue,
+        transactionAmountText: chargedText,
+        currency: chargedCurrency,
+        balance: balance?.value,
+        balanceText: balance?.text,
+        hasAmbiguity: false,
+        candidates: const [],
+        foreignAmount: c.value,
+        foreignAmountText: normalizeLocalizedDecimal(c.raw),
+        foreignCurrency: cur,
+      );
+    }
+    return null;
   }
 
   _AmountExtraction? _extractInternationalParens(String text) {
@@ -1168,7 +1718,7 @@ class ParserEngine {
         _hasNearbyKeyword(l, start, amountWords, before: 36, after: 10);
     final hasTransactionWord = _containsAny(l, transactionWords);
     final hasCurrency =
-        _currency.hasMatch(_window(line, start, before: 12, after: 12));
+        _hasCurrency(_window(line, start, before: 12, after: 12));
     if (hasAmountWord || hasTransactionWord || hasCurrency) {
       var score = 0.55;
       if (hasAmountWord) score += 0.20;
@@ -1288,6 +1838,7 @@ class ParserEngine {
             '')
         .replaceAll(RegExp(r'[.;،]+$'), '')
         .trim();
+    value = cutAtSentenceEnd(value);
     if (RegExp(r'^\d{1,2}:\d{2}\s*(?:am|pm)?\b', caseSensitive: false)
         .hasMatch(value)) {
       return null;
@@ -1300,10 +1851,27 @@ class ParserEngine {
     return null;
   }
 
-  String? _extractCurrency(String text) {
-    final m = _currency.firstMatch(text);
-    return m?.group(0)?.toUpperCase();
+  /// The first currency in [text]: a core code or Arabic form (any case), or
+  /// an ISO 4217 code from [CurrencyTable] in capitals next to a figure. A
+  /// code that names a merchant ("at USD Store") is not the currency.
+  static String? _extractCurrency(String text) {
+    for (final m in _currency.allMatches(text)) {
+      if (_namesMerchant(text, m.start, m.end)) continue;
+      return m.group(0)!.toUpperCase();
+    }
+    final x = Normalizer.extendedCurrency.firstMatch(text);
+    return x?.group(0);
   }
+
+  static final RegExp _merchantIntroducer =
+      RegExp(r'(?:\bat|@|\bfrom|\bto|لدى|من|في)\s*$', caseSensitive: false);
+
+  static bool _namesMerchant(String text, int start, int end) =>
+      _merchantIntroducer.hasMatch(text.substring(0, start)) &&
+      !RegExp(r'^\s?[0-9]').hasMatch(text.substring(end));
+
+  /// Whether [text] names a currency ([_extractCurrency]).
+  static bool _hasCurrency(String text) => _extractCurrency(text) != null;
 
   /// يستخرج رقم/جزء رقم الحساب البنكي إذا ذُكر صراحةً بجوار كلمة «حساب/account».
   /// أفضل جهد فقط — يُستخدم لاحقًا للمطابقة مع bank_account_number؛ لو لم يطابق
@@ -1641,7 +2209,7 @@ class ParserEngine {
         if (v == null || (v - amount).abs() >= 0.005) continue;
         final from = (m.start - 5).clamp(0, line.length).toInt();
         final to = (m.end + 5).clamp(0, line.length).toInt();
-        if (_currency.hasMatch(line.substring(from, to))) return true;
+        if (_hasCurrency(line.substring(from, to))) return true;
       }
     }
     return false;
@@ -1713,4 +2281,22 @@ class _AmountExtraction {
   final double? foreignAmount;
   final String? foreignAmountText;
   final String? foreignCurrency;
+}
+
+enum _Role { event, figure, text }
+
+/// [ParserEngine.clauseScope]: the normalized [text], its [core] (without
+/// footer sentences) and the sentences that carry an unlabelled amount.
+class ClauseScope {
+  const ClauseScope({
+    required this.text,
+    required this.core,
+    required this.eventSentences,
+    required this.footerCount,
+  });
+
+  final String text;
+  final String core;
+  final List<String> eventSentences;
+  final int footerCount;
 }

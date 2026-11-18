@@ -126,7 +126,10 @@ void main() {
         t.widget<SwitchListTile>(learningSwitch());
 
     for (final locale in ['en', 'ar']) {
-      testWidgets('explained, and ON by default ($locale)', (tester) async {
+      // Decided behaviour change (decision 3.10): ON only after an explicit
+      // choice for this account, no longer by default.
+      testWidgets('explained, and ON once chosen ($locale)', (tester) async {
+        learningPrefs[SharedLearningPreference.keyFor('acct-a')] = 'on';
         set(ConsentState.accepted, ConsentState.accepted);
         await pump(tester, locale: locale);
         final l10n = lookupAppL10n(Locale(locale));
@@ -156,11 +159,22 @@ void main() {
       });
     }
 
-    testWidgets('turning it off is stored for this account only, and back on',
+    // Decided behaviour change (decision 3.10): an unanswered switch is OFF;
+    // only an explicit choice turns it on.
+    testWidgets('unanswered with Cloud and AI on is shown OFF, writing nothing',
         (tester) async {
       set(ConsentState.accepted, ConsentState.accepted);
       await pump(tester);
-      expect(learningPrefs, isEmpty, reason: 'the default writes nothing');
+      expect(tile(tester).value, isFalse);
+      expect(learningPrefs, isEmpty);
+    });
+
+    testWidgets('turning it off is stored for this account only, and back on',
+        (tester) async {
+      learningPrefs[SharedLearningPreference.keyFor('acct-a')] = 'on';
+      set(ConsentState.accepted, ConsentState.accepted);
+      await pump(tester);
+      expect(tile(tester).value, isTrue);
       await tester.tap(learningSwitch());
       await tester.pumpAndSettle();
       expect(tile(tester).value, isFalse);
@@ -177,6 +191,7 @@ void main() {
     testWidgets('one account turning it off leaves another account ON',
         (tester) async {
       learningPrefs[SharedLearningPreference.keyFor('acct-a')] = 'off';
+      learningPrefs[SharedLearningPreference.keyFor('acct-b')] = 'on';
       learningAccount = 'acct-b';
       set(ConsentState.accepted, ConsentState.accepted);
       await pump(tester);
@@ -341,6 +356,9 @@ void main() {
             reason: 'the existing disclosure');
         expect(find.byKey(const Key('initialConsentDecline')), findsNothing,
             reason: 'first-use denial is not a management cancel');
+        // The full disclosure is long: scroll to the action first.
+        await tester.ensureVisible(find.byKey(const Key('consentManageCancel')));
+        await tester.pump();
         await tester.tap(find.byKey(const Key('consentManageCancel')));
         await tester.pumpAndSettle();
         expect(repo.saveCalls, 0);
@@ -372,6 +390,9 @@ void main() {
       await tester.tap(find.byKey(const Key('consentTurnOn')));
       await tester.pumpAndSettle();
       expect(repo.saveCalls, 0, reason: 'opening the disclosure grants nothing');
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pumpAndSettle(const Duration(seconds: 6));
       expect(service.enableCalls, 1, reason: 'the durable enable flow');
@@ -386,6 +407,9 @@ void main() {
       await tester.ensureVisible(find.byKey(const Key('consentTurnOn')));
       await tester.tap(find.byKey(const Key('consentTurnOn')));
       await tester.pumpAndSettle();
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
@@ -396,6 +420,9 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 6));
       expect(repo.settings.cloudConsentState, ConsentState.unset);
       expect(service.syncCalls, 0);
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('consentManageCancel')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('consentManageCancel')));
       await tester.pumpAndSettle();
       expect(status(_en.consentStatusActive), findsNothing);
@@ -408,10 +435,16 @@ void main() {
       await tester.ensureVisible(find.byKey(const Key('consentTurnOn')));
       await tester.tap(find.byKey(const Key('consentTurnOn')));
       await tester.pumpAndSettle();
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pumpAndSettle(const Duration(seconds: 6));
       // The durable pending denial is still held after the failed enable.
       facts = const ConsentLiveFacts(enablePending: true);
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('consentManageCancel')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('consentManageCancel')));
       await tester.pumpAndSettle();
       expect(status(_en.consentStatusTurningOn), findsOneWidget);
@@ -425,6 +458,9 @@ void main() {
       await tester.tap(find.byKey(const Key('consentTurnOn')));
       await tester.pumpAndSettle();
       current = false; // logout / account switch while the sheet is open
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pumpAndSettle(const Duration(seconds: 6));
       expect(repo.settings.cloudConsentState, ConsentState.unset);
@@ -508,6 +544,9 @@ void main() {
       await tester.ensureVisible(turnOn());
       await tester.tap(turnOn());
       await tester.pumpAndSettle();
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pumpAndSettle(const Duration(seconds: 6));
       expect(service.enableCalls, 1);
@@ -522,6 +561,9 @@ void main() {
       await tester.ensureVisible(turnOn());
       await tester.tap(turnOn());
       await tester.pumpAndSettle();
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
@@ -549,6 +591,9 @@ void main() {
       await tester.tap(turnOn());
       await tester.pumpAndSettle();
       expect(service.syncCalls, 0);
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pumpAndSettle(const Duration(seconds: 6));
       expect(service.enableCalls, 1);
@@ -595,6 +640,9 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.byKey(const Key('initialConsentAccept')), findsOneWidget);
           if (cancel) {
+            // The full disclosure is long: scroll to the action first.
+            await tester.ensureVisible(find.byKey(const Key('consentManageCancel')));
+            await tester.pump();
             await tester.tap(find.byKey(const Key('consentManageCancel')));
           } else {
             await tester.tapAt(const Offset(400, 20));
@@ -628,6 +676,9 @@ void main() {
           await tester.pumpAndSettle();
           expect(find.byKey(const Key('initialConsentAccept')), findsOneWidget);
           if (cancel) {
+            // The full disclosure is long: scroll to the action first.
+            await tester.ensureVisible(find.byKey(const Key('consentManageCancel')));
+            await tester.pump();
             await tester.tap(find.byKey(const Key('consentManageCancel')));
           } else {
             await tester.tapAt(const Offset(400, 20));
@@ -650,6 +701,9 @@ void main() {
       await tester.ensureVisible(find.byKey(const Key('consentTurnOn')));
       await tester.tap(find.byKey(const Key('consentTurnOn')));
       await tester.pumpAndSettle();
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pumpAndSettle(const Duration(seconds: 6));
     }
@@ -688,6 +742,9 @@ void main() {
       await tester.tap(find.byKey(const Key('consentTurnOn')));
       await tester.pumpAndSettle();
       current = false;
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pumpAndSettle(const Duration(seconds: 6));
       expect(service.routeCalls, 0);

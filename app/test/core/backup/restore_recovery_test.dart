@@ -149,35 +149,49 @@ void main() {
       'duringJournalCommit',
     ];
 
+    // Decision 3.3: a destination holding records takes the MERGE path (no
+    // deletes); a destination with none takes the full-apply path. Every
+    // fault point is exercised on each path that reaches it.
+    const fullApplyOnly = {'afterFirstDelete', 'afterSeveralDeletes'};
     for (final point in faultPoints) {
-      test('failure at "$point" rolls back — full digest + no committed marker',
-          () async {
-        final src = await openMemory();
-        addTearDown(src.close);
-        await seedSource(src);
-        final dst = await openMemory();
-        addTearDown(dst.close);
-        await seedRich(dst);
+      for (final merge in [true, false]) {
+        if (merge && fullApplyOnly.contains(point)) continue;
+        test(
+            'failure at "$point" rolls back — full digest + no committed '
+            'marker${merge ? '' : ' (new device, full apply)'}', () async {
+          final src = await openMemory();
+          addTearDown(src.close);
+          await seedSource(src);
+          final dst = await openMemory();
+          addTearDown(dst.close);
+          if (merge) {
+            await seedRich(dst);
+          } else {
+            await dst.customStatement(
+                "UPDATE user_settings SET country = 'PRESERVE-ME';");
+          }
 
-        final before = await digest(dst);
-        final plan = await planFrom(src);
-        final result = await RestoreService(dst).execute(
-          plan: plan,
-          onFaultPoint: (p) {
-            if (p == point) throw StateError('injected fault at $point');
-          },
-        );
+          final before = await digest(dst);
+          final plan = await planFrom(src);
+          final result = await RestoreService(dst).execute(
+            plan: plan,
+            onFaultPoint: (p) {
+              if (p == point) throw StateError('injected fault at $point');
+            },
+          );
 
-        expect(result.isCommitted, isFalse,
-            reason: 'a fault must never report a committed restore');
-        expect(await digest(dst), before,
-            reason: 'the complete pre-restore database must be unchanged');
-        expect(await committedMarkers(dst), 0,
-            reason: 'the durable committed marker rolled back with the data');
-        expect(
-            (await dst.customSelect('PRAGMA foreign_key_check;').get()).isEmpty,
-            isTrue);
-      });
+          expect(result.isCommitted, isFalse,
+              reason: 'a fault must never report a committed restore');
+          expect(await digest(dst), before,
+              reason: 'the complete pre-restore database must be unchanged');
+          expect(await committedMarkers(dst), 0,
+              reason: 'the durable committed marker rolled back with the data');
+          expect(
+              (await dst.customSelect('PRAGMA foreign_key_check;').get())
+                  .isEmpty,
+              isTrue);
+        });
+      }
     }
   });
 

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/features/ads/admob_build_config.dart';
 import 'package:money_companion/features/report_ads/ad_consent_service.dart';
 import 'package:money_companion/features/report_ads/report_ads_analytics.dart';
 import 'package:money_companion/features/report_ads/report_ads_debug_config.dart';
@@ -108,6 +109,12 @@ ReportAdsAnalytics _analytics() => ReportAdsAnalytics(
     );
 
 void main() {
+  // Decision 3.2: advertising is compiled out of Version 1 builds. These tests
+  // exercise the ad pipeline itself, as a build made with
+  // --dart-define=QIRSH_ADS_ENABLED=true runs it. The compiled-out behaviour
+  // is covered by test/features/ads/v1_ads_compiled_out_test.dart.
+  setUp(() => AdMobBuildConfig.debugAdsCompiledInOverride = true);
+  tearDown(() => AdMobBuildConfig.debugAdsCompiledInOverride = false);
   // A — consent gathering happens exactly once per session, even under
   // concurrent + repeated calls, and is a no-op after completion.
   test('A: SessionAdConsent gathers once per session', () async {

@@ -146,7 +146,28 @@ class AdMobBuildConfig {
   /// application id has the SDK initialise against whatever the native layer
   /// carries.
   static bool isBannerConfiguredFor(TargetPlatform platform) =>
-      appId(platform) != null && bannerUnitId(platform) != null;
+      adsCompiledIn &&
+      appId(platform) != null &&
+      bannerUnitId(platform) != null;
+
+  /// Decision 3.2 (Version 1 has no advertising): ads are compiled OUT of a
+  /// build unless it is built with `--dart-define=QIRSH_ADS_ENABLED=true`.
+  /// A compile-time constant, so no remote feature flag can turn advertising
+  /// back on in a build made without it. When false, nothing initialises the
+  /// Mobile Ads SDK, nothing calls UMP, and no banner or interstitial is
+  /// loaded ([MobileAdsInitializer.mayServe], `UmpAdConsentService`).
+  static const bool _adsBuildEnabled =
+      bool.fromEnvironment('QIRSH_ADS_ENABLED');
+
+  /// Test-only switch for the existing ad tests, which exercise the ad
+  /// pipeline itself. Ignored in release builds (`kReleaseMode` is a
+  /// compile-time constant), so it cannot enable ads in a shipped binary.
+  @visibleForTesting
+  static bool debugAdsCompiledInOverride = false;
+
+  /// Whether this build may run advertising at all. See [_adsBuildEnabled].
+  static bool get adsCompiledIn =>
+      _adsBuildEnabled || (!kReleaseMode && debugAdsCompiledInOverride);
 
   /// Whether this build has a COMPLETE, usable AdMob configuration for
   /// [platform]. Both halves are required: an ad unit without a matching
@@ -155,7 +176,9 @@ class AdMobBuildConfig {
   /// fallback), which is exactly the silent test-identifier shipping this guards
   /// against. Incomplete ⇒ no ad opportunity ⇒ the report still generates.
   static bool isConfiguredFor(TargetPlatform platform) =>
-      appId(platform) != null && interstitialUnitId(platform) != null;
+      adsCompiledIn &&
+      appId(platform) != null &&
+      interstitialUnitId(platform) != null;
 
   /// True in dev/QA builds where the TEST identifiers are in force. Surfaced so
   /// callers and tests can assert that development never touches production.

@@ -58,6 +58,9 @@ import '../common/motion.dart';
 import '../dashboard/dashboard_providers.dart';
 import '../capture/services/local_notification_service.dart';
 import '../onboarding/ios_shortcut_guide.dart';
+import '../onboarding/country_picker_sheet.dart';
+import '../../core/i18n/country_catalog.dart';
+import '../../domain/finance/currency_scale.dart';
 import '../transactions/transactions_providers.dart';
 import 'settings_providers.dart';
 import 'sync_status_ui.dart';
@@ -184,6 +187,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   String _countryLabel(
       UserSettingsEntity s, List<RemoteCountry> countries, bool loading) {
     final code = s.country.toUpperCase();
+    // Every ISO country is selectable (decision 3.7); the generated list names
+    // them all, the synced catalog only a few.
+    final iso = countryByCode(code);
+    if (iso != null) {
+      return '${iso.flag} ${_catalogName(iso.nameAr, iso.nameEn)}';
+    }
     for (final country in countries) {
       if (country.code.toUpperCase() == code) {
         return '${country.flagEmoji} ${_catalogName(country.nameAr, country.nameEn)}';
@@ -203,28 +212,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return loading ? context.l10n.setLoadingCurrencies : s.currency;
   }
 
-  void _editCountry(
+  Future<void> _editCountry(
     BuildContext context,
     WidgetRef ref,
     UserSettingsEntity settings,
-    List<RemoteCountry> countries,
     List<RemoteCurrency> currencies,
-  ) {
-    _showSettingsPicker(
-      context,
-      ref,
-      title: context.l10n.setCountry,
-      current: settings.country.toUpperCase(),
-      values: _countryValues(countries),
-      save: (value) async {
-        final country = value.toUpperCase();
-        final currency = _preferredCurrencyForCountry(
-            country, currencies, settings.currency);
-        await ref
-            .read(saveCountryCurrencyUseCaseProvider)
-            .call(country, currency);
-      },
-    );
+  ) async {
+    final chosen =
+        await showCountryPicker(context, current: settings.country);
+    if (chosen == null || !context.mounted) return;
+    // Only a currency stored money supports; otherwise the user chooses one.
+    final currency = _preferredCurrencyForCountry(
+            chosen.code, currencies, settings.currency) ??
+        await currencyForCountry(context, chosen);
+    if (currency == null) return;
+    await ref
+        .read(saveCountryCurrencyUseCaseProvider)
+        .call(chosen.code, currency);
+    _refreshSettingsDependents(ref);
   }
 
   void _editCurrency(
@@ -685,10 +690,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: l10n.setCountry,
                 value: _countryLabel(
                     settings, countries, countriesAsync.isLoading),
-                onTap: countries.isEmpty
-                    ? null
-                    : () => _editCountry(
-                        context, ref, settings, countries, currencies),
+                onTap: () => _editCountry(context, ref, settings, currencies),
               ),
               _NavTile(
                 icon: AppLucideIcons.banknote,
@@ -1072,6 +1074,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     // every provider built on it: everything the flow needs comes from `ref` now.
     final inventory = ref.read(unsyncedInventoryServiceProvider);
     final auth = ref.read(authServiceProvider);
+    // V1-067: with Cloud off the sheet must not say changes sync on sign-in.
+    final cloudSyncOn =
+        ref.read(userSettingsProvider).valueOrNull?.cloudProcessingEnabled;
     UnsyncedInventory? pending;
     try {
       pending = await inventory.collect();
@@ -1090,7 +1095,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final failedText = context.l10n.setSignOutFailed;
     final navigator = Navigator.of(context, rootNavigator: true);
     final l10n = context.l10n;
-    final choice = await showSignOutSheet(context, pending: pending);
+    final choice = await showSignOutSheet(context,
+        pending: pending, cloudSyncOn: cloudSyncOn);
     if (choice == null) return;
     if (choice == SignOutChoice.removeData) {
       if (!context.mounted) return;
@@ -1142,33 +1148,37 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Map<String, String> _countryValues(List<RemoteCountry> countries) {
-    return {
-      for (final country in countries)
-        country.code.toUpperCase():
-            '${country.flagEmoji} ${_catalogName(country.nameAr, country.nameEn)}'
-                ' · ${country.phonePrefix}',
-    };
-  }
-
   Map<String, String> _currencyValuesForCountry(
     String country,
     List<RemoteCurrency> currencies,
   ) {
     final normalizedCountry = country.trim().toUpperCase();
-    final scoped = currencies
+    final storable = currencies
+        .where((currency) => isSupportedCurrency(currency.code))
+        .toList(growable: false);
+    final scoped = storable
         .where((currency) => currency.countryCodes.contains(normalizedCountry))
         .toList(growable: false);
-    final source = scoped.isEmpty ? currencies : scoped;
-    return {
+    final source = scoped.isEmpty ? storable : scoped;
+    final values = {
       for (final currency in source)
         currency.code.toUpperCase(): '${currency.code.toUpperCase()}'
             ' · ${_catalogName(currency.nameAr, currency.nameEn)}'
             ' · ${currency.symbol}',
     };
+    // A country outside the synced catalog still offers its own currency.
+    final isoDefault = defaultCurrencyFor(normalizedCountry);
+    if (isoDefault != null) values.putIfAbsent(isoDefault, () => isoDefault);
+    if (values.isEmpty) {
+      for (final code in storableCurrencies) {
+        values[code] = code;
+      }
+    }
+    return values;
   }
 
-  String _preferredCurrencyForCountry(
+  /// A storable currency for [country], or null when the user must choose.
+  String? _preferredCurrencyForCountry(
     String country,
     List<RemoteCurrency> currencies,
     String current,
@@ -1176,7 +1186,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final normalizedCountry = country.trim().toUpperCase();
     final normalizedCurrent = current.trim().toUpperCase();
     final countryCurrencies = currencies
-        .where((currency) => currency.countryCodes.contains(normalizedCountry))
+        .where((currency) =>
+            currency.countryCodes.contains(normalizedCountry) &&
+            isSupportedCurrency(currency.code))
         .toList(growable: false);
     if (countryCurrencies.any(
       (currency) => currency.code.toUpperCase() == normalizedCurrent,
@@ -1186,7 +1198,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (countryCurrencies.isNotEmpty) {
       return countryCurrencies.first.code.toUpperCase();
     }
-    return normalizedCurrent;
+    return defaultCurrencyFor(normalizedCountry);
   }
 
   Future<void> _pickProfileImage(
@@ -2102,8 +2114,12 @@ class _IdentityHeader extends StatelessWidget {
               children: [
                 Icon(AppLucideIcons.trophy, size: 16, color: c.goldText),
                 const SizedBox(width: AppSpacing.s1),
-                Text(_levelLine(context, levelKey, totalXp!),
-                    style: AppTypography.caption(c.textMuted)),
+                // UX-09: wraps at large text instead of overflowing.
+                Flexible(
+                  child: Text(_levelLine(context, levelKey, totalXp!),
+                      textAlign: TextAlign.center,
+                      style: AppTypography.caption(c.textMuted)),
+                ),
               ],
             ),
           ],

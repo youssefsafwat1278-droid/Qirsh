@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../../core/privacy/cloud_egress_gate.dart';
+import '../ads/admob_build_config.dart';
 import '../ads/mobile_ads_initializer.dart';
 import 'report_ads_debug_config.dart';
 
@@ -80,6 +81,8 @@ class UmpAdConsentService implements AdConsentService {
 
   @override
   Future<bool> canRequestAds() async {
+    // Decision 3.2: no UMP call at all in a build without ads compiled in.
+    if (!AdMobBuildConfig.adsCompiledIn) return false;
     try {
       return await _info.canRequestAds();
     } catch (_) {

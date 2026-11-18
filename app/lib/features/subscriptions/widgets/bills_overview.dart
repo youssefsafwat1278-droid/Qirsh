@@ -448,6 +448,35 @@ class _BillRow extends StatelessWidget {
             ? c.cta
             : (stateColor == c.warningText ? c.warning : stateColor);
 
+    // UX-09: at large text the amounts go under the name instead of a side
+    // column that cannot shrink (it overflowed at 3.1x on 320 pt).
+    final largeText = MediaQuery.textScalerOf(context).scale(16) > 20;
+    final amounts = Column(
+      crossAxisAlignment:
+          largeText ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+      children: [
+        Text(
+          formatMoney(bill.amountMoney),
+          textDirection: TextDirection.ltr,
+          style: AppTypography.bodyStrong(c.textPrimary),
+        ),
+        if (!isSub)
+          Text(
+            context.l10n.txnPerInstalment(currLabel),
+            style: AppTypography.caption(c.textSecondary),
+          )
+        else ...[
+          // The currency only when it differs from the base one.
+          if (bill.currency.toUpperCase() != baseCurrency.toUpperCase())
+            Text(currLabel, style: AppTypography.caption(c.textSecondary)),
+          Text(
+            context.l10n.subsPerYearApprox(
+                formatMoney(annualEquivalentMoney(bill))),
+            style: AppTypography.caption(c.textSecondary),
+          ),
+        ],
+      ],
+    );
     return InkWell(
       onTap: () => BillDetailsSheet.show(context, bill),
       child: Padding(
@@ -498,37 +527,17 @@ class _BillRow extends StatelessWidget {
                         const SizedBox(height: 6),
                         _ThinBar(value: progress, color: barColor),
                       ],
+                      if (largeText) ...[
+                        const SizedBox(height: 6),
+                        amounts,
+                      ],
                     ],
                   ),
                 ),
-                const SizedBox(width: AppSpacing.s3),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      formatMoney(bill.amountMoney),
-                      textDirection: TextDirection.ltr,
-                      style: AppTypography.bodyStrong(c.textPrimary),
-                    ),
-                    if (!isSub)
-                      Text(
-                        context.l10n.txnPerInstalment(currLabel),
-                        style: AppTypography.caption(c.textSecondary),
-                      )
-                    else ...[
-                      // The currency only when it differs from the base one.
-                      if (bill.currency.toUpperCase() !=
-                          baseCurrency.toUpperCase())
-                        Text(currLabel,
-                            style: AppTypography.caption(c.textSecondary)),
-                      Text(
-                        context.l10n.subsPerYearApprox(
-                            formatMoney(annualEquivalentMoney(bill))),
-                        style: AppTypography.caption(c.textSecondary),
-                      ),
-                    ],
-                  ],
-                ),
+                if (!largeText) ...[
+                  const SizedBox(width: AppSpacing.s3),
+                  amounts,
+                ],
               ],
             ),
             if (!isSub && bill.totalPurchaseAmount != null)

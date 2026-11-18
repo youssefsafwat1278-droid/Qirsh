@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/di/app_providers.dart';
 import '../../domain/entities/report_models.dart';
 import '../../domain/finance/money.dart';
+import '../../domain/repositories/transaction_repository.dart';
 import '../common/category_catalog.dart';
 import '../dashboard/dashboard_providers.dart' show CategorySlice;
 import '../transactions/transactions_providers.dart';
@@ -107,6 +108,25 @@ DateTime _weekStartSaturday(DateTime now) {
   return DateTime(now.year, now.month, now.day)
       .subtract(Duration(days: daysSinceSat));
 }
+
+/// Owner brief 4.6: whether transactions in the report's account scope are
+/// waiting for review. Totals only count confirmed transactions, so the report
+/// says so when there are some. Re-runs with [reportsProvider].
+final reportsHasPendingReviewProvider = FutureProvider<bool>((ref) async {
+  await ref.watch(reportsProvider.future);
+  final txRepo = ref.watch(transactionRepositoryProvider);
+  final accountRepo = ref.watch(accountRepositoryProvider);
+  final selectedAccountId = ref.watch(activeAccountIdProvider);
+  final selected = selectedAccountId == null
+      ? null
+      : await accountRepo.getById(selectedAccountId);
+  final accountId = (selected ?? await accountRepo.getDefault())?.id;
+  final pending = await txRepo.getTransactionPage(
+    limit: 1,
+    filter: TransactionPageFilter(pendingOnly: true, accountId: accountId),
+  );
+  return pending.isNotEmpty;
+});
 
 final reportsProvider = FutureProvider<ReportsBundle>((ref) async {
   ref.watch(scopedRevisionProvider(kReportsRevisionTables));

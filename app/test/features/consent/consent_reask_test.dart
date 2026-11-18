@@ -107,6 +107,9 @@ void main() {
   testWidgets('"Not now" records the question as asked, writes nothing (stays '
       'denied)', (tester) async {
     await pump(tester);
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentDecline')));
     await tester.pumpAndSettle();
     expect(markCalls, 1);

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/di/app_providers.dart';
+import '../../core/i18n/country_catalog.dart';
 import '../../core/session/app_session.dart';
 import '../../core/theme/app_assets.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
@@ -22,6 +23,7 @@ import '../capture/services/local_notification_service.dart';
 import '../capture/services/native_capture_bridge.dart';
 import '../capture/widgets/sms_auto_capture_enable.dart';
 import '../settings/settings_providers.dart';
+import 'country_picker_sheet.dart';
 import 'onboarding_account_step.dart';
 import 'onboarding_consent_steps.dart';
 import 'onboarding_options.dart';
@@ -67,42 +69,17 @@ class OnboardingSetupScreen extends ConsumerStatefulWidget {
       _OnboardingSetupScreenState();
 }
 
-class _CountryChoice {
-  _CountryChoice(this.code, this.flag, this.name, this.currency);
-  final String code;
-  final String flag;
-  final String name;
-  final String currency;
-}
-
-/// Country names come from the ARB, so the list is built per-locale rather
-/// than being a `const` frozen at class-load.
-///
-/// Resolving by code keeps the SELECTION stable while the LABEL follows the
-/// language.
-List<_CountryChoice> _countriesIn(BuildContext context) => <_CountryChoice>[
-      _CountryChoice('SA', '🇸🇦', context.l10n.countrySA, 'SAR'),
-      _CountryChoice('AE', '🇦🇪', context.l10n.countryAE, 'AED'),
-      _CountryChoice('EG', '🇪🇬', context.l10n.countryEG, 'EGP'),
-      _CountryChoice('KW', '🇰🇼', context.l10n.countryKW, 'KWD'),
-      _CountryChoice('QA', '🇶🇦', context.l10n.countryQA, 'QAR'),
-      _CountryChoice('BH', '🇧🇭', context.l10n.countryBH, 'BHD'),
-      _CountryChoice('OM', '🇴🇲', context.l10n.countryOM, 'OMR'),
-      _CountryChoice('JO', '🇯🇴', context.l10n.countryJO, 'JOD'),
-    ];
-
 class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
   static const _stepCount = 6;
   static const _accountStep = 3;
 
   final _done = List<bool>.filled(_stepCount, false);
-  // The CODE is state; the label is not. Storing a `_CountryChoice` meant
-  // holding a localized name in state, which would keep whichever language was
-  // active when the screen was first built.
-  String _countryCode = 'SA';
-  _CountryChoice _selectedCountry(BuildContext context) =>
-      _countriesIn(context).firstWhere((c) => c.code == _countryCode,
-          orElse: () => _countriesIn(context).first);
+  // The CODE is state; the label is not, so the name follows the language.
+  // Nothing is preselected: the user picks from every ISO country (3.7).
+  String? _countryCode;
+  // The base currency the account and Shortcut steps use. A starting
+  // preference only; the parser never takes it as a message's currency proof.
+  String _currency = 'SAR';
 
   bool _busy = false;
   int _currentStep = 0;
@@ -125,12 +102,10 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
     final settings =
         await ref.read(userSettingsRepositoryProvider).getSettings();
     if (!mounted) return;
-    final currency = settings.currency.trim().toUpperCase();
-    final match =
-        _countriesIn(context).where((item) => item.currency == currency);
-    if (match.isNotEmpty) {
-      setState(() => _countryCode = match.first.code);
-    }
+    setState(() {
+      _countryCode = countryByCode(settings.country)?.code;
+      _currency = settings.currency.trim().toUpperCase();
+    });
   }
 
   bool get _canFinish => _done.every((done) => done);
@@ -155,23 +130,35 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
   }
 
   // ── Step 0: country / currency ────────────────────────────────────────
-  Future<void> _saveCountry(_CountryChoice choice) async {
+  Future<void> _chooseCountry() async {
     if (_busy) return;
     HapticFeedback.selectionClick();
+    final choice = await showCountryPicker(context, current: _countryCode);
+    if (choice == null || !mounted) return;
+    // Only a currency stored money supports: the country's default, or the
+    // user's explicit choice when the app cannot store that one.
+    final currency = await currencyForCountry(context, choice);
+    if (currency == null || !mounted) return;
+    await _saveCountry(choice, currency);
+  }
+
+  Future<void> _saveCountry(IsoCountry choice, String currency) async {
+    if (_busy) return;
     setState(() {
       _countryCode = choice.code;
+      _currency = currency;
       _busy = true;
     });
     try {
       ref.read(onboardingSelectionProvider.notifier).state = OnboardingCountry(
         code: choice.code,
-        name: choice.name,
-        currency: choice.currency,
-        currencyCode: choice.currency,
+        name: choice.nameIn(Localizations.localeOf(context).languageCode),
+        currency: currency,
+        currencyCode: currency,
       );
       await ref
           .read(saveCountryCurrencyUseCaseProvider)
-          .call(choice.code, choice.currency);
+          .call(choice.code, currency);
       _markDone(0);
     } catch (error) {
       if (!mounted) return;
@@ -359,7 +346,7 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
             onDark: false, onDone: () => _markDone(2));
       case _accountStep:
         return OnboardingAccountStep(
-          currency: _selectedCountry(context).currency,
+          currency: _currency,
           onDark: false,
           onDone: () => _markDone(_accountStep),
         );
@@ -469,29 +456,11 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
           ),
         ],
       ),
-      // Explicit pill surfaces keep selected and unselected contrast independent
-      // of Material chip defaults in both themes.
-      // v2: a fixed 3-column grid of equal 52pt chips (was ragged 2/3/3).
-      control: LayoutBuilder(builder: (context, constraints) {
-        const gap = 8.0;
-        final width = (constraints.maxWidth - gap * 2) / 3;
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final choice in _countriesIn(context))
-              SizedBox(
-                width: width,
-                height: 52,
-                child: _CountryPill(
-                  choice: choice,
-                  selected: _countryCode == choice.code,
-                  onTap: _busy ? null : () => _saveCountry(choice),
-                ),
-              ),
-          ],
-        );
-      }),
+      control: _CountryField(
+        country: _countryCode == null ? null : countryByCode(_countryCode!),
+        currency: _currency,
+        onTap: _busy ? null : _chooseCountry,
+      ),
     );
   }
 
@@ -533,7 +502,7 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
       (l10n.setupShortcutStep2Title, l10n.setupShortcutStep2Body),
       (
         l10n.setupShortcutStep3Title,
-        l10n.setupShortcutStep3Body(_selectedCountry(context).currency)
+        l10n.setupShortcutStep3Body(_currency)
       ),
       (l10n.setupShortcutStep4Title, l10n.setupShortcutStep4Body),
       (l10n.setupShortcutStep5Title, l10n.setupShortcutStep5Body),
@@ -551,7 +520,7 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
               children: [
                 const ShortcutGuideVideo(),
                 const SizedBox(height: 12),
-                ShortcutSetupActions(currencyCode: _selectedCountry(context).currency),
+                ShortcutSetupActions(currencyCode: _currency),
                 const SizedBox(height: 12),
                 ExpansionTile(
                   title: Text(l10n.shortcutManualSteps),
@@ -710,65 +679,80 @@ class _OnboardingSetupScreenState extends ConsumerState<OnboardingSetupScreen> {
   }
 }
 
-/// One country/currency choice on the setup step.
-///
-/// Deliberately not a `ChoiceChip`: see the note at its call site. Material's
-/// chip defaults must not override the explicit selected/unselected surfaces.
-class _CountryPill extends StatelessWidget {
-  const _CountryPill({
-    required this.choice,
-    required this.selected,
+/// The country step's single control: the chosen country (or a prompt to
+/// choose one) and the honest bank-coverage note.
+class _CountryField extends StatelessWidget {
+  const _CountryField({
+    required this.country,
+    required this.currency,
     required this.onTap,
   });
 
-  final _CountryChoice choice;
-  final bool selected;
+  final IsoCountry? country;
+  final String currency;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    // v2 chip: card + soft stroke; selected = action.soft fill, 1.5pt action
-    // stroke, action.text label (§3.0 02–03).
-    final fill = selected ? c.ctaSoft : c.surface;
-    final border = selected ? c.cta : c.strokeSoft;
-    final foreground = selected ? c.actionText : c.textPrimary;
-    return Material(
-      type: MaterialType.transparency,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppRadius.button),
-        child: Ink(
-          decoration: ShapeDecoration(
-            color: fill,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadius.button),
-              side: BorderSide(color: border, width: selected ? 1.5 : 1),
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 6),
-            child: Center(
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text.rich(
-                  TextSpan(children: [
-                    TextSpan(text: '${choice.name}\n'),
-                    TextSpan(
-                      text: '${choice.flag} ${choice.currency}',
-                      style: AppTypography.overline(
-                          selected ? c.actionText : c.textMuted),
+    final l = context.l10n;
+    final chosen = country;
+    final language = Localizations.localeOf(context).languageCode;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            key: const ValueKey('setup-country-field'),
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+            child: Ink(
+              decoration: ShapeDecoration(
+                color: chosen == null ? c.surface : c.ctaSoft,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.button),
+                  side: BorderSide(
+                      color: chosen == null ? c.strokeSoft : c.cta,
+                      width: chosen == null ? 1 : 1.5),
+                ),
+              ),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 56),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.s4, vertical: AppSpacing.s3),
+                  child: Row(children: [
+                    if (chosen != null) ...[
+                      ExcludeSemantics(
+                          child: Text(chosen.flag,
+                              style: const TextStyle(fontSize: 22))),
+                      const SizedBox(width: AppSpacing.s3),
+                    ],
+                    Expanded(
+                      child: Text(
+                        chosen == null
+                            ? l.countryPickerChoose
+                            : '${chosen.nameIn(language)} · $currency',
+                        style: AppTypography.bodyStrong(
+                            chosen == null ? c.textPrimary : c.actionText),
+                      ),
                     ),
+                    Icon(Icons.expand_more_rounded,
+                        color: chosen == null ? c.textPrimary : c.actionText),
                   ]),
-                  textAlign: TextAlign.center,
-                  style: AppTypography.caption(foreground)
-                      .copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
             ),
           ),
         ),
-      ),
+        const SizedBox(height: AppSpacing.s3),
+        Text(
+          l.countryCoverageNote,
+          textAlign: TextAlign.center,
+          style: AppTypography.caption(c.textSecondary).copyWith(height: 1.5),
+        ),
+      ],
     );
   }
 }

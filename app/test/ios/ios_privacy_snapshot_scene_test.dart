@@ -30,6 +30,11 @@ void main() {
         contains('installPrivacySnapshotView(in: window)'));
   });
 
+  test('B24: the cover goes up as soon as the scene resigns active', () {
+    expect(_body(scene, 'func sceneWillResignActive('),
+        contains('installPrivacySnapshotView(in: window)'));
+  });
+
   test('the cover is removed when the scene returns', () {
     expect(_body(scene, 'func sceneWillEnterForeground('),
         contains('removePrivacySnapshotView()'));

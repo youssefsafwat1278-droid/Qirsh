@@ -47,8 +47,14 @@ void main() {
         src.indexOf('private func scheduleLocalParsedOrGenericNotification(');
     expect(start, greaterThan(0));
     final body = src.substring(start, start + 800);
-    expect(body, contains('PreviewParser.shared'));
-    expect(body, contains('result.isHighConfidence'));
+    // V1-035 (2026-11-17): the legacy branch now uses the same localized
+    // builder as the v2 path, whose only local source is localDetail().
+    expect(body, contains('detailedCaptureNotification()'));
     expect(body, isNot(contains('URLSession')));
+    final local = src.substring(
+        src.indexOf('private func localDetail() -> CaptureDetail? {'));
+    final localBody = local.substring(0, local.indexOf('\n  }\n'));
+    expect(localBody, contains('PreviewParser.shared'));
+    expect(localBody, contains('result.isHighConfidence'));
   });
 }

@@ -71,6 +71,15 @@ class SceneDelegate: FlutterSceneDelegate {
     }
   }
 
+  // B24: cover as soon as the scene stops being active (app switcher swipe,
+  // Control Center, a system sheet), not only once it is in the background,
+  // so the switcher never catches the live screen mid-transition. Removed again
+  // in sceneDidBecomeActive. Idempotent: a second install is a no-op.
+  override func sceneWillResignActive(_ scene: UIScene) {
+    super.sceneWillResignActive(scene)
+    (UIApplication.shared.delegate as? AppDelegate)?.installPrivacySnapshotView(in: window)
+  }
+
   // IOS-03: the app-delegate background/foreground callbacks are not delivered
   // under the scene lifecycle, so the app-switcher cover is driven from here.
   override func sceneDidEnterBackground(_ scene: UIScene) {

@@ -338,8 +338,12 @@ class _ManualTransactionSheetState
     // The budget-scope sentinel is not a transaction category (same filter
     // as the change-category sheet), and nothing is pre-selected so the
     // existing «pick a category» check applies to a new entry.
+    // FR-12: a legacy row stored under the sentinel keeps it as its own
+    // choice, so editing shows the stored category instead of an empty field.
     final categories = catalog.all.where((category) {
-      if (category.key == BudgetEntity.allExpensesCategoryKey) return false;
+      if (category.key == BudgetEntity.allExpensesCategoryKey) {
+        return _categoryId != null && category.id == _categoryId;
+      }
       if (_type == TransactionTypeEntity.income) {
         return category.entity.isIncome;
       }

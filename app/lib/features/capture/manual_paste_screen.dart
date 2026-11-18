@@ -31,6 +31,7 @@ import '../transactions/transactions_screen.dart'
 import '../transactions/widgets/confirm_transaction_sheet.dart';
 import '../common/top_banner.dart';
 import 'manual_paste_splitter.dart';
+import '../../l10n/app_localizations.dart';
 import '../common/app_header.dart';
 import '../common/app_status_pill.dart';
 
@@ -43,6 +44,21 @@ bool pasteSaysNotCompleted({
   required bool savedForAnalysis,
 }) =>
     !savedForAnalysis && TransactionStateCues.isNotCompleted(message);
+
+/// V1-066 — the batch status of a message that produced no transaction uses
+/// the same distinction as the single-message wording: not completed (declined
+/// / on hold), kept in Smart Inbox for analysis, or not understood.
+@visibleForTesting
+String pasteBatchNotTransactionLabel(
+  AppL10n l10n, {
+  required String message,
+  required bool savedForAnalysis,
+}) =>
+    pasteSaysNotCompleted(message: message, savedForAnalysis: savedForAnalysis)
+        ? l10n.pasteNotCompletedShort
+        : savedForAnalysis
+            ? l10n.pasteSavedForAnalysisShort
+            : l10n.pasteNotUnderstood;
 
 class ManualPasteScreen extends ConsumerStatefulWidget {
   const ManualPasteScreen({super.key, this.onTransactionAdded});
@@ -556,7 +572,7 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
 
     // [topInset]: the full-screen page runs under the glass nav bar, so its
     // content starts below it (0 in the sheet).
-    Widget scroll(double topInset) => SingleChildScrollView(
+    Widget scroll(double topInset, {Widget? footer}) => SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(AppSpacing.gutter,
           topInset + AppSpacing.s3, AppSpacing.gutter, AppSpacing.gutter),
       child: Column(
@@ -594,12 +610,17 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
               summary: summary,
             ),
           ],
+          if (footer != null) ...[
+            const SizedBox(height: AppSpacing.s4),
+            footer,
+          ],
         ],
       ),
     );
 
     // v2 QStickyDock: the one primary, disabled until there is text; in the
     // sheet it rides above the keyboard.
+    final largeText = MediaQuery.textScalerOf(context).scale(16) > 20;
     final insets = MediaQuery.viewInsetsOf(context).bottom;
     final dock = DecoratedBox(
       decoration: BoxDecoration(
@@ -607,9 +628,9 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
       ),
       child: Padding(
         padding: EdgeInsets.fromLTRB(
-          AppSpacing.gutter,
+          largeText ? 0 : AppSpacing.gutter,
           AppSpacing.s3,
-          AppSpacing.gutter,
+          largeText ? 0 : AppSpacing.gutter,
           AppSpacing.s3 +
               (widget.fullScreen
                   ? MediaQuery.paddingOf(context).bottom
@@ -617,8 +638,10 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
                       ? insets
                       : MediaQuery.paddingOf(context).bottom),
         ),
-        child: SizedBox(
-          height: AppSpacing.buttonHeight,
+        // UX-09: a minimum, not a fixed, height — the label grows with text.
+        child: ConstrainedBox(
+          constraints:
+              const BoxConstraints(minHeight: AppSpacing.buttonHeight),
           child: ValueListenableBuilder<TextEditingValue>(
             valueListenable: _controller,
             builder: (context, value, _) => FilledButton(
@@ -648,12 +671,17 @@ class _ManualPasteContentState extends ConsumerState<_ManualPasteContent> {
       ),
     );
 
-    Widget content(double topInset) => Column(
-      children: [
-        Expanded(child: scroll(topInset)),
-        dock,
-      ],
-    );
+    // UX-09: above 1.25x the «Analyse» button scrolls with the content instead
+    // of staying pinned, so the larger title and button cannot leave the
+    // sheet without room (it overflowed at the largest size on a small phone).
+    Widget content(double topInset) => largeText
+        ? scroll(topInset, footer: dock)
+        : Column(
+            children: [
+              Expanded(child: scroll(topInset)),
+              dock,
+            ],
+          );
     if (!widget.fullScreen) return content(0);
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -705,7 +733,10 @@ class _PasteBatchItem {
           : context.l10n.pasteAdded,
       AddTransactionOutcome.duplicate => context.l10n.pasteDuplicate,
       AddTransactionOutcome.suspiciousDuplicate => context.l10n.pasteSimilar,
-      AddTransactionOutcome.notTransaction => context.l10n.pasteNotUnderstood,
+      AddTransactionOutcome.notTransaction => pasteBatchNotTransactionLabel(
+          context.l10n,
+          message: message,
+          savedForAnalysis: savedForAnalysis),
     };
   }
 }

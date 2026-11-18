@@ -2402,6 +2402,10 @@ class AppL10nAr extends AppL10n {
   String get rptTabDetails => 'التفاصيل';
 
   @override
+  String get rptPendingNotIncluded =>
+      'العمليات التي تنتظر المراجعة غير محتسبة في هذه المجاميع.';
+
+  @override
   String get rptUnusualSpend => 'صرف غير معتاد';
 
   @override
@@ -2828,7 +2832,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String pasteSummaryLine(int added, int duplicate, int review, int failed) {
-    return 'أُضيفت $added · مكرر $duplicate · يحتاج مراجعة $review · غير مفهوم $failed';
+    return 'أُضيفت $added · مكرر $duplicate · يحتاج مراجعة $review · لم تُسجَّل $failed';
   }
 
   @override
@@ -2944,7 +2948,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get privSharedLearningBody =>
-      'مفعّل افتراضيًا ويمكنك إيقافه في أي وقت. عند تشغيله، في كل مرة تختار «تذكّر التصنيف لهذا المتجر» يرسل قِرش اسم المتجر والتصنيف الذي اخترته فقط. لا تُرسَل أبدًا المبالغ أو التواريخ أو الرسائل أو التحويلات أو أسماء الأشخاص. تُجمَع الاختيارات مع اختيارات المستخدمين الآخرين. ويُضاف الاختيار إلى التصنيفات التي يتلقاها الجميع عندما يتفق عليه 6 مستخدمين على الأقل ويكونون أغلبية واضحة (75%)، أو بعد مراجعة مشرف، ويمكن للمشرف إزالته في أي وقت. يتطلب تشغيل المزامنة السحابية والتحليل الذكي.';
+      'يُفعَّل عند موافقتك على المزامنة السحابية والتحليل الذكي، ويمكنك إيقافه في أي وقت. عند تشغيله، في كل مرة تختار «تذكّر التصنيف لهذا المتجر» يرسل قِرش اسم المتجر والتصنيف الذي اخترته فقط. لا تُرسَل أبدًا المبالغ أو التواريخ أو الرسائل أو التحويلات أو أسماء الأشخاص. تُجمَع الاختيارات مع اختيارات المستخدمين الآخرين. ويُضاف الاختيار إلى التصنيفات التي يتلقاها الجميع عندما يتفق عليه 6 مستخدمين على الأقل ويكونون أغلبية واضحة (75%)، أو بعد مراجعة مشرف، ويمكن للمشرف إزالته في أي وقت. يتطلب تشغيل المزامنة السحابية والتحليل الذكي.';
 
   @override
   String get privSharedLearningNeedsConsent =>
@@ -2952,11 +2956,11 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get privDeleteAccountBody =>
-      'سيتم جدولة حذف حسابك وكل بياناتك (العمليات، الأهداف، الميزانيات، النسخ الاحتياطي) نهائيًا بعد 30 يومًا. يمكنك التراجع عن الحذف خلال هذه المدة من نفس الشاشة قبل تسجيل الدخول مرة أخرى. سيتم تسجيل خروجك من هذا الجهاز الآن.';
+      'حذف حسابك نهائي ولا يمكن التراجع عنه. يُحذف حسابك والبيانات المحفوظة فيه ونسخك الاحتياطية السحابية وصورة ملفك الشخصي. قد تستغرق بعض خطوات الخادم بضع دقائق حتى تكتمل.';
 
   @override
   String privScheduledForDeletion(String date) {
-    return 'حسابك مجدول للحذف بتاريخ $date';
+    return 'لن يُنفَّذ طلب حذف قُدِّم من إصدار سابق من قرش (بتاريخ $date)، وحسابك ما زال نشطًا. لحذف حسابك استخدم «حذف الحساب وكل بياناتي».';
   }
 
   @override
@@ -2996,19 +3000,20 @@ class AppL10nAr extends AppL10n {
   String get privScheduleFailed => 'تعذّر جدولة الحذف الآن. حاول مجدداً.';
 
   @override
-  String get privCancelDeleteTitle => 'إلغاء حذف الحساب؟';
+  String get privCancelDeleteTitle => 'إزالة الطلب السابق؟';
 
   @override
-  String get privCancelDeleteBody => 'سيبقى حسابك وبياناتك كما هي.';
+  String get privCancelDeleteBody =>
+      'يزيل هذا التنبيه فقط. سيبقى حسابك وبياناتك كما هي.';
 
   @override
   String get privKeepAccount => 'تراجع';
 
   @override
-  String get privCancelDeletion => 'إلغاء الحذف';
+  String get privCancelDeletion => 'إزالة هذا التنبيه';
 
   @override
-  String get privCancelFailed => 'تعذّر إلغاء الحذف الآن. حاول مجدداً.';
+  String get privCancelFailed => 'تعذّرت إزالة التنبيه الآن. حاول مجدداً.';
 
   @override
   String get privTitle => 'الخصوصية والبيانات';
@@ -3216,7 +3221,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get pasteNotCompleted =>
-      'هذه العملية مرفوضة أو لم تكتمل — لم يُسجَّل شيء.';
+      'هذه العملية مرفوضة أو معلّقة أو لم تكتمل بعد — لم يُسجَّل شيء. إن كانت قد تمّت فعلًا، أضِفها كعملية جديدة.';
 
   @override
   String get pasteNothingToOpen => 'لا توجد عملية لفتحها لهذه الرسالة.';
@@ -3245,6 +3250,12 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get pasteNotUnderstood => 'غير مفهوم';
+
+  @override
+  String get pasteNotCompletedShort => 'لم تكتمل';
+
+  @override
+  String get pasteSavedForAnalysisShort => 'محفوظة للتحليل';
 
   @override
   String get pasteSummary => 'ملخص الرسائل';
@@ -3359,7 +3370,7 @@ class AppL10nAr extends AppL10n {
   String get txdOriginalCurrency => 'بالعملة الأصلية';
 
   @override
-  String get txdBalanceAfter => 'الرصيد بعد';
+  String get txdBalanceAfter => 'الرصيد الذي أبلغ عنه البنك';
 
   @override
   String get txdNote => 'ملاحظة';
@@ -3400,6 +3411,13 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get txdConfirmedToast => 'تم تأكيد العملية.';
+
+  @override
+  String get txdMoveToReview => 'نقل إلى المراجعة';
+
+  @override
+  String get txdMovedToReviewToast =>
+      'نُقلت إلى المراجعة. لن تُحسب في إجمالياتك حتى تؤكدها.';
 
   @override
   String get txdDeleteTitle => 'حذف العملية؟';
@@ -3669,7 +3687,8 @@ class AppL10nAr extends AppL10n {
   String get homeSteady => 'وضعك مستقر';
 
   @override
-  String get homeReviewToStayAccurate => 'راجعها لتبقى أرصدتك دقيقة';
+  String get homeReviewToStayAccurate =>
+      'العمليات التي تنتظر المراجعة لا تُحتسب في مجاميعك حتى تؤكدها.';
 
   @override
   String get homeAvailableFromMonthBudget => 'متاح من ميزانية الشهر';
@@ -5899,7 +5918,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get rpConfirmBody =>
-      'ستحل النسخة الاحتياطية محل بياناتك الحالية على هذا الجهاز. لا يمكن التراجع بعد التأكيد. هل تريد المتابعة؟';
+      'تدمج الاستعادة هذه النسخة الاحتياطية مع البيانات الموجودة على هذا الجهاز. تُستعاد السجلات غير الموجودة هنا، ويبقى كل ما أضفته أو عدّلته أو حذفته بعد إنشاء النسخة كما هو الآن؛ وإذا وُجد السجل في الاثنين تُحفظ النسخة الأحدث تعديلًا. وعلى جهاز لا يحتوي على سجلات بعد تُستعاد النسخة كاملة بما فيها الإعدادات. تُوقف المزامنة السحابية والتحليل الذكي بعد الاستعادة حتى تشغّلهما من جديد. هل تريد المتابعة؟';
 
   @override
   String get rpCancel => 'إلغاء';
@@ -6021,15 +6040,15 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get smartConsentBullet1 =>
-      'تُرسل الرسائل البنكية الملتقطة، ومنها رسائل SMS البنكية التي تُقرأ تلقائيًا على أندرويد، إلى خوادم قرش بعد إزالة أرقام البطاقات والحسابات والهواتف والرموز. قد تعالج خدمة Google Gemini هذا النص لتحديد المبلغ والتاجر والبنك، وقد تتلقى Google Places أسماء التجار. تبقى فيه المبالغ والتجار والأرصدة، لذا فهو ليس مجهول الهوية.';
+      'رسائل البنوك: تُرسل رسائل البنوك التي تلتقطها إلى خوادم قرش بعد إزالة أرقام البطاقات والحسابات والهواتف والرموز، مع إخفاء أسماء الأشخاص حين يتعرّف عليها التطبيق. قد تعالج خدمة Google Gemini هذا النص، مع ما قرأه التطبيق منه على جهازك وعملة الحساب المطابق لها، لتحديد المبلغ والتاجر والتاريخ ونوع العملية، وقد تتلقى Google Places أسماء التجار. وإذا لم يتعرّف قِرش على البنك المرسِل فقد يُرسَل اسم المرسِل لتحديد البنك. تحتفظ خوادم قرش بنص الرسالة حتى تنتهي معالجتها، و7 أيام كحد أقصى. تبقى فيه المبالغ والتجار والأرصدة وآخر أرقام البطاقات، لذا فهو ليس مجهول الهوية.';
 
   @override
   String get smartConsentBullet2 =>
-      'كما تتم مزامنة معاملاتك وحساباتك وميزانياتك وأهدافك وإعداداتك ونسخها احتياطيًا في حسابك السحابي على قِرش.';
+      'بياناتك: تتم مزامنة معاملاتك وحساباتك وبطاقاتك وميزانياتك وأهدافك وخططك واشتراكاتك وقواعد التصنيف التي تعلّمها التطبيق، والبنك الذي ينتمي إليه كل مرسِل رسائل، وعناصر صندوق الوارد الذكي وإنجازاتك، وملفك الشخصي (الاسم ورقم الهاتف وتاريخ الميلاد والصورة) وإعداداتك، مع حسابك السحابي على قِرش، إضافةً إلى تقارير الأعطال وأحداث توصيل الإشعارات. وإذا أنشأت نسخة احتياطية مشفّرة فإنها تُحفظ هناك أيضًا.';
 
   @override
   String get smartConsentBullet3 =>
-      'بعد الموافقة، تعمل المزامنة والتحليلات المسموح بها تلقائيًا عند توفر الخدمة. يمكنك سحب أي موافقة من الإعدادات ← الخصوصية. المتابعة محليًا لا ترسل هذه البيانات.';
+      'بعد الموافقة، تعمل المزامنة وتحليل الرسائل تلقائيًا، بما في ذلك إعادة المحاولة والمعالجة في الخلفية عندما يسمح هاتفك بذلك. الموافقة على هذا الجهاز لا تفعّلهما على أجهزتك الأخرى.';
 
   @override
   String get smartConsentEnable => 'تفعيل التحليل الذكي والمزامنة السحابية';
@@ -6233,6 +6252,15 @@ class AppL10nAr extends AppL10n {
   String signOutUnsyncedKeepBody(String list) {
     return 'بعض البيانات لم تصل إلى السحابة بعد: $list. تبقى على هذا الجهاز وتُزامَن عند تسجيل دخولك مجددًا.';
   }
+
+  @override
+  String signOutUnsyncedCloudOffBody(String list) {
+    return 'بعض التغييرات موجودة على هذا الجهاز فقط: $list. تبقى على هذا الجهاز ولا تُزامَن ما دام التحليل الذكي والمزامنة السحابية متوقفًا.';
+  }
+
+  @override
+  String get signOutCloudOffNote =>
+      'التحليل الذكي والمزامنة السحابية متوقف، لذا تبقى تغييراتك على هذا الجهاز ولا تُزامَن.';
 
   @override
   String get removeDataTitle => 'حذف البيانات من هذا الجهاز؟';
@@ -6472,7 +6500,7 @@ class AppL10nAr extends AppL10n {
   String get restoreCloudOnly => 'استعادة بالمزامنة السحابية فقط';
 
   @override
-  String get initialConsentAccept => 'أوافق على المزامنة والتحليل الذكي';
+  String get initialConsentAccept => 'أوافق وفعّل';
 
   @override
   String get initialConsentDecline => 'المتابعة محليًا';
@@ -6540,10 +6568,10 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get consentWithdrawBody =>
-      'تتوقف المزامنة والتحليل فورًا معًا. تبقى بياناتك على هذا الجهاز، ويمكنك تفعيلهما مجددًا من هنا في أي وقت.';
+      'تتوقف المزامنة السحابية والتحليل الذكي معًا. يتوقف قِرش عن الإرسال من هذا الجهاز، بما في ذلك المزامنة وتحليل الرسائل وإعادة المحاولة ومساهمات التعلّم المشترك الجديدة. لا يمكن استرجاع ما أُرسل بالفعل، وتبقى البيانات الموجودة في حسابك على قِرش حتى تحذف حسابك. تبقى بياناتك على هذا الجهاز، ويمكنك تفعيلهما مجددًا من هنا في أي وقت.';
 
   @override
-  String get consentWithdrawConfirm => 'إيقاف';
+  String get consentWithdrawConfirm => 'إيقافهما معًا';
 
   @override
   String get consentWithdrawFailed =>
@@ -6558,7 +6586,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get deleteAccountIntro =>
-      'احذف حساب قرش والبيانات المحفوظة فيه نهائيًا وعلى الفور. ستؤكد هويتك أولًا عبر Apple أو طريقة الدخول التي تستخدمها.';
+      'احذف حساب قرش والبيانات المحفوظة فيه نهائيًا، ومنها نسخك الاحتياطية السحابية وصورة ملفك الشخصي. الحذف نهائي ولا يمكن التراجع عنه. ستؤكد هويتك أولًا عبر Apple أو طريقة الدخول التي تستخدمها.';
 
   @override
   String get deleteAccountAction => 'حذف الحساب';
@@ -6568,7 +6596,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get deleteAccountConfirmBody =>
-      'سيُحذف حسابك وبياناته نهائيًا وعلى الفور. أكّد هويتك عبر Apple أو طريقة الدخول التي تستخدمها للمتابعة. لا يمكن التراجع عن الحذف.';
+      'سيُحذف حسابك وبياناته نهائيًا. يبدأ الحذف فور تأكيدك، وقد تستغرق بعض خطوات الخادم بضع دقائق حتى تكتمل، وسنُعلمك عند اكتماله. أكّد هويتك عبر Apple أو طريقة الدخول التي تستخدمها للمتابعة. لا يمكن التراجع عن الحذف.';
 
   @override
   String get deleteAccountConfirmAction => 'حذف نهائي';
@@ -6581,7 +6609,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get deleteAccountAcceptedBody =>
-      'استلمنا طلب الحذف، لكن حسابك لم يُحذف بعد. يمكنك متابعته أو إلغاؤه من الخصوصية والبيانات.';
+      'استلمنا طلب الحذف وبدأ الحذف، لكن حسابك لم يُحذف بعد. قد تستغرق بعض خطوات الخادم بضع دقائق. الحذف نهائي ولا يمكن إلغاؤه. تحقق مرة أخرى بعد قليل.';
 
   @override
   String get deleteAccountFailed => 'تعذّر إكمال حذف حسابك. حاول مجددًا.';
@@ -6868,7 +6896,7 @@ class AppL10nAr extends AppL10n {
   String get homePrivacyToggle => 'إظهار المبالغ أو إخفاؤها';
 
   @override
-  String get accTotalBalance => 'إجمالي الأرصدة';
+  String get accTotalBalance => 'إجمالي الأرصدة المُدخلة يدويًا';
 
   @override
   String get achBadges => 'الشارات';
@@ -7088,6 +7116,95 @@ class AppL10nAr extends AppL10n {
   @override
   String get languageFirstBody =>
       'اختار اللغة اللي تحب تستخدم بيها قِرش. تقدر تغيّرها بعدين.';
+
+  @override
+  String get smartConsentIntro =>
+      'يعمل قِرش بالكامل على هذا الجهاز دون السحابة. إذا وافقت، يُفعَّل كل ما يلي معًا.';
+
+  @override
+  String get smartConsentHeadSent => 'ما الذي يُرسَل';
+
+  @override
+  String get smartConsentHeadWho => 'من يتلقاها';
+
+  @override
+  String get smartConsentWho =>
+      'خوادم قِرش المستضافة لدى Supabase، وGoogle (خدمتا Gemini API وPlaces API)، وSentry لتقارير الأعطال. تعالج Supabase وGemini وSentry البيانات نيابةً عن قِرش.';
+
+  @override
+  String get smartConsentHeadWhy => 'لماذا';
+
+  @override
+  String get smartConsentWhy =>
+      'لقراءة رسائل البنوك بدقة أكبر، ولإبقاء بياناتك متزامنة بين أجهزتك وقابلة للاستعادة بعد إعادة التثبيت، ولإصلاح الأعطال.';
+
+  @override
+  String get smartConsentHeadSync => 'كيف تعمل المزامنة';
+
+  @override
+  String get smartConsentHeadShared => 'التعلّم المشترك للتصنيفات';
+
+  @override
+  String get smartConsentShared =>
+      'التعلّم المشترك للتصنيفات مشمول. عندما تختار «تذكّر التصنيف لهذا المتجر» يرسل قِرش اسم المتجر والتصنيف الذي اخترته، مربوطين برمز أحادي الاتجاه بدلًا من معرّف حسابك. لا تُرسَل أبدًا المبالغ أو التواريخ أو الرسائل أو التحويلات أو أسماء الأشخاص. ويُضاف الاختيار إلى التصنيفات التي يتلقاها الجميع عندما يتفق عليه 6 مستخدمين على الأقل ويكونون أغلبية واضحة (75%)، أو بعد مراجعة مشرف. يمكنك إيقاف التعلّم المشترك وحده من الإعدادات ← الخصوصية.';
+
+  @override
+  String get smartConsentHeadOff => 'الإيقاف';
+
+  @override
+  String get smartConsentOff =>
+      'يمكنك إيقاف المزامنة السحابية والتحليل الذكي معًا في أي وقت من الإعدادات ← الخصوصية. يتوقف الإرسال عندها، بما في ذلك إعادة المحاولة ومساهمات التعلّم المشترك الجديدة. لا يمكن استرجاع ما أُرسل بالفعل، وتبقى البيانات الموجودة في حسابك على قِرش حتى تحذف حسابك.';
+
+  @override
+  String get smartConsentLocal =>
+      'المتابعة محليًا: يبقى كل شيء على هذا الجهاز. لا يُرسَل شيء مما سبق، وتُقرأ الرسائل على الجهاز فقط، ولا توجد مزامنة سحابية أو نسخ احتياطي سحابي.';
+
+  @override
+  String get sharedLearningUpdateTitle => 'التعلّم المشترك للتصنيفات';
+
+  @override
+  String get sharedLearningUpdateBody =>
+      'أصبح التحليل الذكي والمزامنة السحابية يشمل التعلّم المشترك للتصنيفات. لقد فعّلته قبل أن يصبح جزءًا من هذا الاختيار، لذا يبقى التعلّم المشترك متوقفًا ما لم توافق الآن. لن تتغير إعداداتك الأخرى.';
+
+  @override
+  String get sharedLearningUpdateAgree => 'أوافق وأدرِجه';
+
+  @override
+  String get sharedLearningUpdateKeepOff => 'أبقِه متوقفًا';
+
+  @override
+  String get countryPickerTitle => 'اختر دولتك';
+
+  @override
+  String get countryPickerSearchHint => 'ابحث عن دولة';
+
+  @override
+  String get countryPickerNoResults => 'لا توجد دولة تطابق البحث.';
+
+  @override
+  String get countryPickerChoose => 'اختر دولتك';
+
+  @override
+  String get countryCoverageTested => 'مختبَرة مع بعض البنوك';
+
+  @override
+  String get countryCoverageNote =>
+      'اختُبر قِرش على رسائل بعض البنوك في السعودية ومصر فقط، وليس على كل صيغ الرسائل. في الدول الأخرى قد لا تُفهم رسائل البنوك بشكل صحيح. يمكنك دائمًا إضافة معاملاتك يدويًا.';
+
+  @override
+  String get countryCurrencyChooseNext => 'تختار العملة في الخطوة التالية';
+
+  @override
+  String get currencyChoiceTitle => 'اختر عملتك';
+
+  @override
+  String currencyChoiceUnsupportedBody(String currency) {
+    return 'لا يستطيع قِرش تسجيل المبالغ بعملة $currency حتى الآن. اختر العملة التي تريد متابعة أموالك بها، ويمكنك تغييرها لاحقًا من الإعدادات.';
+  }
+
+  @override
+  String get currencyChoiceNoCurrencyBody =>
+      'ليس لهذه المنطقة عملة خاصة بها. اختر العملة التي تريد متابعة أموالك بها، ويمكنك تغييرها لاحقًا من الإعدادات.';
 
   @override
   String get coachPasteTitle => 'اقرأ رسالة البنك';
@@ -7366,7 +7483,18 @@ class AppL10nAr extends AppL10n {
       'حساب Google هذا جديد على قرش. اختر «إنشاء حساب» للتسجيل.';
 
   @override
-  String get accV2Balance => 'الرصيد';
+  String get accBalanceManual => 'رصيد أُدخل يدويًا';
+
+  @override
+  String get accBalanceManualShort => 'أُدخل يدويًا';
+
+  @override
+  String get accBankReportedBalance => 'آخر رصيد أبلغ عنه البنك';
+
+  @override
+  String accBankReportedAt(String date, String time) {
+    return 'أُبلغ عنه في $date الساعة $time';
+  }
 
   @override
   String get accV2YourAccounts => 'حساباتك';

@@ -191,7 +191,8 @@ void main() {
 
   testWidgets(
       'the operation is captured BEFORE the confirmation dialog; the dialog '
-      'says permanent, immediate and Apple; cancelling releases it and sends nothing',
+      'says permanent, final and Apple and does not promise immediate '
+      'completion (decision 3.4); cancelling releases it and sends nothing',
       (tester) async {
     final flow = _Flow();
     await _open(tester, flow);
@@ -200,12 +201,30 @@ void main() {
     expect(find.text(_en.deleteAccountConfirmBody), findsOneWidget);
     final body = _en.deleteAccountConfirmBody.toLowerCase();
     expect(body, contains('permanent'));
-    expect(body, contains('immediate'));
+    expect(body, contains('cannot be undone'));
     expect(body, contains('apple'));
-    expect(_en.deleteAccountIntro.toLowerCase(), contains('apple'));
+    final intro = _en.deleteAccountIntro.toLowerCase();
+    expect(intro, contains('apple'));
+    // Decision 3.4: the server work is asynchronous, so no copy may promise
+    // that it is already complete or happens immediately; no undo period.
+    for (final text in [body, intro]) {
+      expect(text, isNot(contains('immediate')));
+      expect(text, isNot(contains('30 days')));
+    }
     final ar = lookupAppL10n(const Locale('ar'));
     expect(ar.deleteAccountConfirmBody, contains('Apple'));
     expect(ar.deleteAccountIntro, contains('Apple'));
+    for (final text in [ar.deleteAccountConfirmBody, ar.deleteAccountIntro]) {
+      expect(text, isNot(contains('على الفور')));
+      expect(text, isNot(contains('30')));
+    }
+    // An accepted (still running) deletion is final: no offer to cancel it.
+    expect(_en.deleteAccountAcceptedBody.toLowerCase(),
+        contains('cannot be cancelled'));
+    expect(_en.deleteAccountAcceptedBody.toLowerCase(),
+        isNot(contains('you can check or cancel')));
+    expect(ar.deleteAccountAcceptedBody, contains('لا يمكن إلغاؤه'));
+    expect(ar.deleteAccountAcceptedBody, isNot(contains('أو إلغاؤه')));
     await tester.tap(find.text(_en.commonCancel));
     await tester.pumpAndSettle();
     expect(flow.events, ['resume', 'begin', 'close']);

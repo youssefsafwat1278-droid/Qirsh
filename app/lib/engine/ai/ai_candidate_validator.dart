@@ -1,6 +1,8 @@
+import '../../domain/finance/currency_scale.dart';
 import '../models/parsed_transaction.dart';
 import '../models/transaction_type.dart';
 import '../parser/capture_money.dart';
+import '../parser/currency_table.dart';
 import '../parser/direction_signal.dart';
 import '../parser/merchant_sanity.dart';
 import '../parser/normalizer.dart';
@@ -16,12 +18,14 @@ class AiCandidateValidation {
       : accepted = false,
         currency = '',
         merchantName = null,
-        occurredAt = null;
+        occurredAt = null,
+        currencyFromAccount = false;
 
   const AiCandidateValidation.accepted({
     required this.currency,
     required this.merchantName,
     required this.occurredAt,
+    this.currencyFromAccount = false,
   })  : accepted = true,
         rejectionReason = null;
 
@@ -36,6 +40,9 @@ class AiCandidateValidation {
 
   /// The AI date when inside the plausibility window, else the local one.
   final DateTime? occurredAt;
+
+  /// 4.4: the message names no currency; [currency] is the matched account's.
+  final bool currencyFromAccount;
 }
 
 /// Deterministic, side-effect-free gate for an AI parse candidate. It never
@@ -65,7 +72,20 @@ class AiCandidateValidator {
     DateTime? referenceTime,
     String? messageText,
     TransactionType? normalizedType,
+    String? accountCurrency,
   }) {
+    // 4.2: a structured answer that is not a completed movement is never a
+    // transaction (the server already returns it as is_transaction=false;
+    // checked again here for any other server).
+    final messageType = response.messageType;
+    if (messageType != null && messageType != 'transaction') {
+      return const AiCandidateValidation.rejected(
+          'message_type_not_transaction');
+    }
+    final status = response.status;
+    if (status != null && status != 'completed') {
+      return const AiCandidateValidation.rejected('status_not_completed');
+    }
     // DATA-01 — a declined/failed purchase moved no money, whatever the AI says.
     if (TransactionStateCues.isNotCompleted(messageText ?? sanitizedText)) {
       return const AiCandidateValidation.rejected('transaction_not_completed');
@@ -73,7 +93,10 @@ class AiCandidateValidator {
     // LR-06 — an OTP or an advert / account notice is never a transaction,
     // whatever the AI says (an ignore word inside the grounded merchant name
     // does not count).
-    if (ParserEngine.isNonTransactionText(messageText ?? sanitizedText,
+    // V1-086: an account-notice line unrelated to the amount (a footer next
+    // to a completed movement) does not count.
+    if (ParserEngine.isNonTransactionText(
+        withoutUnrelatedNotices(messageText ?? sanitizedText, response.amount),
         merchant: _merchantGrounded(response.merchantName, sanitizedText)
             ? response.merchantName
             : null)) {
@@ -90,7 +113,14 @@ class AiCandidateValidator {
         messageText ?? sanitizedText, response.amount)) {
       return const AiCandidateValidation.rejected('amount_is_account_figure');
     }
+    // Closure round (follow-up 6 (5)): base + tip/fee/VAT with a stated
+    // total — the total charged is the amount, counted once.
+    final total = chargedTotal(messageText ?? sanitizedText);
+    if (total != null && (response.amount - total).abs() >= 0.005) {
+      return const AiCandidateValidation.rejected('amount_not_charged_total');
+    }
     final currency = response.currency.trim().toUpperCase();
+    var fromAccount = false;
     if (localParsed != null) {
       if (!((response.amount - localParsed.amount).abs() < 0.01)) {
         return const AiCandidateValidation.rejected('amount_mismatch_local');
@@ -98,8 +128,16 @@ class AiCandidateValidator {
       if (currency != localParsed.currency.trim().toUpperCase()) {
         return const AiCandidateValidation.rejected('currency_mismatch_local');
       }
-    } else if (!_currencyGrounded(currency, sanitizedText)) {
-      return const AiCandidateValidation.rejected('currency_not_grounded');
+    } else if (!currencyGrounded(currency, sanitizedText)) {
+      // 4.4: never an AI guess — only the matched account's own currency,
+      // and only when the text names no currency that could contradict it.
+      final account = accountCurrency?.trim().toUpperCase();
+      final named = currencyCodes
+          .any((code) => currencyGrounded(code, messageText ?? sanitizedText));
+      if (account == null || account != currency || named) {
+        return const AiCandidateValidation.rejected('currency_not_grounded');
+      }
+      fromAccount = true;
     }
 
     // The exact amount text must be present and canonical for the currency
@@ -116,18 +154,26 @@ class AiCandidateValidator {
     }
     // DATA-03 — the committed value is amountText: it must be the grounded
     // amount itself, not a fragment of another number in the text.
-    final textAmount = double.tryParse(
-        Normalizer.normalize(amountText).replaceAll(',', ''));
+    final textAmount =
+        double.tryParse(Normalizer.normalize(amountText).replaceAll(',', ''));
     if (textAmount == null ||
         (textAmount - response.amount).abs() >= 0.005 ||
-        !GroundingCheck.verify(amount: textAmount, sanitizedText: sanitizedText)) {
+        !GroundingCheck.verify(
+            amount: textAmount, sanitizedText: sanitizedText)) {
       return const AiCandidateValidation.rejected('amount_text_not_grounded');
     }
 
     // The AI type must not contradict the message's own direction wording.
+    // Closure round (follow-up 6 (4)): the direction the device books — the
+    // structure of the sentence carrying this amount — so a cashback/points
+    // line or a footer never contradicts a correct answer.
     if (messageText != null &&
         normalizedType != null &&
-        DirectionSignal.contradicts(messageText, normalizedType)) {
+        contradictsBooked(messageText, normalizedType,
+            amount: response.amount,
+            merchant: _merchantGrounded(response.merchantName, sanitizedText)
+                ? response.merchantName
+                : null)) {
       return const AiCandidateValidation.rejected('direction_contradiction');
     }
 
@@ -160,16 +206,139 @@ class AiCandidateValidator {
       // The local parser reads the written digits and AM/PM/ص/م exactly; the
       // AI only fills a date the local parse could not find.
       occurredAt: localParsed?.occurredAt ?? (dateOk ? aiDate : null),
+      currencyFromAccount: fromAccount,
     );
   }
 
-  static bool _currencyGrounded(String iso, String text) {
+  /// The ISO codes the server validator accepts (CURRENCY_CODES): the
+  /// parser's currency table limited to the DETECTION registry
+  /// (`kDetectionCurrencyScale`, a subset of what persisted Money can hold)
+  /// (closure round; drift tests ai_currency_codes_test.dart and
+  /// _shared/ai_currency_table_drift_test.ts).
+  static final List<String> currencyCodes = List.unmodifiable([
+    for (final code in CurrencyTable.iso)
+      if (kDetectionCurrencyScale.containsKey(code)) code,
+  ]);
+
+  /// V1-086 / RR-03 — words that report a completed card or account movement
+  /// but are not money words (round 10 removed them from the deterministic
+  /// money list). Here they only decide whether an account-notice line
+  /// elsewhere may be set aside; they never type or record anything.
+  static const List<String> _completionWords = [
+    'authorised', 'authorized', 'approved', 'posted', 'direct debit', //
+    'standing order', 'payroll',
+  ];
+
+  static final RegExp _sentenceCut = RegExp(r'[\n!?؟;؛]|\.(?![0-9])');
+
+  /// V1-086 — [text] without the account-notice sentences ("Credit limit:
+  /// SAR 20,000", "Your e-statement is available", "Card activated") that
+  /// are unrelated to [amount]: only when a sentence holding the amount
+  /// itself names a completed movement (a money word or a completion word),
+  /// and only sentences with a notice word and no ignore word or OTP code.
+  /// Otherwise unchanged, so an advert, an OTP or a notice whose own
+  /// sentence carries the amount stays "not a transaction". Mirrors
+  /// `withoutUnrelatedNotices` in `_shared/ai_candidate_validator.ts`.
+  static String withoutUnrelatedNotices(String text, double amount) {
+    final sentences = Normalizer.normalize(text).split(_sentenceCut);
+    bool holds(String s) =>
+        GroundingCheck.verify(amount: amount, sanitizedText: s);
+    bool completed(String s) {
+      final lower = s.toLowerCase();
+      return ParserEngine.hasMoneyWord(lower) ||
+          _completionWords
+              .any((w) => ParserEngine.containsIgnoreWord(lower, w));
+    }
+
+    if (!sentences.any((s) => holds(s) && completed(s))) return text;
+    final kept = sentences.where((s) {
+      if (holds(s)) return true;
+      final lower = s.toLowerCase();
+      final notice = ParserEngine.noticeWords
+          .any((w) => ParserEngine.containsIgnoreWord(lower, w));
+      final marker = ParserEngine.hasIgnoreWord(lower) ||
+          ParserEngine.isNonTransactionText(lower.replaceAll(
+              RegExp(ParserEngine.noticeWords.map(RegExp.escape).join('|')),
+              ' '));
+      return !notice || marker;
+    });
+    return kept.join('\n');
+  }
+
+  /// Closure round (follow-up 6 (4)): the direction the device books for
+  /// [text] — the clause structure ([DirectionSignal.detect]) of the first
+  /// sentence that carries [amount] when it decides it, else of the whole
+  /// message. "POS purchase SAR 45.00 at SHOP. Credited points 45" is a
+  /// debit; "Your account was credited. Amount SAR 300.00" stays a credit.
+  ///
+  /// A [merchant] name is masked first, as the parser masks it for the type
+  /// ("Purchase … at Salary Store" is a purchase).
+  static TxnDirection bookedDirection(String text,
+      {double? amount, String? merchant}) {
+    final name = merchant?.trim() ?? '';
+    if (name.length >= 3) {
+      text = text.replaceAll(
+          RegExp(RegExp.escape(name), caseSensitive: false), ' ');
+    }
+    if (amount != null && amount.isFinite) {
+      // The first sentence naming the amount is the event; a later figure
+      // equal to it ("Credited points 45") is not.
+      final clause = text.split(_sentenceCut).firstWhere(
+          (s) => GroundingCheck.verify(amount: amount, sanitizedText: s),
+          orElse: () => '');
+      if (clause.isNotEmpty) {
+        final d = DirectionSignal.detect(clause);
+        if (d != TxnDirection.unknown) return d;
+      }
+    }
+    return DirectionSignal.detect(text);
+  }
+
+  /// [DirectionSignal.contradicts] against [bookedDirection].
+  static bool contradictsBooked(String text, TransactionType type,
+      {double? amount, String? merchant}) {
+    final booked = bookedDirection(text, amount: amount, merchant: merchant);
+    final typed = DirectionSignal.ofType(type);
+    return booked != TxnDirection.unknown &&
+        typed != TxnDirection.unknown &&
+        booked != typed;
+  }
+
+  static final RegExp _totalComponent = RegExp(
+    r'(?<![a-z])(?:tips?|gratuity|service charge|fees?|vat|tax)(?![a-z])|'
+    r'بقشيش|إكرامية|اكرامية|ضريبة|رسوم|عمولة',
+    caseSensitive: false,
+  );
+  static final RegExp _chargedTotal = RegExp(
+    r'(?:(?<![a-z])(?:grand total|total(?: amount)?(?: charged| paid| debited| deducted)?)'
+    r'|الإجمالي|الاجمالي|إجمالي المبلغ|اجمالي المبلغ|المبلغ الإجمالي|المبلغ الاجمالي|المجموع)'
+    r'\s*(?:of|is|:|=)?\s*(?:[a-z]{3}\s?)?([0-9][0-9,]*(?:\.[0-9]+)?)',
+    caseSensitive: false,
+  );
+
+  /// The total charged a message states next to a tip, fee, VAT or tax
+  /// component ("SAR 100.00 + tip SAR 15.00. Total charged SAR 115.00"), or
+  /// null. That total is the amount that left the account; a same-currency
+  /// fee is part of it (never a second row). Server twin: `chargedTotal`.
+  static double? chargedTotal(String text) {
+    final t =
+        Normalizer.normalizeCurrencyTokens(Normalizer.normalizeDigits(text));
+    if (!_totalComponent.hasMatch(t)) return null;
+    final m = _chargedTotal.firstMatch(t);
+    if (m == null) return null;
+    return double.tryParse(m.group(1)!.replaceAll(',', ''));
+  }
+
+  /// A core parser code counts in any case as a whole word; any other table
+  /// code only in capitals right next to a figure ("NGN 5,000"), so words such
+  /// as "ALL" or "TOP" are never a currency (server `currencyGrounded`).
+  static bool currencyGrounded(String iso, String text) {
     if (iso.isEmpty) return false;
     final normalized = Normalizer.normalizeCurrencyTokens(text);
-    final code = RegExp(
-      '(?<![A-Za-z])${RegExp.escape(iso)}(?![A-Za-z])',
-      caseSensitive: false,
-    );
+    final e = RegExp.escape(iso);
+    final code = Normalizer.isoCurrencyAlternation.split('|').contains(iso)
+        ? RegExp('(?<![A-Za-z])$e(?![A-Za-z])', caseSensitive: false)
+        : RegExp('(?<![A-Za-z])$e(?=\\s?[0-9])|(?<=[0-9]\\s?)$e(?![A-Za-z])');
     if (code.hasMatch(normalized)) return true;
     final extras = _extraAliases[iso] ?? const <String>[];
     return extras.any(text.contains);

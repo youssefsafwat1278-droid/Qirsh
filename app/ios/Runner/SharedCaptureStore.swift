@@ -283,6 +283,9 @@ enum SharedCaptureStore {
     case quotaFull
     case removalInProgress
     case ownerChanged
+    /// Owner decision 3.13: no account is signed in, so the message was NOT
+    /// stored (and is not kept for whichever account signs in next).
+    case signedOut
 
     /// Method-channel error code for a refused re-enqueue.
     var bridgeCode: String {
@@ -311,6 +314,10 @@ enum SharedCaptureStore {
         return arabic
           ? "تعذر حفظ الرسالة بأمان. افتح قفل الآيفون، ثم افتح قِرش وحاول مرة أخرى."
           : "Couldn't save the message securely. Unlock your iPhone, then open Qirsh and try again."
+      case .signedOut:
+        return arabic
+          ? "لم تُحفظ رسالة البنك لأنك غير مسجّل الدخول. افتح قِرش وسجّل الدخول لتسجيل رسائل البنك الجديدة. لم نحتفظ بهذه الرسالة."
+          : "This bank message wasn't saved because you're signed out. Open Qirsh and sign in to record new bank messages. This message wasn't kept."
       }
     }
   }
@@ -4768,13 +4775,22 @@ enum SharedCaptureStore {
   /// `full` when the volume has less free space than two whole segments (a
   /// tail rewrite needs a temp copy), `near` below 64 MB. Diagnostics only:
   /// a capture is refused only by an actual failed write.
+  ///
+  /// B16 / V1-008: the only reader is the debug-only Sync diagnostics screen,
+  /// so the free-space probe exists in DEBUG builds only. Release builds do
+  /// not contain the DiskSpace required-reason API and report `.ok`, which is
+  /// why neither privacy manifest declares DiskSpace.
   private static func deviceCapacityState() -> QuotaState {
+    #if DEBUG
     guard let url = try? appGroupContainerURL(),
           let values = try? url.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]),
           let free = values.volumeAvailableCapacityForImportantUsage else { return .ok }
     if free < Int64(2 * segmentMaxBytes) { return .full }
     if free < Int64(64 * 1024 * 1024) { return .near }
     return .ok
+    #else
+    return .ok
+    #endif
   }
 
   /// Every queued item, for diagnostics and tests. Content-bearing: never log it.

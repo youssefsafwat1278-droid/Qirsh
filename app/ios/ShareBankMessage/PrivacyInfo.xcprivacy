@@ -52,14 +52,6 @@
 		<!-- Disk space (SharedCaptureStore.deviceCapacityState, compiled into
 		     this target too): a coarse ok/near/full state shown in the app's
 		     Sync diagnostics screen (IOS-01). -->
-		<dict>
-			<key>NSPrivacyAccessedAPIType</key>
-			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
-			<key>NSPrivacyAccessedAPITypeReasons</key>
-			<array>
-				<string>85F4.1</string>
-			</array>
-		</dict>
 	</array>
 </dict>
 </plist>

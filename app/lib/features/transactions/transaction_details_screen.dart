@@ -115,7 +115,8 @@ class _TransactionDetailsContent extends ConsumerStatefulWidget {
 class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsContent> {
   bool _confirming = false;
   bool _deleting = false;
-  bool get _busy => _confirming || _deleting;
+  bool _movingToReview = false;
+  bool get _busy => _confirming || _deleting || _movingToReview;
   String get transactionId => widget.transactionId;
   bool get isSheet => widget.isSheet;
 
@@ -143,6 +144,7 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
         }
 
         final category = catalog?.byId(tx.categoryId);
+        final largeText = MediaQuery.textScalerOf(context).scale(16) > 20;
         final isDebit = transactionIsDebit(tx);
         final amountColor = isDebit ? c.textPrimary : c.success;
         final merchantTitle = tx.rawMerchant?.trim().isNotEmpty == true
@@ -249,7 +251,8 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
                     const SizedBox(height: AppSpacing.s3),
                     Text(
                       merchantTitle,
-                      maxLines: 1,
+                      // UX-09: the merchant may wrap at large text.
+                      maxLines: largeText ? 3 : 1,
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
                       style: AppTypography.cardTitle(c.textSecondary),
@@ -325,7 +328,7 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
                         children: [
                           Text(
                             category?.name ?? context.l10n.txdUncategorised,
-                            maxLines: 1,
+                            maxLines: largeText ? 2 : 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTypography.bodyStrong(c.textPrimary),
                           ),
@@ -333,10 +336,20 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
                             context.l10n.txnCategory,
                             style: AppTypography.caption(c.textMuted),
                           ),
+                          // UX-09: at large text the action sits under the
+                          // category so its label is not cut off.
+                          if (largeText && catalog != null) ...[
+                            const SizedBox(height: AppSpacing.s2),
+                            _TintedPill(
+                              label: context.l10n.txnChangeCategory,
+                              onTap: () =>
+                                  showChangeCategorySheet(context, tx, catalog),
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                    if (catalog != null) ...[
+                    if (!largeText && catalog != null) ...[
                       const SizedBox(width: AppSpacing.s2),
                       Flexible(
                         child: _TintedPill(
@@ -393,8 +406,9 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
                       trailing: TextButton(
                         onPressed: () => _editCard(context, ref, tx),
                         style: TextButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          minimumSize: const Size(0, 0),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.s2),
+                          minimumSize: const Size(44, 44),
                           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
                         child: Text(context.l10n.txdChange,
@@ -486,6 +500,29 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
                 ),
               ),
               const SizedBox(height: AppSpacing.s5),
+              // Owner brief 4.6: a saved transaction can go back to review
+              // (outside totals until confirmed again).
+              if (tx.status == TransactionStatus.confirmed) ...[
+                TextButton.icon(
+                  key: const Key('txdMoveToReview'),
+                  onPressed: _busy
+                      ? null
+                      : () => _moveToReview(context, ref, tx.id),
+                  style: TextButton.styleFrom(
+                    foregroundColor: c.actionText,
+                    minimumSize: const Size(44, 44),
+                  ),
+                  icon: _movingToReview
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(AppLucideIcons.inbox),
+                  label: Text(context.l10n.txdMoveToReview,
+                      textAlign: TextAlign.center),
+                ),
+                const SizedBox(height: AppSpacing.s2),
+              ],
               // Destructive = plain danger text, well away from the primary
               // (which now lives in the sticky dock).
               TextButton.icon(
@@ -657,6 +694,26 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
       if (context.mounted) AppToast.showError(context, context.l10n.repoErrUnknown);
     } finally {
       if (mounted) setState(() => _confirming = false);
+    }
+  }
+
+  Future<void> _moveToReview(
+      BuildContext context, WidgetRef ref, String id) async {
+    if (_busy) return;
+    setState(() => _movingToReview = true);
+    try {
+      await ref.read(markForReviewUseCaseProvider)(id);
+      if (!mounted || !context.mounted) return;
+      ref.invalidate(transactionByIdProvider(id));
+      refreshTransactions(ref);
+      ref.invalidate(dashboardDataProvider);
+      AppToast.show(context, context.l10n.txdMovedToReviewToast);
+    } on RepoException catch (e) {
+      if (context.mounted) AppToast.showError(context, repoErrorMessage(context, e));
+    } catch (_) {
+      if (context.mounted) AppToast.showError(context, context.l10n.repoErrUnknown);
+    } finally {
+      if (mounted) setState(() => _movingToReview = false);
     }
   }
 
@@ -842,6 +899,32 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
   Widget _buildDetailRow(BuildContext context, String label, String value,
       {Widget? trailing, bool isPending = false, TextDirection? valueTextDirection}) {
     final c = context.colors;
+    // UX-09: above 1.25x the label sits above the value (the side-by-side row
+    // overflowed at the largest sizes); the default size is unchanged.
+    if (MediaQuery.textScalerOf(context).scale(16) > 20) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.s4, vertical: AppSpacing.s3),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(label, style: AppTypography.callout(c.textMuted)),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              textDirection: valueTextDirection,
+              style: AppTypography.callout(c.textPrimary)
+                  .copyWith(fontWeight: FontWeight.w500),
+            ),
+            if (trailing != null)
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: trailing,
+              ),
+          ],
+        ),
+      );
+    }
     // v2 details row: 52pt, label muted leading, value body.strong trailing.
     return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 52),

@@ -1,3 +1,5 @@
+import 'currency_table.dart';
+
 /// تطبيع نص الرسالة قبل الاستخراج (خاص بالسوق السعودي + عام).
 ///
 /// المسؤوليات:
@@ -6,6 +8,26 @@
 /// - توحيد كلمات ورموز العملات إلى رموز ISO.
 class Normalizer {
   Normalizer._();
+
+  /// Round 3: the ISO codes of [CurrencyTable.iso] that are not in
+  /// [isoCurrencyAlternation] — recognised only in capitals next to a number.
+  static final String extendedCurrencyAlternation = CurrencyTable.iso
+      .where((c) => !isoCurrencyAlternation.split('|').contains(c))
+      .join('|');
+
+  /// An extended ISO code in capitals right before or after a number.
+  static final RegExp extendedCurrency =
+      RegExp('(?<![A-Za-z])(?:$extendedCurrencyAlternation)(?=\\s?[0-9])|'
+          '(?<=[0-9]\\s?)(?:$extendedCurrencyAlternation)(?![A-Za-z])');
+
+  static final List<(RegExp, String)> _localForms = [
+    for (final f in CurrencyTable.localForms)
+      (
+        RegExp('(?<![A-Za-z])${RegExp.escape(f[0])}(?=\\s?[0-9])|'
+            '(?<=[0-9]\\s?)${RegExp.escape(f[0])}(?![A-Za-z])'),
+        f[1]
+      ),
+  ];
 
   // الأرقام العربية-الهندية (U+0660..0669) والممتدة (U+06F0..06F9).
   static const int _arabicIndicZero = 0x0660;
@@ -41,7 +63,7 @@ class Normalizer {
   /// generic swallows it. `ر.ع` has to be handled before the bare `ريال`
   /// fallback, and `دينار كويتي`/`دينار بحريني` before any bare `دينار`.
   static String normalizeCurrencyTokens(String input) {
-    return input
+    return _applyLocalForms(input
         // Round 9: "Saudi Riyals" (once read as AUD, a substring of "Saudi").
         .replaceAll(
             RegExp(r'(?<![A-Za-z])saudi riyals?(?![A-Za-z])',
@@ -63,7 +85,17 @@ class Normalizer {
         .replaceAll(RegExp(r'دينار\s+كويتي'), 'KWD')
         .replaceAll(RegExp(r'دينار\s+بحريني'), 'BHD')
         .replaceAll(RegExp(r'دولار\s+أمريكي|دولار\s+امريكي|دولار'), 'USD')
-        .replaceAll(RegExp(r'ريال'), 'SAR');
+        .replaceAll(RegExp(r'ريال'), 'SAR'));
+  }
+
+  /// Round 3: a local currency form next to a number ("SR1,250.00", "50 LE",
+  /// "€20") becomes its ISO code ([CurrencyTable.localForms]).
+  static String _applyLocalForms(String input) {
+    var text = input;
+    for (final (re, code) in _localForms) {
+      text = text.replaceAll(re, code);
+    }
+    return text;
   }
 
   static final RegExp _currencyBeforeDigits = RegExp(
@@ -93,7 +125,12 @@ class Normalizer {
     var text = input.replaceAllMapped(
         _currencyBeforeDigits, (m) => '${m[1]} ');
     text = text.replaceAllMapped(_currencyAfterDigits, (m) => ' ${m[1]}');
-    return text;
+    text = text.replaceAllMapped(
+        RegExp('(?<![A-Za-z])($extendedCurrencyAlternation)(?=[0-9])'),
+        (m) => '${m[1]} ');
+    return text.replaceAllMapped(
+        RegExp('(?<=[0-9])($extendedCurrencyAlternation)(?![A-Za-z])'),
+        (m) => ' ${m[1]}');
   }
 
   static String stripTashkeel(String input) {

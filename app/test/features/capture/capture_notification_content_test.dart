@@ -123,6 +123,27 @@ void main() {
       final content = buildReviewCaptureContent(null);
       expect(content.title, 'أكّد العملية');
     });
+
+    // Owner decision 3.12: an entry awaiting review shows its category as a
+    // suggestion, never as the final category; a saved one shows it plainly.
+    test('category of an entry awaiting review is labelled a suggestion', () {
+      for (final lang in const ['ar', 'en']) {
+        final review = buildReviewCaptureContent(
+            _tx(categoryId: 'groceries'),
+            now: _fixedNow,
+            lang: lang);
+        final saved = buildConfirmedCaptureContent(
+            _tx(categoryId: 'groceries'),
+            now: _fixedNow,
+            lang: lang);
+        final suggested = lang == 'en' ? 'Suggested category: ' : 'التصنيف المقترح: ';
+        final plain = lang == 'en' ? '\nCategory: ' : '\nالتصنيف: ';
+        expect(review.body, contains(suggested));
+        expect(review.body, isNot(contains(plain)));
+        expect(saved.body, contains(plain));
+        expect(saved.body, isNot(contains(suggested)));
+      }
+    });
   });
 
   group('buildDuplicateCaptureContent', () {

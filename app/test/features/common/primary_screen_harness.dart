@@ -9,6 +9,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/di/app_providers.dart';
+import 'package:money_companion/core/session/unsynced_inventory.dart';
+import 'package:money_companion/features/accounts/accounts_screen.dart';
+import 'package:money_companion/features/capture/manual_paste_screen.dart';
+import 'package:money_companion/features/settings/sign_out_sheet.dart';
+import 'package:money_companion/features/transactions/manual_transaction_sheet.dart';
+import 'package:money_companion/features/transactions/transaction_details_screen.dart';
+import 'package:money_companion/features/transactions/transactions_providers.dart';
 import 'package:money_companion/core/theme/app_theme.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
@@ -144,6 +151,82 @@ final primaryScreens = <PrimaryScreen>[
       () => const SettingsScreen(page: SettingsPage.account)),
 ];
 
+/// Opens a sheet through its real `show` function once the host is laid out,
+/// so the sheet is measured with the same modal constraints as in the app.
+class _SheetHost extends StatefulWidget {
+  const _SheetHost(this.open);
+  final Future<void> Function(BuildContext context) open;
+  @override
+  State<_SheetHost> createState() => _SheetHostState();
+}
+
+class _SheetHostState extends State<_SheetHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => mounted ? widget.open(context) : null);
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(body: SizedBox.expand());
+}
+
+final _syntheticPending = TransactionEntity(
+  id: 'scan-2',
+  amountMoney: Money(2150, 'SAR'),
+  currency: 'SAR',
+  type: TransactionTypeEntity.payment,
+  source: TransactionSourceEntity.bank,
+  occurredAt: DateTime(2026, 11, 17, 9, 30),
+  rawMessage: 'synthetic',
+  rawMerchant: 'Coffee Kiosk',
+  parseConfidence: 1,
+  status: TransactionStatus.pending,
+  createdAt: DateTime(2026, 11, 17, 9, 30),
+  updatedAt: DateTime(2026, 11, 17, 9, 30),
+);
+
+const _unsyncedSample = UnsyncedInventory(
+  ledgerOutbox: 3,
+  planningOutbox: 1,
+  smartInboxPending: 0,
+  localOnlyCards: 0,
+  senderMappingsPending: 0,
+  notificationLogPending: 0,
+);
+
+/// UX-09 (closure round): the primary screens plus the transaction, review,
+/// accounts and sign-out surfaces the large-text gate also covers.
+final largeTextScreens = <PrimaryScreen>[
+  ...primaryScreens,
+  PrimaryScreen('Smart Inbox', () => const TransactionsScreen(), overrides: [
+    transactionsPendingFilterProvider.overrideWith((ref) => true),
+  ]),
+  // Category filter active: shows the chip's clear "x" (UX-05).
+  PrimaryScreen('Transactions (category filter)',
+      () => const TransactionsScreen(), overrides: [
+    transactionCategoryFilterProvider.overrideWith((ref) => 'groceries'),
+  ]),
+  PrimaryScreen('Transaction details (review)',
+      () => const TransactionDetailsScreen(transactionId: 'scan-2')),
+  // A saved (confirmed) transaction: shows "Move to review" (owner brief 4.6).
+  PrimaryScreen('Transaction details (saved)',
+      () => const TransactionDetailsScreen(transactionId: 'scan-1')),
+  PrimaryScreen('Transaction details sheet',
+      () => _SheetHost((c) => TransactionDetailsScreen.showSheet(c, 'scan-2'))),
+  PrimaryScreen('Add transaction',
+      () => _SheetHost((c) => ManualTransactionSheet.show(c))),
+  PrimaryScreen('Edit transaction',
+      () => _SheetHost((c) =>
+          ManualTransactionSheet.show(c, transaction: _syntheticPending))),
+  PrimaryScreen('Paste bank message',
+      () => _SheetHost((c) => ManualPasteScreen.showSheet(c))),
+  PrimaryScreen('Accounts', () => const AccountsScreen()),
+  PrimaryScreen('Sign-out sheet',
+      () => _SheetHost((c) => showSignOutSheet(c, pending: _unsyncedSample))),
+];
+
 Future<void> loadAppFont(WidgetTester tester) => tester.runAsync(() async {
       final loader = FontLoader('Vazirmatn');
       for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold']) {
@@ -158,7 +241,9 @@ Future<List<String>> pumpPrimaryScreen(WidgetTester tester, PrimaryScreen screen
     {required Size size,
     required String language,
     double textScale = 1,
-    bool dark = false}) async {
+    bool dark = false,
+    bool seedPending = true,
+    Future<void> Function(AppDatabase db)? seed}) async {
   // A fresh ProviderScope per screen (a scope's override list is fixed).
   await tester.pumpWidget(const SizedBox.shrink());
   FlutterSecureStorage.setMockInitialValues({});
@@ -177,7 +262,9 @@ Future<List<String>> pumpPrimaryScreen(WidgetTester tester, PrimaryScreen screen
     for (final (type, amount, status, merchant) in [
       (TransactionTypeEntity.income, 1240000, TransactionStatus.confirmed, null),
       (TransactionTypeEntity.payment, 8730, TransactionStatus.confirmed, 'Corner Grocery'),
-      (TransactionTypeEntity.payment, 2150, TransactionStatus.pending, 'Coffee Kiosk'),
+      (TransactionTypeEntity.payment, 2150,
+          seedPending ? TransactionStatus.pending : TransactionStatus.confirmed,
+          'Coffee Kiosk'),
     ]) {
       final at = DateTime.now().subtract(Duration(hours: 3 + n));
       await repo.saveTransaction(
@@ -198,11 +285,18 @@ Future<List<String>> pumpPrimaryScreen(WidgetTester tester, PrimaryScreen screen
           categoryKey: type == TransactionTypeEntity.income ? 'income' : 'groceries');
     }
   });
+  if (seed != null) await tester.runAsync(() => seed(db));
   final errors = <String>[];
   final previous = FlutterError.onError;
   FlutterError.onError = (details) {
     errors.add(details.exceptionAsString().split('\n').first);
-    if (debugPrintScanErrors) debugPrint(details.toString());
+    if (debugPrintScanErrors) {
+      final where = RegExp(r'file://\S*?/lib/\S+')
+          .allMatches(details.toString())
+          .map((m) => m.group(0)!.split('/lib/').last)
+          .join(' <- ');
+      debugPrint('SCAN ERROR ${details.exceptionAsString().split('\n').first} @ $where');
+    }
   };
   _restoreErrors = () => FlutterError.onError = previous;
   addTearDown(() async {

@@ -196,7 +196,7 @@ class TransactionsPanel extends StatelessWidget {
       amountMoney: tx.amountMoney,
       currency: Currency.label(context, tx.currency),
       subtitle:
-          '${compact ? '${MaterialLocalizations.of(context).formatShortDate(tx.occurredAt.toLocal())} · ' : ''}${Formatters.time(tx.occurredAt, context)} · ${category?.name ?? context.l10n.homeUncategorised}',
+          '${compact ? '${_shortDate(context, tx.occurredAt)} · ' : ''}${Formatters.time(tx.occurredAt, context)} · ${category?.name ?? context.l10n.homeUncategorised}',
       categoryIconName: category?.iconName,
       categoryColor: category?.color,
       brandLogoUrl: BrandMark.logoFor(title, merchantLogos),
@@ -235,3 +235,10 @@ class TransactionsPanel extends StatelessWidget {
         ),
       );
 }
+
+/// V1-068: the date in Western digits, like the amounts and times beside it.
+/// Material's Arabic short date uses Arabic-Indic digits («١٧ نوفمبر ٢٠٢٦»).
+String _shortDate(BuildContext context, DateTime at) =>
+    Localizations.localeOf(context).languageCode == 'en'
+        ? MaterialLocalizations.of(context).formatShortDate(at.toLocal())
+        : Formatters.fullDate(at, context);

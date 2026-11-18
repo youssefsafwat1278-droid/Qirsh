@@ -4,14 +4,12 @@
 // an in-memory `user_transactions` behind the real PostgREST client
 // (fake_ledger_cloud.dart). Synthetic data only.
 //
-// Semantics asserted (see RestoreBackupUseCase._rebindSyncIdentity):
-//  * restored rows keep their server identity and their RESTORED values become
-//    the cloud copy (no duplicate cloud rows);
-//  * PENDING OWNER DECISION (replace vs merge): cloud rows ABSENT from the
-//    backup are kept and pulled back to the device (merge, the non-destructive
-//    default);
-//  * a row the cloud holds as a tombstone is never un-deleted: the restored row
-//    is kept locally and surfaced as a sync conflict.
+// Semantics asserted (decision 3.3, restore = merge; see
+// RestoreBackupUseCase._mergeSnapshot):
+//  * rows keep their server identity; no duplicate cloud rows;
+//  * an edit or deletion made after the backup is newer and is kept;
+//  * rows created after the backup are kept, on the device and in the cloud.
+// The per-scenario merge rule is covered in restore_merge_rule_test.dart.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/domain/finance/money.dart';
 
@@ -30,8 +28,8 @@ void main() {
   });
   tearDown(() => admission.finish());
 
-  test('R1: restored values win over later synced edits; a cloud row created '
-      'after the backup is kept and pulled back (pending decision: merge)',
+  test('R1: a later synced edit is newer and is kept; a row created after the '
+      'backup is kept; nothing is duplicated',
       () async {
     await d.add('r1-A', '10');
     await d.add('r1-B', '20');
@@ -49,20 +47,19 @@ void main() {
     final restored = await d.live();
     expect(restored, {
       'Synthetic shop r1-A': '10.00',
-      'Synthetic shop r1-B': '20.00',
+      'Synthetic shop r1-B': '25.00',
       'Synthetic shop r1-C': '30.00',
+      'Synthetic shop r1-D': '40.00',
     });
 
     await d.sync();
     await d.sync();
     await expectConverged(d, restored);
-    // The cloud-only row D (absent from the backup) is merged back.
-    expect((await d.live())['Synthetic shop r1-D'], '40.00');
     expect(d.cloud.rows, hasLength(4), reason: 'no new cloud rows at all');
   });
 
-  test('R2: a cloud row created after the backup returns to the device '
-      '(pending decision: merge), nothing duplicated', () async {
+  test('R2: a row created after the backup stays on the device and in the '
+      'cloud, nothing duplicated', () async {
     await d.add('r2-A', '10');
     await d.sync();
     final backup = await d.backup();
@@ -71,7 +68,10 @@ void main() {
 
     await d.restore(backup);
     final restored = await d.live();
-    expect(restored, {'Synthetic shop r2-A': '10.00'});
+    expect(restored, {
+      'Synthetic shop r2-A': '10.00',
+      'Synthetic shop r2-E': '50.00',
+    });
 
     await d.sync();
     await d.sync();
@@ -83,9 +83,8 @@ void main() {
     expect(d.cloud.rows, hasLength(2));
   });
 
-  test('a restored row the cloud holds as a tombstone is kept locally and '
-      'surfaced as a conflict, never duplicated or silently re-deleted',
-      () async {
+  test('a row deleted (and synced) after the backup stays deleted: no '
+      'resurrection, no conflict, no duplicate', () async {
     await d.add('t-A', '10');
     await d.add('t-C', '30');
     await d.sync();
@@ -98,11 +97,8 @@ void main() {
     await d.sync();
     await d.sync();
 
-    expect(await d.live(), {
-      'Synthetic shop t-A': '10.00',
-      'Synthetic shop t-C': '30.00',
-    });
-    expect(await d.syncStatus('t-C'), 'conflict');
+    expect(await d.live(), {'Synthetic shop t-A': '10.00'});
+    expect(await d.syncStatus('t-C'), isNot('conflict'));
     expect(await d.syncStatus('t-A'), 'synced');
     expect(d.cloud.live().keys, ['Synthetic shop t-A'],
         reason: 'the cloud tombstone is never un-deleted by a restore');

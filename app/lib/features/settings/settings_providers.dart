@@ -42,7 +42,7 @@ final userSettingsProvider = FutureProvider<UserSettingsEntity>((ref) async {
 });
 
 /// Whether "Remember for this merchant" also shares the merchant and category
-/// right now: the account's shared-learning switch (on by default) AND Cloud
+/// right now: the account's shared-learning switch (off until the user agrees) AND Cloud
 /// AND AI consent — the same three the client checks before sending. Drives
 /// the just-in-time notice in the category sheets.
 final sharedLearningActiveProvider = FutureProvider.autoDispose<bool>((ref) async {

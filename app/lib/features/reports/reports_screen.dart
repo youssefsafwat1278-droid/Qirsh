@@ -37,6 +37,7 @@ import '../report_ads/report_ad_notice.dart';
 import '../reporting/ui/report_config_page.dart';
 import '../report_ads/report_ads_providers.dart';
 import 'reports_providers.dart';
+import '../app/app_shell.dart' show shellIndexProvider;
 
 Future<void> _openReport(BuildContext context, WidgetRef ref) async {
   final request = await showReportConfigPage(context);
@@ -216,6 +217,7 @@ class _ReportsScreenState extends ConsumerState<ReportsScreen> {
                                     ),
                                   ),
                                 ),
+                                const _PendingReviewNote(),
                                 const Padding(
                                   padding: EdgeInsets.symmetric(
                                       horizontal: AppSpacing.gutter),
@@ -1114,6 +1116,17 @@ class _CategoryLegendTile extends StatelessWidget {
       if (slice.hasRefunds && !privacyMode)
         '${context.l10n.rptIncludesRefund}${formatMoney(slice.refunds!)}',
     ].join().trim();
+    final large = MediaQuery.textScalerOf(context).scale(16) > 20;
+    final figures = [
+      _AmountText(
+        amount: slice.total,
+        currencyLabel: currencyLabel,
+        privacyMode: privacyMode,
+      ),
+      Text('${(slice.percent * 100).round()}%',
+          textDirection: TextDirection.ltr,
+          style: AppTypography.caption(c.textLight)),
+    ];
     return AnimatedOpacity(
       duration: AppMotion.micro,
       opacity: dimmed ? .35 : 1,
@@ -1134,7 +1147,7 @@ class _CategoryLegendTile extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(slice.category.name,
-                            maxLines: 1,
+                            maxLines: large ? 2 : 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppTypography.bodyStrong(c.textMain)),
                         if (meta.isNotEmpty)
@@ -1143,22 +1156,27 @@ class _CategoryLegendTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.s2),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      _AmountText(
-                        amount: slice.total,
-                        currencyLabel: currencyLabel,
-                        privacyMode: privacyMode,
-                      ),
-                      Text('${(slice.percent * 100).round()}%',
-                          textDirection: TextDirection.ltr,
-                          style: AppTypography.caption(c.textLight)),
-                    ],
-                  ),
+                  if (!large) ...[
+                    const SizedBox(width: AppSpacing.s2),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: figures,
+                    ),
+                  ],
                 ],
               ),
+              // UX-09: at large text the amount and share wrap under the
+              // name (the side column overflowed at the largest size).
+              if (large)
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(
+                      start: 52, top: AppSpacing.s1),
+                  child: Wrap(
+                    spacing: AppSpacing.s2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: figures,
+                  ),
+                ),
               const SizedBox(height: AppSpacing.s1),
               Padding(
                 padding: const EdgeInsetsDirectional.only(start: 52),
@@ -1682,6 +1700,65 @@ class _Enter extends StatelessWidget {
         child: Transform.translate(
           offset: Offset(0, AppMotion.enterRise * (1 - t)),
           child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Owner brief 4.6: the totals above count confirmed transactions only. When
+/// some are waiting for review, say so and offer the way to them (the Smart
+/// Inbox: Transactions filtered to pending review). Hidden otherwise.
+class _PendingReviewNote extends ConsumerWidget {
+  const _PendingReviewNote();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final hasPending =
+        ref.watch(reportsHasPendingReviewProvider).valueOrNull ?? false;
+    if (!hasPending) return const SizedBox.shrink();
+    final c = context.colors;
+    void open() {
+      HapticFeedback.selectionClick();
+      ref.read(transactionsPendingFilterProvider.notifier).state = true;
+      ref.read(shellIndexProvider.notifier).state = 1;
+      final navigator = Navigator.of(context);
+      if (navigator.canPop()) navigator.popUntil((route) => route.isFirst);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.gutter, AppSpacing.s3, AppSpacing.gutter, 0),
+      child: Semantics(
+        key: const Key('reportsPendingReviewNote'),
+        container: true,
+        child: Container(
+          padding: const EdgeInsetsDirectional.fromSTEB(
+              AppSpacing.s4, AppSpacing.s2, AppSpacing.s2, AppSpacing.s2),
+          decoration: BoxDecoration(
+            color: c.warningBg,
+            borderRadius: BorderRadius.circular(AppRadius.button),
+          ),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: AppSpacing.s1,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.s1),
+                child: Text(context.l10n.rptPendingNotIncluded,
+                    style: AppTypography.caption(c.warningText)),
+              ),
+              TextButton(
+                onPressed: open,
+                style: TextButton.styleFrom(
+                  foregroundColor: c.warningText,
+                  minimumSize: const Size(44, 44),
+                ),
+                child: Text(context.l10n.commonReview),
+              ),
+            ],
+          ),
         ),
       ),
     );

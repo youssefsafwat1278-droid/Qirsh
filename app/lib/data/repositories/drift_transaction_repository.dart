@@ -74,6 +74,47 @@ class DriftTransactionRepository implements TransactionRepository {
   }
 
   @override
+  Future<TransactionEntity> markForReview(String id) async {
+    return _db.transaction(() async {
+      final current = await getById(id);
+      if (current == null) {
+        throw StateError('Transaction not found: $id');
+      }
+      // Idempotent, and only from confirmed: a pending row is already in
+      // review and an ignored (deleted) row is not revived by this.
+      if (current.status != TransactionStatus.confirmed) return current;
+      // Status only: amount, category, category_source and type stay, so a
+      // later confirm() restores exactly what the user had.
+      await _db.customUpdate(
+        '''
+          UPDATE transactions
+          SET status = 'pending',
+              updated_at = ?
+          WHERE id = ? AND status = 'confirmed';
+        ''',
+        variables: [
+          Variable.withString(dateTimeToSql(DateTime.now().toUtc())),
+          Variable.withString(id),
+        ],
+      );
+      final updated = await getById(id);
+      if (updated == null) {
+        throw StateError('Transaction not found: $id');
+      }
+      // The same sync path as confirm(): `status` round-trips as 'pending'
+      // (server check constraint 0029; every build's pull maps it).
+      await _outboxQueue?.enqueue(OutboxOperation.update, updated);
+      // The user withdrew acceptance of this reading. Recorded as
+      // rejected_or_deleted (the existing event; no schema change): in the
+      // Proof gate that outranks an earlier or later `confirmed`, so a doubted
+      // parse can never be counted as confirmed-unchanged — the strict side.
+      await _proofLog.record(
+          transactionId: id, event: ProofCorrectionEvent.rejectedOrDeleted);
+      return updated;
+    });
+  }
+
+  @override
   Future<TransactionEntity?> findDuplicate({
     required Money amount,
     required String rawMerchant,
@@ -1138,6 +1179,27 @@ class DriftTransactionRepository implements TransactionRepository {
       ],
     ).getSingle();
     return Money(row.read<int>('t'), currency);
+  }
+
+  @override
+  Future<ReportedBalance?> latestReportedBalance({String? accountId}) async {
+    final row = await _db.customSelect(
+      '''
+        SELECT balance_after_minor AS m, currency, occurred_at
+        FROM transactions
+        WHERE status = 'confirmed'
+          AND balance_after IS NOT NULL${_accountClause(accountId)}${accountId == null ? _includedTotalsAccountClause() : ''}
+        ORDER BY occurred_at DESC
+        LIMIT 1;
+      ''',
+      variables: _accountVars(accountId),
+    ).getSingleOrNull();
+    final minor = row?.readNullable<int>('m');
+    if (row == null || minor == null) return null;
+    return (
+      balance: Money(minor, row.read<String>('currency')),
+      occurredAt: dateTimeFromSql(row.read<String>('occurred_at')),
+    );
   }
 
   @override

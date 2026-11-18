@@ -4309,6 +4309,12 @@ abstract class AppL10n {
   /// **'التفاصيل'**
   String get rptTabDetails;
 
+  /// No description provided for @rptPendingNotIncluded.
+  ///
+  /// In ar, this message translates to:
+  /// **'العمليات التي تنتظر المراجعة غير محتسبة في هذه المجاميع.'**
+  String get rptPendingNotIncluded;
+
   /// No description provided for @rptUnusualSpend.
   ///
   /// In ar, this message translates to:
@@ -4828,7 +4834,7 @@ abstract class AppL10n {
   /// No description provided for @pasteSummaryLine.
   ///
   /// In ar, this message translates to:
-  /// **'أُضيفت {added} · مكرر {duplicate} · يحتاج مراجعة {review} · غير مفهوم {failed}'**
+  /// **'أُضيفت {added} · مكرر {duplicate} · يحتاج مراجعة {review} · لم تُسجَّل {failed}'**
   String pasteSummaryLine(int added, int duplicate, int review, int failed);
 
   /// No description provided for @pasteAnalysedCount.
@@ -5026,7 +5032,7 @@ abstract class AppL10n {
   /// No description provided for @privSharedLearningBody.
   ///
   /// In ar, this message translates to:
-  /// **'مفعّل افتراضيًا ويمكنك إيقافه في أي وقت. عند تشغيله، في كل مرة تختار «تذكّر التصنيف لهذا المتجر» يرسل قِرش اسم المتجر والتصنيف الذي اخترته فقط. لا تُرسَل أبدًا المبالغ أو التواريخ أو الرسائل أو التحويلات أو أسماء الأشخاص. تُجمَع الاختيارات مع اختيارات المستخدمين الآخرين. ويُضاف الاختيار إلى التصنيفات التي يتلقاها الجميع عندما يتفق عليه 6 مستخدمين على الأقل ويكونون أغلبية واضحة (75%)، أو بعد مراجعة مشرف، ويمكن للمشرف إزالته في أي وقت. يتطلب تشغيل المزامنة السحابية والتحليل الذكي.'**
+  /// **'يُفعَّل عند موافقتك على المزامنة السحابية والتحليل الذكي، ويمكنك إيقافه في أي وقت. عند تشغيله، في كل مرة تختار «تذكّر التصنيف لهذا المتجر» يرسل قِرش اسم المتجر والتصنيف الذي اخترته فقط. لا تُرسَل أبدًا المبالغ أو التواريخ أو الرسائل أو التحويلات أو أسماء الأشخاص. تُجمَع الاختيارات مع اختيارات المستخدمين الآخرين. ويُضاف الاختيار إلى التصنيفات التي يتلقاها الجميع عندما يتفق عليه 6 مستخدمين على الأقل ويكونون أغلبية واضحة (75%)، أو بعد مراجعة مشرف، ويمكن للمشرف إزالته في أي وقت. يتطلب تشغيل المزامنة السحابية والتحليل الذكي.'**
   String get privSharedLearningBody;
 
   /// No description provided for @privSharedLearningNeedsConsent.
@@ -5038,13 +5044,13 @@ abstract class AppL10n {
   /// No description provided for @privDeleteAccountBody.
   ///
   /// In ar, this message translates to:
-  /// **'سيتم جدولة حذف حسابك وكل بياناتك (العمليات، الأهداف، الميزانيات، النسخ الاحتياطي) نهائيًا بعد 30 يومًا. يمكنك التراجع عن الحذف خلال هذه المدة من نفس الشاشة قبل تسجيل الدخول مرة أخرى. سيتم تسجيل خروجك من هذا الجهاز الآن.'**
+  /// **'حذف حسابك نهائي ولا يمكن التراجع عنه. يُحذف حسابك والبيانات المحفوظة فيه ونسخك الاحتياطية السحابية وصورة ملفك الشخصي. قد تستغرق بعض خطوات الخادم بضع دقائق حتى تكتمل.'**
   String get privDeleteAccountBody;
 
   /// No description provided for @privScheduledForDeletion.
   ///
   /// In ar, this message translates to:
-  /// **'حسابك مجدول للحذف بتاريخ {date}'**
+  /// **'لن يُنفَّذ طلب حذف قُدِّم من إصدار سابق من قرش (بتاريخ {date})، وحسابك ما زال نشطًا. لحذف حسابك استخدم «حذف الحساب وكل بياناتي».'**
   String privScheduledForDeletion(String date);
 
   /// No description provided for @privPolicy.
@@ -5122,13 +5128,13 @@ abstract class AppL10n {
   /// No description provided for @privCancelDeleteTitle.
   ///
   /// In ar, this message translates to:
-  /// **'إلغاء حذف الحساب؟'**
+  /// **'إزالة الطلب السابق؟'**
   String get privCancelDeleteTitle;
 
   /// No description provided for @privCancelDeleteBody.
   ///
   /// In ar, this message translates to:
-  /// **'سيبقى حسابك وبياناتك كما هي.'**
+  /// **'يزيل هذا التنبيه فقط. سيبقى حسابك وبياناتك كما هي.'**
   String get privCancelDeleteBody;
 
   /// No description provided for @privKeepAccount.
@@ -5140,13 +5146,13 @@ abstract class AppL10n {
   /// No description provided for @privCancelDeletion.
   ///
   /// In ar, this message translates to:
-  /// **'إلغاء الحذف'**
+  /// **'إزالة هذا التنبيه'**
   String get privCancelDeletion;
 
   /// No description provided for @privCancelFailed.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر إلغاء الحذف الآن. حاول مجدداً.'**
+  /// **'تعذّرت إزالة التنبيه الآن. حاول مجدداً.'**
   String get privCancelFailed;
 
   /// No description provided for @privTitle.
@@ -5506,7 +5512,7 @@ abstract class AppL10n {
   /// No description provided for @pasteNotCompleted.
   ///
   /// In ar, this message translates to:
-  /// **'هذه العملية مرفوضة أو لم تكتمل — لم يُسجَّل شيء.'**
+  /// **'هذه العملية مرفوضة أو معلّقة أو لم تكتمل بعد — لم يُسجَّل شيء. إن كانت قد تمّت فعلًا، أضِفها كعملية جديدة.'**
   String get pasteNotCompleted;
 
   /// No description provided for @pasteNothingToOpen.
@@ -5562,6 +5568,18 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'غير مفهوم'**
   String get pasteNotUnderstood;
+
+  /// No description provided for @pasteNotCompletedShort.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تكتمل'**
+  String get pasteNotCompletedShort;
+
+  /// No description provided for @pasteSavedForAnalysisShort.
+  ///
+  /// In ar, this message translates to:
+  /// **'محفوظة للتحليل'**
+  String get pasteSavedForAnalysisShort;
 
   /// No description provided for @pasteSummary.
   ///
@@ -5752,7 +5770,7 @@ abstract class AppL10n {
   /// No description provided for @txdBalanceAfter.
   ///
   /// In ar, this message translates to:
-  /// **'الرصيد بعد'**
+  /// **'الرصيد الذي أبلغ عنه البنك'**
   String get txdBalanceAfter;
 
   /// No description provided for @txdNote.
@@ -5832,6 +5850,18 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'تم تأكيد العملية.'**
   String get txdConfirmedToast;
+
+  /// No description provided for @txdMoveToReview.
+  ///
+  /// In ar, this message translates to:
+  /// **'نقل إلى المراجعة'**
+  String get txdMoveToReview;
+
+  /// No description provided for @txdMovedToReviewToast.
+  ///
+  /// In ar, this message translates to:
+  /// **'نُقلت إلى المراجعة. لن تُحسب في إجمالياتك حتى تؤكدها.'**
+  String get txdMovedToReviewToast;
 
   /// No description provided for @txdDeleteTitle.
   ///
@@ -6064,7 +6094,7 @@ abstract class AppL10n {
   /// No description provided for @homeReviewToStayAccurate.
   ///
   /// In ar, this message translates to:
-  /// **'راجعها لتبقى أرصدتك دقيقة'**
+  /// **'العمليات التي تنتظر المراجعة لا تُحتسب في مجاميعك حتى تؤكدها.'**
   String get homeReviewToStayAccurate;
 
   /// No description provided for @homeAvailableFromMonthBudget.
@@ -9934,7 +9964,7 @@ abstract class AppL10n {
   /// No description provided for @rpConfirmBody.
   ///
   /// In ar, this message translates to:
-  /// **'ستحل النسخة الاحتياطية محل بياناتك الحالية على هذا الجهاز. لا يمكن التراجع بعد التأكيد. هل تريد المتابعة؟'**
+  /// **'تدمج الاستعادة هذه النسخة الاحتياطية مع البيانات الموجودة على هذا الجهاز. تُستعاد السجلات غير الموجودة هنا، ويبقى كل ما أضفته أو عدّلته أو حذفته بعد إنشاء النسخة كما هو الآن؛ وإذا وُجد السجل في الاثنين تُحفظ النسخة الأحدث تعديلًا. وعلى جهاز لا يحتوي على سجلات بعد تُستعاد النسخة كاملة بما فيها الإعدادات. تُوقف المزامنة السحابية والتحليل الذكي بعد الاستعادة حتى تشغّلهما من جديد. هل تريد المتابعة؟'**
   String get rpConfirmBody;
 
   /// No description provided for @rpCancel.
@@ -10138,19 +10168,19 @@ abstract class AppL10n {
   /// No description provided for @smartConsentBullet1.
   ///
   /// In ar, this message translates to:
-  /// **'تُرسل الرسائل البنكية الملتقطة، ومنها رسائل SMS البنكية التي تُقرأ تلقائيًا على أندرويد، إلى خوادم قرش بعد إزالة أرقام البطاقات والحسابات والهواتف والرموز. قد تعالج خدمة Google Gemini هذا النص لتحديد المبلغ والتاجر والبنك، وقد تتلقى Google Places أسماء التجار. تبقى فيه المبالغ والتجار والأرصدة، لذا فهو ليس مجهول الهوية.'**
+  /// **'رسائل البنوك: تُرسل رسائل البنوك التي تلتقطها إلى خوادم قرش بعد إزالة أرقام البطاقات والحسابات والهواتف والرموز، مع إخفاء أسماء الأشخاص حين يتعرّف عليها التطبيق. قد تعالج خدمة Google Gemini هذا النص، مع ما قرأه التطبيق منه على جهازك وعملة الحساب المطابق لها، لتحديد المبلغ والتاجر والتاريخ ونوع العملية، وقد تتلقى Google Places أسماء التجار. وإذا لم يتعرّف قِرش على البنك المرسِل فقد يُرسَل اسم المرسِل لتحديد البنك. تحتفظ خوادم قرش بنص الرسالة حتى تنتهي معالجتها، و7 أيام كحد أقصى. تبقى فيه المبالغ والتجار والأرصدة وآخر أرقام البطاقات، لذا فهو ليس مجهول الهوية.'**
   String get smartConsentBullet1;
 
   /// No description provided for @smartConsentBullet2.
   ///
   /// In ar, this message translates to:
-  /// **'كما تتم مزامنة معاملاتك وحساباتك وميزانياتك وأهدافك وإعداداتك ونسخها احتياطيًا في حسابك السحابي على قِرش.'**
+  /// **'بياناتك: تتم مزامنة معاملاتك وحساباتك وبطاقاتك وميزانياتك وأهدافك وخططك واشتراكاتك وقواعد التصنيف التي تعلّمها التطبيق، والبنك الذي ينتمي إليه كل مرسِل رسائل، وعناصر صندوق الوارد الذكي وإنجازاتك، وملفك الشخصي (الاسم ورقم الهاتف وتاريخ الميلاد والصورة) وإعداداتك، مع حسابك السحابي على قِرش، إضافةً إلى تقارير الأعطال وأحداث توصيل الإشعارات. وإذا أنشأت نسخة احتياطية مشفّرة فإنها تُحفظ هناك أيضًا.'**
   String get smartConsentBullet2;
 
   /// No description provided for @smartConsentBullet3.
   ///
   /// In ar, this message translates to:
-  /// **'بعد الموافقة، تعمل المزامنة والتحليلات المسموح بها تلقائيًا عند توفر الخدمة. يمكنك سحب أي موافقة من الإعدادات ← الخصوصية. المتابعة محليًا لا ترسل هذه البيانات.'**
+  /// **'بعد الموافقة، تعمل المزامنة وتحليل الرسائل تلقائيًا، بما في ذلك إعادة المحاولة والمعالجة في الخلفية عندما يسمح هاتفك بذلك. الموافقة على هذا الجهاز لا تفعّلهما على أجهزتك الأخرى.'**
   String get smartConsentBullet3;
 
   /// No description provided for @smartConsentEnable.
@@ -10452,6 +10482,18 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'بعض البيانات لم تصل إلى السحابة بعد: {list}. تبقى على هذا الجهاز وتُزامَن عند تسجيل دخولك مجددًا.'**
   String signOutUnsyncedKeepBody(String list);
+
+  /// No description provided for @signOutUnsyncedCloudOffBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'بعض التغييرات موجودة على هذا الجهاز فقط: {list}. تبقى على هذا الجهاز ولا تُزامَن ما دام التحليل الذكي والمزامنة السحابية متوقفًا.'**
+  String signOutUnsyncedCloudOffBody(String list);
+
+  /// No description provided for @signOutCloudOffNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحليل الذكي والمزامنة السحابية متوقف، لذا تبقى تغييراتك على هذا الجهاز ولا تُزامَن.'**
+  String get signOutCloudOffNote;
 
   /// No description provided for @removeDataTitle.
   ///
@@ -10876,7 +10918,7 @@ abstract class AppL10n {
   /// No description provided for @initialConsentAccept.
   ///
   /// In ar, this message translates to:
-  /// **'أوافق على المزامنة والتحليل الذكي'**
+  /// **'أوافق وفعّل'**
   String get initialConsentAccept;
 
   /// No description provided for @initialConsentDecline.
@@ -10996,13 +11038,13 @@ abstract class AppL10n {
   /// No description provided for @consentWithdrawBody.
   ///
   /// In ar, this message translates to:
-  /// **'تتوقف المزامنة والتحليل فورًا معًا. تبقى بياناتك على هذا الجهاز، ويمكنك تفعيلهما مجددًا من هنا في أي وقت.'**
+  /// **'تتوقف المزامنة السحابية والتحليل الذكي معًا. يتوقف قِرش عن الإرسال من هذا الجهاز، بما في ذلك المزامنة وتحليل الرسائل وإعادة المحاولة ومساهمات التعلّم المشترك الجديدة. لا يمكن استرجاع ما أُرسل بالفعل، وتبقى البيانات الموجودة في حسابك على قِرش حتى تحذف حسابك. تبقى بياناتك على هذا الجهاز، ويمكنك تفعيلهما مجددًا من هنا في أي وقت.'**
   String get consentWithdrawBody;
 
   /// No description provided for @consentWithdrawConfirm.
   ///
   /// In ar, this message translates to:
-  /// **'إيقاف'**
+  /// **'إيقافهما معًا'**
   String get consentWithdrawConfirm;
 
   /// No description provided for @consentWithdrawFailed.
@@ -11026,7 +11068,7 @@ abstract class AppL10n {
   /// No description provided for @deleteAccountIntro.
   ///
   /// In ar, this message translates to:
-  /// **'احذف حساب قرش والبيانات المحفوظة فيه نهائيًا وعلى الفور. ستؤكد هويتك أولًا عبر Apple أو طريقة الدخول التي تستخدمها.'**
+  /// **'احذف حساب قرش والبيانات المحفوظة فيه نهائيًا، ومنها نسخك الاحتياطية السحابية وصورة ملفك الشخصي. الحذف نهائي ولا يمكن التراجع عنه. ستؤكد هويتك أولًا عبر Apple أو طريقة الدخول التي تستخدمها.'**
   String get deleteAccountIntro;
 
   /// No description provided for @deleteAccountAction.
@@ -11044,7 +11086,7 @@ abstract class AppL10n {
   /// No description provided for @deleteAccountConfirmBody.
   ///
   /// In ar, this message translates to:
-  /// **'سيُحذف حسابك وبياناته نهائيًا وعلى الفور. أكّد هويتك عبر Apple أو طريقة الدخول التي تستخدمها للمتابعة. لا يمكن التراجع عن الحذف.'**
+  /// **'سيُحذف حسابك وبياناته نهائيًا. يبدأ الحذف فور تأكيدك، وقد تستغرق بعض خطوات الخادم بضع دقائق حتى تكتمل، وسنُعلمك عند اكتماله. أكّد هويتك عبر Apple أو طريقة الدخول التي تستخدمها للمتابعة. لا يمكن التراجع عن الحذف.'**
   String get deleteAccountConfirmBody;
 
   /// No description provided for @deleteAccountConfirmAction.
@@ -11068,7 +11110,7 @@ abstract class AppL10n {
   /// No description provided for @deleteAccountAcceptedBody.
   ///
   /// In ar, this message translates to:
-  /// **'استلمنا طلب الحذف، لكن حسابك لم يُحذف بعد. يمكنك متابعته أو إلغاؤه من الخصوصية والبيانات.'**
+  /// **'استلمنا طلب الحذف وبدأ الحذف، لكن حسابك لم يُحذف بعد. قد تستغرق بعض خطوات الخادم بضع دقائق. الحذف نهائي ولا يمكن إلغاؤه. تحقق مرة أخرى بعد قليل.'**
   String get deleteAccountAcceptedBody;
 
   /// No description provided for @deleteAccountFailed.
@@ -11548,7 +11590,7 @@ abstract class AppL10n {
   /// No description provided for @accTotalBalance.
   ///
   /// In ar, this message translates to:
-  /// **'إجمالي الأرصدة'**
+  /// **'إجمالي الأرصدة المُدخلة يدويًا'**
   String get accTotalBalance;
 
   /// No description provided for @achBadges.
@@ -11868,6 +11910,162 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'اختار اللغة اللي تحب تستخدم بيها قِرش. تقدر تغيّرها بعدين.'**
   String get languageFirstBody;
+
+  /// No description provided for @smartConsentIntro.
+  ///
+  /// In ar, this message translates to:
+  /// **'يعمل قِرش بالكامل على هذا الجهاز دون السحابة. إذا وافقت، يُفعَّل كل ما يلي معًا.'**
+  String get smartConsentIntro;
+
+  /// No description provided for @smartConsentHeadSent.
+  ///
+  /// In ar, this message translates to:
+  /// **'ما الذي يُرسَل'**
+  String get smartConsentHeadSent;
+
+  /// No description provided for @smartConsentHeadWho.
+  ///
+  /// In ar, this message translates to:
+  /// **'من يتلقاها'**
+  String get smartConsentHeadWho;
+
+  /// No description provided for @smartConsentWho.
+  ///
+  /// In ar, this message translates to:
+  /// **'خوادم قِرش المستضافة لدى Supabase، وGoogle (خدمتا Gemini API وPlaces API)، وSentry لتقارير الأعطال. تعالج Supabase وGemini وSentry البيانات نيابةً عن قِرش.'**
+  String get smartConsentWho;
+
+  /// No description provided for @smartConsentHeadWhy.
+  ///
+  /// In ar, this message translates to:
+  /// **'لماذا'**
+  String get smartConsentHeadWhy;
+
+  /// No description provided for @smartConsentWhy.
+  ///
+  /// In ar, this message translates to:
+  /// **'لقراءة رسائل البنوك بدقة أكبر، ولإبقاء بياناتك متزامنة بين أجهزتك وقابلة للاستعادة بعد إعادة التثبيت، ولإصلاح الأعطال.'**
+  String get smartConsentWhy;
+
+  /// No description provided for @smartConsentHeadSync.
+  ///
+  /// In ar, this message translates to:
+  /// **'كيف تعمل المزامنة'**
+  String get smartConsentHeadSync;
+
+  /// No description provided for @smartConsentHeadShared.
+  ///
+  /// In ar, this message translates to:
+  /// **'التعلّم المشترك للتصنيفات'**
+  String get smartConsentHeadShared;
+
+  /// No description provided for @smartConsentShared.
+  ///
+  /// In ar, this message translates to:
+  /// **'التعلّم المشترك للتصنيفات مشمول. عندما تختار «تذكّر التصنيف لهذا المتجر» يرسل قِرش اسم المتجر والتصنيف الذي اخترته، مربوطين برمز أحادي الاتجاه بدلًا من معرّف حسابك. لا تُرسَل أبدًا المبالغ أو التواريخ أو الرسائل أو التحويلات أو أسماء الأشخاص. ويُضاف الاختيار إلى التصنيفات التي يتلقاها الجميع عندما يتفق عليه 6 مستخدمين على الأقل ويكونون أغلبية واضحة (75%)، أو بعد مراجعة مشرف. يمكنك إيقاف التعلّم المشترك وحده من الإعدادات ← الخصوصية.'**
+  String get smartConsentShared;
+
+  /// No description provided for @smartConsentHeadOff.
+  ///
+  /// In ar, this message translates to:
+  /// **'الإيقاف'**
+  String get smartConsentHeadOff;
+
+  /// No description provided for @smartConsentOff.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكنك إيقاف المزامنة السحابية والتحليل الذكي معًا في أي وقت من الإعدادات ← الخصوصية. يتوقف الإرسال عندها، بما في ذلك إعادة المحاولة ومساهمات التعلّم المشترك الجديدة. لا يمكن استرجاع ما أُرسل بالفعل، وتبقى البيانات الموجودة في حسابك على قِرش حتى تحذف حسابك.'**
+  String get smartConsentOff;
+
+  /// No description provided for @smartConsentLocal.
+  ///
+  /// In ar, this message translates to:
+  /// **'المتابعة محليًا: يبقى كل شيء على هذا الجهاز. لا يُرسَل شيء مما سبق، وتُقرأ الرسائل على الجهاز فقط، ولا توجد مزامنة سحابية أو نسخ احتياطي سحابي.'**
+  String get smartConsentLocal;
+
+  /// No description provided for @sharedLearningUpdateTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'التعلّم المشترك للتصنيفات'**
+  String get sharedLearningUpdateTitle;
+
+  /// No description provided for @sharedLearningUpdateBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'أصبح التحليل الذكي والمزامنة السحابية يشمل التعلّم المشترك للتصنيفات. لقد فعّلته قبل أن يصبح جزءًا من هذا الاختيار، لذا يبقى التعلّم المشترك متوقفًا ما لم توافق الآن. لن تتغير إعداداتك الأخرى.'**
+  String get sharedLearningUpdateBody;
+
+  /// No description provided for @sharedLearningUpdateAgree.
+  ///
+  /// In ar, this message translates to:
+  /// **'أوافق وأدرِجه'**
+  String get sharedLearningUpdateAgree;
+
+  /// No description provided for @sharedLearningUpdateKeepOff.
+  ///
+  /// In ar, this message translates to:
+  /// **'أبقِه متوقفًا'**
+  String get sharedLearningUpdateKeepOff;
+
+  /// No description provided for @countryPickerTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر دولتك'**
+  String get countryPickerTitle;
+
+  /// No description provided for @countryPickerSearchHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'ابحث عن دولة'**
+  String get countryPickerSearchHint;
+
+  /// No description provided for @countryPickerNoResults.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد دولة تطابق البحث.'**
+  String get countryPickerNoResults;
+
+  /// No description provided for @countryPickerChoose.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر دولتك'**
+  String get countryPickerChoose;
+
+  /// No description provided for @countryCoverageTested.
+  ///
+  /// In ar, this message translates to:
+  /// **'مختبَرة مع بعض البنوك'**
+  String get countryCoverageTested;
+
+  /// No description provided for @countryCoverageNote.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختُبر قِرش على رسائل بعض البنوك في السعودية ومصر فقط، وليس على كل صيغ الرسائل. في الدول الأخرى قد لا تُفهم رسائل البنوك بشكل صحيح. يمكنك دائمًا إضافة معاملاتك يدويًا.'**
+  String get countryCoverageNote;
+
+  /// No description provided for @countryCurrencyChooseNext.
+  ///
+  /// In ar, this message translates to:
+  /// **'تختار العملة في الخطوة التالية'**
+  String get countryCurrencyChooseNext;
+
+  /// No description provided for @currencyChoiceTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختر عملتك'**
+  String get currencyChoiceTitle;
+
+  /// No description provided for @currencyChoiceUnsupportedBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يستطيع قِرش تسجيل المبالغ بعملة {currency} حتى الآن. اختر العملة التي تريد متابعة أموالك بها، ويمكنك تغييرها لاحقًا من الإعدادات.'**
+  String currencyChoiceUnsupportedBody(String currency);
+
+  /// No description provided for @currencyChoiceNoCurrencyBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'ليس لهذه المنطقة عملة خاصة بها. اختر العملة التي تريد متابعة أموالك بها، ويمكنك تغييرها لاحقًا من الإعدادات.'**
+  String get currencyChoiceNoCurrencyBody;
 
   /// No description provided for @coachPasteTitle.
   ///
@@ -12325,11 +12523,29 @@ abstract class AppL10n {
   /// **'حساب Google هذا جديد على قرش. اختر «إنشاء حساب» للتسجيل.'**
   String get authGoogleSignupRequired;
 
-  /// No description provided for @accV2Balance.
+  /// No description provided for @accBalanceManual.
   ///
   /// In ar, this message translates to:
-  /// **'الرصيد'**
-  String get accV2Balance;
+  /// **'رصيد أُدخل يدويًا'**
+  String get accBalanceManual;
+
+  /// No description provided for @accBalanceManualShort.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُدخل يدويًا'**
+  String get accBalanceManualShort;
+
+  /// No description provided for @accBankReportedBalance.
+  ///
+  /// In ar, this message translates to:
+  /// **'آخر رصيد أبلغ عنه البنك'**
+  String get accBankReportedBalance;
+
+  /// No description provided for @accBankReportedAt.
+  ///
+  /// In ar, this message translates to:
+  /// **'أُبلغ عنه في {date} الساعة {time}'**
+  String accBankReportedAt(String date, String time);
 
   /// No description provided for @accV2YourAccounts.
   ///

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 // ignore: depend_on_referenced_packages
 import 'package:google_mobile_ads/src/ad_instance_manager.dart'
     show instanceManager;
+import 'package:money_companion/features/ads/admob_build_config.dart';
 import 'package:money_companion/core/privacy/gated_url_launcher.dart';
 import 'package:money_companion/features/ads/banner_ads_providers.dart';
 import 'package:money_companion/features/ads/mobile_ads_initializer.dart';
@@ -45,6 +46,12 @@ class _CountingConsent implements AdConsentService {
 }
 
 void main() {
+  // Decision 3.2: advertising is compiled out of Version 1 builds. These tests
+  // exercise the ad pipeline itself, as a build made with
+  // --dart-define=QIRSH_ADS_ENABLED=true runs it. The compiled-out behaviour
+  // is covered by test/features/ads/v1_ads_compiled_out_test.dart.
+  setUp(() => AdMobBuildConfig.debugAdsCompiledInOverride = true);
+  tearDown(() => AdMobBuildConfig.debugAdsCompiledInOverride = false);
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late List<String> adCalls;

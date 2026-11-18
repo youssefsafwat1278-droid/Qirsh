@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../../core/privacy/cloud_egress_gate.dart';
+import 'admob_build_config.dart';
 
 /// One-time Google Mobile Ads SDK initialization, shared by every ad format.
 ///
@@ -44,6 +45,9 @@ class MobileAdsInitializer {
 
   /// Whether ad/UMP network may run right now. Every ad entry point asks this.
   static Future<bool> mayServe() async {
+    // Decision 3.2: a build without ads compiled in never reaches the SDK or
+    // UMP, whatever the remote flags say.
+    if (!AdMobBuildConfig.adsCompiledIn) return false;
     try {
       return await CloudEgressGate.instance.permits();
     } catch (_) {

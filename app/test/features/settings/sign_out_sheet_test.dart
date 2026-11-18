@@ -30,6 +30,7 @@ Future<SignOutChoice?> _open(
   UnsyncedInventory? pending,
   Locale locale = const Locale('en'),
   Future<void> Function()? act,
+  bool? cloudSyncOn,
 }) async {
   SignOutChoice? result;
   var done = false;
@@ -45,7 +46,8 @@ Future<SignOutChoice?> _open(
     home: Builder(
       builder: (context) => TextButton(
         onPressed: () async {
-          result = await showSignOutSheet(context, pending: pending);
+          result = await showSignOutSheet(context,
+              pending: pending, cloudSyncOn: cloudSyncOn);
           done = true;
         },
         child: const Text('open'),
@@ -141,5 +143,40 @@ void main() {
     await _open(tester, locale: const Locale('ar'));
     expect(find.text('تسجيل الخروج'), findsNWidgets(2));
     expect(find.byKey(const Key('signOutRemoveData')), findsNothing);
+  });
+
+  // V1-067 / decision B26 (a): with Smart Analysis & Cloud Sync off nothing
+  // syncs on sign-in, so the sheet must not say it does.
+  testWidgets('Cloud off: unsynced warning says changes are not synced',
+      (tester) async {
+    await _open(tester, pending: _pending, cloudSyncOn: false);
+    expect(find.byKey(const Key('signOutUnsyncedWarning')), findsOneWidget);
+    expect(find.textContaining('syncs when you sign back in'), findsNothing);
+    expect(
+        find.textContaining('are not synced while Smart Analysis & Cloud Sync '
+            'is off'),
+        findsOneWidget);
+  });
+
+  testWidgets('Cloud off, nothing pending: a note says changes stay local',
+      (tester) async {
+    await _open(tester, pending: _clean, cloudSyncOn: false);
+    expect(find.byKey(const Key('signOutUnsyncedWarning')), findsNothing);
+    expect(find.byKey(const Key('signOutCloudOffNote')), findsOneWidget);
+  });
+
+  testWidgets('Cloud off in Arabic says the changes are not synced',
+      (tester) async {
+    await _open(tester,
+        pending: _pending, cloudSyncOn: false, locale: const Locale('ar'));
+    expect(find.textContaining('تُزامَن عند تسجيل دخولك'), findsNothing);
+    expect(find.textContaining('ولا تُزامَن ما دام التحليل الذكي'),
+        findsOneWidget);
+  });
+
+  testWidgets('Cloud on keeps the sync-on-sign-in sentence', (tester) async {
+    await _open(tester, pending: _pending, cloudSyncOn: true);
+    expect(find.textContaining('syncs when you sign back in'), findsOneWidget);
+    expect(find.byKey(const Key('signOutCloudOffNote')), findsNothing);
   });
 }

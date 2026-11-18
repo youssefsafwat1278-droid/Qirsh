@@ -154,6 +154,16 @@ class _FakeTransactionRepository implements TransactionRepository {
   }
 
   @override
+  Future<ReportedBalance?> latestReportedBalance({String? accountId}) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<TransactionEntity> markForReview(String id) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<CurrencyTotal>> currencyTotalsBetween({
     required DateTime from,
     required DateTime to,

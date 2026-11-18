@@ -1,4 +1,5 @@
 import 'normalizer.dart';
+import 'parser_engine.dart';
 
 /// DATA-01 — a bank message reporting a transaction that did NOT complete
 /// (declined / failed / rejected / cancelled / voided / expired / insufficient
@@ -177,7 +178,18 @@ class TransactionStateCues {
   ];
 
   /// True when [rawText] reports a transaction that did not complete.
-  static bool isNotCompleted(String rawText) {
+  ///
+  /// Round 3 (owner brief 4.1): the cues apply to the message's clause scope
+  /// ([ParserEngine.clauseScope]): a footer sentence (security advice, an
+  /// advert, a notice, another attempt's status, a labelled figure) never
+  /// makes a completed movement not completed.
+  static bool isNotCompleted(String rawText) =>
+      _isNotCompletedText(ParserEngine.clauseScope(rawText).core);
+
+  /// Whether [lower] holds a declined/not-completed cue word at all.
+  static bool hasCue(String lower) => _declined.hasMatch(foldForCues(lower));
+
+  static bool _isNotCompletedText(String rawText) {
     final text = foldForCues(rawText);
     int? creditAt;
     var undone = false;

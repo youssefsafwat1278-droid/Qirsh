@@ -306,8 +306,10 @@ class PrivacyScreen extends ConsumerWidget {
     if (work.current) ref.invalidate(userSettingsProvider);
   }
 
+  // Decision 3.5: the legal documents open with Cloud OFF too, through the
+  // narrow legal-document exception (never the general external launcher).
   Future<void> _openExternalLink(BuildContext context, Uri url) async {
-    final opened = await launchExternalUrl(url);
+    final opened = await launchLegalDocument(url);
     if (!opened && context.mounted) {
       AppToast.showError(context, context.l10n.privLinkFailed);
     }

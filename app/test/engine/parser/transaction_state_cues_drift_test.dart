@@ -2,6 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/engine/parser/currency_table.dart';
+import 'package:money_companion/engine/parser/direction_signal.dart';
+import 'package:money_companion/engine/parser/message_meaning.dart';
+import 'package:money_companion/engine/parser/normalizer.dart';
 import 'package:money_companion/engine/parser/parser_engine.dart';
 import 'package:money_companion/engine/parser/shared_preview_parser.dart';
 import 'package:money_companion/engine/parser/transaction_state_cues.dart';
@@ -70,6 +74,49 @@ void main() {
     });
     test('moneyKeywords', () {
       expect(strings(server['moneyKeywords']), ParserEngine.moneyWords);
+    });
+
+    // Round 3 (4.1): meaning before amount reads the same clause words on
+    // both sides (message_meaning.dart ↔ process-ios-sms/message_meaning.ts).
+    final meaning = server['messageMeaning'] as Map<String, dynamic>;
+    final meaningPairs = {
+      'otherEventMarkers': MessageMeaning.otherEventMarkers,
+      'dueMarkers': MessageMeaning.dueMarkers,
+      'futureMarkers': MessageMeaning.futureMarkers,
+      'offerMarkers': MessageMeaning.offerMarkers,
+      'summaryMarkers': MessageMeaning.summaryMarkers,
+      'doneVerbs': MessageMeaning.doneVerbs,
+      'tenseMarkers': MessageMeaning.tenseMarkers,
+      'ownAccountStrong': MessageMeaning.ownAccountStrong,
+      'ownAccountMarkers': MessageMeaning.ownAccountMarkers,
+      'explicitOwnTransfer': MessageMeaning.explicitOwnTransfer,
+      'cashDepositMarkers': MessageMeaning.cashDepositMarkers,
+      'pendingWords': MessageMeaning.pendingWords,
+      'abbreviations': MessageMeaning.abbreviations,
+      'sourceOfFunds': MessageMeaning.sourceOfFunds,
+      'ownDestination': MessageMeaning.ownDestination,
+      'futureTense': MessageMeaning.futureTense,
+      'rewardMarkers': MessageMeaning.rewardMarkers,
+      'debitFlow': DirectionSignal.debitFlow,
+      'creditFlow': DirectionSignal.creditFlow,
+    };
+    test('messageMeaning has exactly the Dart lists', () {
+      expect(meaning.keys.toSet(), meaningPairs.keys.toSet());
+    });
+    for (final e in meaningPairs.entries) {
+      test('messageMeaning.${e.key}',
+          () => expect(strings(meaning[e.key]), e.value));
+    }
+
+    // Round 3 (4.4, V1-031): one currency table on both sides.
+    test('currencyTable', () {
+      final table = server['currencyTable'] as Map<String, dynamic>;
+      expect(strings(table['core']).join('|'),
+          Normalizer.isoCurrencyAlternation);
+      expect(strings(table['iso']), CurrencyTable.iso);
+      expect(
+          [for (final f in table['localForms'] as List) strings(f)],
+          CurrencyTable.localForms);
     });
   });
 

@@ -61,6 +61,9 @@ void main() {
       ));
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
@@ -78,6 +81,9 @@ void main() {
       expect(result, isNull, reason: 'the sheet does not report a grant');
       // The user can try again.
       service.enableError = null;
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pumpAndSettle(const Duration(seconds: 6));
       expect(result, isTrue);
@@ -97,6 +103,9 @@ void main() {
     ));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pumpAndSettle();
     expect(service.retryCalls, 1);
@@ -115,6 +124,9 @@ void main() {
     ));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pumpAndSettle(const Duration(seconds: 6));
     expect(find.text(lookupAppL10n(const Locale('en')).cloudEnableIncomplete),
@@ -132,6 +144,9 @@ void main() {
     ));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
@@ -174,6 +189,9 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('consentTurnOn')));
     await tester.tap(find.byKey(const Key('consentTurnOn')));
     await tester.pumpAndSettle();
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
@@ -204,6 +222,9 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('consentTurnOn')));
     await tester.tap(find.byKey(const Key('consentTurnOn')));
     await tester.pumpAndSettle();
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pumpAndSettle(const Duration(seconds: 6));
     expect(service.enableCalls, 1);

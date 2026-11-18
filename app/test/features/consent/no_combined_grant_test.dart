@@ -121,6 +121,9 @@ void main() {
   testWidgets('first-use "Continue locally" persists a denial of BOTH and '
       'enables nothing', (tester) async {
     await open(tester);
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentDecline')));
     await tester.pumpAndSettle();
     expect(result, isFalse);
@@ -137,6 +140,9 @@ void main() {
       (tester) async {
     await open(tester);
     expectNothingGranted();
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pumpAndSettle(const Duration(seconds: 6));
     expect(result, isTrue);
@@ -149,6 +155,9 @@ void main() {
       'writes nothing', (tester) async {
     await open(tester, management: true);
     expect(find.byKey(const Key('initialConsentDecline')), findsNothing);
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('consentManageCancel')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('consentManageCancel')));
     await tester.pumpAndSettle();
     expect(result, isFalse);
@@ -159,6 +168,9 @@ void main() {
       'scope', (tester) async {
     await open(tester);
     current = false;
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pumpAndSettle(const Duration(seconds: 6));
     expect(result, isNot(isTrue));
@@ -169,6 +181,9 @@ void main() {
       (tester) async {
     await open(tester);
     current = false;
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentDecline')));
     await tester.pumpAndSettle(const Duration(seconds: 6));
     expect(result, isNot(isTrue));

@@ -1,4 +1,5 @@
 import '../models/parsed_transaction.dart';
+import 'message_meaning.dart';
 
 /// نتيجة محاولة تحليل رسالة.
 ///
@@ -17,6 +18,7 @@ class ParseResult {
     this.dateAmbiguous = false,
     this.currencyDefaulted = false,
     this.amountDetected = false,
+    this.meaning,
   });
 
   factory ParseResult.success(
@@ -28,8 +30,10 @@ class ParseResult {
     bool amountAmbiguous = false,
     bool dateAmbiguous = false,
     bool currencyDefaulted = false,
+    MessageMeaning? meaning,
   }) =>
       ParseResult._(
+        meaning: meaning,
         isTransaction: true,
         transaction: txn,
         bankKey: bankKey,
@@ -49,8 +53,10 @@ class ParseResult {
   factory ParseResult.notTransaction({
     String? bankKey,
     bool amountDetected = false,
+    MessageMeaning? meaning,
   }) =>
       ParseResult._(
+        meaning: meaning,
         isTransaction: false,
         bankKey: bankKey,
         amountDetected: amountDetected,
@@ -91,4 +97,12 @@ class ParseResult {
   /// The engine found a transaction amount in the message (true for every
   /// successful parse, and for a parse rejected only for low confidence).
   final bool amountDetected;
+
+  /// Round 3 (owner brief 4.1): what the message means — its kind
+  /// (completed movement, not completed, notice, own-account transfer, cash
+  /// deposit, several events, OTP), a disposition and a machine-readable
+  /// reason, and whether the message names no currency. Null on paths that
+  /// return before the meaning is read (and in results built elsewhere).
+  /// Additive: existing fields keep their meaning.
+  final MessageMeaning? meaning;
 }

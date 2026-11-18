@@ -15,6 +15,9 @@ import 'package:money_companion/engine/parser/transaction_state_cues.dart';
 /// (`process-ios-sms/parse_test.ts`) so the two runtimes judge the same text.
 /// Synthetic messages only.
 const _casesPath = '../supabase/functions/process-ios-sms/declined_cases.json';
+// Round 3 (closure): the ceiling of the deviations allowlist (700 after the
+// clause-scope fixes moved 58 rows to acceptance; it was 758).
+const _maxDeviations = 700;
 const _deviationsPath =
     '../supabase/functions/process-ios-sms/declined_cases_deviations.json';
 const _notCompleted = 'transaction_not_completed';
@@ -49,9 +52,7 @@ void main() {
       // incoming transfer recorded as income (same direction).
       'dropped',
       'completed_income',
-      // Round 10: open defects carried from the baseline ([defect] rows only).
-      'completed_payment',
-      'completed_credit',
+      // (Round 10's open device payment/refund defects are fixed in round 3.)
     });
   });
 
@@ -79,6 +80,15 @@ void main() {
     expect(pinned.length, allow['count']);
     expect(deviating.map(key).toSet(), pinned.map(key).toSet());
     expect(deviating.length, allow['count']);
+    // Round 3 (closure, V1-080): the allowlist cannot grow silently — a new
+    // pin means raising this ceiling here and in parse_test.ts — and every
+    // pin says whether it characterizes a safe deviation or an open defect.
+    // A row outside the allowlist is an acceptance row.
+    expect(allow['count'], lessThanOrEqualTo(_maxDeviations));
+    for (final p in pinned) {
+      expect(p['pin'], p['defect'] == null ? 'safe_deviation' : 'open_defect',
+          reason: '${p['text']}');
+    }
     for (final c in cases) {
       final completed = (c['expect'] as String).startsWith('completed_');
       if (!completed) continue;
@@ -156,7 +166,10 @@ void main() {
               reason: 'preview');
         } else if (!(c['expect'] as String).startsWith('completed_') ||
             ParserEngine.hasIgnoreWord(text.toLowerCase()) ||
-            ParserEngine.isNoticeMessage(text)) {
+            // Round 3: isNoticeMessage reads the clause core (a notice
+            // footer no longer makes a movement a notice); the preview reads
+            // the whole text, as this check did before.
+            ParserEngine.isNoticeMessage(text, wholeText: true)) {
           expect(preview.parse(text).isHighConfidence, isFalse,
               reason: 'preview');
         } else {
@@ -326,3 +339,4 @@ void main() {
     });
   }
 }
+

@@ -1,4 +1,6 @@
 import '../models/transaction_type.dart';
+import 'message_meaning.dart';
+import 'parser_engine.dart';
 
 /// Money-movement direction derived **independently** from explicit wording in
 /// the message. It is used as a grounding cross-check against the classified
@@ -109,13 +111,108 @@ class DirectionSignal {
   static List<String> get creditWords => _creditWords;
   static List<String> get debitWords => _debitWords;
 
+  /// Round 3 (owner brief 4.1, V1-082): the direction of the message's
+  /// transaction clause. Footer sentences ([ParserEngine.clauseScope]) do
+  /// not count; the clause's own verb and preposition structure
+  /// ([flowOf]: "debited", "paid to", "credited", "received from") decides
+  /// first, and only when it is silent do the money words decide (a noun such
+  /// as "deposit" or "salary" alone no longer outweighs "paid to …").
+  ///
+  /// A bare "to your account" (`إلى حسابك`) with no credit verb and no
+  /// outgoing structure does not decide here, as the bare English phrase
+  /// never did: the money words do (this is the cross-check the import paths
+  /// hold a server or AI direction against).
   static TxnDirection detect(String text) {
+    final core = ParserEngine.clauseScope(text).core;
+    final flow = flowOf(core);
+    if (flow == TxnDirection.credit &&
+        !hasDebitFlow(core) &&
+        !_creditVerbFlow.hasMatch(core.toLowerCase())) {
+      return detectWords(core);
+    }
+    if (flow != TxnDirection.unknown) return flow;
+    return detectWords(core);
+  }
+
+  static final RegExp _creditVerbFlow = _flowPattern([
+    for (final w in creditFlow)
+      if (w != 'إلى حسابك' && w != 'الى حسابك') w,
+  ]);
+
+  /// The word-family reading of [text] (both or neither family: unknown).
+  static TxnDirection detectWords(String text) {
     final lower = text.toLowerCase();
     final hasCredit = _creditWords.any(lower.contains);
     final hasDebit = _debitWords.any(lower.contains);
     if (hasCredit && !hasDebit) return TxnDirection.credit;
     if (hasDebit && !hasCredit) return TxnDirection.debit;
     return TxnDirection.unknown;
+  }
+
+  /// Outgoing structure: a debit verb or "… to / from your account".
+  /// Equal to `messageMeaning.debitFlow` in `process-ios-sms/parser_rules.json`.
+  static const List<String> debitFlow = [
+    'debited', 'deducted', 'charged', 'withdrawn', 'spent', 'sent to',
+    'paid to', 'paid at', 'paid for', 'paid using', 'paid by card',
+    'transferred to', 'transfer to', 'from your account', 'from your card',
+    'from account', 'money out', 'outgoing', 'outward',
+    'تم خصم', 'خصم مبلغ', 'تم سحب', 'مبلغ صادر', 'حوالة صادرة',
+    'تحويل صادر', 'من حسابك', 'من بطاقتك', 'تم الدفع', 'تم دفع', 'تم سداد',
+  ];
+
+  /// Incoming structure: a credit verb or "… into / to your account".
+  /// Equal to `messageMeaning.creditFlow` in `process-ios-sms/parser_rules.json`.
+  static const List<String> creditFlow = [
+    'credited', 'received', 'deposited to', 'deposited into',
+    'deposited in your', 'paid into', 'paid to your account',
+    'transferred to your account', 'transferred into your account',
+    'transfer to your account', 'sent to you', 'refunded', 'money in',
+    'inward', 'incoming', 'تم إيداع', 'تم ايداع',
+    'حوالة واردة', 'تحويل وارد', 'تم استلام', 'استلمت', 'مبلغ وارد',
+    'إلى حسابك', 'الى حسابك', 'تمت إضافة', 'تم إضافة', 'إضافتها',
+  ];
+
+  static final RegExp _debitFlow = _flowPattern(debitFlow);
+  static final RegExp _creditFlow = _flowPattern(creditFlow);
+  static RegExp _flowPattern(List<String> words) => RegExp(
+      '(?<![a-z\u0621-\u064a])[وفب]?(?:${(List.of(words)..sort((a, b) => b.length - a.length)).map(RegExp.escape).join('|')})(?![a-z])');
+
+  static bool hasDebitFlow(String text) =>
+      _debitFlow.hasMatch(text.toLowerCase());
+  static bool hasCreditFlow(String text) =>
+      _creditFlow.hasMatch(text.toLowerCase());
+
+  /// The direction of the earliest flow phrase in [text] (a longer phrase
+  /// wins at the same position: "transferred to your" is incoming).
+  ///
+  /// "Payment … received" with no payer ("Your card payment of SAR 500 has
+  /// been received") acknowledges the user's own payment: not decisive.
+  static TxnDirection flowOf(String text) {
+    final lower = text.toLowerCase();
+    final d = _debitFlow.firstMatch(lower);
+    var c = _creditFlow.firstMatch(lower);
+    if (c != null && d == null && c[0] == 'received') {
+      final sentence = lower.split(RegExp(r'[\n!?؟;؛]|\.(?![0-9])')).firstWhere(
+          (x) => x.contains('received'),
+          orElse: () => '');
+      final before = sentence.substring(0, sentence.indexOf('received'));
+      if (RegExp(r'(?<![a-z])payment(?![a-z])').hasMatch(before) &&
+          !RegExp(r'(?<![a-z])from(?![a-z])').hasMatch(sentence)) {
+        c = null;
+      }
+    }
+    if (d == null && c == null) return TxnDirection.unknown;
+    if (c == null) return TxnDirection.debit;
+    if (d == null) return TxnDirection.credit;
+    final credit = c.start < d.start || (c.start == d.start && c.end >= d.end);
+    // "SAR 500 credited to Ali from your account": the money left the
+    // user's own account, and no clause names it as the destination.
+    if (credit &&
+        MessageMeaning.sourceOfFunds.any(lower.contains) &&
+        !MessageMeaning.ownDestination.any(lower.contains)) {
+      return TxnDirection.debit;
+    }
+    return credit ? TxnDirection.credit : TxnDirection.debit;
   }
 
   /// The direction implied by a classified [TransactionType], or

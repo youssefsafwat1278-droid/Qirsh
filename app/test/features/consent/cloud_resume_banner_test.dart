@@ -111,6 +111,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('initialConsentAccept')), findsOneWidget);
     expect(service.enableCalls, 0);
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('consentManageCancel')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('consentManageCancel')));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('cloudResumeEnable')), findsOneWidget);
@@ -121,6 +124,9 @@ void main() {
     await pump(tester);
     await tester.tap(find.byKey(const Key('cloudResumeEnable')));
     await tester.pumpAndSettle();
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pumpAndSettle();
     expect(service.enableCalls, 1);

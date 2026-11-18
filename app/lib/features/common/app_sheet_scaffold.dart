@@ -90,32 +90,42 @@ class AppSheetScaffold extends StatelessWidget {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (title != null)
-                              Text(
-                                title!,
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.calmTitle(c.textPrimary)
-                                    .copyWith(fontSize: 19),
-                              ),
-                            if (subtitle != null) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                subtitle!,
-                                textAlign: TextAlign.center,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.caption(c.textSecondary)
-                                    .copyWith(fontSize: 12.5),
-                              ),
-                            ],
-                          ],
+                      // UX-05: the Stack takes this child's height and clips
+                      // the side buttons to it; a one-line title (~23 pt)
+                      // cut the close / action buttons below 44 pt.
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minHeight: 48),
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 40),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (title != null)
+                                  Text(
+                                    title!,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style:
+                                        AppTypography.calmTitle(c.textPrimary)
+                                            .copyWith(fontSize: 19),
+                                  ),
+                                if (subtitle != null) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    subtitle!,
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style:
+                                        AppTypography.caption(c.textSecondary)
+                                            .copyWith(fontSize: 12.5),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
                         ),
                       ),
                       if (leading != null)
@@ -139,7 +149,8 @@ class AppSheetScaffold extends StatelessWidget {
                           bottom: 0,
                           child: Center(
                             child: IconButton(
-                              tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                              tooltip: MaterialLocalizations.of(context)
+                                  .closeButtonTooltip,
                               onPressed: () => Navigator.of(context).pop(),
                               icon: const Icon(AppLucideIcons.x),
                               color: c.textSecondary,

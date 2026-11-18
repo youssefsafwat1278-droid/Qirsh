@@ -79,7 +79,13 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     if (entry == OnboardingSetupEntry.full) {
       expect(find.text('Step 1 of 6'), findsOneWidget);
-      await tester.tap(find.textContaining(country).first);
+      // Decision 3.7: the country is chosen from the searchable ISO list.
+      await tester.tap(find.byKey(const ValueKey('setup-country-field')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const ValueKey('country-search')), country);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('country-EG')));
+      await tester.pumpAndSettle();
       await advance(tester);
     }
   }
@@ -90,6 +96,9 @@ void main() {
     await pumpSetup(tester);
     expect(find.text('Step 2 of 6'), findsOneWidget);
     expect(repo.settings.cloudConsentState, ConsentState.unset);
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentDecline')));
     await advance(tester);
     expect(find.text('Step 3 of 6'), findsOneWidget);
@@ -102,6 +111,9 @@ void main() {
 
   testWidgets('explicit Accept grants cloud and AI through existing authority', (tester) async {
     await pumpSetup(tester);
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await advance(tester);
     expect(repo.settings.cloudConsentState, ConsentState.accepted);
@@ -117,6 +129,9 @@ void main() {
     service.outcome = const CaptureRegistrationStatus(
         CaptureRegistrationPhase.failed, 'register_failed');
     final accept = find.byKey(const Key('initialConsentAccept'));
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(accept);
+    await tester.pump();
     await tester.tap(accept);
     await advance(tester);
 
@@ -126,6 +141,8 @@ void main() {
     await tester.pump(const Duration(seconds: 4));
     service.outcome =
         const CaptureRegistrationStatus(CaptureRegistrationPhase.connected);
+    await tester.ensureVisible(accept);
+    await tester.pump();
     await tester.tap(accept);
     await advance(tester);
     expect(find.text('Step 3 of 6'), findsOneWidget);
@@ -135,6 +152,9 @@ void main() {
       'country currency, no default name', (tester) async {
     await pumpSetup(tester);
     for (var i = 0; i < 1; i++) {
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentDecline')));
       await advance(tester);
     }
@@ -160,6 +180,9 @@ void main() {
       (tester) async {
     await pumpSetup(tester);
     for (var i = 0; i < 1; i++) {
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentDecline')));
       await advance(tester);
     }
@@ -203,6 +226,9 @@ void main() {
     ));
     await pumpSetup(tester);
     for (var i = 0; i < 1; i++) {
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentDecline')));
       await advance(tester);
     }
@@ -234,6 +260,9 @@ void main() {
     addTearDown(() => tester.binding.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null));
     await pumpSetup(tester);
+    // The full disclosure is long: scroll to the action first.
+    await tester.ensureVisible(find.byKey(const Key('initialConsentDecline')));
+    await tester.pump();
     await tester.tap(find.byKey(const Key('initialConsentDecline')));
     await advance(tester);
     await tester.tap(find.text('Continue'));

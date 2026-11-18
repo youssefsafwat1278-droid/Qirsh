@@ -391,6 +391,12 @@ class _AccountCard extends ConsumerWidget {
                                         ? c.warningText
                                         : c.textMain)),
                           ),
+                          // Decision 3.14: the source of this balance.
+                          const SizedBox(height: 3),
+                          Text(context.l10n.accBalanceManualShort,
+                              key: const Key('accountRowBalanceSource'),
+                              textAlign: TextAlign.end,
+                              style: AppTypography.caption(c.textLight)),
                           if (showCurrency) ...[
                             const SizedBox(height: 3),
                             Text(Currency.labelWithCode(context, account.currency),

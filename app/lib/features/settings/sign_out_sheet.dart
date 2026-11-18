@@ -47,13 +47,20 @@ String unsyncedItemsList(BuildContext context, UnsyncedInventory inv) {
 
 /// Ordinary sign-out offers one preserving action. Unsynced work warns but
 /// never blocks locking the account. Device-removal confirmation stays separate.
+///
+/// [cloudSyncOn] is the Smart Analysis & Cloud Sync choice. When it is `false`
+/// nothing syncs on sign-in either, so the sheet says the changes stay on this
+/// device and are not synced while it is off (V1-067, decision B26 (a)). When it
+/// is unknown (`null`) the sheet does not promise either way.
 Future<SignOutChoice?> showSignOutSheet(
   BuildContext context, {
   UnsyncedInventory? pending,
+  bool? cloudSyncOn,
 }) {
   final c = context.colors;
   final l10n = context.l10n;
   final unsynced = pending != null && pending.hasPendingUserData;
+  final cloudOff = cloudSyncOn == false;
   return showGlassSheet<SignOutChoice>(
     context: context,
     showDragHandle: true,
@@ -84,9 +91,19 @@ Future<SignOutChoice?> showSignOutSheet(
                 if (unsynced) ...[
                   const SizedBox(height: AppSpacing.s3),
                   Text(
-                    l10n.signOutUnsyncedKeepBody(
-                        unsyncedItemsList(sheetContext, pending)),
+                    cloudOff
+                        ? l10n.signOutUnsyncedCloudOffBody(
+                            unsyncedItemsList(sheetContext, pending))
+                        : l10n.signOutUnsyncedKeepBody(
+                            unsyncedItemsList(sheetContext, pending)),
                     key: const Key('signOutUnsyncedWarning'),
+                    style: AppTypography.body(c.textMain),
+                  ),
+                ] else if (cloudOff) ...[
+                  const SizedBox(height: AppSpacing.s3),
+                  Text(
+                    l10n.signOutCloudOffNote,
+                    key: const Key('signOutCloudOffNote'),
                     style: AppTypography.body(c.textMain),
                   ),
                 ],

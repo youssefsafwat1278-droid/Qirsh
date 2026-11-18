@@ -478,6 +478,9 @@ class CaptureImportService {
     }
 
     final result = results[id];
+    // Closure round (parser meaning): what the device reads the message to be
+    // decides before any server result is imported (Smart Inbox + reason).
+    final held = meaningHoldReason(item.text);
     if (aiPrimary) {
       if (result?.parsed['parserSource'] == 'ai_ignored') {
         // Only the device's deterministic OTP/promo filter may drop a capture.
@@ -493,6 +496,7 @@ class CaptureImportService {
             message: item, committedTransactions: const []);
       }
       if (result != null &&
+          held == null &&
           _isProcessed(result) &&
           _validates(result, item) &&
           !_localContradicts(result, item)) {
@@ -511,8 +515,10 @@ class CaptureImportService {
       }
       // No guessed financial transaction: retain the full native message in
       // Smart Inbox atomically before acknowledging the native receipt.
+      final serverReason = result?.parsed['reviewReason'];
       await _sync.persistUnprocessableCapture(item,
-          isOwnerCurrent: () => _stillOwner(owner));
+          isOwnerCurrent: () => _stillOwner(owner),
+          reviewReason: held ?? (serverReason is String ? serverReason : null));
       await _removeNative(owner, id);
       if (result != null) acks.add(id);
       return CaptureImportItem(id: id, path: CaptureImportPath.server,
@@ -525,20 +531,30 @@ class CaptureImportService {
         local = !(fetchStatus == CaptureFetchStatus.unavailable &&
             (item.failureReason?.trim().isEmpty ?? true));
         if (!local) return null;
-      } else if (_isProcessed(result) && _validates(result, item)) {
-        if (!_localContradicts(result, item)) {
+      } else if (_isProcessed(result)) {
+        final reason = _validation(result, item).reason;
+        if (reason == null && held == null && !_localContradicts(result, item)) {
           return _importFromServer(owner, item, id, result, acks);
         }
-        // LR-03 — the device's own reading contradicts the server's (the
-        // opposite direction, or not a transaction): neither is trusted. The
-        // full message goes to Smart Inbox, never a confirmed row from either
-        // reading (the local fallback would confirm the device's).
-        await _sync.persistUnprocessableCapture(item,
-            isOwnerCurrent: () => _stillOwner(owner));
-        await _removeNative(owner, id);
-        acks.add(id);
-        return CaptureImportItem(id: id, path: CaptureImportPath.server,
-            message: item, committedTransactions: const []);
+        if (reason == null ||
+            reason == 'direction_contradiction' ||
+            held != null) {
+          // LR-03 — the device's own reading contradicts the server's (the
+          // opposite direction, or not a transaction), the validator found
+          // the server's direction contradicts the wording, or the message
+          // is one no reading may record (its meaning): neither reading is
+          // trusted. The full message goes to Smart Inbox, never a confirmed
+          // row from either (the local fallback would confirm the device's).
+          await _sync.persistUnprocessableCapture(item,
+              isOwnerCurrent: () => _stillOwner(owner),
+              reviewReason: held ??
+                  (reason == 'direction_contradiction' ? reason : null));
+          await _removeNative(owner, id);
+          acks.add(id);
+          return CaptureImportItem(id: id, path: CaptureImportPath.server,
+              message: item, committedTransactions: const []);
+        }
+        local = true;
       } else {
         local = true;
       }
@@ -552,12 +568,16 @@ class CaptureImportService {
   }
 
   /// ValidatedCapture v1 against the text the device holds.
-  static bool _validates(ProcessedCaptureDto dto, SharedCapturedMessage item) {
+  static bool _validates(ProcessedCaptureDto dto, SharedCapturedMessage item) =>
+      _validation(dto, item).accepted;
+
+  static CaptureValidation _validation(
+      ProcessedCaptureDto dto, SharedCapturedMessage item) {
     final p = dto.parsed;
     double? number(Object? v) =>
         v is num ? v.toDouble() : (v is String ? double.tryParse(v) : null);
     String? text(Object? v) => v is String ? v : null;
-    final validation = validateCaptureCandidate(
+    return validateCaptureCandidate(
       candidate: CaptureCandidate(
         amount: number(p['amount']),
         amountText: text(p['amount_text']),
@@ -571,7 +591,6 @@ class CaptureImportService {
       text: item.text,
       receivedAt: item.receivedAt ?? dto.createdAt ?? DateTime.now().toUtc(),
     );
-    return validation.accepted;
   }
 
   /// FR-02 / LR-03 / LR-04 — the device's own reading of the text contradicts
@@ -584,6 +603,7 @@ class CaptureImportService {
       direction: p['direction'] is String ? p['direction'] as String : null,
       type: p['type'] is String ? p['type'] as String : null,
       senderId: item.sender,
+      merchant: p['merchant'] is String ? p['merchant'] as String : null,
       // PR-06: an amount the device cannot read is never taken as agreeing.
       amount: p['amount'] is num
           ? p['amount'] as num
@@ -654,6 +674,7 @@ class CaptureImportService {
       message: item,
       disposition: result.disposition,
       transactionId: result.transactionId,
+      reviewReason: result.addTransactionResult.reviewReason,
     );
     // The local result is durable either way; a retained item is removed by the
     // next run's receipt check.

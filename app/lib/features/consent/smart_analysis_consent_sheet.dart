@@ -9,6 +9,7 @@ import '../../core/backend/supabase_config.dart';
 import '../../core/di/app_providers.dart';
 import '../../core/privacy/consent_authority.dart';
 import '../../core/privacy/diagnostics_consent_gate.dart';
+import '../../core/privacy/shared_learning_preference.dart';
 import '../../core/session/admission_authority.dart';
 import '../../core/session/app_session.dart';
 import '../../core/session/consent_capability.dart';
@@ -21,11 +22,13 @@ import '../../domain/entities/supporting_entities.dart';
 import '../../domain/repositories/user_settings_repository.dart';
 import '../capture/services/capture_device_registration_service.dart';
 import '../settings/settings_providers.dart';
+import 'legal_links.dart';
 import '../../core/theme/widgets/glass_sheet.dart';
 
-/// One disclosed initial choice for Cloud Sync and Smart Analysis. Nothing is
-/// pre-selected: Accept grants both; local use persists both denials. Dismissal
-/// changes nothing. Privacy management retains independent withdrawal.
+/// One disclosed initial choice for Cloud Sync and Smart Analysis (decision
+/// 3.8). Nothing is pre-selected: "Agree and enable" grants both and includes
+/// shared category learning (3.10); "Continue locally" persists both denials.
+/// Dismissal changes nothing. Withdrawal in Privacy turns both off together.
 ///
 /// [management] opens the same disclosure from the Privacy screen to RE-consent:
 /// its secondary action is a plain Cancel that writes nothing (first-use "Continue
@@ -44,18 +47,24 @@ Future<bool> showSmartAnalysisConsentSheet(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (sheetContext) => SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
-            AppSpacing.gutter, AppSpacing.s2, AppSpacing.gutter, AppSpacing.s6),
-        child: SmartAnalysisConsentPanel(
-          work: scope,
-          management: management,
-          restoreCloud: restoreCloud,
-          onDone: (granted) {
-            onAnswered?.call();
-            Navigator.of(sheetContext).pop(granted);
-          },
+    // The disclosure is long: cap the sheet so the scrim above it stays
+    // visible and tapping it still dismisses (a dismissal grants nothing).
+    builder: (sheetContext) => ConstrainedBox(
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.9),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.s2,
+              AppSpacing.gutter, AppSpacing.s6),
+          child: SmartAnalysisConsentPanel(
+            work: scope,
+            management: management,
+            restoreCloud: restoreCloud,
+            onDone: (granted) {
+              onAnswered?.call();
+              Navigator.of(sheetContext).pop(granted);
+            },
+          ),
         ),
       ),
     ),
@@ -109,20 +118,32 @@ Future<ReaskOutcome> maybeReaskConsent(
   final work = ref.read(consentLocalWorkProvider)();
   if (work == null) return ReaskOutcome.stale;
   final repository = ref.read(userSettingsRepositoryProvider);
+  var askSharedLearning = false;
   try {
     final settings = await work.run(repository.getSettings);
     if (!work.current) return ReaskOutcome.stale;
     if (settings.cloudConsentState != ConsentState.unset ||
         settings.aiConsentState != ConsentState.unset) {
-      return ReaskOutcome.notNeeded;
+      // Decision 3.10 transition: an account that accepted before shared
+      // learning was part of this choice is asked about it once.
+      if (settings.cloudProcessingEnabled && settings.aiConsentGranted) {
+        askSharedLearning = true;
+      } else {
+        return ReaskOutcome.notNeeded;
+      }
     }
-    if (await (seen ?? AppSession.instance.consentPromptSeen)()) {
+    if (!askSharedLearning &&
+        await (seen ?? AppSession.instance.consentPromptSeen)()) {
       return ReaskOutcome.notNeeded;
     }
   } on StaleAdmissionException {
     return ReaskOutcome.stale;
   }
   if (!context.mounted || !work.current) return ReaskOutcome.stale;
+  if (askSharedLearning) {
+    return _maybeAskSharedLearning(context, ref, work,
+        isForeground: isForeground, beforePresent: beforePresent);
+  }
   var choice = AccountCloudChoice.none;
   if (readChoice != null) {
     choice = await readChoice();
@@ -173,6 +194,105 @@ Future<ReaskOutcome> maybeReaskConsent(
     },
   );
   return ReaskOutcome.shown;
+}
+
+/// Asks an account that accepted Cloud and AI before shared category learning
+/// was part of that consent (decision 3.10) whether to include it. Nothing is
+/// assumed: until answered it stays OFF. A button records the answer for this
+/// account on this device; a dismissal records nothing, so it is asked again.
+Future<ReaskOutcome> _maybeAskSharedLearning(
+  BuildContext context,
+  WidgetRef ref,
+  ConsentLocalWork work, {
+  bool Function()? isForeground,
+  Future<void> Function()? beforePresent,
+}) async {
+  final preference = ref.read(sharedLearningPreferenceProvider);
+  final uid = work.capability.uid;
+  if (await preference.isAnswered(uid)) return ReaskOutcome.notNeeded;
+  if (!context.mounted || !work.current) return ReaskOutcome.stale;
+  if (isForeground != null && !isForeground()) return ReaskOutcome.deferred;
+  if (beforePresent != null) {
+    await beforePresent();
+    if (!context.mounted || !work.current) return ReaskOutcome.stale;
+    if (isForeground != null && !isForeground()) return ReaskOutcome.deferred;
+  }
+  final agreed = await showGlassSheet<bool>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    // The disclosure is long: cap the sheet so the scrim above it stays
+    // visible and tapping it still dismisses (a dismissal grants nothing).
+    builder: (sheetContext) => ConstrainedBox(
+      constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(sheetContext).height * 0.9),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.s2,
+              AppSpacing.gutter, AppSpacing.s6),
+          child: SharedLearningUpdatePanel(
+              onDone: (value) => Navigator.of(sheetContext).pop(value)),
+        ),
+      ),
+    ),
+  );
+  if (agreed == null || !work.current) return ReaskOutcome.shown;
+  try {
+    await preference.set(uid, agreed);
+  } catch (_) {
+    // Unwritten: still OFF and still unanswered, so it is asked again.
+  }
+  if (context.mounted) ref.invalidate(sharedLearningOptInProvider);
+  return ReaskOutcome.shown;
+}
+
+/// The one-time shared-learning question for accounts that consented earlier.
+class SharedLearningUpdatePanel extends StatelessWidget {
+  const SharedLearningUpdatePanel({super.key, required this.onDone});
+
+  final ValueChanged<bool> onDone;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final fg = context.colors.textPrimary;
+    final muted = context.colors.textSecondary;
+    const buttonSize = Size.fromHeight(AppSpacing.buttonHeight);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(l10n.sharedLearningUpdateTitle,
+            style: AppTypography.sectionTitle(fg)),
+        const SizedBox(height: AppSpacing.s3),
+        Text(l10n.sharedLearningUpdateBody, style: AppTypography.body(muted)),
+        const SizedBox(height: AppSpacing.s3),
+        Text(l10n.smartConsentShared, style: AppTypography.body(muted)),
+        const SizedBox(height: AppSpacing.s3),
+        Text(l10n.smartConsentOff, style: AppTypography.body(muted)),
+        LegalLinks(color: fg),
+        const SizedBox(height: AppSpacing.s3),
+        FilledButton(
+          key: const Key('sharedLearningUpdateAgree'),
+          style: FilledButton.styleFrom(minimumSize: buttonSize),
+          onPressed: () => onDone(true),
+          child: Text(l10n.sharedLearningUpdateAgree,
+              textAlign: TextAlign.center),
+        ),
+        const SizedBox(height: AppSpacing.s2),
+        OutlinedButton(
+          key: const Key('sharedLearningUpdateKeepOff'),
+          style: OutlinedButton.styleFrom(
+              minimumSize: buttonSize,
+              foregroundColor: fg,
+              side: BorderSide(color: fg)),
+          onPressed: () => onDone(false),
+          child: Text(l10n.sharedLearningUpdateKeepOff,
+              textAlign: TextAlign.center),
+        ),
+      ],
+    );
+  }
 }
 
 /// The consent-only capability of the lifecycle a consent action started in, and
@@ -421,6 +541,7 @@ class _SmartAnalysisConsentPanelState
     }
     if (!work.current) return;
     final service = ref.read(captureDeviceRegistrationServiceProvider);
+    final container = ProviderScope.containerOf(context, listen: false);
     setState(() => _granting = true);
     final UserSettingsEntity saved;
     try {
@@ -446,6 +567,23 @@ class _SmartAnalysisConsentPanelState
       }
       if (mounted) setState(() => _granting = false);
       return;
+    }
+    // Decision 3.10: shared category learning is part of this affirmative
+    // choice, so it is recorded ON here, explicitly, for this account. Never
+    // on any other path: an update or a dismissal opts nobody in. A failed
+    // write leaves it OFF (fail closed); the sending gates still require
+    // Cloud AND AI consent at every send. The keychain write does not hold up
+    // completing the consent itself.
+    if (ai && saved.cloudProcessingEnabled && saved.aiConsentGranted &&
+        work.current) {
+      unawaited(container
+          .read(sharedLearningPreferenceProvider)
+          .set(work.capability.uid, true)
+          .then((_) {
+        try {
+          container.invalidate(sharedLearningOptInProvider);
+        } catch (_) {} // The scope may be gone by then.
+      }, onError: (Object _) {}));
     }
     // Consent is locally saved from here on. A registration failure is reported by the
     // live status below (connected / failed + Retry), never as a save failure.
@@ -501,6 +639,17 @@ class _SmartAnalysisConsentPanelState
     final l10n = context.l10n;
     final fg = widget.onDark ? Colors.white : context.colors.textPrimary;
     final muted = widget.onDark ? Colors.white70 : context.colors.textSecondary;
+    Widget heading(String text) => Padding(
+        padding: const EdgeInsets.only(top: AppSpacing.s2, bottom: AppSpacing.s1),
+        child: Semantics(
+            header: true,
+            child: Text(text, style: AppTypography.bodyStrong(fg))));
+    Widget para(String text) => Padding(
+        padding: const EdgeInsets.only(bottom: AppSpacing.s3),
+        child: Text(text, style: AppTypography.body(muted)));
+    // Decision 3.8: both choices have the same size and weight; only the
+    // affirmative "Agree and enable" turns anything on.
+    const buttonSize = Size.fromHeight(AppSpacing.buttonHeight);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -508,13 +657,30 @@ class _SmartAnalysisConsentPanelState
         Text(widget.restoreCloud ? l10n.restoreCloudTitle : l10n.smartConsentTitle,
             style: AppTypography.sectionTitle(fg)),
         const SizedBox(height: AppSpacing.s3),
-        for (final text in [l10n.smartConsentBullet2, l10n.smartConsentBullet1, l10n.smartConsentBullet3])
-          Padding(padding: const EdgeInsets.only(bottom: AppSpacing.s3),
-            child: Text(text, style: AppTypography.body(muted))),
+        para(l10n.smartConsentIntro),
+        heading(l10n.smartConsentHeadSent),
+        para(l10n.smartConsentBullet2),
+        para(l10n.smartConsentBullet1),
+        heading(l10n.smartConsentHeadWho),
+        para(l10n.smartConsentWho),
+        heading(l10n.smartConsentHeadWhy),
+        para(l10n.smartConsentWhy),
+        heading(l10n.smartConsentHeadSync),
+        para(l10n.smartConsentBullet3),
+        heading(l10n.smartConsentHeadShared),
+        para(l10n.smartConsentShared),
+        heading(l10n.smartConsentHeadOff),
+        para(l10n.smartConsentOff),
+        if (!widget.management) para(l10n.smartConsentLocal),
+        LegalLinks(color: fg),
+        const SizedBox(height: AppSpacing.s3),
         FilledButton(
           key: const Key('initialConsentAccept'),
+          style: FilledButton.styleFrom(minimumSize: buttonSize),
           onPressed: _granting ? null : () => _grant(cloud: true, ai: true),
-          child: Text(_granting ? l10n.consentStatusTurningOn : l10n.initialConsentAccept),
+          child: Text(
+              _granting ? l10n.consentStatusTurningOn : l10n.initialConsentAccept,
+              textAlign: TextAlign.center),
         ),
         if (widget.restoreCloud)
           TextButton(
@@ -530,10 +696,15 @@ class _SmartAnalysisConsentPanelState
             child: Text(l10n.commonCancel),
           )
         else ...[
-          TextButton(
+          const SizedBox(height: AppSpacing.s2),
+          OutlinedButton(
             key: const Key('initialConsentDecline'),
+            style: OutlinedButton.styleFrom(
+                minimumSize: buttonSize,
+                foregroundColor: fg,
+                side: BorderSide(color: fg)),
             onPressed: _granting ? null : _decline,
-            child: Text(l10n.initialConsentDecline),
+            child: Text(l10n.initialConsentDecline, textAlign: TextAlign.center),
           ),
           TextButton(
             onPressed: () => context.push(widget.privacyRoute),

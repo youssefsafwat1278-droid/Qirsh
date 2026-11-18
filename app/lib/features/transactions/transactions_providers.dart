@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/di/account_access_mode.dart';
 import '../../core/di/app_providers.dart';
 import '../../domain/entities/bill_entity.dart';
 import '../../domain/entities/transaction_entity.dart';
 import '../../domain/finance/money.dart';
 import '../../domain/repositories/transaction_repository.dart';
+import '../../domain/usecases/mark_for_review_usecase.dart';
 import '../common/category_catalog.dart';
 
 /// B2-C — one date section of the transaction list, grouped by LOCAL calendar
@@ -231,6 +233,11 @@ final transactionsDateRangeProvider =
 
 final transactionKindFilterProvider =
     StateProvider<TransactionKindFilter>((ref) => TransactionKindFilter.all);
+
+/// Owner brief 4.6: moves a confirmed transaction back to review (pending,
+/// outside totals). A writer, like `confirmTransactionUseCaseProvider`.
+final markForReviewUseCaseProvider = writerProvider<MarkForReviewUseCase>(
+    (ref) => MarkForReviewUseCase(ref.watch(transactionRepositoryProvider)));
 
 /// Selected category filter (by category id). `null` means all categories.
 final transactionCategoryFilterProvider = StateProvider<String?>((ref) => null);

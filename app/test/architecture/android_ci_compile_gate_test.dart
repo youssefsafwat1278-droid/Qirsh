@@ -190,15 +190,41 @@ void main() {
       };
     }
 
-    test('admob is attached to EXACTLY the two signed release workflows', () {
+    test('admob is attached to EXACTLY the Android signed release workflow',
+        () {
+      // Owner decision 3.2 (2026-11-17): Version 1 (iPhone) has no advertising,
+      // so no iOS workflow carries production AdMob credentials any more.
       final groups = groupsByWorkflow();
       final withAdmob = groups.entries
           .where((e) => e.value.contains('admob'))
           .map((e) => e.key)
           .toSet();
-      expect(withAdmob, {'ios-signed-release', 'android-release'},
-          reason: 'production AdMob credentials belong to signed release builds '
-              'and nowhere else');
+      expect(withAdmob, {'android-release'},
+          reason: 'production AdMob credentials belong to the Android signed '
+              'release build and nowhere else');
+    });
+
+    test('no iOS workflow can compile ads in or pass an AdMob id (3.2)', () {
+      for (final wf in const [
+        'ios-signed',
+        'ios-signed-release',
+        'ios-unsigned-sideload',
+      ]) {
+        final body = _workflow(wf);
+        expect(body.contains('--dart-define=QIRSH_ADS_ENABLED'), isFalse,
+            reason: '$wf must not compile advertising in');
+        expect(RegExp(r'--dart-define=ADMOB_').hasMatch(body), isFalse,
+            reason: '$wf must not pass AdMob identifiers to Dart');
+        expect(body.contains("printf 'ADMOB_APP_ID_IOS"), isFalse,
+            reason: '$wf must not write an AdMob app id into Info.plist');
+      }
+      for (final wf in const ['ios-signed', 'ios-signed-release']) {
+        expect(_workflow(wf), contains('rm -f ios/Flutter/AdMob.xcconfig'),
+            reason: '$wf must remove a stale AdMob.xcconfig before building');
+      }
+      // Android (outside V1) keeps its existing ads behaviour explicitly.
+      expect(_workflow('android-release'),
+          contains('--dart-define=QIRSH_ADS_ENABLED=true'));
     });
 
     test('admob is NOT attached to the quality gate', () {
@@ -225,8 +251,7 @@ void main() {
       final groups = groupsByWorkflow();
       expect(groups['android-release'],
           containsAll(<String>['supabase', 'google_play', 'admob']));
-      expect(groups['ios-signed-release'],
-          containsAll(<String>['supabase', 'admob']));
+      expect(groups['ios-signed-release'], contains('supabase'));
       expect(groups['ios-unsigned-sideload'], contains('supabase'));
     });
   });

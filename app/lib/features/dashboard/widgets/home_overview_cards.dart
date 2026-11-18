@@ -143,39 +143,77 @@ class _CategorySpendCardState extends State<CategorySpendCard> {
               ? null
               : Border(top: BorderSide(color: HomeV2.hairline(context))),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 10,
-              height: 10,
-              decoration: BoxDecoration(
-                color: slice.category.accent(brightness),
-                shape: BoxShape.circle,
-              ),
+        child: Builder(builder: (context) {
+          final dot = Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: slice.category.accent(brightness),
+              shape: BoxShape.circle,
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(slice.category.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.body(t.textOnCanvasPrimary)),
-            ),
-            if (delta != null) ...[
+          );
+          final figures = <Widget>[
+            if (delta != null)
               Directionality(
                 textDirection: TextDirection.ltr,
                 child: AppStatusPill(
                     label: delta, tone: deltaTone!, compact: true),
               ),
-              const SizedBox(width: 8),
-            ],
             Text('${(slice.percent * 100).round()}%',
                 style: AppTypography.caption(t.textOnCanvasMuted)),
-            const SizedBox(width: 10),
             Text(widget.privacyMode ? '••••' : formatMoney(slice.total),
                 style: AppTypography.amountSmall(t.textOnCanvasPrimary)
                     .copyWith(fontSize: 16)),
-          ],
-        ),
+          ];
+          // UX-09: above 1.25x the figures wrap under the category name
+          // (the one-line row overflowed at the largest size on 320 pt).
+          if (MediaQuery.textScalerOf(context).scale(16) > 20) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  dot,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(slice.category.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.body(t.textOnCanvasPrimary)),
+                  ),
+                ]),
+                const SizedBox(height: 4),
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(start: 22),
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: figures,
+                  ),
+                ),
+              ],
+            );
+          }
+          return Row(
+            children: [
+              dot,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(slice.category.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.body(t.textOnCanvasPrimary)),
+              ),
+              if (delta != null) ...[
+                figures[0],
+                const SizedBox(width: 8),
+              ],
+              figures[figures.length - 2],
+              const SizedBox(width: 10),
+              figures.last,
+            ],
+          );
+        }),
       ),
     );
   }

@@ -260,6 +260,9 @@ void main() {
       await tester.ensureVisible(turnOn());
       await tester.tap(turnOn());
       await settle(tester);
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await settle(tester);
       await settle(tester); // the preflight/reservation adds local DB work
@@ -292,6 +295,9 @@ void main() {
       await tester.ensureVisible(turnOn());
       await tester.tap(turnOn());
       await settle(tester);
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await settle(tester);
       expect(settings.saved, 1, reason: 'the committed choice is not re-saved');
@@ -314,6 +320,9 @@ void main() {
       await tester.ensureVisible(turnOn());
       await tester.tap(turnOn());
       await settle(tester);
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await settle(tester);
       expect(sim.of('beginCloudEgressEnable'), hasLength(1),
@@ -340,6 +349,9 @@ void main() {
       await tester.ensureVisible(turnOn());
       await tester.tap(turnOn());
       await settle(tester);
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await settle(tester);
       expect(sim.of('finishCloudEgressEnable'), hasLength(1));
@@ -409,6 +421,9 @@ void main() {
       await tester.ensureVisible(turnOn());
       await tester.tap(turnOn());
       await settle(tester);
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await settleUntil(tester, find.text(_en.cloudEnableChoiceNotSaved));
       final row = await io(tester, settings.getSettings);
@@ -455,6 +470,9 @@ void main() {
           if (!nativeFinish.isCompleted) nativeFinish.complete();
         });
       });
+      // The full disclosure is long: scroll to the action first.
+      await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+      await tester.pump();
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await settleUntil(tester, status(_en.consentStatusActive));
       expect(status(_en.consentStatusActive), findsOneWidget);

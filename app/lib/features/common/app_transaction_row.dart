@@ -105,6 +105,28 @@ class AppTransactionRow extends StatelessWidget {
             '${awaitingPrice ? '$sep${l.txnAwaitingPrice}' : ''}'
             '${isAi ? '$sep${l.a11yAi}' : ''}';
 
+    // UX-09: above 1.25x the row switches to a stacked, wrapping layout.
+    final large = MediaQuery.textScalerOf(context).scale(16) > 20;
+    final badges = [
+      if (isPending)
+        _RowBadge(
+            label: l.commonUnderReview,
+            color: c.warningText,
+            background: c.warningBg),
+      if (awaitingPrice)
+        _RowBadge(
+            label: l.txnAwaitingPrice,
+            color: c.warningText,
+            background: c.warningBg),
+    ];
+    final amountText = _RowAmount(
+      text: privacyMode ? '••••' : '$amountPrefix$magnitude',
+      style: AppTypography.amountSmall(
+        privacyMode ? c.textMuted : amountColor,
+      ),
+      fractionColor: privacyMode ? c.textMuted : c.textSecondary,
+    );
+
     return Semantics(
       label: semantics,
       button: onTap != null,
@@ -159,7 +181,7 @@ class AppTransactionRow extends StatelessWidget {
                             child: Text(
                               title,
                               style: AppTypography.bodyStrong(c.textPrimary),
-                              maxLines: 1,
+                              maxLines: large ? 3 : 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
@@ -182,52 +204,70 @@ class AppTransactionRow extends StatelessWidget {
                       // chip (moved off the title line).
                       if (subtitle != null || isPending || awaitingPrice) ...[
                         const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            if (subtitle != null)
-                              Flexible(
-                                child: Text(
+                        // UX-09: at large text the meta line wraps (the review
+                        // badge moves under the category · time text instead
+                        // of pushing past the row's edge).
+                        if (large)
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            runSpacing: 4,
+                            children: [
+                              if (subtitle != null)
+                                Text(
                                   subtitle!,
                                   style: AppTypography.caption(c.textMuted),
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                              ),
-                            if (isPending)
-                              _RowBadge(
-                                  label: context.l10n.commonUnderReview,
-                                  color: c.warningText,
-                                  background: c.warningBg),
-                            if (awaitingPrice)
-                              _RowBadge(
-                                  label: context.l10n.txnAwaitingPrice,
-                                  color: c.warningText,
-                                  background: c.warningBg),
-                          ],
+                              ...badges,
+                            ],
+                          )
+                        else
+                          Row(
+                            children: [
+                              if (subtitle != null)
+                                Flexible(
+                                  child: Text(
+                                    subtitle!,
+                                    style: AppTypography.caption(c.textMuted),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ...badges,
+                            ],
+                          ),
+                      ],
+                      // UX-09: at large text the amount takes its own line
+                      // under the title at full size, instead of a side
+                      // column capped at 40% of the width that shrank it.
+                      if (large && trailing == null) ...[
+                        const SizedBox(height: 2),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: AlignmentDirectional.centerStart,
+                          child: amountText,
                         ),
                       ],
                     ],
                   ),
                 ),
-                const SizedBox(width: AppSpacing.s3),
-                trailing ??
-                    ConstrainedBox(
-                      constraints: BoxConstraints(
-                        maxWidth: MediaQuery.sizeOf(context).width * .4,
-                      ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: AlignmentDirectional.centerEnd,
-                        child: _RowAmount(
-                          text: privacyMode ? '••••' : '$amountPrefix$magnitude',
-                          style: AppTypography.amountSmall(
-                            privacyMode ? c.textMuted : amountColor,
-                          ),
-                          fractionColor:
-                              privacyMode ? c.textMuted : c.textSecondary,
-                        ),
-                      ),
+                if (trailing != null) ...[
+                  const SizedBox(width: AppSpacing.s3),
+                  trailing!,
+                ] else if (!large) ...[
+                  const SizedBox(width: AppSpacing.s3),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.sizeOf(context).width * .4,
                     ),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: AlignmentDirectional.centerEnd,
+                      child: amountText,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

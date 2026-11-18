@@ -1,6 +1,9 @@
-// V1-020 — per-entity proof that a restore keeps each synced row's server
-// identity (the backup format carries none) and leaves the right intent for the
-// normal sync machinery, plus the local-only (guest) guard. Real restore use
+// V1-020 / decision 3.3 — per-entity proof that a restore keeps each synced
+// row's server identity (the backup format carries none) and leaves the right
+// intent for the normal sync machinery, plus the local-only (guest) guard.
+// A device holding records MERGES (its copies are kept untouched unless the
+// backup's copy is newer); a device with none takes the full-apply path, which
+// rebinds the identity of the rows it replaces. Real restore use
 // case, snapshot builder, PendingSyncReconciler and outbox queues on an
 // in-memory database; no network. Synthetic data only.
 import 'package:drift/native.dart';
@@ -42,7 +45,6 @@ const _keys = {
   'plan_transaction_links': "plan_id || ':' || transaction_id",
   'user_settings': 'id',
 };
-const _children = {'goal_contributions', 'bill_payments', 'plan_transaction_links'};
 
 Future<Set<String>> _cols(AppDatabase db, String table) async => {
       for (final r in await db.customSelect('PRAGMA table_info($table);').get())
@@ -120,8 +122,8 @@ void main() {
       Map<String, dynamic>.from(await BackupSnapshotBuilder(db).build());
 
   for (final e in _keys.entries) {
-    test('${e.key}: a restored row keeps its server identity and base tokens '
-        '(${_children.contains(e.key) ? 'live immutable child: synced' : 'parent: pending, restored values win'})',
+    test('${e.key}: restoring onto a device that holds the same rows keeps '
+        'each row, its server identity, base tokens and synced state (merge)',
         () async {
       await _seedEveryFamily(db);
       await RestoreBackupUseCase(db)(await backup());
@@ -138,14 +140,38 @@ void main() {
         if (cols.contains('server_revision')) {
           expect(r['server_revision'], 7);
         }
-        expect(r['sync_status'],
-            _children.contains(e.key) ? 'synced' : 'pending');
+        expect(r['sync_status'], 'synced',
+            reason: 'an unchanged device copy needs no new intent');
       }
     });
   }
 
-  test('after a restore the restored domains re-pull from the start and every '
-      'restored parent gets exactly one update intent', () async {
+  test('new device (no records yet): the full apply rebinds the identity of '
+      'every synced row it replaces and leaves an update intent', () async {
+    await _account(db, 'n-acc');
+    await db.customStatement(
+        "INSERT INTO cards(id,account_id,last4,network,created_at,updated_at) "
+        "VALUES('n-card','n-acc','4242','visa','$_t','$_t');");
+    for (final t in ['accounts', 'cards', 'categories', 'user_settings']) {
+      await db.customStatement(
+          "UPDATE $t SET server_id = 'srv:' || id, "
+          "server_updated_at = '$_base', sync_status = 'synced';");
+    }
+    await RestoreBackupUseCase(db)(await backup());
+    for (final t in ['accounts', 'cards', 'categories', 'user_settings']) {
+      final rows = await _q(
+          db, 'SELECT id, server_id, server_updated_at, sync_status FROM $t;');
+      expect(rows, isNotEmpty, reason: t);
+      for (final r in rows) {
+        expect(r['server_id'], 'srv:${r['id']}', reason: '$t identity lost');
+        expect(r['server_updated_at'], _base);
+        expect(r['sync_status'], 'pending', reason: t);
+      }
+    }
+  });
+
+  test('a merge keeps every pull cursor (nothing pulled was removed) and '
+      'records no intent for unchanged rows', () async {
     await _seedEveryFamily(db);
     final snapshot = await backup();
     // Cursors of the restored domains are reset; unrelated keys are kept.
@@ -171,7 +197,7 @@ void main() {
     expect(
         (await _q(db, 'SELECT entity FROM sync_cursors ORDER BY entity;'))
             .map((r) => r['entity']),
-        ['budget_warning_v1:user-1', 'seq_epoch:user-1', 'smart_inbox']);
+        hasLength(10));
 
     final ledger = LedgerOutboxQueue(
         db: db, isPushEnabled: () => true, getAuthUserId: () async => 'user-1');
@@ -187,40 +213,12 @@ void main() {
       getAuthUserId: () async => 'user-1',
       mayEgress: () async => true,
     ).run();
-    expect(
-        await _q(db, 'SELECT transaction_id, operation FROM ledger_sync_outbox;'),
-        [
-          {'transaction_id': 'e-tx', 'operation': 'update'}
-        ]);
-    final planningIntents = {
-      for (final r in await _q(db,
-          'SELECT entity_type, operation FROM planning_sync_outbox;'))
-        r['entity_type']: r['operation'],
-    };
-    for (final type in [
-      PlanningOutboxQueue.accountsEntityType,
-      PlanningOutboxQueue.categoriesEntityType,
-      PlanningOutboxQueue.cardsEntityType,
-      PlanningOutboxQueue.budgetsEntityType,
-      PlanningOutboxQueue.goalsEntityType,
-      PlanningOutboxQueue.subscriptionsEntityType,
-      PlanningOutboxQueue.plansEntityType,
-      PlanningOutboxQueue.settingsEntityType,
-    ]) {
-      expect(planningIntents[type], 'update', reason: type);
-    }
-    for (final type in [
-      PlanningOutboxQueue.goalContributionsEntityType,
-      PlanningOutboxQueue.billPaymentsEntityType,
-      PlanningOutboxQueue.planLinksEntityType,
-    ]) {
-      expect(planningIntents.containsKey(type), isFalse,
-          reason: '$type is immutable and identical to its cloud copy');
-    }
+    expect(await _q(db, 'SELECT 1 FROM ledger_sync_outbox;'), isEmpty);
+    expect(await _q(db, 'SELECT 1 FROM planning_sync_outbox;'), isEmpty);
   });
 
-  test('a queued pre-restore edit is dropped: the intent re-recorded after the '
-      'restore carries the RESTORED value', () async {
+  test('an edit made after the backup is newer: it and its queued intent are '
+      'kept', () async {
     await _seedEveryFamily(db);
     final snapshot = await backup();
     final ledger = LedgerOutboxQueue(
@@ -231,7 +229,7 @@ void main() {
     expect(await _q(db, 'SELECT 1 FROM ledger_sync_outbox;'), hasLength(1));
 
     await RestoreBackupUseCase(db)(snapshot);
-    expect(await _q(db, 'SELECT 1 FROM ledger_sync_outbox;'), isEmpty);
+    expect(await _q(db, 'SELECT 1 FROM ledger_sync_outbox;'), hasLength(1));
 
     await PendingSyncReconciler(
       db: db,
@@ -248,7 +246,11 @@ void main() {
             'SELECT operation, payload_json FROM ledger_sync_outbox;'))
         .single;
     expect(row['operation'], 'update');
-    expect(row['payload_json'] as String, contains('"amount":10'));
+    expect(row['payload_json'] as String, contains('"amount":99'));
+    expect(
+        (await _q(db, "SELECT amount_minor FROM transactions WHERE id = 'e-tx';"))
+            .single['amount_minor'],
+        9900);
   });
 
   test('local-only (guest) restore: nothing is queued, bound or lost',
@@ -291,7 +293,9 @@ void main() {
             'ORDER BY id;'),
         [
           {'id': 'g-A', 'amount_minor': 1000, 'server_id': null, 'sync_status': null},
-          {'id': 'g-B', 'amount_minor': 2000, 'server_id': null, 'sync_status': null},
+          // Merge: the newer edit and the record added after the backup stay.
+          {'id': 'g-B', 'amount_minor': 2500, 'server_id': null, 'sync_status': null},
+          {'id': 'g-C', 'amount_minor': 3000, 'server_id': null, 'sync_status': null},
         ]);
     for (final table in _keys.keys) {
       expect(

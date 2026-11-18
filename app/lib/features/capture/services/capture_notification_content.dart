@@ -58,9 +58,13 @@ CaptureNotificationContent buildReviewCaptureContent(
     title: en
         ? 'Confirm ${_typeLabelDefinite(tx.type, lang)} — ${_amountLine(tx)}'
         : 'أكّد ${_typeLabelDefinite(tx.type, lang)} — ${_amountLine(tx)}',
+    // Owner decision 3.12: an entry awaiting review is not final, so its
+    // category is labelled as a suggestion, never as the category.
     body: en
-        ? '${_detailsBlock(tx, now: now, lang: lang)}\nTap to review and confirm.'
-        : '${_detailsBlock(tx, now: now, lang: lang)}\nاضغط للمراجعة والتأكيد.',
+        ? '${_detailsBlock(tx, now: now, lang: lang, suggestedCategory: true)}'
+            '\nTap to review and confirm.'
+        : '${_detailsBlock(tx, now: now, lang: lang, suggestedCategory: true)}'
+            '\nاضغط للمراجعة والتأكيد.',
   );
 }
 
@@ -98,7 +102,12 @@ String _amountLine(TransactionEntity tx) {
 }
 
 /// قائمة التفاصيل — سطر لكل معلومة متاحة.
-String _detailsBlock(TransactionEntity tx, {DateTime? now, String lang = 'ar'}) {
+String _detailsBlock(
+  TransactionEntity tx, {
+  DateTime? now,
+  String lang = 'ar',
+  bool suggestedCategory = false,
+}) {
   final en = lang == 'en';
   final lines = <String>[
     '${en ? 'Amount' : 'المبلغ'}: ${_amountLine(tx)}'
@@ -117,7 +126,12 @@ String _detailsBlock(TransactionEntity tx, {DateTime? now, String lang = 'ar'}) 
   lines.add('${en ? 'Time' : 'الوقت'}: '
       '${captureTimeLabel(tx.occurredAt, now: now, lang: lang)}');
   final cat = captureCategoryLabel(tx.categoryId, lang: lang);
-  if (cat != null) lines.add('${en ? 'Category' : 'التصنيف'}: $cat');
+  if (cat != null) {
+    final label = suggestedCategory
+        ? (en ? 'Suggested category' : 'التصنيف المقترح')
+        : (en ? 'Category' : 'التصنيف');
+    lines.add('$label: $cat');
+  }
   return lines.join('\n');
 }
 

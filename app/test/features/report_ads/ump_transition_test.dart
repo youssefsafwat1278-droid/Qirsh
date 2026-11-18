@@ -3,10 +3,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 // ignore: implementation_imports
 import 'package:google_mobile_ads/src/ump/user_messaging_codec.dart';
+import 'package:money_companion/features/ads/admob_build_config.dart';
 import 'package:money_companion/features/report_ads/ad_consent_service.dart';
 import '../../harness/egress_test_support.dart';
 
 void main() {
+  // Decision 3.2: advertising is compiled out of Version 1 builds. These tests
+  // exercise the ad pipeline itself, as a build made with
+  // --dart-define=QIRSH_ADS_ENABLED=true runs it. The compiled-out behaviour
+  // is covered by test/features/ads/v1_ads_compiled_out_test.dart.
+  setUp(() => AdMobBuildConfig.debugAdsCompiledInOverride = true);
+  tearDown(() => AdMobBuildConfig.debugAdsCompiledInOverride = false);
   TestWidgetsFlutterBinding.ensureInitialized();
   const update = 'ConsentInformation#requestConsentInfoUpdate';
   const form = 'UserMessagingPlatform#loadAndShowConsentFormIfRequired';

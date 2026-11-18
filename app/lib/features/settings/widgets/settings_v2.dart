@@ -413,6 +413,20 @@ class SettingsV2Row extends StatelessWidget {
         (icon == null
             ? null
             : SettingsV2Tile(icon: icon!, danger: danger, color: tileColor));
+    // UX-09: above 1.25x the current value moves under the title, so a long
+    // value or an action such as «Add your number» cannot push the row past
+    // its edge. At the default size the row is unchanged.
+    final large = MediaQuery.textScalerOf(context).scale(16) > 20;
+    final valueText = value == null
+        ? null
+        : Text(
+            value!,
+            maxLines: large ? 3 : 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: large ? TextAlign.start : TextAlign.end,
+            textDirection: valueLtr ? TextDirection.ltr : null,
+            style: AppTypography.subhead(c.textMuted),
+          );
     return InkWell(
       onTap: onTap,
       onLongPress: onLongPress,
@@ -444,23 +458,22 @@ class SettingsV2Row extends StatelessWidget {
                         style: AppTypography.caption(c.textMuted),
                       ),
                     ],
+                    if (large && valueText != null) ...[
+                      const SizedBox(height: 2),
+                      valueText,
+                    ],
+                    if (large && valueWidget != null) ...[
+                      const SizedBox(height: AppSpacing.s1),
+                      valueWidget!,
+                    ],
                   ],
                 ),
               ),
-              if (value != null) ...[
+              if (!large && valueText != null) ...[
                 const SizedBox(width: AppSpacing.s2),
-                Flexible(
-                  child: Text(
-                    value!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.end,
-                    textDirection: valueLtr ? TextDirection.ltr : null,
-                    style: AppTypography.subhead(c.textMuted),
-                  ),
-                ),
+                Flexible(child: valueText),
               ],
-              if (valueWidget != null) ...[
+              if (!large && valueWidget != null) ...[
                 const SizedBox(width: AppSpacing.s2),
                 valueWidget!,
               ],

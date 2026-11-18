@@ -15,6 +15,7 @@ import '../../../domain/entities/transaction_entity.dart';
 import '../../../domain/errors/repo_exceptions.dart';
 import '../../../domain/finance/money_transport.dart';
 import 'ledger_outbox_queue.dart';
+import 'ledger_payload.dart';
 
 const _transactionMoneySelect =
     '*, amount_text:amount::text, balance_after_text:balance_after::text, '
@@ -330,8 +331,11 @@ class TransactionsBackfillService {
           // to that row and reconciled exactly like a backfill match below
           // (equal -> synced, money differs -> conflict), never re-inserted
           // under a second, backfill key — that copy would be double-counted on
-          // every other device. A cloud TOMBSTONE is never un-deleted: a live
-          // local row against it is bound as a conflict for the user.
+          // every other device. A cloud TOMBSTONE is never un-deleted. Decision
+          // 3.3: a live local row against it with no local change waiting
+          // (none queued — see the query — and not `pending`) takes the cloud
+          // deletion, as a pulled tombstone does; one with a pending change is
+          // bound as a conflict for the user.
           final own = await _getClient()
               .from('user_transactions')
               .select(_transactionMoneySelect)
@@ -339,12 +343,22 @@ class TransactionsBackfillService {
               .eq('client_request_id', localId)
               .maybeSingle();
           if (own != null && own['deleted_at'] != null && !isDeleted) {
-            mismatched.add(localId);
-            await _db.customStatement(
-              "UPDATE transactions SET server_id = ?, sync_status = 'conflict' "
-              'WHERE id = ?;',
-              [own['id'] as String, localId],
-            );
+            if (local.readNullable<String>('sync_status') == 'pending') {
+              mismatched.add(localId);
+              await _db.customStatement(
+                "UPDATE transactions SET server_id = ?, sync_status = 'conflict' "
+                'WHERE id = ?;',
+                [own['id'] as String, localId],
+              );
+            } else {
+              final now = dateTimeToSql(DateTime.now().toUtc());
+              await _db.customStatement(
+                "UPDATE transactions SET status = 'ignored', updated_at = ?, "
+                "server_id = ?, synced_at = ?, sync_status = 'synced' "
+                'WHERE id = ?;',
+                [now, own['id'] as String, now, localId],
+              );
+            }
             continue;
           }
           final existing = own ??
@@ -396,8 +410,15 @@ class TransactionsBackfillService {
               localForeignAmount,
               localForeignCurrency ?? localCurrency,
             ) ||
-            serverRow['direction'] != payload['direction'] ||
-            serverRow['transaction_type'] != payload['transaction_type'];
+            // A row the outbox push wrote (bound above by its own id) carries
+            // the push's mapping (LedgerPayloadCodec), which derives direction
+            // from the type when none is stored; either mapping is a match.
+            (serverRow['direction'] != payload['direction'] &&
+                serverRow['direction'] !=
+                    LedgerPayloadCodec.serverDirection(type, direction)) ||
+            (serverRow['transaction_type'] != payload['transaction_type'] &&
+                serverRow['transaction_type'] !=
+                    LedgerPayloadCodec.serverTransactionType(type));
         if (mismatch) {
           mismatched.add(localId);
           // Audit H-2 — see AccountsBackfillService. A remote row that disagrees

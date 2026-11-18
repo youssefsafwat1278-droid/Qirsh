@@ -160,6 +160,9 @@ void main() {
         final attemptsBefore = attempts;
         final retry = find.text(l10n.startRetry);
         await tester.ensureVisible(retry);
+        // ensureVisible moves the scroll offset; the new position is laid out
+        // on the next frame, so pump before tapping.
+        await tester.pump();
         await tester.tap(retry);
         await tester.pumpAndSettle();
         expect(attempts, attemptsBefore + 1);

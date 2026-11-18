@@ -273,8 +273,11 @@ void main() {
     test('quota refusal reuses the approved copy; no new user-visible text',
         () {
       final copy = body(store, 'var userMessage: String');
-      expect('return arabic'.allMatches(copy).length, 3,
-          reason: 'only the three approved R9 messages exist');
+      // Owner decision 3.13 (2026-11-17) added the fourth: the signed-out
+      // refusal ("open Qirsh and sign in"), replacing the storage copy that
+      // misdescribed the cause.
+      expect('return arabic'.allMatches(copy).length, 4,
+          reason: 'only the approved R9 messages and the 3.13 copy exist');
       expect(
           copy,
           contains(

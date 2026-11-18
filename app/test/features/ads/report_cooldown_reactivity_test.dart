@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/features/ads/admob_build_config.dart';
 import 'package:money_companion/features/ads/ad_placement.dart';
 import 'package:money_companion/features/ads/banner_ads_providers.dart';
 import 'package:money_companion/features/ads/report_banner_suppression.dart';
@@ -51,6 +52,12 @@ List<bool?> _watch(ProviderContainer container, AdPlacement placement) {
 Future<void> _settle() => Future<void>.delayed(const Duration(milliseconds: 5));
 
 void main() {
+  // Decision 3.2: advertising is compiled out of Version 1 builds. These tests
+  // exercise the ad pipeline itself, as a build made with
+  // --dart-define=QIRSH_ADS_ENABLED=true runs it. The compiled-out behaviour
+  // is covered by test/features/ads/v1_ads_compiled_out_test.dart.
+  setUp(() => AdMobBuildConfig.debugAdsCompiledInOverride = true);
+  tearDown(() => AdMobBuildConfig.debugAdsCompiledInOverride = false);
   setUp(ReportBannerSuppression.resetForTest);
   tearDown(ReportBannerSuppression.resetForTest);
 

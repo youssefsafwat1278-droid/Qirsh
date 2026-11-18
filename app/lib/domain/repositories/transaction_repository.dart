@@ -44,6 +44,9 @@ class TransactionPageFilter {
   final bool pendingOnly;
 }
 
+/// A balance figure from a bank message and when the bank reported it.
+typedef ReportedBalance = ({Money balance, DateTime occurredAt});
+
 abstract class TransactionRepository {
   Future<TransactionEntity?> findDuplicate({
     required Money amount,
@@ -82,6 +85,15 @@ abstract class TransactionRepository {
   Future<TransactionEntity?> getById(String id);
 
   Future<TransactionEntity> confirm(String id);
+
+  /// Owner brief 4.6: moves a CONFIRMED transaction back into review
+  /// (status `pending`: shown in Smart Inbox, excluded from every total) and
+  /// queues the same ledger sync update as [confirm], so the cloud and other
+  /// devices agree. Amount, category and category provenance are unchanged
+  /// (a manual category stays manual). Idempotent: a transaction that is not
+  /// confirmed is returned unchanged with no write. [confirm] restores it in
+  /// place (same row, no duplicate). Throws [StateError] for an unknown id.
+  Future<TransactionEntity> markForReview(String id);
 
   /// [appliedByRule] marks a write made because the user taught a merchant
   /// rule and asked to update past transactions — not a per-transaction hand
@@ -224,6 +236,10 @@ abstract class TransactionRepository {
 
   /// آخر رصيد معروف من رسائل البنك، إن وُجد.
   Future<Money?> latestBalanceAfter({String? accountId});
+
+  /// The same balance as [latestBalanceAfter] (same rows, same order) together
+  /// with the time the bank reported it: the transaction's `occurredAt`.
+  Future<ReportedBalance?> latestReportedBalance({String? accountId});
 
   /// إجمالي المصروف والدخل مجمّعاً حسب العملة خلال فترة نصف-مفتوحة `[from, to)`
   /// (MALI-028) — لعرض «كل الحسابات» دون جمع عملات مختلفة تحت وسم واحد.

@@ -1,5 +1,6 @@
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/legal_urls.dart';
 import 'cloud_egress_gate.dart';
 
 /// Astra H2.5: the ONE way the app opens an external URL. Every `url_launcher`
@@ -50,4 +51,27 @@ bool isShortcutSetupUrl(Uri uri) {
 Future<bool> launchShortcutSetupUrl(Uri uri) async {
   if (!isShortcutSetupUrl(uri)) return false;
   return launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
+/// The second ungated exception (owner decision 3.5): the Privacy Policy and
+/// Terms must open with Cloud OFF, including before consent.
+///
+/// Exactly the two configured documents ([kPrivacyPolicyUrl], [kTermsUrl]),
+/// compared as whole URLs: no other path, query, fragment, port, user info or
+/// host. The URLs are constants, so opening one carries no message, account or
+/// consent data; the legal site receives an ordinary page request from the
+/// browser. It does not enable Cloud or AI and changes no other egress rule:
+/// every other URL is refused here and must use [launchExternalUrl].
+bool isLegalDocumentUrl(Uri uri) {
+  final text = uri.toString();
+  return uri.scheme == 'https' &&
+      (text == kPrivacyPolicyUrl.toString() || text == kTermsUrl.toString());
+}
+
+/// Opens an [isLegalDocumentUrl] document in an in-app Safari view (the
+/// system browser on platforms without one) without the Cloud gate; refuses
+/// the rest.
+Future<bool> launchLegalDocument(Uri uri) async {
+  if (!isLegalDocumentUrl(uri)) return false;
+  return launchUrl(uri, mode: LaunchMode.inAppBrowserView);
 }

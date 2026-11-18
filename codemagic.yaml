@@ -184,12 +184,9 @@ workflows:
     environment:
       groups:
         - supabase
-        # Production AdMob identifiers. Attached to the two SIGNED release
-        # workflows only — never to the quality gate (a guard enforces that) and
-        # never to the unsigned sideload, which is a test artifact.
-        # Absence stays safe: every ADMOB_* define below tolerates an empty
-        # value, so a build without this group serves no ads rather than failing.
-        - admob
+        # No `admob` group: Version 1 has no advertising (owner decision 3.2).
+        # The iOS build passes no AdMob identifier and no QIRSH_ADS_ENABLED, so
+        # ads are compiled out and GADApplicationIdentifier stays empty.
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.youssefsafwat.mali
@@ -206,6 +203,11 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
+        # Owner decision 3.11: keep every sign-in method build 147 users have
+        # (Apple + Google + email code), exactly as `ios-signed` does.
+        QIRSH_GOOGLE_AUTH_ENABLED: "true"
+        QIRSH_EMAIL_AUTH_ENABLED: "true"
+        QIRSH_ALTERNATE_SIGNUP_ENABLED: "true"
         # Candidate discovery must yield exactly one IPA. It is then renamed
         # without changing bytes to this single publication path.
         IOS_RELEASE_IPA: "app/build/ios/ipa/money_companion-signed.ipa"
@@ -404,34 +406,29 @@ workflows:
             echo "build must never ship without a real backend (stub-auth risk)."
             exit 1
           fi
+          # Owner decision 3.11: a signed build keeps Google and email-code
+          # sign-in, so existing accounts can still sign in.
+          if [ "${QIRSH_GOOGLE_AUTH_ENABLED:-}" != "true" ] || [ "${QIRSH_EMAIL_AUTH_ENABLED:-}" != "true" ]; then
+            echo "ERROR: QIRSH_GOOGLE_AUTH_ENABLED and QIRSH_EMAIL_AUTH_ENABLED must be true"
+            echo "for a signed iOS build (existing users sign in with them)."
+            exit 1
+          fi
 
-      - name: Materialise AdMob release config (native)
+      - name: Keep AdMob out of the iOS build (V1 has no ads)
         working_directory: app
         script: |
-          # The iOS App ID must reach Info.plist via a build setting; dart-define
-          # alone cannot. Release.xcconfig has an optional `#include? AdMob.xcconfig`,
-          # so writing this file supplies ADMOB_APP_ID_IOS to the native build.
-          # The file is gitignored and is never committed. If the variable is
-          # unset we write nothing: the build then ships with an empty app id and
-          # Dart holds ads closed.
-          if [ -n "${ADMOB_APP_ID_IOS:-}" ]; then
-            printf 'ADMOB_APP_ID_IOS=%s\n' "$ADMOB_APP_ID_IOS" > ios/Flutter/AdMob.xcconfig
-            echo "AdMob iOS app id supplied to the native build (value not printed)."
-          else
-            rm -f ios/Flutter/AdMob.xcconfig
-            echo "No ADMOB_APP_ID_IOS provided — building with ads unconfigured (fail closed)."
-          fi
+          # Owner decision 3.2: no advertising in Version 1. Never write
+          # ios/Flutter/AdMob.xcconfig, and remove any stale copy, so the
+          # release Info.plist carries an empty GADApplicationIdentifier.
+          rm -f ios/Flutter/AdMob.xcconfig
+          echo "AdMob not configured for this iOS build (ads compiled out)."
 
       - name: Build signed IPA
         working_directory: app
         script: |
           set -eu
-          # AdMob (R7 I3): release inputs are environment-provided, never
-          # committed. The App ID must reach BOTH Dart (which decides ad
-          # eligibility) and the native Info.plist (which the SDK reads) — the
-          # latter via the AdMob.xcconfig step above. Absent values are legal:
-          # the build then has NO ad configuration and report export simply
-          # runs without ads.
+          # No ADMOB_* or QIRSH_ADS_ENABLED define: Version 1 has no ads
+          # (owner decision 3.2), so no remote flag can switch them on.
           # Remove only the prior export directory before codesign/export so a
           # stale single IPA cannot masquerade as output from this build.
           rm -rf build/ios/ipa
@@ -448,9 +445,6 @@ workflows:
             --dart-define=QIRSH_EMAIL_AUTH_ENABLED="${QIRSH_EMAIL_AUTH_ENABLED:-false}" \
             --dart-define=QIRSH_ALTERNATE_SIGNUP_ENABLED="${QIRSH_ALTERNATE_SIGNUP_ENABLED:-true}" \
             --dart-define=APP_VERSION="$IOS_MARKETING_VERSION" \
-            --dart-define=ADMOB_APP_ID_IOS="${ADMOB_APP_ID_IOS:-}" \
-            --dart-define=ADMOB_INTERSTITIAL_IOS="${ADMOB_INTERSTITIAL_IOS:-}" \
-            --dart-define=ADMOB_BANNER_IOS="${ADMOB_BANNER_IOS:-}" \
             --export-options-plist=/Users/builder/export_options.plist
 
       # Resolve the export exactly once. Zero or multiple candidates fail before
@@ -692,7 +686,8 @@ workflows:
             --dart-define=APP_VERSION="$APP_VERSION" \
             --dart-define=ADMOB_APP_ID_ANDROID="${ADMOB_APP_ID_ANDROID:-}" \
             --dart-define=ADMOB_INTERSTITIAL_ANDROID="${ADMOB_INTERSTITIAL_ANDROID:-}" \
-            --dart-define=ADMOB_BANNER_ANDROID="${ADMOB_BANNER_ANDROID:-}"
+            --dart-define=ADMOB_BANNER_ANDROID="${ADMOB_BANNER_ANDROID:-}" \
+            --dart-define=QIRSH_ADS_ENABLED=true
 
       # §13 — never ship an artifact whose signer was not checked. Cheap, and it
       # would catch a debug-signed or unsigned bundle before it reaches Play.
@@ -1027,17 +1022,22 @@ workflows:
             echo "build must never ship without a real backend (stub-auth risk)."
             exit 1
           fi
+          # Owner decision 3.11: a signed build keeps Google and email-code
+          # sign-in, so existing accounts can still sign in.
+          if [ "${QIRSH_GOOGLE_AUTH_ENABLED:-}" != "true" ] || [ "${QIRSH_EMAIL_AUTH_ENABLED:-}" != "true" ]; then
+            echo "ERROR: QIRSH_GOOGLE_AUTH_ENABLED and QIRSH_EMAIL_AUTH_ENABLED must be true"
+            echo "for a signed iOS build (existing users sign in with them)."
+            exit 1
+          fi
 
-      - name: Materialise AdMob release config (native)
+      - name: Keep AdMob out of the iOS build (V1 has no ads)
         working_directory: app
         script: |
-          if [ -n "${ADMOB_APP_ID_IOS:-}" ]; then
-            printf 'ADMOB_APP_ID_IOS=%s\n' "$ADMOB_APP_ID_IOS" > ios/Flutter/AdMob.xcconfig
-            echo "AdMob iOS app id supplied to the native build (value not printed)."
-          else
-            rm -f ios/Flutter/AdMob.xcconfig
-            echo "No ADMOB_APP_ID_IOS provided — building with ads unconfigured (fail closed)."
-          fi
+          # Owner decision 3.2: no advertising in Version 1. Never write
+          # ios/Flutter/AdMob.xcconfig, and remove any stale copy, so the
+          # release Info.plist carries an empty GADApplicationIdentifier.
+          rm -f ios/Flutter/AdMob.xcconfig
+          echo "AdMob not configured for this iOS build (ads compiled out)."
 
       - name: Build signed IPA
         working_directory: app
@@ -1057,9 +1057,6 @@ workflows:
             --dart-define=QIRSH_EMAIL_AUTH_ENABLED="${QIRSH_EMAIL_AUTH_ENABLED:-false}" \
             --dart-define=QIRSH_ALTERNATE_SIGNUP_ENABLED="${QIRSH_ALTERNATE_SIGNUP_ENABLED:-true}" \
             --dart-define=APP_VERSION="$IOS_MARKETING_VERSION" \
-            --dart-define=ADMOB_APP_ID_IOS="${ADMOB_APP_ID_IOS:-}" \
-            --dart-define=ADMOB_INTERSTITIAL_IOS="${ADMOB_INTERSTITIAL_IOS:-}" \
-            --dart-define=ADMOB_BANNER_IOS="${ADMOB_BANNER_IOS:-}" \
             --export-options-plist=/Users/builder/export_options.plist
 
       - name: Resolve, stamp, and verify the EXACT signed IPA — REQUIRED before submit

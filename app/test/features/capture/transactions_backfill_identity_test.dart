@@ -64,18 +64,59 @@ void main() {
             'silently resolved either way');
   });
 
-  test('a live local row whose cloud copy is a tombstone is bound and flagged '
-      'as a conflict, never re-inserted', () async {
+  test('a row with no stored direction is compared the way the outbox push '
+      'wrote it: an unchanged row is synced, not a false conflict', () async {
+    await d.add('n-A', '10');
+    await d.db.customStatement(
+        "UPDATE transactions SET direction = NULL WHERE id = 'n-A';");
+    await d.sync();
+    expect(d.cloud.rows.single['direction'], 'debit',
+        reason: 'the push derives debit from the payment type');
+    await forgetIdentity();
+
+    await d.sync();
+
+    expect(d.cloud.rows, hasLength(1), reason: 'no backfill copy');
+    expect(await d.syncStatus('n-A'), 'synced');
+  });
+
+  test('a restored row whose cloud copy is a tombstone takes the cloud '
+      'deletion: not re-inserted, not resurrected, no conflict', () async {
     await d.add('t-A', '10');
     await d.sync();
     d.cloud.rows.single['deleted_at'] = '2026-09-01T00:00:00.000Z';
     await forgetIdentity();
 
     await d.sync();
+    await d.sync();
 
     expect(d.cloud.rows, hasLength(1), reason: 'no backfill copy');
     expect(d.cloud.live(), isEmpty, reason: 'the tombstone is not undone');
-    expect(await d.live(), {'Synthetic shop t-A': '10.00'});
-    expect(await d.syncStatus('t-A'), 'conflict');
+    expect(await d.live(), isEmpty,
+        reason: 'the deletion made in the cloud after the backup is kept');
+    expect(await d.syncStatus('t-A'), 'synced');
+    expect(
+        (await d.db
+                .customSelect("SELECT server_id FROM transactions WHERE id = 't-A'")
+                .getSingle())
+            .readNullable<String>('server_id'),
+        d.cloud.rows.single['id'],
+        reason: 'bound to the cloud row, so it is never backfilled again');
+  });
+
+  test('...but a row with a local change still waiting to be sent is a '
+      'conflict for the user, never silently deleted', () async {
+    await d.add('t-P', '10');
+    await d.sync();
+    d.cloud.rows.single['deleted_at'] = '2026-09-01T00:00:00.000Z';
+    await forgetIdentity();
+    await d.db.customStatement(
+        "UPDATE transactions SET sync_status = 'pending' WHERE id = 't-P';");
+
+    await d.sync();
+
+    expect(d.cloud.live(), isEmpty, reason: 'the tombstone is not undone');
+    expect(await d.live(), {'Synthetic shop t-P': '10.00'});
+    expect(await d.syncStatus('t-P'), 'conflict');
   });
 }

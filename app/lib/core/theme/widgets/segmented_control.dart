@@ -50,8 +50,11 @@ class SegmentedControl<T> extends StatelessWidget {
 
     // UX-05: the 4pt inset applies to the thumb only, so each segment's tap
     // target is the full 44pt track height (the visible thumb is unchanged).
+    // UX-09: a minimum (not fixed) 44pt height, so the labels can take two
+    // lines at large text instead of being clipped by the track.
+    final large = MediaQuery.textScalerOf(context).scale(16) > 20;
     return Container(
-      height: 44,
+      constraints: const BoxConstraints(minHeight: 44),
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
         color: c.surfaceMuted,
@@ -70,62 +73,75 @@ class SegmentedControl<T> extends StatelessWidget {
                   top: 4,
                   bottom: 4,
                   width: w,
-                  left: rtl ? w * (options.length - 1 - selected) : w * selected,
+                  left:
+                      rtl ? w * (options.length - 1 - selected) : w * selected,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       color: accent ? c.cta : c.surfaceTop,
                       borderRadius: BorderRadius.circular(AppRadius.pill),
-                      boxShadow:
-                          accent || isDark ? null : AppShadows.e1,
+                      boxShadow: accent || isDark ? null : AppShadows.e1,
                     ),
                   ),
                 ),
-              Row(
-                children: [
-                  for (final o in options)
-                    Expanded(
-                      child: Semantics(
-                        button: true,
-                        selected: value == o.value,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap: () {
-                            if (value != o.value) {
-                              HapticFeedback.selectionClick();
-                            }
-                            onChanged(o.value);
-                          },
-                          child: Center(
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (o.icon != null) ...[
-                                  Icon(o.icon, size: 16, color: fg(o.value)),
-                                  const SizedBox(width: 6),
-                                ],
-                                Flexible(
-                                  child: AnimatedDefaultTextStyle(
-                                    duration: AppMotion.micro,
-                                    style: AppTypography.subhead(fg(o.value))
-                                        .copyWith(
-                                      fontWeight: value == o.value
-                                          ? FontWeight.w600
-                                          : FontWeight.w500,
-                                    ),
-                                    child: Text(
-                                      o.label,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final o in options)
+                        Expanded(
+                          child: Semantics(
+                            button: true,
+                            selected: value == o.value,
+                            child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () {
+                                if (value != o.value) {
+                                  HapticFeedback.selectionClick();
+                                }
+                                onChanged(o.value);
+                              },
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                    vertical: large ? 10 : 0),
+                                child: Center(
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (o.icon != null) ...[
+                                        Icon(o.icon,
+                                            size: 16, color: fg(o.value)),
+                                        const SizedBox(width: 6),
+                                      ],
+                                      Flexible(
+                                        child: AnimatedDefaultTextStyle(
+                                          duration: AppMotion.micro,
+                                          style:
+                                              AppTypography.subhead(fg(o.value))
+                                                  .copyWith(
+                                            fontWeight: value == o.value
+                                                ? FontWeight.w600
+                                                : FontWeight.w500,
+                                          ),
+                                          child: Text(
+                                            o.label,
+                                            maxLines: large ? 2 : 1,
+                                            textAlign: TextAlign.center,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
-                ],
+                    ],
+                  ),
+                ),
               ),
             ],
           );

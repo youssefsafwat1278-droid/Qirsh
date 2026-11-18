@@ -153,38 +153,51 @@ class RestoreBackupUseCase {
     await _db.customStatement('PRAGMA foreign_keys = OFF;');
     try {
       await _db.transaction(() async {
-        // V1-020: remember which server row each existing local row is, BEFORE
-        // the delete below throws that identity away (the snapshot carries no
-        // sync columns).
-        await _captureSyncIdentity(tables);
-        var deletedCount = 0;
-        for (final table in _deleteOrder) {
-          // Conditional delete: only empty a table the backup actually carries
-          // (back-compat). A v2 backup has no cards/categories/sender_mappings
-          // keys, so its restore must NOT wipe the fresh DB's seeded catalog.
-          if (!tables.containsKey(table)) continue;
-          await _db.customStatement('DELETE FROM $table;');
-          deletedCount++;
-          if (deletedCount == 1) fault('afterFirstDelete');
-          if (deletedCount == 3) fault('afterSeveralDeletes');
-        }
-        var insertedTables = 0;
-        for (final table in _restoreOrder) {
-          final rows = (tables[table] as List<dynamic>?) ?? const [];
-          var rowIndex = 0;
-          for (final row in rows.cast<Map<String, dynamic>>()) {
-            await _insertRow(table, row);
-            if (insertedTables == 0 && rowIndex == 0) fault('afterFirstInsert');
-            rowIndex++;
+        // Decision 3.3: restore MERGES into a device that already holds
+        // financial records (see [_mergeSnapshot] for the per-row rule). A
+        // device with none yet (a new install, at most an empty account made
+        // during setup) has nothing newer to keep, so the backup is applied in
+        // full, settings and catalog included, as before.
+        final merge = await _deviceHoldsFinancialData();
+        if (merge) {
+          await _mergeSnapshot(tables, schemaVersion, fault);
+        } else {
+          // V1-020: remember which server row each existing local row is,
+          // BEFORE the delete below throws that identity away (the snapshot
+          // carries no sync columns).
+          await _captureSyncIdentity(tables);
+          var deletedCount = 0;
+          for (final table in _deleteOrder) {
+            // Conditional delete: only empty a table the backup actually
+            // carries (back-compat). A v2 backup has no cards/categories/
+            // sender_mappings keys, so its restore must NOT wipe the fresh
+            // DB's seeded catalog.
+            if (!tables.containsKey(table)) continue;
+            await _db.customStatement('DELETE FROM $table;');
+            deletedCount++;
+            if (deletedCount == 1) fault('afterFirstDelete');
+            if (deletedCount == 3) fault('afterSeveralDeletes');
           }
-          insertedTables++;
-          if (insertedTables == 2) fault('afterPartialInsert');
+          var insertedTables = 0;
+          for (final table in _restoreOrder) {
+            final rows = (tables[table] as List<dynamic>?) ?? const [];
+            var rowIndex = 0;
+            for (final row in rows.cast<Map<String, dynamic>>()) {
+              await _insertRow(table, row);
+              if (insertedTables == 0 && rowIndex == 0) {
+                fault('afterFirstInsert');
+              }
+              rowIndex++;
+            }
+            insertedTables++;
+            if (insertedTables == 2) fault('afterPartialInsert');
+          }
         }
         fault('duringRelationshipReconstruction');
         // Idempotent no-op for a self-consistent v3 snapshot; heals legacy /
         // cross-catalog dangling references so the committed DB is FK-clean.
         await _sanitizeDanglingReferences();
-        await _rebindSyncIdentity(tables);
+        if (!merge) await _rebindSyncIdentity(tables);
         // Postflight INSIDE the txn — a residual violation aborts + rolls back.
         final violations =
             await _db.customSelect('PRAGMA foreign_key_check;').get();
@@ -201,7 +214,8 @@ class RestoreBackupUseCase {
         // currency), so a canonical live DB ends canonical. Contributions inherit
         // the parent goal's confirmed currency. Any id not covered → throw → rollback.
         if (planningRepairDecision != null) {
-          await _canonicalizeRestoredPlanning(planningRepairDecision);
+          await _canonicalizeRestoredPlanning(planningRepairDecision,
+              onlyApplied: merge);
         }
         // MALI-026 (B8-3 §3) — version dispatch for NON-planning money:
         //   • v4+ exact snapshot: the exact `_minor` (+ currency) were inserted
@@ -238,7 +252,11 @@ class RestoreBackupUseCase {
         // MALI-014/076n §6 — in-transaction verification against the immutable
         // plan. Any mismatch throws BEFORE commit → the whole restore rolls back
         // and the original database is preserved.
-        if (plan != null) await _verifyAgainstPlan(plan, fault);
+        if (plan != null) {
+          merge
+              ? await _verifyMergeAgainstPlan(plan, fault)
+              : await _verifyAgainstPlan(plan, fault);
+        }
         fault('afterVerification');
         // A backup keeps each transaction's merchant link, but a legacy or
         // cross-catalog snapshot can carry a link the sanitizer above had to
@@ -246,6 +264,11 @@ class RestoreBackupUseCase {
         // never fuzzy — AFTER verification, so the plan is checked against the
         // snapshot as restored. Category and provenance are untouched.
         await repairMissingMerchantLinks(_db);
+        if (merge) {
+          await _db.customStatement('DROP TABLE IF EXISTS temp.restore_merge;');
+          await _db.customStatement(
+              'DROP TABLE IF EXISTS temp.restore_merge_counts;');
+        }
         // Audit H-20: these steps are required for CORRECTNESS, not
         // convenience, so they belong inside the atomic transaction.
         // `runPostRestoreSetup` resets ai/cloud consent (MALI-059n) so a
@@ -319,10 +342,17 @@ class RestoreBackupUseCase {
   /// whose parent goal wasn't converted, throws → the whole restore rolls back
   /// (§8, no partial planning restore). Runs INSIDE the restore transaction.
   Future<void> _canonicalizeRestoredPlanning(
-      RestorePayloadRepairDecision decision) async {
+      RestorePayloadRepairDecision decision,
+      {bool onlyApplied = false}) async {
+    // Under a merge, only the rows the backup actually wrote are converted;
+    // the device's own rows are already canonical and keep their exact minor.
+    String applied(String table) => onlyApplied
+        ? " WHERE id IN (SELECT key FROM temp.restore_merge "
+            "WHERE tbl = '$table' AND applied = 1)"
+        : '';
     for (final b in await _db
-        .customSelect(
-            'SELECT id, amount, last_notified_spent_amount FROM budgets;')
+        .customSelect('SELECT id, amount, last_notified_spent_amount '
+            'FROM budgets${applied('budgets')};')
         .get()) {
       final id = b.read<String>('id');
       final cur = decision.currencyForId(id);
@@ -345,7 +375,8 @@ class RestoreBackupUseCase {
     final goalCurrency = <String, String>{};
     for (final g in await _db
         .customSelect('SELECT id, target_amount, saved_amount, '
-            'last_notified_saved_amount, auto_save_amount FROM goals;')
+            'last_notified_saved_amount, auto_save_amount '
+            'FROM goals${applied('goals')};')
         .get()) {
       final id = g.read<String>('id');
       final cur = decision.currencyForId(id);
@@ -369,10 +400,12 @@ class RestoreBackupUseCase {
     }
 
     for (final c in await _db
-        .customSelect('SELECT id, amount, goal_id FROM goal_contributions;')
+        .customSelect('SELECT id, amount, goal_id FROM goal_contributions'
+            '${applied('goal_contributions')};')
         .get()) {
       final parentGoalId = c.read<String>('goal_id');
-      final cur = goalCurrency[parentGoalId];
+      final cur = goalCurrency[parentGoalId] ??
+          (onlyApplied ? await _goalCurrency(parentGoalId) : null);
       if (cur == null) {
         throw BackupException(
           'تعذّرت الاستعادة: مساهمة هدف يتيمة (${c.read<String>('id')}).',
@@ -514,6 +547,324 @@ class RestoreBackupUseCase {
       "OR entity LIKE 'seq:%:accounts' "
       "OR entity LIKE 'seq:%:planning\\_%' ESCAPE '\\';",
     );
+  }
+
+  // ── Decision 3.3: restore = MERGE ────────────────────────────────────────
+  //
+  // Per backup row, matched to a device row by its local id (a plan link by
+  // plan + transaction; a singleton settings/streak row by being the row; a
+  // catalog row with a natural unique key by that key):
+  //
+  //  * no device row          -> the backup row is inserted (restored);
+  //  * a device row exists    -> the backup row wins ONLY when both carry
+  //    `updated_at` and the backup's is strictly newer; otherwise the device
+  //    row is kept untouched — its values, deletion (a deleted transaction is
+  //    `ignored` with a newer `updated_at`; planning rows keep `deleted_at`),
+  //    category and category provenance, server identity and queued intents;
+  //  * a device row absent from the backup is never touched (kept).
+  //
+  // A row the backup wins keeps the device's server identity, is marked
+  // `pending` when server-backed (PendingSyncReconciler records the update
+  // intent) and loses its queued intents, which describe the pre-restore
+  // values. A restored row the server already has is bound by the startup
+  // backfill on its own id (never duplicated). Pull cursors are kept: nothing
+  // the device already pulled was removed.
+
+  /// True when this device already holds financial records of its own:
+  /// transactions, budgets, goals, bills/subscriptions or plans. Accounts alone
+  /// (an empty account made during setup) and the seeded catalog and settings
+  /// are not records a backup could be newer or older than.
+  Future<bool> _deviceHoldsFinancialData() async => (await _db
+          .customSelect('SELECT (EXISTS(SELECT 1 FROM transactions) '
+              'OR EXISTS(SELECT 1 FROM budgets) '
+              'OR EXISTS(SELECT 1 FROM goals) '
+              'OR EXISTS(SELECT 1 FROM subscriptions) '
+              'OR EXISTS(SELECT 1 FROM plans)) AS has_data;')
+          .getSingle())
+      .read<int>('has_data') ==
+      1;
+
+  Future<String?> _goalCurrency(String goalId) async => (await _db
+          .customSelect('SELECT currency FROM goals WHERE id = ?;',
+              variables: [Variable.withString(goalId)])
+          .getSingleOrNull())
+      ?.readNullable<String>('currency');
+
+  /// Unique keys other than `id` that identify the same record on another
+  /// install. An empty list marks a single-row table.
+  static const _naturalKeys = <String, List<String>>{
+    'categories': ['key'],
+    'merchants': ['normalized_name'],
+    'merchant_category_map': ['merchant_id'],
+    'achievements': ['key'],
+    'sender_bank_mappings': ['normalized_sender_id'],
+    'cards': ['account_id', 'last4'],
+    'user_settings': [],
+    'streaks': [],
+  };
+
+  /// Catalog rows other rows point at: when the device holds the same record
+  /// under another id, the backup's references are moved to the device id.
+  static const _remappedReferences = {
+    'categories': 'category_id',
+    'merchants': 'merchant_id',
+  };
+
+  Future<void> _mergeSnapshot(Map<String, dynamic> tables, int schemaVersion,
+      void Function(String point) fault) async {
+    await _db.customStatement('DROP TABLE IF EXISTS temp.restore_merge;');
+    await _db.customStatement(
+      'CREATE TEMP TABLE restore_merge(tbl TEXT NOT NULL, key TEXT NOT NULL, '
+      'applied INTEGER NOT NULL, PRIMARY KEY(tbl, key));',
+    );
+    await _db
+        .customStatement('DROP TABLE IF EXISTS temp.restore_merge_counts;');
+    await _db.customStatement(
+        'CREATE TEMP TABLE restore_merge_counts(tbl TEXT PRIMARY KEY, n INTEGER);');
+    final remap = <String, Map<String, String>>{
+      for (final c in _remappedReferences.values) c: {},
+    };
+    var tableIndex = 0;
+    for (final table in _restoreOrder) {
+      await _db.customStatement(
+          "INSERT INTO restore_merge_counts SELECT '$table', COUNT(*) "
+          'FROM $table;');
+      final cols = await _columnsOf(table);
+      final rows = (tables[table] as List<dynamic>?) ?? const [];
+      var rowIndex = 0;
+      for (final row in rows.cast<Map<String, dynamic>>()) {
+        await _mergeRow(table, row, schemaVersion, cols, remap);
+        if (tableIndex == 0 && rowIndex == 0) fault('afterFirstInsert');
+        rowIndex++;
+      }
+      tableIndex++;
+      if (tableIndex == 2) fault('afterPartialInsert');
+    }
+  }
+
+  Future<void> _mergeRow(
+    String table,
+    Map<String, dynamic> row,
+    int schemaVersion,
+    Set<String> cols,
+    Map<String, Map<String, String>> remap,
+  ) async {
+    final data = _prepareRow(table, row);
+    for (final e in remap.entries) {
+      final v = data[e.key];
+      if (v is String && e.value.containsKey(v)) data[e.key] = e.value[v];
+    }
+    final backupKey = table == 'plan_transaction_links'
+        ? '${data['plan_id']}:${data['transaction_id']}'
+        : '${data['id']}';
+    final deviceKey = await _findDeviceRow(table, data);
+    if (deviceKey == null) {
+      // The device keeps its own default account; a restored one joins it as
+      // an ordinary account.
+      if (table == 'accounts' &&
+          data['is_default'] == 1 &&
+          await _db
+                  .customSelect('SELECT 1 AS x FROM accounts '
+                      'WHERE is_default = 1 AND deleted_at IS NULL LIMIT 1;')
+                  .getSingleOrNull() !=
+              null) {
+        data['is_default'] = 0;
+      }
+      // Plain INSERT: an unforeseen unique collision aborts the whole restore
+      // (rolled back) instead of REPLACE silently deleting a device row.
+      await _insertPrepared(table, data, replace: false);
+      await _recordMerge(table, backupKey, applied: true);
+      return;
+    }
+    final ref = _remappedReferences[table];
+    if (ref != null && deviceKey != backupKey) remap[ref]![backupKey] = deviceKey;
+    final backupWins = cols.contains('updated_at') &&
+        await _backupIsNewer(table, deviceKey, data['updated_at']);
+    if (backupWins) {
+      await _updateFromBackup(table, deviceKey, data, schemaVersion, cols);
+    }
+    await _recordMerge(table, deviceKey, applied: backupWins);
+  }
+
+  Future<void> _recordMerge(String table, String key,
+          {required bool applied}) =>
+      _db.customStatement(
+        'INSERT OR REPLACE INTO restore_merge(tbl, key, applied) '
+        'VALUES (?, ?, ?);',
+        [table, key, applied ? 1 : 0],
+      );
+
+  /// The device row that is the same record as [data], or null.
+  Future<String?> _findDeviceRow(
+      String table, Map<String, dynamic> data) async {
+    Future<String?> first(String where, List<Object?> args) async => (await _db
+            .customSelect('SELECT id FROM $table WHERE $where LIMIT 1;',
+                variables: [for (final a in args) _variable(a)])
+            .getSingleOrNull())
+        ?.data['id']
+        ?.toString();
+
+    final natural = _naturalKeys[table];
+    if (natural != null && natural.isEmpty) return first('1 = 1', const []);
+    if (table == 'plan_transaction_links') {
+      final hit = await _db.customSelect(
+        'SELECT 1 AS x FROM plan_transaction_links '
+        'WHERE plan_id = ? AND transaction_id = ?;',
+        variables: [
+          _variable(data['plan_id']),
+          _variable(data['transaction_id']),
+        ],
+      ).getSingleOrNull();
+      return hit == null ? null : '${data['plan_id']}:${data['transaction_id']}';
+    }
+    final byId = await first('id = ?', [data['id']]);
+    if (byId != null || natural == null) return byId;
+    if (natural.any((c) => data[c] == null)) return null;
+    var where = natural.map((c) => '$c = ?').join(' AND ');
+    if (table == 'cards') {
+      // Only an ACTIVE card is unique per (account, last4).
+      if (data['deleted_at'] != null) return null;
+      where += ' AND deleted_at IS NULL';
+    }
+    return first(where, [for (final c in natural) data[c]]);
+  }
+
+  Future<bool> _backupIsNewer(
+      String table, String deviceId, Object? backupUpdatedAt) async {
+    final backup =
+        backupUpdatedAt is String ? DateTime.tryParse(backupUpdatedAt) : null;
+    if (backup == null) return false;
+    final row = await _db.customSelect(
+        'SELECT updated_at FROM $table WHERE id = ?;',
+        variables: [Variable.withString(deviceId)]).getSingleOrNull();
+    final device = DateTime.tryParse(row?.readNullable<String>('updated_at') ?? '');
+    return device == null || backup.isAfter(device);
+  }
+
+  Future<void> _updateFromBackup(String table, String deviceId,
+      Map<String, dynamic> data, int schemaVersion, Set<String> cols) async {
+    final allowed = BackupSnapshotBuilder.restorableColumns[table]!;
+    final set = [
+      for (final c in allowed)
+        if (c != 'id' && data.containsKey(c)) c,
+    ];
+    // A legacy (v3-) backup carries only the REAL amount: clear the exact minor
+    // so backfillNonPlanningMoneyV30 re-derives it from the restored value.
+    final cleared = [
+      if (schemaVersion < 4)
+        for (final c in allowed)
+          if (c.endsWith('_minor') && !data.containsKey(c) && cols.contains(c))
+            c,
+    ];
+    await _db.customStatement(
+      'UPDATE $table SET ${[
+        for (final c in set) '$c = ?',
+        for (final c in cleared) '$c = NULL',
+        if (cols.contains('server_id')) kMarkPendingIfServerBacked,
+      ].join(', ')} WHERE id = ?;',
+      [for (final c in set) _variable(data[c]).value, deviceId],
+    );
+    if (!_syncedTables.containsKey(table)) return;
+    final entityType = _syncedTables[table];
+    await _db.customStatement(
+      entityType == null
+          ? 'DELETE FROM ledger_sync_outbox WHERE transaction_id = ?;'
+          : 'DELETE FROM planning_sync_outbox '
+              'WHERE entity_type = ? AND entity_id = ?;',
+      [if (entityType != null) entityType, deviceId],
+    );
+  }
+
+  /// [_verifyAgainstPlan] for a merge: every backup transaction is on the
+  /// device (kept or restored), no table gained more rows than the backup
+  /// brought, and the rows the backup wrote carry the plan's money exactly.
+  Future<void> _verifyMergeAgainstPlan(RestorePlan plan,
+      [void Function(String point)? fault]) async {
+    Future<int> scalar(String sql) async =>
+        (await _db.customSelect(sql).getSingle()).read<int>('c');
+
+    if (await scalar('SELECT COUNT(*) AS c FROM user_settings;') != 1) {
+      throw const RestoreVerificationException('missing_singleton');
+    }
+    if (await scalar('SELECT COUNT(*) AS c FROM accounts;') < 1) {
+      throw const RestoreVerificationException('missing_default_account');
+    }
+    final planTxns = plan.tables['transactions'] ?? const [];
+    final planIds = {for (final r in planTxns) r['id']};
+    if (planIds.length != planTxns.length) {
+      throw const RestoreVerificationException('duplicate_identifier');
+    }
+    final present = await scalar(
+        'SELECT COUNT(*) AS c FROM restore_merge m JOIN transactions t '
+        "ON t.id = m.key WHERE m.tbl = 'transactions';");
+    if (present != planIds.length) {
+      throw const RestoreVerificationException('row_count_mismatch');
+    }
+    for (final entry in plan.expectedRowCounts.entries) {
+      final before = await _db.customSelect(
+          'SELECT n FROM restore_merge_counts WHERE tbl = ?;',
+          variables: [Variable.withString(entry.key)]).getSingleOrNull();
+      if (before == null) continue;
+      final now = await scalar('SELECT COUNT(*) AS c FROM ${entry.key};');
+      if (now > before.read<int>('n') + entry.value) {
+        throw const RestoreVerificationException('row_count_mismatch');
+      }
+    }
+
+    fault?.call('duringVerification');
+
+    final applied = {
+      for (final r in await _db
+          .customSelect("SELECT key FROM restore_merge "
+              "WHERE tbl = 'transactions' AND applied = 1;")
+          .get())
+        r.read<String>('key'),
+    };
+    final written = <String, double>{};
+    for (final row in await _db
+        .customSelect(
+          'SELECT currency AS cur, '
+          'COALESCE(SUM(${FinancialSql.netExpenseSignedAmount()}), 0) AS t '
+          'FROM transactions WHERE ${FinancialSql.confirmedPredicate()} '
+          'AND id IN (SELECT key FROM restore_merge '
+          "WHERE tbl = 'transactions' AND applied = 1) GROUP BY currency;",
+        )
+        .get()) {
+      written[row.read<String>('cur')] = row.read<double>('t');
+    }
+    final expected = _planNetExpensePerCurrency(RestorePlan(
+      operationId: plan.operationId,
+      envelopeVersion: plan.envelopeVersion,
+      snapshotSchemaVersion: plan.snapshotSchemaVersion,
+      sourceFingerprint: plan.sourceFingerprint,
+      tables: {
+        'transactions': [
+          for (final r in planTxns)
+            if (applied.contains(r['id'])) r,
+        ],
+      },
+      warnings: const [],
+    ));
+    for (final currency in {...written.keys, ...expected.keys}) {
+      if (((written[currency] ?? 0.0) - (expected[currency] ?? 0.0)).abs() >
+          1e-6) {
+        throw const RestoreVerificationException('total_mismatch');
+      }
+    }
+
+    final keyRef = (await _db
+            .customSelect("SELECT COALESCE(db_encryption_key_ref, '') AS k "
+                'FROM user_settings LIMIT 1;')
+            .getSingle())
+        .read<String>('k');
+    if (keyRef.isNotEmpty) {
+      throw const RestoreVerificationException('key_ref_present');
+    }
+    for (final table in plan.tables.keys) {
+      if (BackupSnapshotBuilder.intentionallyExcluded.contains(table)) {
+        throw const RestoreVerificationException('remote_row_present');
+      }
+    }
   }
 
   /// FK-safe repair applied inside the restore transaction (with enforcement
@@ -821,7 +1172,12 @@ class RestoreBackupUseCase {
   static bool _looksSensitive(String column) =>
       _sensitivePattern.hasMatch(column);
 
-  Future<void> _insertRow(String table, Map<String, dynamic> row) async {
+  Future<void> _insertRow(String table, Map<String, dynamic> row) =>
+      _insertPrepared(table, _prepareRow(table, row));
+
+  /// The row exactly as it may be written: exact minors parsed, the raw
+  /// message replaced, the deprecated key column blanked.
+  Map<String, dynamic> _prepareRow(String table, Map<String, dynamic> row) {
     final data = Map<String, dynamic>.from(row);
     // MALI-026 (B8-3 §2/§3): a v4 snapshot carries every `_minor` as a decimal
     // integer STRING (JS-safe). Parse it back to an int64 so it lands in the
@@ -850,6 +1206,11 @@ class RestoreBackupUseCase {
       // value a legacy/foreign snapshot may carry.
       data['db_encryption_key_ref'] = '';
     }
+    return data;
+  }
+
+  Future<void> _insertPrepared(String table, Map<String, dynamic> data,
+      {bool replace = true}) async {
     // MALI-058n §6 — column names are fixed by application code, NEVER taken
     // from arbitrary snapshot keys. Restrict to the backup-safe whitelist; any
     // other key (a legacy db_encryption_key_ref value, or any unrecognized
@@ -877,7 +1238,8 @@ class RestoreBackupUseCase {
     if (columns.isEmpty) return;
     final placeholders = List.filled(columns.length, '?').join(', ');
     await _db.customInsert(
-      'INSERT OR REPLACE INTO $table(${columns.join(', ')}) VALUES ($placeholders);',
+      'INSERT${replace ? ' OR REPLACE' : ''} INTO $table(${columns.join(', ')}) '
+      'VALUES ($placeholders);',
       variables: <Variable>[
         for (final column in columns) _variable(data[column]),
       ],

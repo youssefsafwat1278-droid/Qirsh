@@ -7,6 +7,7 @@
 // fakes.
 import 'dart:async';
 
+import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/data/db/app_database.dart';
@@ -681,6 +682,109 @@ void main() {
       });
     }
 
+    // Closure round, follow-up 6: the parser's message meaning and the
+    // validator's direction check decide on every import path.
+    Future<String?> reviewReason(String id) async {
+      final rows = await db.customSelect(
+          "SELECT metadata_json FROM smart_inbox_items WHERE payload_id = '$id';")
+          .get();
+      if (rows.isEmpty) return 'no row';
+      final meta = rows.single.read<String?>('metadata_json');
+      final m = RegExp(r'"review_reason":"([a-z_]+)"').firstMatch(meta ?? '');
+      return m?.group(1);
+    }
+
+    test(
+        'follow-up 6 (2): a validator direction contradiction goes to Smart '
+        'Inbox with the reason, not to the local reading', () async {
+      const credit = 'SAR 45.00 credited to your account *4521 from Ali';
+      queue.items.add(item(_id(1), text: credit));
+      server.fetch = CaptureServerFetch(
+          CaptureFetchStatus.ok, {_id(1): _processed(_id(1))});
+
+      final report = await buildService().run();
+
+      expect(report.imported.single.path, CaptureImportPath.server);
+      expect(await db.customSelect('SELECT type FROM transactions;').get(),
+          isEmpty,
+          reason: 'neither the server debit nor the device credit');
+      expect(await reviewReason(_id(1)), 'direction_contradiction');
+      expect(queue.acked, [_id(1)]);
+    });
+
+    for (final aiPrimary in [false, true]) {
+      test(
+          'follow-up 6 (1) (aiPrimary=$aiPrimary): a server that processed an '
+          'ATM cash deposit as income is not imported: Smart Inbox + reason',
+          () async {
+        const deposit = 'Cash deposit SAR 45.00 to account *4521 via ATM';
+        queue.items.add(item(_id(1), text: deposit));
+        server.fetch = CaptureServerFetch(CaptureFetchStatus.ok, {
+          _id(1): ProcessedCaptureDto(
+            payloadId: _id(1),
+            status: 'processed',
+            state: 'processed',
+            parsed: const {
+              'amount': 45.0,
+              'amount_text': '45.00',
+              'currency': 'SAR',
+              'direction': 'credit',
+              'type': 'income',
+              'rawMessage': 'sanitized',
+              'parserSource': 'ai',
+              'confidence': 0.9,
+            },
+            notification: const {},
+          ),
+        });
+
+        await buildService(aiPrimary: aiPrimary).run();
+
+        expect(await db.customSelect('SELECT type FROM transactions;').get(),
+            isEmpty,
+            reason: 'a cash deposit is not proven income');
+        expect(await reviewReason(_id(1)), 'cash_deposit');
+      });
+
+      test(
+          'follow-up 6 (1) (aiPrimary=$aiPrimary): a bill-due notice the '
+          'server processed is not imported: Smart Inbox + reason', () async {
+        const bill =
+            'Your bill of SAR 45.00 is due on 25/06. Pay now to avoid late fees.';
+        queue.items.add(item(_id(1), text: bill));
+        server.fetch = CaptureServerFetch(
+            CaptureFetchStatus.ok, {_id(1): _processed(_id(1))});
+
+        await buildService(aiPrimary: aiPrimary).run();
+
+        expect(await db.customSelect('SELECT type FROM transactions;').get(),
+            isEmpty);
+        expect(await reviewReason(_id(1)), 'bill_due');
+      });
+    }
+
+    test(
+        'follow-up 6 (1): AI-primary keeps the server meaning reason on a '
+        'rejected capture', () async {
+      queue.items.add(item(_id(1)));
+      server.fetch = CaptureServerFetch(CaptureFetchStatus.ok, {
+        _id(1): ProcessedCaptureDto(
+          payloadId: _id(1),
+          status: 'rejected',
+          state: 'rejected',
+          parsed: const {'parserSource': 'ai', 'reviewReason': 'own_accounts'},
+          notification: const {},
+          sanitizedText: 'redacted',
+          failureReason: 'not_parseable',
+        ),
+      });
+
+      await buildService(aiPrimary: true).run();
+
+      expect(await txIds(), isEmpty);
+      expect(await reviewReason(_id(1)), 'own_accounts');
+    });
+
     for (final entry in {
       'rejected': (String id) => _rejected(id),
       'retryable (unresolved)': (String id) => ProcessedCaptureDto(
@@ -973,5 +1077,40 @@ void main() {
       await svc.run();
       expect(await txIds(), [_id(1)]);
     });
+  });
+
+  // 4.5: a late or repeated server (AI) result never overwrites a category
+  // the user chose by hand, and its provenance survives the redelivery.
+  test('a redelivered AI result leaves a manual category and its provenance',
+      () async {
+    server.fetch = CaptureServerFetch(
+        CaptureFetchStatus.ok, {_id(1): _processed(_id(1))});
+    queue.items.add(item(_id(1)));
+    await buildService(aiPrimary: true).run();
+    expect(await txIds(), [_id(1)]);
+    await txRepo.updateCategory(transactionId: _id(1), categoryKey: 'travel');
+
+    // The same capture again, now with a different AI category.
+    final late = _processed(_id(1));
+    server.fetch = CaptureServerFetch(CaptureFetchStatus.ok, {
+      _id(1): ProcessedCaptureDto(
+        payloadId: late.payloadId,
+        status: late.status,
+        state: late.state,
+        parsed: {...late.parsed, 'category': 'shopping'},
+        notification: late.notification,
+      ),
+    });
+    queue.items.add(item(_id(1)));
+    final report = await buildService(aiPrimary: true).run();
+    expect(report.imported.single.path, CaptureImportPath.alreadyImported);
+    final tx = (await txRepo.getById(_id(1)))!;
+    expect(tx.categoryProvenance, CategoryProvenance.user);
+    final key = await db
+        .customSelect('SELECT c.key FROM transactions t JOIN categories c '
+            'ON c.id = t.category_id WHERE t.id = ?;',
+            variables: [Variable.withString(_id(1))])
+        .getSingle();
+    expect(key.read<String>('key'), 'travel');
   });
 }
