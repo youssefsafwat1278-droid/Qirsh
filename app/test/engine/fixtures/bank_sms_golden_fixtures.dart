@@ -400,7 +400,7 @@ At:19/04/26 11:07''',
   // Round 3 closure (owner brief §5): an ATM cash deposit may be the user's
   // own cash, so it is a review row with its amount, not income. (Was:
   // income, pending.) The id is kept for traceability.
-  BankSmsGoldenFixture(
+  const BankSmsGoldenFixture(
     id: 'sa_anb_atm_deposit_income',
     description:
         'ANB ATM deposit — review row (not proven income), بـ:SAR pattern',
