@@ -9961,6 +9961,18 @@ abstract class AppL10n {
   /// **'تأكيد الاستعادة'**
   String get rpConfirmTitle;
 
+  /// No description provided for @rpConfirmBodyMerge.
+  ///
+  /// In ar, this message translates to:
+  /// **'يحتوي هذا الجهاز على سجلاتك، لذا ستُدمج النسخة الاحتياطية معها. تُضاف السجلات غير الموجودة هنا، ويبقى كل ما أضفته أو عدّلته أو حذفته على هذا الجهاز كما هو الآن: لا تُستعاد عملية حذفتها، وإذا وُجد السجل في الاثنين تُحفظ النسخة الأحدث تعديلًا. تبقى قواعد تصنيف التجار المحفوظة على هذا الجهاز، ولا تُضاف القواعد الموجودة في النسخة فقط. تُوقف المزامنة السحابية والتحليل الذكي بعد الاستعادة حتى تشغّلهما من جديد. هل تريد المتابعة؟'**
+  String get rpConfirmBodyMerge;
+
+  /// No description provided for @rpConfirmBodyFull.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا يحتوي هذا الجهاز على سجلات بعد، لذا ستُستعاد النسخة الاحتياطية كما هي، بما فيها الإعدادات وقواعد تصنيف التجار المحفوظة. تُوقف المزامنة السحابية والتحليل الذكي بعد الاستعادة حتى تشغّلهما من جديد. هل تريد المتابعة؟'**
+  String get rpConfirmBodyFull;
+
   /// No description provided for @rpConfirmBody.
   ///
   /// In ar, this message translates to:

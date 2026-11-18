@@ -52,6 +52,14 @@ const held: Array<[string, string, ReturnType<typeof answer>]> = [
   ['Your bill of SAR 230.00 is due on 25/06. Pay now to avoid late fees.', 'bill_due',
     answer(230, 'payment', 'debit')],
   ['Your salary of SAR 9,000.00 is expected on 27/06', 'scheduled_or_expected', answer(9000, 'income', 'credit')],
+  // Held-out oracle shapes (follow-up 10): a perfect model answer for an
+  // own-account move, two purchases, or a card repayment is still not money.
+  ['Transfer SAR 3,000.00 from Savings account *1111 to Current account *2222', 'own_accounts',
+    answer(3000, 'transfer', 'debit')],
+  ['Purchase SAR 80.00 at Danube card *4521. Purchase SAR 45.00 at Kudu card *4521', 'multiple_amounts',
+    answer(80, 'payment', 'debit')],
+  ['Credit card payment of AED 2,500.00 received. Thank you', 'card_repayment',
+    { ...answer(2500, 'payment', 'debit'), currency: 'AED' }],
 ];
 
 // Parser follow-up 3 (SM-01): the `uncertain` kind (other_event_status,

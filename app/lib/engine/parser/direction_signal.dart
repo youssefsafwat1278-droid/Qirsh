@@ -1,4 +1,5 @@
 import '../models/transaction_type.dart';
+import 'currency_table.dart';
 import 'message_meaning.dart';
 import 'parser_engine.dart';
 
@@ -139,7 +140,12 @@ class DirectionSignal {
   static String _withoutRewardFlows(String lower) {
     for (final flow in [_debitFlow, _creditFlow]) {
       for (final m in flow.allMatches(lower).toList().reversed) {
-        if (isRewardFlow(lower, m.start, m.end)) {
+        // A side credit's whole clause goes ("…, تم إيداع استرداد نقدي 2
+        // ريال": its noun is not a money word of the transaction either).
+        final side = sideCreditClause(lower, m.start, m.end);
+        if (side != null) {
+          lower = lower.replaceRange(side.$1, side.$2, ' ' * (side.$2 - side.$1));
+        } else if (isRewardFlow(lower, m.start, m.end)) {
           lower = lower.replaceRange(m.start, m.end, ' ' * (m.end - m.start));
         }
       }
@@ -168,7 +174,8 @@ class DirectionSignal {
     'debited', 'deducted', 'charged', 'withdrawn', 'spent', 'sent to',
     'paid to', 'paid at', 'paid for', 'paid using', 'paid by card',
     'transferred to', 'transfer to', 'from your account', 'from your card',
-    'from account', 'money out', 'outgoing', 'outward',
+    'from account', 'money out', 'outgoing', 'outward', 'was used for',
+    'has been used for',
     'تم خصم', 'خصم مبلغ', 'تم سحب', 'مبلغ صادر', 'حوالة صادرة',
     'تحويل صادر', 'من حسابك', 'من بطاقتك', 'تم الدفع', 'تم دفع', 'تم سداد',
     'منك إلى', 'منك الى',
@@ -245,14 +252,75 @@ class DirectionSignal {
 
   /// Whether the flow phrase at [start]..[end] of [lower] moves reward points
   /// or miles: a reward unit right after it (a count may come first), or in
-  /// its own clause before it.
+  /// its own clause before it; or whether it is a side credit
+  /// ([sideCreditClause]).
   static bool isRewardFlow(String lower, int start, int end) {
     if (_rewardAfter.hasMatch(lower.substring(end))) return true;
     var from = 0;
     for (final c in _rewardClauseCut.allMatches(lower.substring(0, start))) {
       from = c.end;
     }
-    return _rewardUnit.hasMatch(lower.substring(from, start));
+    return _rewardUnit.hasMatch(lower.substring(from, start)) ||
+        sideCreditClause(lower, start, end) != null;
+  }
+
+  /// Follow-up 4 (NEW-1): the message's direction and amount come from its
+  /// primary clause, the one that carries the first currency figure (the
+  /// transaction amount). A flow phrase in a later clause that names a
+  /// reward, cashback, bonus or loyalty credit, and whose own figure (if it
+  /// has one) is smaller than the primary figure, is a side event: it never
+  /// sets the direction. Returns that clause's span, or null. A message
+  /// whose only event is a cashback or redemption credit has no earlier
+  /// primary figure, so its credit stands. Mirrors `sideCreditClause` in
+  /// `_shared/money_text.ts`.
+  static (int, int)? sideCreditClause(String lower, int start, int end) {
+    var from = 0;
+    for (final c in _sideClauseCut.allMatches(lower.substring(0, start))) {
+      from = c.end;
+    }
+    final next = _sideClauseCut.firstMatch(lower.substring(end));
+    final to = next == null ? lower.length : end + next.start;
+    final clause = lower.substring(from, to);
+    if (!_sideReward.hasMatch(clause)) return null;
+    final primary = _currencyFigure.firstMatch(lower);
+    if (primary == null || primary.start >= from) return null;
+    final own = _currencyFigure.firstMatch(clause);
+    if (own != null && !(_figureValue(own) < _figureValue(primary))) {
+      return null;
+    }
+    return (from, to);
+  }
+
+  /// [lower] with every side-credit clause ([sideCreditClause]) blanked.
+  static String withoutSideCredits(String lower) {
+    for (final m in _creditFlow.allMatches(lower).toList().reversed) {
+      final side = sideCreditClause(lower, m.start, m.end);
+      if (side != null) {
+        lower = lower.replaceRange(side.$1, side.$2, ' ' * (side.$2 - side.$1));
+      }
+    }
+    return lower;
+  }
+
+  /// Whether [lower] names a reward, cashback, bonus or loyalty credit.
+  static bool namesReward(String lower) => _sideReward.hasMatch(lower);
+
+  static final RegExp _sideClauseCut =
+      RegExp(r'[\n,،;!?؟؛]|\.(?![0-9])| [-–—] | and (?=[a-z])');
+  static final RegExp _sideReward = RegExp(
+      r'(?<![a-z])(?:cash ?back|rewards?|bonus|qitaf|loyalty|points|miles)(?![a-z])'
+      r'|استرداد نقدي|كاش ?باك|مكافأة|المكافأة|مكافآت|المكافآت|مكافاة|المكافاة|قطاف'
+      r'|(?:ال)?نقاط(?!\s*البيع)|نقطة|نقطه|أميال|اميال');
+  static final String _codes =
+      [for (final c in CurrencyTable.iso) c.toLowerCase(), 'sr', r'ر\.س'].join('|');
+  static final RegExp _currencyFigure = RegExp(
+      '(?<![a-z])(?:$_codes)\\s?([0-9٠-٩][0-9٠-٩,٬]*(?:[.٫][0-9٠-٩]+)?)'
+      '|([0-9٠-٩][0-9٠-٩,٬]*(?:[.٫][0-9٠-٩]+)?)\\s?(?:$_codes|ريال|جنيه|درهم|دينار)(?![a-z])');
+  static double _figureValue(RegExpMatch m) {
+    final raw = (m.group(1) ?? m.group(2)!).replaceAllMapped(
+        RegExp('[٠-٩]'), (d) => '${d[0]!.codeUnitAt(0) - 0x660}');
+    return double.tryParse(raw.replaceAll(RegExp('[,٬]'), '').replaceAll('٫', '.')) ??
+        double.infinity;
   }
 
   static const String _rewardUnits =

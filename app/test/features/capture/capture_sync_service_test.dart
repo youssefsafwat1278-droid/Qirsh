@@ -478,6 +478,41 @@ void main() {
   });
 
   test(
+      'Follow-up 10: a processed server row for a message the device reads as '
+      'review or no movement (own accounts, two purchases, card repayment, '
+      'uncertain, scheduled) is a review row, never a transaction', () async {
+    final client = _FakeCaptureBackendClient([
+      for (final (id, text, amount) in [
+        ('own', 'Transfer SAR 3,000.00 from Savings account *1111 to '
+            'Current account *2222', 3000),
+        ('two', 'Purchase SAR 80.00 at Danube card *4521. Purchase SAR 45.00 '
+            'at Kudu card *4521', 80),
+        ('card', 'Credit card payment of SAR 2,500.00 received. Thank you',
+            2500),
+        ('trunc', 'Purchase of SAR 80.00 at SHOP with card *1234 was decl',
+            80),
+        ('so', 'أمر مستديم بمبلغ 1,500 ريال إلى حساب 7788 سينفذ غدا', 1500),
+      ])
+        _capture(
+          payloadId: id,
+          status: 'processed',
+          type: 'payment',
+          direction: 'debit',
+          rawMessage: text,
+          amountText: '$amount.00',
+          numericAmount: amount,
+          merchant: null,
+        ),
+    ]);
+    final txRepo = DriftTransactionRepository(db);
+
+    await service(client).sync();
+
+    expect(await txRepo.getRecent(limit: 10, accountId: null), isEmpty);
+    expect(await DriftSmartInboxRepository(db).getOpen(), hasLength(5));
+  });
+
+  test(
       'V1-001 residuals: every not_completed case of the shared table, '
       'marked processed by a server as a payment or a refund, changes no total',
       () async {

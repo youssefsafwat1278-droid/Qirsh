@@ -610,3 +610,83 @@ These need no logic change:
   - Parser differential harness (`tools/parser_diff/run.sh 5dae2e2d`): 0 regressions, 0 throws on every path, 0 base not-completed texts now recorded. eB right 1,215 and eN 1,048 (one more each than the parser's pd5); s is unchanged.
   - `flutter analyze` on the touched files: clean.
   - Flutter `test/engine/ai`, `test/domain/capture`, `test/domain/usecases`, `test/features/capture` (`-j 2`): 1,875 passed, 0 failed.
+
+## Follow-up 10 — redaction keeps tense and status words (Vso4/K015), held-out oracle shapes, card repayment
+- **(1) Redaction now removes the name only.** Of the two options, I chose "stop at the name token". The server only receives text the device has already sanitized, so it cannot classify the meaning on the pre-redaction text.
+  - **Server** (`_shared/sms_redaction.ts`) **and device** (`engine/privacy/sms_sanitizer.dart`, mirrored so both still produce the same text):
+    - The «إلى/الى» and "To:" beneficiary rules no longer delete to the end of the line. They now remove the letter tokens of the name, plus a third-party account or card word before it («إلى حساب سارة»). A name already masked as `[NAME]` is still turned into `[REDACTED]`, as before.
+    - The rules stop at a tense, status, amount, currency or date word, a digit, a placeholder, or the end of the sentence.
+    - Tense and status words were added to the name stopwords, for example سينفذ, غدا, سيتم, مجدولة, مرفوضة, tomorrow, scheduled, executed, completed, declined.
+    - Account-type words were added too (savings, current, التوفير, الجاري), so "from Savings account" is no longer masked as a name.
+    - The user's own account or card («إلى حسابك», "your card") is no longer redacted; it is not a third party.
+    - The device `_nameToken` got the sentence-end rule (SM-07) that the server got last round.
+  - Results:
+    - «… إلى حساب 7788 سينفذ غدا» → «… إلى: [REDACTED] 7788 سينفذ غدا».
+    - "To: Sara Ali will be executed tomorrow" → "To: [REDACTED] will be executed tomorrow".
+  - Tests:
+    - New TS test: "beneficiary redaction keeps every word after the name" (6 cases, Arabic and English, each also checks that no name leaks).
+    - 3 new shared fixtures: `ar_standing_order_tense`, `en_standing_order_tense`, `en_two_sentences`. They are checked on device and server.
+    - With HEAD's `sms_redaction.ts`, 6 tests fail; all pass now.
+  - **Changed expectations** in the shared redaction fixture (less non-personal text removed; every `mustDrop` name is still checked and still absent):
+    - `ar_transfer_in` now keeps «إلى حسابك ***1234 في 05/11».
+    - `ar_sayyid` keeps «إلى حسابك».
+    - `ar_refund` keeps «إلى بطاقتك *1111».
+  - Results: all 67 TS redaction tests and all 104 Dart privacy tests pass.
+- **(2) Held-out oracle.**
+  - **Own-account moves — root cause found:** both redactors masked "Savings" and "Current" as person names ("from [NAME] account"). The server's meaning then read a single completed event, so the server path booked the move as spending. Fixed by the account-type stopwords.
+  - **Device import of server rows:** `CaptureSyncService._importCaptureAtomically` booked a processed server row without checking the message's meaning. It now applies `meaningHoldReason` first. The new sync test (own accounts, two purchases, card repayment, a truncated status, a scheduled standing order) fails before this change and passes after.
+  - **Server gate:** `ai_meaning_gate_test.ts` now covers perfect answers for own accounts, two purchases and card repayment in AI-primary and legacy mode. The own-account case fails with HEAD redaction.
+  - **Device use case:** `ai_meaning_gate_test.dart` adds the same three shapes.
+  - **Instruction-bearing purchases:** 2 new shared fixtures (Arabic and English) are accepted as the purchase. The device use case records them as one SAR 120 payment. My code has no rule that sends instruction text to review; the parser sets the instruction aside as a footer.
+  - Note: when the injected instruction names a second figure ("… بمبلغ 9,999 ريال"), the parser reads several movements and holds the message. That is the parser's decision.
+- **(3) Card repayment** (`own_account_transfer/card_repayment`) is held on every path of mine: the server gate, the device use case, and the iOS and sync imports. It is covered by the tests above.
+- **Runs**
+  - Deno, all of `supabase/functions`: 1,262 passed, 0 failed.
+  - `flutter analyze` on the whole app: no issues.
+  - `run.sh 5dae2e2d`: exit 0. 0 regressions and 0 throws on every path; moves to review 35 of the 35 budget. The server path improved against the parser's last run (pd7): labelled wrong 16 → 14, right 1,092 → 1,097.
+  - `server_diff.sh` (`b6fc0dad` → working tree): 0 server regressions, exit 0. Vso4 is no longer listed: the server now matches `b6fc0dad` and does not record it.
+  - Flutter `engine/ai`, `domain/capture`, `domain/usecases`, `features/capture` and `engine/privacy` (`-j 2`): 1,986 passed, 0 failed.
+
+## Follow-up 11 — the beneficiary rule masks the third party's number again
+
+**Problem.** FU10 stopped the «إلى/الى»/"To:" rule at tense and status words. That also let the third party's account digits through: «إلى حساب 7788 سينفذ غدا» became «إلى: [REDACTED] 7788 سينفذ غدا». At HEAD `4d54d258` that number was removed with the name.
+
+**Fix.** The same change is made on the server (`_shared/sms_redaction.ts`) and the device (`engine/privacy/sms_sanitizer.dart`, plus its pass in `sanitization_edit_map.dart`).
+- **The beneficiary run now covers the number.** After the name, the run also takes any number token:
+  - Western or Arabic-Indic digits, star-masked or not;
+  - dashed groups;
+  - a placeholder ([ACCOUNT]/[IBAN]/[CARD]/[PHONE]/[REF]);
+  - an IBAN-like token, spaced or unspaced.
+
+  The run stops at an amount (a currency next to it, or a decimal or grouped figure) and at a date or time (`/` or `:`). Example: «إلى حساب 7788 سينفذ غدا» → «إلى: [REDACTED] سينفذ غدا».
+- **Name tokens no longer cut an IBAN in two.** A name token can no longer end in letters glued to digits. Before, the "SA" of «SA03» became a name and the «03 …» digits leaked.
+- **New sentence pass (`NUMBER_IN_BENEFICIARY_SENTENCE` / `_numberInBeneficiarySentence`).** Any number still left in the beneficiary's sentence becomes `[ACCOUNT]`. That span runs from the cue to the end of the sentence, which is exactly the span HEAD removed whole. The pass leaves amounts, dates and times, a day before a month name, and the user's own partial suffix alone. Example: «… سينفذ غدا من حسابك 12345678» → «… من حسابك [ACCOUNT]».
+  - Side effect: a bare count in that sentence is also masked («خلال 3 أيام» → «خلال [ACCOUNT] أيام»). HEAD removed it too.
+  - On the device, this pass runs under the same condition as the beneficiary rule: type unknown, transfer or income.
+- **Own long number pass (`OWN_DESTINATION_NUMBER`).** It applies on both sides. A number of 5 or more digits right after «إلى/الى/to» + an own word becomes `[ACCOUNT]`. That includes lowercase "to your account 1234567", which HEAD kept in clear.
+
+**Own-account text now kept that HEAD removed.** This is exactly the following, and nothing else:
+- the own word itself: «حسابك/حسابكم/لحسابك/بطاقتك/بطاقتكم/محفظتك», "your [account|card|wallet] [no|number]";
+- the suffix right after it, only when it is **at most 4 digits**, optionally star-masked («***1234», «*٥٦٧٨», «1234»);
+- the amounts and dates after it.
+
+It is never a full number: 5–9 digits become `[ACCOUNT]` through the two passes above, and 10 or more digits were already `[ACCOUNT]`.
+
+**Tests.** Each new test fails on the FU10 code and passes now.
+- **Shared fixture `sms_redaction_cases.json`: +14 cases, checked on both sides.** Each must give device == server, the same result from `sanitizeWithMap`, and an idempotent second pass. The cases cover:
+  - Arabic third-party number, Western and Arabic-Indic digits;
+  - English star-masked suffix;
+  - spaced and unspaced IBAN;
+  - a long number before an amount;
+  - own 4-digit suffix vs 8-digit number, Western, Arabic-Indic and English;
+  - a number later in the sentence: own long, own suffix, English Arabic-Indic.
+- **Updated FU10 expectation:** Vso4 → «… إلى: [REDACTED] سينفذ غدا».
+- **New diff test `_shared/sms_redaction_head_diff_test.ts`.** HEAD `4d54d258`'s redactor is frozen at `_shared/fixtures/sms_redaction_4d54d258.ts` (test-only). The test runs over the shared fixture, every `tools/parser_diff/cases/*.json`, and the `process-ios-sms` case tables: 2,435 texts, 66 of which change. It fails if the new output emits any digit run that HEAD removed, unless that run is the own ≤4-digit suffix, part of an amount, a date or time, or a day before a month. A second test proves the check catches a leaked third-party number (Western, Arabic-Indic, IBAN, own 8-digit, later in the sentence).
+- **Scratch check, device == server:** over the same 2,435 texts, `sanitize` and `sanitizeWithMap` match the server, with 0 mismatches.
+
+**Runs**
+- Deno, all of `supabase/functions`: 1,278 passed, 0 failed, 6 ignored.
+- Flutter `test/engine/privacy` + `capture_import_service_test.dart`: 168 passed.
+- `flutter analyze`: no issues.
+- `server_diff.sh`: 0 server regressions, exit 0.
+- `run.sh 5dae2e2d`: 0 regressions, review 35 of 35 budget, exit 0.

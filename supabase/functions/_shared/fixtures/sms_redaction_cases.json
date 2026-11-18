@@ -376,7 +376,7 @@
   "id": "ar_transfer_in",
   "kind": "transfer_in",
   "raw": "حوالة واردة من محمد عبدالله آل سعود بمبلغ 5000 ريال إلى حسابك ***1234 في 05/11",
-  "expected": "حوالة واردة من [NAME] بمبلغ 5000 ريال إلى: [REDACTED]",
+  "expected": "حوالة واردة من [NAME] بمبلغ 5000 ريال إلى حسابك ***1234 في 05/11",
   "mustKeep": [
    "حوالة واردة من [NAME] بمبلغ 5000 ريال"
   ],
@@ -435,7 +435,7 @@
   "id": "ar_sayyid",
   "kind": "transfer_in",
   "raw": "السيد خالد العتيبي قام بتحويل 300 ريال إلى حسابك",
-  "expected": "السيد [NAME] قام بتحويل 300 ريال إلى: [REDACTED]",
+  "expected": "السيد [NAME] قام بتحويل 300 ريال إلى حسابك",
   "mustKeep": [
    "السيد [NAME] قام بتحويل 300 ريال"
   ],
@@ -460,7 +460,7 @@
   "id": "ar_refund",
   "kind": "refund",
   "raw": "استرداد مبلغ 120 ريال من نون إلى بطاقتك *1111",
-  "expected": "استرداد مبلغ 120 ريال من نون إلى: [REDACTED]",
+  "expected": "استرداد مبلغ 120 ريال من نون إلى بطاقتك *1111",
   "mustKeep": [
    "من نون",
    "120 ريال"
@@ -504,6 +504,239 @@
   "mustDrop": [
    "فهد",
    "١٢٣٤٥٦٧٨٩٠١٢٣"
+  ]
+ },
+ {
+  "id": "ar_standing_order_tense",
+  "kind": "transfer",
+  "raw": "أمر مستديم بمبلغ 1,500 ريال إلى حساب سارة الاسمري سينفذ غدا",
+  "expected": "أمر مستديم بمبلغ 1,500 ريال إلى: [REDACTED] سينفذ غدا",
+  "mustKeep": [
+   "1,500",
+   "ريال",
+   "سينفذ غدا"
+  ],
+  "mustDrop": [
+   "سارة",
+   "الاسمري"
+  ]
+ },
+ {
+  "id": "en_standing_order_tense",
+  "kind": "transfer",
+  "raw": "Standing order SAR 1,500 To: Sara Ali will be executed tomorrow",
+  "expected": "Standing order SAR 1,500 To: [REDACTED] will be executed tomorrow",
+  "mustKeep": [
+   "SAR",
+   "1,500",
+   "will be executed tomorrow"
+  ],
+  "mustDrop": [
+   "Sara",
+   "Ali"
+  ]
+ },
+ {
+  "id": "en_two_sentences",
+  "kind": "transfer",
+  "raw": "SAR 1,000.00 sent to Ali Hassan. Previous transfer declined.",
+  "expected": "SAR 1,000.00 sent to [NAME]. Previous transfer declined.",
+  "mustKeep": [
+   "1,000.00",
+   "Previous transfer declined."
+  ],
+  "mustDrop": [
+   "Ali",
+   "Hassan"
+  ]
+ },
+ {
+  "id": "ar_beneficiary_account_digits",
+  "kind": "transfer_out",
+  "raw": "أمر مستديم بمبلغ 1,500 ريال إلى حساب 7788 سينفذ غدا",
+  "expected": "أمر مستديم بمبلغ 1,500 ريال إلى: [REDACTED] سينفذ غدا",
+  "mustKeep": [
+   "1,500",
+   "سينفذ غدا"
+  ],
+  "mustDrop": [
+   "7788"
+  ]
+ },
+ {
+  "id": "ar_beneficiary_indic_digits",
+  "kind": "transfer_out",
+  "raw": "تحويل ٥٠٠ ريال إلى سارة الاسمري ٧٧٨٨٩٩ سينفذ غدا",
+  "expected": "تحويل ٥٠٠ ريال إلى: [REDACTED] سينفذ غدا",
+  "mustKeep": [
+   "٥٠٠ ريال",
+   "سينفذ غدا"
+  ],
+  "mustDrop": [
+   "سارة",
+   "٧٧٨٨٩٩"
+  ]
+ },
+ {
+  "id": "en_beneficiary_star_suffix",
+  "kind": "transfer_out",
+  "raw": "Transfer of SAR 200.00 To: Sara Ali *7788 pending",
+  "expected": "Transfer of SAR 200.00 To: [REDACTED] pending",
+  "mustKeep": [
+   "SAR 200.00",
+   "pending"
+  ],
+  "mustDrop": [
+   "Sara",
+   "7788"
+  ]
+ },
+ {
+  "id": "ar_beneficiary_iban_spaced",
+  "kind": "transfer_out",
+  "raw": "تحويل 750 ريال إلى سارة SA03 8000 0000 6080 1016 7519 سينفذ غدا",
+  "expected": "تحويل 750 ريال إلى: [REDACTED] سينفذ غدا",
+  "mustKeep": [
+   "750 ريال",
+   "سينفذ غدا"
+  ],
+  "mustDrop": [
+   "سارة",
+   "SA03",
+   "8000",
+   "7519"
+  ]
+ },
+ {
+  "id": "en_beneficiary_iban_unspaced",
+  "kind": "transfer_out",
+  "raw": "Standing order SAR 900.00 To: Ali Hassan SA0380000000608010167519 scheduled tomorrow",
+  "expected": "Standing order SAR 900.00 To: [REDACTED] scheduled tomorrow",
+  "mustKeep": [
+   "SAR 900.00",
+   "scheduled tomorrow"
+  ],
+  "mustDrop": [
+   "Ali",
+   "SA03",
+   "7519"
+  ]
+ },
+ {
+  "id": "en_beneficiary_long_number",
+  "kind": "transfer_out",
+  "raw": "Transfer To: Ali Hassan 1234567 SAR 500.00 completed on 12/11",
+  "expected": "Transfer To: [REDACTED] SAR 500.00 completed on 12/11",
+  "mustKeep": [
+   "SAR 500.00",
+   "completed on 12/11"
+  ],
+  "mustDrop": [
+   "Ali",
+   "1234567"
+  ]
+ },
+ {
+  "id": "ar_own_suffix_4",
+  "kind": "transfer_in",
+  "raw": "تم إيداع 300 ريال إلى حسابك 1234 في 05/11",
+  "expected": "تم إيداع 300 ريال إلى حسابك 1234 في 05/11",
+  "mustKeep": [
+   "حسابك 1234",
+   "05/11"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "ar_own_long_number",
+  "kind": "transfer_in",
+  "raw": "تم إيداع 300 ريال إلى حسابك 12345678 في 05/11",
+  "expected": "تم إيداع 300 ريال إلى حسابك [ACCOUNT] في 05/11",
+  "mustKeep": [
+   "300 ريال",
+   "05/11"
+  ],
+  "mustDrop": [
+   "12345678"
+  ]
+ },
+ {
+  "id": "ar_own_long_indic",
+  "kind": "transfer_in",
+  "raw": "تم إيداع ٣٠٠ ريال إلى حسابك ١٢٣٤٥٦٧٨ في ٠٥/١١",
+  "expected": "تم إيداع ٣٠٠ ريال إلى حسابك [ACCOUNT] في ٠٥/١١",
+  "mustKeep": [
+   "٣٠٠ ريال",
+   "٠٥/١١"
+  ],
+  "mustDrop": [
+   "١٢٣٤٥٦٧٨"
+  ]
+ },
+ {
+  "id": "en_own_suffix_masked",
+  "kind": "transfer_in",
+  "raw": "SAR 300.00 credited to your account ***1234 on 05/11",
+  "expected": "SAR 300.00 credited to your account ***1234 on 05/11",
+  "mustKeep": [
+   "***1234",
+   "05/11"
+  ],
+  "mustDrop": []
+ },
+ {
+  "id": "en_own_long_number",
+  "kind": "transfer_in",
+  "raw": "SAR 300.00 credited to your account 1234567 on 05/11",
+  "expected": "SAR 300.00 credited to your account [ACCOUNT] on 05/11",
+  "mustKeep": [
+   "SAR 300.00",
+   "05/11"
+  ],
+  "mustDrop": [
+   "1234567"
+  ]
+ },
+ {
+  "id": "ar_beneficiary_later_own_long",
+  "kind": "transfer_out",
+  "raw": "تحويل 500 ريال إلى سارة سينفذ غدا من حسابك 12345678",
+  "expected": "تحويل 500 ريال إلى: [REDACTED] سينفذ غدا من حسابك [ACCOUNT]",
+  "mustKeep": [
+   "500 ريال",
+   "سينفذ غدا"
+  ],
+  "mustDrop": [
+   "سارة",
+   "12345678"
+  ]
+ },
+ {
+  "id": "ar_beneficiary_later_own_suffix",
+  "kind": "transfer_out",
+  "raw": "تحويل 500 ريال إلى سارة سينفذ غدا من حسابك *5678",
+  "expected": "تحويل 500 ريال إلى: [REDACTED] سينفذ غدا من حسابك *5678",
+  "mustKeep": [
+   "500 ريال",
+   "سينفذ غدا",
+   "*5678"
+  ],
+  "mustDrop": [
+   "سارة"
+  ]
+ },
+ {
+  "id": "en_beneficiary_later_number_indic",
+  "kind": "transfer_out",
+  "raw": "To: Ali Hassan completed, beneficiary acct ٧٧٨٨٩٩ fee SAR 5.00",
+  "expected": "To: [REDACTED] completed, beneficiary acct [ACCOUNT] fee SAR 5.00",
+  "mustKeep": [
+   "completed",
+   "SAR 5.00"
+  ],
+  "mustDrop": [
+   "Ali",
+   "٧٧٨٨٩٩"
   ]
  }
 ]

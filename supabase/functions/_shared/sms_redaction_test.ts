@@ -248,10 +248,10 @@ Deno.test('parse-sms drops a placeholder merchant_name before returning/storing 
 Deno.test('third-party redaction never merges two sentences', () => {
   const cases: Array<[string, string]> = [
     ['SAR 1,000.00 sent to Ali completed. Previous transfer declined.',
-      'SAR 1,000.00 sent to [NAME]. Previous transfer declined.'],
+      'SAR 1,000.00 sent to [NAME] completed. Previous transfer declined.'],
     ['تم تحويل 100 ريال الى علي. العملية السابقة مرفوضة', 'تم تحويل 100 ريال الى: [REDACTED]. العملية السابقة مرفوضة'],
     ['Transfer To: Sara Ali. Previous attempt declined.', 'Transfer To: [REDACTED]. Previous attempt declined.'],
-    ['حوالة الى: سارة الاسمري مبلغ 1,000.00 ريال. شكرا', 'حوالة الى: [REDACTED]. شكرا'],
+    ['حوالة الى: سارة الاسمري مبلغ 1,000.00 ريال. شكرا', 'حوالة الى: [REDACTED] مبلغ 1,000.00 ريال. شكرا'],
     ['Transfer received from AHMED ALI.', 'Transfer received from [NAME].'],
   ];
   for (const [raw, expected] of cases) assertEquals(redactThirdPartyNames(redactPii(raw)), expected, raw);
@@ -261,4 +261,26 @@ Deno.test('a title or initial period does not end the name', () => {
   const out = redactThirdPartyNames('Transfer to Mr. Ali Hassan SAR 500.00. Thank you');
   assertEquals(out, 'Transfer to [NAME] SAR 500.00. Thank you');
   assert(!out.includes('Ali') && !out.includes('Hassan'));
+});
+
+// Vso4 / K015: redaction removes the name (and the account object before it)
+// and nothing after it, so the server and the model still read the tense and
+// status words. Synthetic only.
+Deno.test('beneficiary redaction keeps every word after the name', () => {
+  const cases: Array<[string, string]> = [
+    ['أمر مستديم بمبلغ 1,500 ريال إلى حساب 7788 سينفذ غدا', 'أمر مستديم بمبلغ 1,500 ريال إلى: [REDACTED] سينفذ غدا'],
+    ['تحويل 500 ريال إلى حساب سارة الاسمري تم بنجاح', 'تحويل 500 ريال إلى: [REDACTED] تم بنجاح'],
+    ['تحويل 500 ريال الى علي سينفذ غدا', 'تحويل 500 ريال الى: [REDACTED] سينفذ غدا'],
+    ['Standing order SAR 1,500 To: Sara Ali will be executed tomorrow',
+      'Standing order SAR 1,500 To: [REDACTED] will be executed tomorrow'],
+    ['Transfer To: A. Ali Hassan SAR 500 completed', 'Transfer To: [REDACTED] SAR 500 completed'],
+    ['To: John Smith', 'To: [REDACTED]'],
+  ];
+  for (const [raw, expected] of cases) {
+    const out = redactThirdPartyNames(redactPii(raw));
+    assertEquals(out, expected, raw);
+    for (const name of ['سارة', 'الاسمري', 'علي', 'Sara', 'Ali', 'Hassan', 'John', 'Smith']) {
+      assert(!out.includes(name), `${name} leaked: ${out}`);
+    }
+  }
 });

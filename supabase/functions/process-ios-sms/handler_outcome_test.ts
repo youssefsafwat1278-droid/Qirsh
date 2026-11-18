@@ -119,7 +119,8 @@ Deno.test('clean card/ATM SMS without merchant: processed, consult AI only with 
 });
 
 Deno.test('direction unknown: still goes to AI (one call) when allowed, rejected when not', async () => {
-  const text = 'Your card 1234 was used for EGP 99.50';
+  // Follow-up 4: "was used for" now names a debit; "transaction of" names no direction.
+  const text = 'Your card 1234 transaction of EGP 99.50';
   const ai = { amount: 99.5, amount_text: '99.50', currency: 'EGP', type: 'payment', direction: 'debit' };
   const a = await call(fakeSupabase(), { payloadId: 'u1', sanitizedText: text, allowAi: true }, ai);
   assertEquals(a.calls, 1);

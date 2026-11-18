@@ -950,6 +950,17 @@ class CaptureSyncService {
       return null;
     }
 
+    // Follow-up 10 (held-out oracle): the device's meaning of the same text
+    // decides before a server row is booked — an own-account move, several
+    // movements, a card repayment, an uncertain status or a no-movement notice
+    // is never a transaction because a server (or its model) said so.
+    if (meaningHoldReason(
+            _string(parsed['rawMessage']) ?? capture.sanitizedText ?? '') !=
+        null) {
+      await _persistBackendUnprocessableCapture(
+          capture, requireCurrentAdmission, committed);
+      return null;
+    }
     // FR-02 / LR-04 — the device's own parse of the same text reads the
     // opposite money direction (debit vs credit), or drops it as not a
     // transaction: the same recoverable review path.

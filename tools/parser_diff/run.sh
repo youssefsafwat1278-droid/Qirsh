@@ -9,7 +9,9 @@
 # app/ (the package config is reused for the extracted versions).
 # PARSER_DIFF_SCRATCH sets the scratch folder (default: a new temp folder).
 # Exit status 1 when a labelled message the base got right is wrong or silent
-# on any path, or when any path throws.
+# on any path, when any path throws, or when more messages than the review
+# budget (PARSER_DIFF_REVIEW_BUDGET, default 35) moved from right (labelled)
+# or recorded (unlabelled) to a review row; diff.py lists every such move.
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 REPO=$(cd "$HERE/../.." && pwd)
@@ -45,16 +47,25 @@ json.dump(cfg, open(sys.argv[2], 'w'))
 PY
   fi
   cp "$HERE/device.dart" "$S/$name/h/device_test.dart"
-  if [ -f "$root/app/lib/engine/parser/message_meaning.dart" ]; then
-    cat > "$S/$name/h/shim.dart" <<'DART'
-import 'package:money_companion/engine/parser/parser_engine.dart';
-import 'package:money_companion/domain/capture/validated_capture.dart';
-String? meaning(String t) { final m = ParserEngine.meaningOf(t); return '${m.kind.name}:${m.reason}'; }
-String? hold(String t) => meaningHoldReason(t);
-DART
-  else
-    printf 'String? meaning(String t) => null;\nString? hold(String t) => null;\n' > "$S/$name/h/shim.dart"
-  fi
+  # The version shim: its meaning reading and hold (where it has them), and
+  # localParseContradictsServer as its import step calls it (the merchant is
+  # passed where the version takes it).
+  local mer=''
+  grep -A8 'bool localParseContradictsServer' "$root/app/lib/domain/capture/validated_capture.dart" | grep -q 'merchant' &&
+    mer=', merchant: m'
+  {
+    echo "import 'package:money_companion/domain/capture/validated_capture.dart';"
+    if [ -f "$root/app/lib/engine/parser/message_meaning.dart" ]; then
+      echo "import 'package:money_companion/engine/parser/parser_engine.dart';"
+      echo "String? meaning(String t) { final m = ParserEngine.meaningOf(t); return '\${m.kind.name}:\${m.reason}'; }"
+      echo "String? hold(String t) => meaningHoldReason(t);"
+    else
+      echo "String? meaning(String t) => null;"
+      echo "String? hold(String t) => null;"
+    fi
+    echo "bool contradicts(String t, String? d, String? ty, String? snd, num? a, String? m) =>"
+    echo "    localParseContradictsServer(text: t, direction: d, type: ty, senderId: snd, amount: a$mer);"
+  } > "$S/$name/h/shim.dart"
   echo "$root" > "$S/$name/root"
 }
 

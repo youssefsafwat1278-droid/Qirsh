@@ -117,6 +117,8 @@ class MessageMeaning {
   static const List<String> otherEventMarkers = [
     'previous', 'earlier', 'prior', 'another', 'last attempt',
     'first attempt', 'dispute', 'السابقة', 'السابق', 'سابقة',
+    // Follow-up 4 (SM-06): "Last transaction SAR 30 …", «آخر عملية 30 ريال».
+    'last', 'آخر',
   ];
 
   /// Follow-up 3 (SM-01): an [otherEventMarkers] word attaches a status cue
@@ -128,6 +130,8 @@ class MessageMeaning {
     'purchases', 'payment', 'payments', 'transfer', 'transfers', 'withdrawal',
     'operation', 'charge', 'txn', 'trx', 'عملية', 'العملية', 'محاولة',
     'المحاولة', 'معاملة', 'المعاملة', 'حركة', 'الحركة',
+    // Follow-up 4 (SM-06): "Previous salary SAR …", «الراتب السابق».
+    'salary', 'راتب', 'الراتب',
   ];
 
   /// An amount that is owed or due, not paid.
@@ -148,6 +152,10 @@ class MessageMeaning {
     'مجدولة', 'ستتم', 'سيخصم', 'سيُخصم', 'سيضاف', 'سيودع', 'جاري تنفيذ',
     'جاري معالجة', 'جارٍ تنفيذ', 'جارٍ معالجة',
     'طلب استرداد', 'طلب الاسترداد',
+    // Follow-up 4: an execution date ahead ("standing order … executes
+    // tomorrow", «سينفذ غدا»).
+    'tomorrow', 'غدا', 'غداً', 'execution date', 'executes', 'تاريخ التنفيذ',
+    'سينفذ', 'ستنفذ',
   ];
 
   /// An offer, a call to act or a condition ("Deposit SAR 1,000 or more to

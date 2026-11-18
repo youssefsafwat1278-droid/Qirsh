@@ -47,7 +47,9 @@ const CLEAN_SMS = [
 // amount+currency, direction unknown, no merchant -> unresolved, HYBRID
 const HYBRID_SMS = 'EGP 99.50 ZARA online';
 // direction unknown, no merchant -> unresolved, HYBRID
-const HYBRID_NO_DIR_SMS = 'Your card 1234 was used for EGP 99.50';
+// Follow-up 4: "was used for" now names a debit (a card used for an amount),
+// so the direction-unknown fixture says "transaction of" instead.
+const HYBRID_NO_DIR_SMS = 'Your card 1234 transaction of EGP 99.50';
 // no amount/currency -> unresolved, AI-only ($ is not a deterministic currency)
 const AI_ONLY_SMS = 'Purchase $20.00 at SHOP';
 

@@ -213,6 +213,12 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
     pass(SmsSanitizer.beneficiaryEnPattern, (_) => 'To: [REDACTED]',
         '[REDACTED]');
   }
+  pass(SmsSanitizer.ownDestinationNumberPattern,
+      (m) => '${m.group(1)!}[ACCOUNT]', '[ACCOUNT]');
+  if (stripBeneficiary) {
+    pass(SmsSanitizer.numberInBeneficiarySentencePattern, (_) => '[ACCOUNT]',
+        '[ACCOUNT]');
+  }
   pass(SmsSanitizer.greetingPattern, (_) => '[REDACTED]', '[REDACTED]');
 
   // `sanitize` finishes with .trim(); trimmed characters are dropped, and the

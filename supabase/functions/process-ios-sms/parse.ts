@@ -12,9 +12,11 @@ import {
   currencyIn,
   EXPLICIT_OWN_TRANSFER,
   isOwnAccountMove,
+  MAX_TEXT_LENGTH,
   meaningOf,
   type MessageMeaning,
   withoutNoticeTails,
+  withoutSideCredits,
 } from './message_meaning.ts';
 import {
   type AiCandidate,
@@ -362,7 +364,9 @@ const OTHER_SUBJECT = (() => {
   const arNouns = nouns.filter((w) => !isLatin(w)).map(foldForCues);
   return new RegExp(
     `(?<![a-z])(?:(?:${latinMarkers.join('|')})\\s+(?:\\S+\\s+){0,2}?(?:${nouns.filter(isLatin).join('|')})|` +
-      `${latinPhrases.join('|')})(?![a-z])|(?:${arNouns.join('|')})\\s+(?:${arMarkers.join('|')})`,
+      `${latinPhrases.join('|')})(?![a-z])|(?:${arNouns.join('|')})\\s+(?:${arMarkers.join('|')})` +
+      // «آخر عملية»: an Arabic marker may also come first.
+      `|(?<![\\u0621-\\u064a])(?:${arMarkers.join('|')})\\s+(?:${arNouns.join('|')})`,
   );
 })();
 
@@ -586,7 +590,7 @@ export function deterministicParse(
     ? 'unknown'
     : meaning.direction !== 'unknown'
     ? meaning.direction
-    : detectDirection(clauseScope(normalized, CUE_DEPS).core.toLowerCase());
+    : detectDirection(withoutSideCredits(clauseScope(normalized, CUE_DEPS).core.toLowerCase()));
   const type = direction === 'credit' ? (isRefundText(lower) ? 'refund' : 'income')
     : direction === 'debit' ? 'payment' : 'unknown';
   const category = type === 'income' ? 'income' : inferCategory(merchant, type);
@@ -773,13 +777,15 @@ function normalize(input: string): string {
 
 /** The message's meaning (message_meaning.ts) over the normalized text. */
 export function messageMeaning(text: string): MessageMeaning {
+  // Follow-up 4 (NEW-3): over-length is the length of the text as given (a
+  // bounded text is MAX_TEXT_LENGTH + 1 long); normalizing may change it.
   return meaningOf(normalize(text), {
     ...CUE_DEPS,
     isOtherEventStatus,
     isNotCompletedCore: isDeclinedCore,
     namesDirection: (s) => detectDirection(s.toLowerCase()) !== 'unknown',
     hasChargedPair: (t) => chargedPair(t) !== null,
-  });
+  }, text.length > MAX_TEXT_LENGTH);
 }
 
 // Round 3 (V1-084): "Purchase of USD 20.00 … Charged SAR 75.00". The amount
@@ -789,6 +795,7 @@ export function messageMeaning(text: string): MessageMeaning {
 const FIG = '([0-9][0-9,]*(?:\\.[0-9]+)?)';
 const CHARGED_AFTER = new RegExp(
   '(?<![a-z])(?:amount charged|charged amount|charged|billed|equivalent(?: to)?|amount in [a-z]{3}|deducted|' +
+    'amount debited|debited amount|debited|' +
     'المبلغ المخصوم|بما يعادل|ما يعادل)\\s*(?:amount|of|as)?\\s*:?\\s*' +
     `(?:([A-Za-z]{2,3})\\s?${FIG}|${FIG}\\s?([A-Za-z]{3}))`,
   'i',

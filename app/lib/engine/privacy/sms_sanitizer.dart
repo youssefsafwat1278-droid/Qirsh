@@ -102,15 +102,91 @@ class SmsSanitizer {
   static final _accountNumber = RegExp('$_nb$_dc{10,20}$_nbEnd');
 
   // ── Beneficiary / transfer recipient ─────────────────────────────────────
-  // Captures everything after إلى: / الى: / To: to end of line.
+  // The name after إلى: / الى: / To: (and the account or card object before
+  // it), never a tense, status, amount, currency or date word, an amount, a
+  // date or the next sentence (SM-07 / Vso4: «إلى حساب 7788 سينفذ غدا» keeps
+  // «سينفذ غدا», so the model still reads the tense). Server twin:
+  // BENEFICIARY_AR / BENEFICIARY_EN in _shared/sms_redaction.ts.
   // Applied only when stripping is required (see [sanitize]).
+  static final String _beneficiaryToken =
+      "(?!(?:${nameStopwords.where((w) => !beneficiaryObjectWords.contains(w)).join('|')})"
+      "(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]))"
+      "[\\p{L}\\p{M}][\\p{L}\\p{M}*'’\\-]*(?:\\.[\\p{L}\\p{M}][\\p{L}\\p{M}*'’\\-]*)*"
+      '(?:(?<=(?<![\\p{L}\\p{M}])(?:\\p{L}|mrs|mr|ms|dr))\\.)?';
+  // A name already masked as [NAME] is part of the run, so the beneficiary
+  // still reads [REDACTED] as before.
+  // The third party's account, card or IBAN number is part of the run too
+  // (Western or Arabic-Indic digits, star-masked or not, a placeholder, an
+  // IBAN-like token), so «إلى حساب 7788 سينفذ غدا» → «إلى: [REDACTED] سينفذ غدا».
+  // A figure followed by a currency or a decimal part is an amount, and one
+  // with `/` or `:` is a date or time: those end the run and are kept.
+  static const List<String> _currencyAfter = [
+    'sar', 'egp', 'aed', 'usd', 'eur', 'gbp', 'kwd', 'qar', 'bhd', 'omr',
+    'jod', 'le', 'sr', 'riyals?', 'pounds?', 'dirhams?', 'dinars?',
+    'dollars?', 'ريال', 'جنيه', 'جم', 'درهم', 'دينار', 'دولار', 'يورو',
+    r'ر\.س',
+  ];
+  static final String _beneficiaryId =
+      '(?:\\[(?:ACCOUNT|IBAN|CARD|PHONE|REF)\\]'
+      '|[A-Z]{2}$_dc{2}(?:[ ]?[0-9A-Z]{4})*(?:[ ]?[0-9A-Z]{1,3})?'
+      '|[*xX•#]*$_dc+(?:-$_dc+)*)'
+      '(?![0-9A-Za-z]|[.,٫٬/:]$_dc|$_dc'
+      '|[ \\t]*(?:${_currencyAfter.join('|')})(?![\\p{L}\\p{M}])(?![ \\t]*$_dc))';
+  static final String _beneficiaryPart =
+      '(?:$_beneficiaryId|$_beneficiaryToken)';
+  static final String _beneficiaryRun =
+      '(?:\\[NAME\\]|$_beneficiaryPart)(?:[ \\t]+$_beneficiaryPart)*';
   static final _beneficiaryAr = RegExp(
-    r'(إلى|الى)\s*:?\s*.+',
+    '(إلى|الى)\\s*:?\\s*$_beneficiaryRun',
     caseSensitive: false,
+    unicode: true,
   );
   static final _beneficiaryEn = RegExp(
-    r'\bTo\s*:\s*.+',
+    '\\bTo\\s*:\\s*$_beneficiaryRun',
     caseSensitive: false,
+    unicode: true,
+  );
+
+  // The user's own account or card after the cue stays («إلى حسابك ***1234»),
+  // but only as a partial suffix: an unmasked number of five or more digits
+  // after it is still masked as [ACCOUNT] (10+ digits already are). Server
+  // twin: OWN_DESTINATION_NUMBER.
+  static final _ownDestinationNumber = RegExp(
+    '((?:إلى|الى|\\bto)\\s*:?\\s*(?:your|حسابك|حسابكم|لحسابك|بطاقتك|بطاقتكم|محفظتك)'
+    '(?:[ \\t]+(?:account|card|wallet|رقم|no\\.?|number))?[ \\t]+)[*xX•#]*$_dc{5,}'
+    '(?![.,٫٬/:]?$_dc|[ \\t]*(?:${_currencyAfter.join('|')})(?![\\p{L}\\p{M}])(?![ \\t]*$_dc))',
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  // Any other number left in the beneficiary's sentence (from إلى / الى /
+  // To: to the end of the sentence, the span the rule used to remove whole)
+  // is masked as [ACCOUNT], unless it is an amount (a currency next to it, or
+  // a grouped or decimal figure), a date or time, a day before a month name,
+  // or the user's own partial suffix (at most four digits after «حسابك»,
+  // "your account" …). Server twin: NUMBER_IN_BENEFICIARY_SENTENCE.
+  static const List<String> _month = [
+    'يناير', 'فبراير', 'مارس', 'أبريل', 'ابريل', 'مايو', 'يونيو', 'يوليو',
+    'أغسطس', 'اغسطس', 'سبتمبر', 'أكتوبر', 'اكتوبر', 'نوفمبر', 'ديسمبر',
+    'jan(?:uary)?', 'feb(?:ruary)?', 'mar(?:ch)?', 'apr(?:il)?', 'may',
+    'june?', 'july?', 'aug(?:ust)?', 'sep(?:t|tember)?', 'oct(?:ober)?',
+    'nov(?:ember)?', 'dec(?:ember)?',
+  ];
+  static const String _ownWord =
+      r'(?:your|حسابك|حسابكم|لحسابك|بطاقتك|بطاقتكم|محفظتك)'
+      r'(?:[ \t]+(?:account|card|wallet|رقم|no\.?|number))?';
+  static final String _currencyWord =
+      '(?:${_currencyAfter.join('|')})(?![\\p{L}\\p{M}])';
+  static final _numberInBeneficiarySentence = RegExp(
+    '(?<![A-Za-z0-9٠-٩۰-۹*•#]|$_dc[.,٫٬/:\\-])'
+    '(?![*xX•#]*$_dc{1,4}(?!$_dc|-$_dc)(?<=$_ownWord[ \\t]+[*xX•#]*$_dc+))'
+    '(?!$_dc{1,2}[ \\t]+(?:${_month.join('|')})(?![\\p{L}\\p{M}]))'
+    '(?<!(?<![\\p{L}\\p{M}])$_currencyWord[ \\t]*)'
+    '(?:[A-Z]{2}(?=$_dc))?[*xX•#]*$_dc+(?:-$_dc+)*'
+    '(?![0-9A-Za-z٠-٩۰-۹]|[.,٫٬/:\\-]$_dc|[ \\t]*$_currencyWord(?![ \\t]*$_dc))'
+    '(?<=(?:إلى|الى|\\bTo\\s*:)(?:(?!$_sentenceEnd).)*)',
+    caseSensitive: false,
+    unicode: true,
   );
 
   // ── Arabic greetings with personal names ─────────────────────────────────
@@ -194,11 +270,45 @@ class SmsSanitizer {
     'متاح', 'المرجع', 'مرجع', 'رسوم', 'عمولة', 'قام', 'حول', 'حوّل', 'أرسل',
     'ارسل', 'إرسال', 'ارسال', 'بتحويل', 'بإرسال', 'استلم', 'أودع', 'اودع',
     'سحب', 'دفع',
+    // Tense and status words (SM-07 / Vso4): a name never runs into what
+    // the message says happened, so «… إلى علي سينفذ غدا» keeps «سينفذ غدا».
+    'shall', 'tomorrow', 'today', 'scheduled', 'executes', 'executed',
+    'execution', 'pending', 'declined', 'rejected', 'failed', 'unsuccessful',
+    'completed', 'approved', 'processed', 'awaiting', 'expected', 'upcoming',
+    'reversed', 'cancelled', 'canceled', 'not', 'please', 'if', 'once', 'when',
+    'every', 'under', 'due', 'سينفذ', 'ستنفذ', 'سيتم', 'ستتم', 'سوف', 'غدا',
+    'غداً', 'مجدول', 'مجدولة', 'سيخصم', 'سيُخصم', 'سيضاف', 'سيودع', 'جاري',
+    'جارٍ', 'قيد', 'معلق', 'معلقة', 'مرفوضة', 'مرفوض', 'رفض', 'فشلت', 'فشل',
+    'لم', 'تمت', 'بنجاح', 'يرجى', 'الرجاء', 'إذا', 'اذا', 'مستحق', 'مستحقة',
+    // Account types (own-account moves keep «from Savings to Current»).
+    'savings', 'saving', 'current', 'checking', 'chequing',
+    'التوفير', 'توفير', 'الادخار', 'ادخار', 'الجاري',
   ];
+
+  /// Words the beneficiary rule may consume with the name: the account or
+  /// card object a name follows («إلى حساب سارة», "To: the account of …").
+  /// The user's OWN account or card («إلى حسابك», "to your card") is not a
+  /// third party and stays, so own-account moves and credits read the same
+  /// after redaction. Every other stopword (tense, status, amount, currency,
+  /// date) ends the run.
+  static const Set<String> beneficiaryObjectWords = {
+    'you', 'us', 'the', 'a', 'an', 'account',
+    'accounts', 'acct', 'ac', 'card', 'cards', 'wallet', 'mobile', 'phone',
+    'number', 'no', 'name', 'حساب', 'الحساب', 'حسابات',
+    'لحساب', 'للحساب', 'بطاقة', 'البطاقة',
+    'بطاقه', 'محفظة', 'المحفظة', 'رقم',
+  };
 
   static final String _nameToken =
       "(?!(?:${nameStopwords.join('|')})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]))"
-      "[\\p{L}\\p{M}*][\\p{L}\\p{M}*.'’\\-]*";
+      // SM-07: a sentence-ending period is never part of a name (server twin
+      // NAME_TOKEN); an initial or title keeps its period. A lone star
+      // before digits is a masked number, and letters glued to digits
+      // (an IBAN's «SA03») are not a name.
+      "(?!\\*+$_dc)[\\p{L}\\p{M}*](?:[\\p{L}\\p{M}*'’\\-]|(?!$_sentenceEnd)\\.)*"
+      "(?![\\p{L}\\p{M}*'’\\-]|$_dc)";
+  static const String _sentenceEnd =
+      r'(?:(?<!(?<![\p{L}\p{M}])(?:\p{L}|mrs|mr|ms|dr))\.(?=\s|$)|[\n!?؟;؛])';
   static final String _name = '$_nameToken(?:[ \\t]+$_nameToken){0,5}';
   static const String _cueSep = r'(?:[ \t]*:[ \t]*|[ \t]+)';
 
@@ -278,6 +388,9 @@ class SmsSanitizer {
   static RegExp get accountNumberPattern => _accountNumber;
   static RegExp get beneficiaryArPattern => _beneficiaryAr;
   static RegExp get beneficiaryEnPattern => _beneficiaryEn;
+  static RegExp get ownDestinationNumberPattern => _ownDestinationNumber;
+  static RegExp get numberInBeneficiarySentencePattern =>
+      _numberInBeneficiarySentence;
   static RegExp get greetingPattern => _greeting;
   static RegExp get emailPattern => _email;
   static RegExp get referencePattern => _reference;
@@ -341,6 +454,11 @@ class SmsSanitizer {
       text = text.replaceAllMapped(
           _beneficiaryAr, (m) => '${m.group(1)!}: [REDACTED]');
       text = text.replaceAll(_beneficiaryEn, 'To: [REDACTED]');
+    }
+    text = text.replaceAllMapped(
+        _ownDestinationNumber, (m) => '${m.group(1)!}[ACCOUNT]');
+    if (stripBeneficiary) {
+      text = text.replaceAll(_numberInBeneficiarySentence, '[ACCOUNT]');
     }
 
     // 7. Arabic greetings that include a personal name

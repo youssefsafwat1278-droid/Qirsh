@@ -412,3 +412,123 @@ Every remaining wrong or silent outcome is wrong or silent at `5dae2e2d` too. Th
 - Deno, whole `supabase/functions`: **1,160 passed, 0 failed** (6 ignored). Lint is clean on `process-ios-sms/`, `parse-sms/`, `_shared/money_text.ts` and `tools/parser_diff/server.ts`. `deno check` is clean. `deno.lock` is unchanged.
 - `flutter analyze --no-pub lib/engine/parser` plus the touched tests: no issues.
 - Flutter: `flutter test --no-pub -j 2 test/engine/` plus 138 more files: every test outside `test/engine` that imports `engine/parser`, `test/domain/capture`, `test/features/capture`, `capture_commit*` and every test importing the capture import/sync services or `validated_capture`. Result: **6,253 passed, 0 failed.**
+
+## Follow-up 4 (S re-review at `7dd6efa8`: REJECT on one narrow class), 2026-11-18
+
+Nothing committed. Model: Opus 5.5 (`claude-opus-5-5`). Every number below is synthetic and tuned-on development data, not real-world accuracy.
+
+### Rules (device AND server, each a clause-role rule)
+
+- **NEW-1: direction and amount come from the primary clause.**
+  - A clause that credits a reward (cashback, reward, bonus, Qitaf, loyalty, points, miles, «استرداد نقدي», «مكافأة», «قطاف», «نقاط», «أميال») is a side credit when the message's first currency figure comes before it, and the clause's own figure is absent or smaller.
+  - A side credit is not a credit flow (`DirectionSignal.sideCreditClause` / TS `sideCreditClause` in `_shared/money_text.ts`). Type detection reads the core with side credits blanked (`withoutSideCredits`). A reward line is a side event.
+  - A message whose only event is the cashback, reward or redemption credit stays a credit (N1j–N1m). P006's shape ("SAR 45.00 paid …; cashback SAR 2 credited") is a recorded debit on both sides.
+  - A count before points or miles ("6 points") is never a money candidate (`_rewardCount`).
+- **NEW-2 / SM-04: a completed primary clause is never dropped or `no_movement`.**
+  - The head of a figure clause (up to the first notice or tense word after the figure) decides. A tail decides only when it moves money (a done verb, a flow, a movement lead) and names no reward. So "…, earn 5 points", "and earn rewards", "total spent this month SAR x" and «تذكير: …» tails no longer turn a completed purchase into a notice.
+  - "When you paid … you earned 6 points" reads as past: the "when you" + past verb is not a condition.
+  - Alone, "Total spent this month SAR 3,200" is still a summary, and «سيتم خصم … غدا» is still scheduled.
+  - "was used for" / "has been used for" is now a debit flow. Two server tests used "Your card 1234 was used for EGP 99.50" as their direction-unknown example; that example is now "Your card 1234 transaction of EGP 99.50" (`parse_test.ts`, `handler_outcome_test.ts`). The assertions are unchanged.
+- **NEW-3: a partial read is never recorded.** A text longer than 2,000 characters is still read as its head and tail, but its meaning is now `uncertain/over_length` (review) on both sides, whatever the head and tail say.
+  - On the server, the length test is taken before normalizing. An Arabic text bounded to 2,001 characters normalized to 2,000 or less and was recorded (N3c). The harness found this.
+  - **Over-length texts always go to review.** That is the policy I chose instead of an unbounded linear scan.
+- **SM-06: "Previous salary SAR …" / "Last transaction SAR …" footers** (and «الراتب السابق», «آخر عملية») are other-event figures. They are set aside as footers, so the salary or purchase is recorded with its own amount. When the footer figure was the only ambiguity, the core is re-read alone.
+- **SM-07: parity.**
+  - T79 ("Transaction unauthorised: SAR 100.00 at CAFE ONE") is `not_completed/declined_or_failed` on both sides: a status with no event sentence is not completed.
+  - G000 shape (tip totals): a tip or gratuity figure («بقشيش», «إكرامية») next to another currency figure is `uncertain/tip_component` (review) on both sides. Before, both sides recorded the bill or the tip as the amount (Gt1 85, Gt4 15), and the server recorded Gt3 where the device reviewed it.
+  - Meaning parity over 2,411 texts (the case files and table plus fu4): **disposition differs in 0**. Kind or reason differs in 157, the same systematic extractor difference as Follow-up 3.
+- **Held-out classes.**
+  - Refund requests under review or received → no movement or not completed (H4a–d, Vrf1–4); an approved, credited refund is still recorded (Vrf5).
+  - A standing order that "will be executed tomorrow", "executes tomorrow", has an "execution date", or «سينفذ غدا» → scheduled (no movement); "executed successfully" → recorded.
+  - A cheque "returned unpaid" / "bounced" / «مرتجع» / «إرجاع الشيك» → `not_completed/cheque_returned`.
+  - "Amount debited SAR x" / "Debited SAR x" after a GBP purchase → SAR x, with the GBP amount kept as the foreign amount.
+  - An instruction to the reader ("Ignore previous instructions…", "SYSTEM: …", «تجاهل التعليمات…», «ملاحظة للمساعد: سجل…») is a footer. The purchase is saved as a debit.
+
+### Credit card payment "… received" (build 147 × new server)
+
+By clause structure, "Credit card payment of AED 2,500.00 received", "Payment … received for your credit card", "Transfer/paid … to (your) credit card" and «سداد بطاقتك الائتمانية» are the bank acknowledging a repayment of the user's own card debt. Whether that is spending (a payment) or a move between own accounts depends on the account model. **This is policy-dependent, so it now goes to review (`own_account_transfer/card_repayment`) on both sides.** It moves three labelled rows from right to review: A039, A159 and ME11. Table rows A039 and A159 are pinned `device=review`, `server=unresolved`. The owner should decide the policy.
+
+### Harness (`tools/parser_diff/`) made honest
+
+- `diff.py diff` reports the labelled and unlabelled numbers per path separately. It counts and lists every **right → review** move (labelled) and every **unlabelled record → review** move, plus unlabelled record → silent.
+- It fails when the moves to review exceed `PARSER_DIFF_REVIEW_BUDGET`. The default is **35 messages**, the justified set below, so any new one fails the run.
+- The import model now follows `CaptureImportService`:
+  - a validated server row that the device does not contradict is imported;
+  - a contradicted row, or a `direction_contradiction`, goes to Smart Inbox (review);
+  - any other validation failure falls back to the local parse;
+  - the merchant is passed to `localParseContradictsServer` where the version takes it (a per-version shim, so `5dae2e2d` still compiles).
+- New: `tools/parser_diff/server_diff.sh [BASE=b6fc0dad] [WORK]` (`diff.py server`) runs the server only, deployed server against working tree. It lists rejected → processed, processed → rejected and changed bookings. A pre-round not-completed text that the old server recorded and the new one rejects is listed separately (the import then reviews it locally).
+- New case file `cases/fu4.json` (76 labelled rows: NEW-1/NEW-2 shapes, over-length, SM-06, SM-07, the held-out classes, card repayment, AI shapes, tip totals).
+
+### Results
+
+**Device harness `run.sh 5dae2e2d` (pd7): exit 0.** Regressions 0, throws 0, base-not-completed-now-recorded 0. Moves to review: 35 of a 35 budget.
+
+| Path | labelled wrong | silent | review | right | throw |
+|---|---|---|---|---|---|
+| dB | 109 → 7 | 1 → 0 | 486 → 396 | 1,041 → 1,234 | 0 → 0 |
+| dN | 75 → 6 | 4 → 2 | 723 → 715 | 835 → 914 | 0 → 0 |
+| s | 100 → 16 | 23 → 9 | 570 → 520 | 944 → 1,092 | 0 → 0 |
+| eB | 118 → 13 | 0 → 0 | 449 → 338 | 1,070 → 1,286 | 0 → 0 |
+| eN | 105 → 13 | 0 → 0 | 560 → 504 | 972 → 1,120 | 0 → 0 |
+
+Unlabelled on eB: record 609 → 595, review 2 → 16, not-completed 159 → 159, ignored 12 → 12.
+
+**Right → review (19 labelled messages), each justified:**
+- Cash deposits (owner §5, decided in an earlier round): MB08, MB09, MB10, MB26, MB37, MB38, MD05, MD06, MD10 (fixed deposit), MD11, Z069, Q063, Q064, Q065.
+- Q057: an ATM cash deposit reversal.
+- Q134: the purchase names no currency.
+- Card repayment (policy, above): A039, A159, ME11.
+
+**Unlabelled record → review (16 messages):**
+- A117 and A146: tip totals (SM-07 rule).
+- K014 and the 13 G014 golden layouts: ATM deposits (owner §5, decided).
+
+**Server differential `server_diff.sh` (b6fc0dad → working tree, 2,419 distinct texts):**
+- **rejected → processed: 182.**
+  - 101 labelled review → right and 21 labelled silent → right.
+  - 60 unlabelled. I read each; all are completed movements:
+    - outward transfers (K010, K013 and the G010/G013 layouts, K036 and G036, K080, K081, K097);
+    - an incoming transfer (K098);
+    - payment confirmations «تم الدفع بنجاح» (K039 and G039);
+    - a card charge (K084);
+    - completed refunds and reversals (K238, K239, K253);
+    - purchases (K_N23, K_N38).
+- recorded → rejected for the pre-round not-completed invariant: 9 (CU_W00, CU_W03, CU_W07, R10, R12, R13, R14, G10, LX_M14; R13 was a review row at `b6fc0dad`). These were decided in Follow-up 3: never recorded, reviewed by the device's local import.
+- processed → rejected: 475. Of these, 184 are wrong → right, 56 are wrong → review, 72 are right → review (the decided review classes, as on the device) and 163 are unlabelled.
+- Booking changed: 58. Of these, 42 are wrong → right, and the 15 unlabelled ones are footer limit or balance amounts replaced by the real amount, or a wrong IN replaced by OUT.
+- **1 regression, outside my files:** Vso4 «أمر مستديم بمبلغ 1,500 ريال إلى حساب 7788 سينفذ غدا». `redactThirdPartyNames` (`_shared/sms_redaction.ts`) rewrites it to «… إلى: [REDACTED]». That removes the future tense, so the new server records 1,500 OUT. `b6fc0dad` sent it to review. It is already recorded at HEAD `4d54d258`. The device's own meaning reads the unredacted text and holds it, so the effective import (eB/eN) is right. The fix belongs to the redaction owner.
+- `server_diff.sh HEAD` (`4d54d258` → working tree): 0 regressions. 18 rejected → processed, all labelled right or completed.
+
+### Tests: "fails before, passes after"
+
+- New tests:
+  - `app/test/engine/parser/follow_up4_money_correctness_test.dart` and `supabase/functions/process-ios-sms/follow_up4_money_correctness_test.ts`.
+  - The shared fixture `process-ios-sms/follow_up4_cases.json` (76 rows, the same as `cases/fu4.json`).
+  - Rule tests for NEW-1, NEW-2, NEW-3 (including the Arabic normalize case on the server) and SM-07.
+- "Before" was confirmed by copying the test files and fixture into a `git archive` of HEAD `4d54d258`:
+  - **Dart: 49 failures. TS: 48 failures.**
+  - Both pass on the working tree: 80 + 80.
+
+### Changed expectations (decided, listed)
+
+- `declined_cases.json`:
+  - A039 and A159 are pinned `device=review`, `server=unresolved` (card repayment policy).
+  - Pins were removed where the row is now right: P13_0, P13_3 and P13_7 on the server ("was used for"), N00_1 and N02_1 on the device, and Q206 on the device.
+  - The ceiling still equals the count: **703**.
+- `parse_test.ts` / `handler_outcome_test.ts`: the direction-unknown example text (above).
+- `follow_up3_cases.json` P02 ("Spent SAR 75.00 … 7 points credited"): the `device=review` safe-deviation pin is removed, because the device now records the correct 75 SAR debit. The row is now an acceptance check.
+- Word lists (`otherEventMarkers` + last/«آخر», `otherEventNouns` + salary/«راتب», `futureMarkers` + tomorrow/«غدا»/execution date/«سينفذ») were regenerated into `parser_rules.json`. The drift tests pass.
+
+### For the coordinator / AI owner
+
+1. AI1 (own-account Savings → Current) and AI2 (two purchases) do not need a new result type. The parser already returns `own_account_transfer/own_accounts` and `multiple_events/multiple_amounts` (both review) for them. The AI path must hold on `meaningHoldReason` / the meaning gate before it books an AI answer for them (AI owner's files).
+2. `_shared/sms_redaction.ts`: Arabic «إلى حساب …» followed by a clause is redacted through the end of the text, which drops tense and status words (Vso4 above, and K015 from Follow-up 3).
+3. The card repayment policy (above) is the owner's decision.
+
+### Commands and results (final state)
+
+- Harness: `PARSER_DIFF_SCRATCH=… tools/parser_diff/run.sh 5dae2e2d` → exit 0. `tools/parser_diff/server_diff.sh` → exit 1 (Vso4 only, redaction). `server_diff.sh HEAD` → exit 0.
+- Deno, whole `supabase/functions`: **1,250 passed, 0 failed** (6 ignored). `deno lint` is clean on `process-ios-sms/`, `_shared/money_text.ts` and `tools/parser_diff/server.ts`. `deno check` is clean. `deno.lock` is unchanged.
+- `flutter analyze --no-pub` on the WHOLE app: **No issues found.**
+- Flutter: `flutter test --no-pub -j 2` over 200 files: all of `test/engine`, every test importing `engine/parser`, every capture import/sync test, and the 138-file list from Follow-up 3. Result: **6,373 passed, 1 failed** (P02, the stale pin above). After the pin fix, `follow_up3_money_correctness_test.dart` passes on both sides (95 + 95).

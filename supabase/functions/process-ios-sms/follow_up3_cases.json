@@ -42,7 +42,7 @@
     {"id": "A10", "src": "FU3", "kind": "d", "text": "Purchase of SAR 120.00 at Jarir with card *4521. Previous transaction declined.", "amount": 120, "currency": "SAR", "device": "review", "server": "review", "pin": "decided: another event's status sentence next to the movement (not completed at 5dae2e2d)"},
     {"id": "A11", "src": "FU3", "kind": "d", "text": "Purchase SAR 60.00 at Kudu card *4521 approved. Your earlier attempt was declined.", "amount": 60, "currency": "SAR", "device": "review", "server": "review", "pin": "decided: another event's status sentence next to the movement (not completed at 5dae2e2d)"},
     {"id": "P01", "src": "FU3", "kind": "d", "text": "Purchase SAR 200.00 at Panda card *4521, 20 reward points added to your account", "amount": 200, "currency": "SAR"},
-    {"id": "P02", "src": "FU3", "kind": "d", "text": "Spent SAR 75.00 at Starbucks card *4521. 7 points credited to your account", "amount": 75, "currency": "SAR", "device": "review", "pin": "safe deviation as at 5dae2e2d"},
+    {"id": "P02", "src": "FU3", "kind": "d", "text": "Spent SAR 75.00 at Starbucks card *4521. 7 points credited to your account", "amount": 75, "currency": "SAR"},
     {"id": "P03", "src": "FU3", "kind": "d", "text": "تم شراء بمبلغ 150 ريال لدى نون بطاقة 4521، تمت إضافة 15 نقطة إلى رصيدك", "amount": 150, "currency": "SAR"},
     {"id": "P04", "src": "FU3", "kind": "d", "text": "POS AED 60.00 at Carrefour card *4521, 60 miles credited to your account", "amount": 60, "currency": "AED"},
     {"id": "P05", "src": "FU3", "kind": "c", "text": "SAR 500.00 credited to your account *4521 from Ali", "amount": 500, "currency": "SAR"},

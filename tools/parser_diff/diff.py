@@ -4,20 +4,28 @@
   diff.py cases <cases dir> <declined_cases.json> <out cases.json>
   diff.py diff <cases.json> <base out.jsonl> <work out.jsonl>
   diff.py freeze <cases.json> <base out.jsonl> <fixture.json>
+  diff.py server <cases.json> <base server.jsonl> <work server.jsonl>
 
 Labels (`truth.kind`): d = completed debit, c = completed credit,
 t = between own accounts (neutral), k = completed (any direction),
 n = not a movement (anything but a booking is right), r = must be a review
 row (a booking or silence is wrong). `amt`/`cur` (and `alt` = an accepted
 [amount, currency]) check the booked value.
+
+Exit status 1 on a regression (right at base -> wrong or silent, a throw, a
+base not-completed message now recorded) or when the messages that moved
+from right (labelled) or recorded (unlabelled) to a review row exceed the
+review budget: PARSER_DIFF_REVIEW_BUDGET (default 35 messages, the justified set at Follow-up 4). Each such
+move is listed and must be justified in the closure record.
 """
-import collections, glob, json, os, sys
+import collections, glob, json, os, re, sys
 
 SIDES = ['dB', 'dN', 's', 'eB', 'eN']
 WRONG = {'WDIR', 'WAMT', 'WCUR', 'WREC', 'WOWN', 'WNEU', 'THROW'}
 TEXP = {'completed_payment': 'd', 'completed_withdrawal': 'd', 'completed_income': 'c',
         'completed_credit': 'c', 'completed_transfer_in': 'c', 'completed_transfer_own': 't',
         'not_completed': 'n', 'ignored': 'n'}
+REVIEW_BUDGET = int(os.environ.get('PARSER_DIFF_REVIEW_BUDGET', '35'))
 CASH = ('atm', 'صراف', 'cash deposit', 'إيداع نقدي', 'ايداع نقدي', 'cash deposited')
 
 
@@ -104,11 +112,15 @@ def compare(cases, base, work):
     bad = 0
     for side in SIDES:
         gb, gw = collections.Counter(), collections.Counter()
+        ub, uw = collections.Counter(), collections.Counter()
         for r in uniq:
             t = r.get('truth')
             ob, ow = B[r['id']][side], W[r['id']][side]
             a, b = grade(ob, t, r['text']), grade(ow, t, r['text'])
-            gb[a] += 1; gw[b] += 1
+            if t is None:
+                ub[outcome(ob).split(' ')[0]] += 1; uw[outcome(ow).split(' ')[0]] += 1
+            else:
+                gb[a] += 1; gw[b] += 1
             if outcome(ob) == outcome(ow) and a == b: continue
             if b == 'THROW' or (a == 'OK' and b in WRONG | {'SILENT'}):
                 cls = 'REGRESSION'
@@ -117,14 +129,20 @@ def compare(cases, base, work):
             elif a == 'OK' and b == 'REVIEW': cls = 'right -> review'
             elif a == 'REVIEW' and b == 'OK': cls = 'review -> right'
             elif a in WRONG and b in WRONG: cls = 'wrong -> other wrong'
+            elif t is None and outcome(ob).startswith('record') and ow['c'] == 'REV':
+                cls = 'unlabelled record -> review'
+            elif t is None and outcome(ob).startswith('record') and ow['c'] == 'SIL':
+                cls = 'unlabelled record -> silent'
             elif t is None: cls = 'unlabelled move'
             else: cls = 'outcome moved, same grade'
             if cls == 'REGRESSION': bad += 1
             moved[cls].append((side, r, outcome(ob), outcome(ow), a, b))
         ws = lambda g: sum(g[k] for k in WRONG)
-        print(f'{side}: wrong {ws(gb)}->{ws(gw)} silent {gb["SILENT"]}->{gw["SILENT"]} '
+        print(f'{side} labelled: wrong {ws(gb)}->{ws(gw)} silent {gb["SILENT"]}->{gw["SILENT"]} '
               f'review {gb["REVIEW"]}->{gw["REVIEW"]} right {gb["OK"]}->{gw["OK"]} throw {gb["THROW"]}->{gw["THROW"]}')
-    order = ['REGRESSION', 'wrong -> other wrong', 'right -> review', 'unlabelled move', 'outcome moved, same grade',
+        print(f'{side} unlabelled: ' + ' '.join(f'{k} {ub[k]}->{uw[k]}' for k in sorted(set(ub) | set(uw))))
+    order = ['REGRESSION', 'wrong -> other wrong', 'right -> review', 'unlabelled record -> review',
+             'unlabelled record -> silent', 'unlabelled move', 'outcome moved, same grade',
              'fixed', 'wrong/silent -> review', 'review -> right']
     for cls in order:
         items = moved.get(cls, [])
@@ -148,7 +166,69 @@ def compare(cases, base, work):
         print(f'- {r["id"]} {hits} {r["text"][:160]!r}')
     bad += len(nc_recorded)
     print(f'\nREGRESSIONS (right at base -> wrong/silent, a throw, or base not-completed now recorded): {bad}')
+    to_review = {i[1]['id'] for c in ('right -> review', 'unlabelled record -> review') for i in moved.get(c, [])}
+    print(f'TO REVIEW (labelled right or unlabelled recorded -> review, any path): {len(to_review)} messages, '
+          f'budget {REVIEW_BUDGET}' + (' -- OVER BUDGET' if len(to_review) > REVIEW_BUDGET else ''))
+    return bad + (1 if len(to_review) > REVIEW_BUDGET else 0)
+
+
+def server_compare(cases, base, work):
+    """Server-only differential (server_diff.sh): base server vs work server."""
+    rows = json.load(open(cases, encoding='utf-8'))
+    load = lambda f: {j['id']: j for j in map(json.loads, filter(None, open(f, encoding='utf-8').read().split('\n')))}
+    B, W = load(base), load(work)
+    seen, uniq = set(), []
+    for r in rows:
+        if r['text'] in seen: continue
+        seen.add(r['text']); uniq.append(r)
+
+    def norm(s):
+        if s.get('throw') is not None: return {'c': 'THROW', 'p': s['throw']}
+        if s.get('processed'):
+            t = s.get('type') or 'unknown'
+            if t == 'transfer' and s.get('dir') in ('debit', 'credit'):
+                t = 'payment' if s['dir'] == 'debit' else 'income'
+            return {'c': bookOf(t), 'p': f"server:{s.get('type')}", 'a': s.get('a'), 'cur': s.get('cur')}
+        # As device.dart: a capture that would reach the AI, or a review kind
+        # kept in Smart Inbox, is a review row; any other rejection is silent.
+        rev = s.get('ai') or re.match(r'^(cash_deposit|own_account_transfer|multiple_events|uncertain):', s.get('reason') or '')
+        return {'c': 'REV' if rev else 'SIL', 'p': f"server_rejected:{s.get('reason') or ''}"}
+
+    # The pre-round not-completed invariant (decided): these texts are never
+    # recorded; the work server rejecting one is the invariant, and the
+    # device then reviews it (the import falls back to the local parse).
+    inv = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'supabase', 'functions',
+                       'process-ios-sms', 'pre_round_not_completed.json')
+    held = set(json.load(open(inv, encoding='utf-8'))['texts'])
+    moves = collections.defaultdict(list)
+    bad = 0
+    for r in uniq:
+        b, w = norm(B[r['id']]), norm(W[r['id']])
+        t = r.get('truth')
+        gb, gw = grade(b, t, r['text']), grade(w, t, r['text'])
+        if w['c'] != 'THROW' and gw == 'SILENT' and r['text'] in held and 'not_completed' in w['p']:
+            if b['c'] != w['c']: moves['recorded -> rejected (pre-round not-completed invariant)'].append((r, b, w, gb, gw))
+            continue
+        if w['c'] == 'THROW' or (gb == 'OK' and gw in WRONG | {'SILENT'}):
+            bad += 1; moves['REGRESSION'].append((r, b, w, gb, gw)); continue
+        pb, pw = b['c'] in ('IN', 'OUT', 'NEU'), w['c'] in ('IN', 'OUT', 'NEU')
+        if not pb and pw: moves['rejected -> processed'].append((r, b, w, gb, gw))
+        elif pb and not pw: moves['processed -> rejected'].append((r, b, w, gb, gw))
+        elif pb and pw and outcome(b) != outcome(w): moves['processed, booking changed'].append((r, b, w, gb, gw))
+    print(f'{len(uniq)} distinct messages ({sum(1 for r in uniq if "truth" in r)} labelled)')
+    for cls in ('REGRESSION', 'rejected -> processed', 'recorded -> rejected (pre-round not-completed invariant)',
+                'processed -> rejected', 'processed, booking changed'):
+        items = moves.get(cls, [])
+        print(f'\n== {cls}: {len(items)}')
+        for r, b, w, gb, gw in items:
+            lab = f' [{gb}->{gw}]' if r.get('truth') else ' [unlabelled]'
+            print(f'- {r["id"]}{lab} {outcome(b)} -> {outcome(w)} ({w["p"]}) {r["text"][:150]!r}')
+    print(f'\nSERVER REGRESSIONS (work throws, or right at base -> wrong/silent): {bad}')
     return bad
+
+
+def bookOf(t):
+    return {'income': 'IN', 'refund': 'IN', 'transfer': 'NEU', 'unknown': 'NEU'}.get(t, 'OUT')
 
 
 def freeze(cases, base, out):
@@ -169,5 +249,7 @@ if __name__ == '__main__':
         build(*sys.argv[2:5])
     elif sys.argv[1] == 'freeze':
         freeze(*sys.argv[2:5])
+    elif sys.argv[1] == 'server':
+        sys.exit(1 if server_compare(*sys.argv[2:5]) else 0)
     else:
         sys.exit(1 if compare(*sys.argv[2:5]) else 0)

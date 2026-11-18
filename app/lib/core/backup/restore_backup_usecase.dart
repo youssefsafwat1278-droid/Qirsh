@@ -583,9 +583,14 @@ class RestoreBackupUseCase {
   /// planning record, a saved merchant rule, a custom category or a sender
   /// mapping. Only the seeded catalog, learned/seeded merchant data,
   /// achievement progress and settings are not counted.
-  Future<bool> _deviceHoldsUserData() async {
+  Future<bool> _deviceHoldsUserData() => restoreWillMerge(_db);
+
+  /// Read-only (SP-12): whether a restore onto [db] now would MERGE (true) or
+  /// apply the backup in full (false) — the same decision [call] makes, so the
+  /// confirmation can state the one that applies.
+  static Future<bool> restoreWillMerge(AppDatabase db) async {
     final seedKeys = [for (final c in DatabaseSeed.categories) c.key];
-    final row = await _db.customSelect(
+    final row = await db.customSelect(
       'SELECT (${[
         for (final t in const [
           'accounts', 'cards', 'transactions', 'budgets', 'goals',

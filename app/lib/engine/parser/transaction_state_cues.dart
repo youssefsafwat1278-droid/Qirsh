@@ -232,7 +232,11 @@ class TransactionStateCues {
         '(?![a-z])'
         '|(?:${arNouns.join('|')})'
         r'\s+'
-        '(?:${arMarkers.join('|')})');
+        '(?:${arMarkers.join('|')})'
+        // «آخر عملية»: an Arabic marker may also come first.
+        '|(?<![\u0621-\u064a])(?:${arMarkers.join('|')})'
+        r'\s+'
+        '(?:${arNouns.join('|')})');
   }();
 
   static bool _isNotCompletedText(String rawText) {

@@ -9,7 +9,9 @@
 // own-account wording → neutral; a transfer → income if incoming else
 // payment). Effective (iOS import, AI off): the meaning hold (where the
 // version has one), the server row when it validates and the device does not
-// contradict it, else review; with no server row, the device result.
+// contradict it (merchant passed, as CaptureImportService does); a
+// contradicted row or a direction_contradiction goes to Smart Inbox (review);
+// any other validation failure, or no processed server row, the device result.
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
@@ -79,17 +81,22 @@ Map<String, dynamic> serverBooked(Map s, String raw) {
 String eff(Map s, String t, String? snd) {
   final held = shim.hold(t);
   if (held != null) return 'hold:$held';
-  final ok = validateCaptureCandidate(
+  final reason = validateCaptureCandidate(
           candidate: CaptureCandidate(amount: (s['a'] as num?)?.toDouble(), amountText: s['at'] as String?,
               currency: s['cur'] as String?, direction: s['dir'] as String?, type: s['type'] as String?,
               merchant: s['m'] as String?, last4: s['l4'] as String?, occurredAt: s['occ'] as String?),
           text: t, receivedAt: DateTime.utc(2026, 11, 17, 10))
-      .accepted;
-  if (!ok) return 'local';
-  return localParseContradictsServer(text: t, direction: s['dir'] as String?, type: s['type'] as String?,
-          senderId: snd, amount: s['a'] as num?)
-      ? 'inbox'
-      : 'server';
+      .reason;
+  // CaptureImportService: a validated row the device's reading does not
+  // contradict is imported; a contradicted row, or one the validator found
+  // contradicts the wording (direction_contradiction), goes to Smart Inbox;
+  // any other validation failure falls back to the local parse.
+  if (reason == null &&
+      !shim.contradicts(t, s['dir'] as String?, s['type'] as String?, snd, s['a'] as num?, s['m'] as String?)) {
+    return 'server';
+  }
+  if (reason == null) return 'inbox';
+  return reason == 'direction_contradiction' ? 'inbox:$reason' : 'local';
 }
 
 void main() {

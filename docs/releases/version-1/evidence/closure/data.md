@@ -554,3 +554,17 @@ Restore suite R1–R9b on the same stack: `+10: All tests passed!` (`data/fu3_re
 
 **Deleted-category rules (orchestrator extension).** `DriftMerchantCategoryRepository`: `userConfirmedCategoryFor`, `getUserConfirmedRules` (rules list, cloud backfill) and `getLearnedCategoryMap` (learned-map seed) now require `categories.deleted_at IS NULL`. Categorisation then falls through to shared learning, then to the AI category, without an error.
 Test `app/test/data/merchant_rule_deleted_category_test.dart`: 2 tests, failing before (`'restaurants'` returned, rule outranked the AI) and passing after. Related rule/capture/categorisation suites plus `test/architecture`: `+675 ~1: All tests passed!`; analyze clean.
+
+### SP-12 (re-review at `7dd6efa8`): the confirmation names the restore that applies
+
+- **Code.**
+  - `RestoreBackupUseCase.restoreWillMerge(db)` is a new static, read-only method. It holds the same check the restore itself uses (`_deviceHoldsUserData` now calls it).
+  - The restore prompt is the only confirmation dialog; the backup screen opens it through `/backup/restore`. Before showing the dialog, it reads this decision and shows one text:
+    - `rpConfirmBodyMerge` (merge): what is kept, what is added, that a deleted transaction is not brought back, and that rules that exist only in the backup are not added;
+    - `rpConfirmBodyFull` (full): the backup is restored as it is, settings and rules included.
+  - If the database cannot be read (only in tests without one), the dialog shows the existing text that describes both cases (`rpConfirmBody`).
+  - EN and AR (MSA, Western digits); `gen-l10n` was re-run.
+- **Timing.** Data can change between the dialog and the commit. Only one direction is plausible (the device gains a record, so the restore merges instead of applying in full), and it is the safe one.
+- **Test.** New `app/test/features/onboarding/restore_confirmation_path_test.dart`, 4 cases (EN/AR × merge/full). Before: all 4 failed (the dialog showed the combined text). After: `+4`, all passing.
+- **Existing test updated to the decided behaviour.** `restore_confirmation_cancel_surface_test` (fresh database) now expects `rpConfirmBodyFull`.
+- **Suites.** Onboarding, visual_parity, backup screen, `large_text_overflow_test`, the tap-target test, `test/architecture` and `test/l10n`: `+1473 ~1: All tests passed!`. `flutter analyze` is clean.

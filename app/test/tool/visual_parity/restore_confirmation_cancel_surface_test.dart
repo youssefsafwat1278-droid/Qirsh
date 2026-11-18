@@ -76,7 +76,8 @@ void main() {
             await tester.pump(const Duration(milliseconds: 500));
             expect(find.byType(GlassAlertDialog), findsOneWidget);
             expect(find.text(l.rpConfirmTitle), findsOneWidget);
-            expect(find.text(l.rpConfirmBody), findsOneWidget);
+            // SP-12: a fresh database has no records -> the full-restore text.
+            expect(find.text(l.rpConfirmBodyFull), findsOneWidget);
             expect(service.calls, attempt + 1);
             expect(service.forbiddenCalls, 0);
             await tester.tap(find.descendant(

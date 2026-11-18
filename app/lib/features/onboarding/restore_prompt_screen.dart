@@ -6,7 +6,9 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/backend/supabase_config.dart';
 import '../../core/utils/l10n_ext.dart';
 import '../../core/backup/backup_service.dart';
+import '../../core/backup/restore_backup_usecase.dart';
 import '../../core/backup/restore_controller.dart';
+import '../../core/di/app_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_assets.dart';
 import '../../core/theme/app_spacing.dart';
@@ -113,12 +115,28 @@ class _RestorePromptScreenState extends ConsumerState<RestorePromptScreen> {
   /// BEFORE any destructive mutation. Cancelling changes nothing.
   Future<bool> _confirmRestore() async {
     if (!mounted) return false;
+    // SP-12: state only the restore that applies to this device. Read-only;
+    // the same decision the restore makes. If it cannot be read, the text
+    // describing both cases is shown.
+    bool? merge;
+    try {
+      merge = await RestoreBackupUseCase.restoreWillMerge(
+          ref.read(appDatabaseProvider));
+    } catch (_) {
+      merge = null;
+    }
+    if (!mounted) return false;
+    final body = switch (merge) {
+      true => context.l10n.rpConfirmBodyMerge,
+      false => context.l10n.rpConfirmBodyFull,
+      null => context.l10n.rpConfirmBody,
+    };
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => GlassAlertDialog(
         title: Text(context.l10n.rpConfirmTitle),
-        content: Text(context.l10n.rpConfirmBody),
+        content: Text(body),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
