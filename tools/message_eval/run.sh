@@ -50,7 +50,10 @@ for REV in "$@"; do
   python3 "$HERE/expand.py" "${MESSAGE_EVAL_SET:-$HERE/heldout/messages.jsonl}" "$OUT/messages.json"
 
   echo "== $SHORT: server (Deno, the commit's parse.ts)"
-  (cd "$OUT" && deno run --no-lock --allow-read --allow-write --allow-env \
+  # LEN-1: does the client under test send textLength to the server?
+  CLIENT_LEN=0
+  if grep -q "'textLength'" "$WT/app/lib/features/capture/services/capture_backend_client.dart"; then CLIENT_LEN=1; fi
+  (cd "$OUT" && MESSAGE_EVAL_CLIENT_TEXT_LENGTH=$CLIENT_LEN deno run --no-lock --allow-read --allow-write --allow-env \
      --allow-net=generativelanguage.googleapis.com \
      "$HERE/deno/server_eval.ts" "$SRV_WT" "$OUT/messages.json" "$OUT/server.json")
 

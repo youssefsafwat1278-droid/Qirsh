@@ -508,3 +508,159 @@ The class totals do not rise only because other messages in those classes improv
 Against the §10 mixed run (`7dd6efa8` server), the `6f771108` server is better on 11 `cloud_det` messages and worse on none; on the oracle path the 4 tip totals newly go to review.
 
 The real-model run is still BLOCKED, for the same reason as §5.
+
+## 12. Final held-out run of the round: `f4dcabd3` (2026-11-18)
+
+Same set (753 messages), same labels, same `ACCEPTANCE.md` criteria. **No label was changed.** `df -h /` showed 22 GB free before and 21 GB after. All runs exit 0 with 0 runner errors (`flutter test`: all passed; the SkSL shader messages are the known benign ones). All my scratch worktrees are removed.
+
+Runs:
+- `tools/message_eval/run.sh f4dcabd3`;
+- `MESSAGE_EVAL_SERVER_REV=f4dcabd3 tools/message_eval/run.sh b6fc0dad` (build 147 after the deploy). The "before" side is the §10 `b6fc0dad` run.
+- The development siblings on `f4dcabd3` (separate table below).
+- A server-step-only check with the older oracle answer (below).
+
+### Runner change (server step `deno/server_eval.ts`, and `run.sh`)
+
+`index.ts` at `f4dcabd3` changed the stored-result step. The runner mirrors that step, and now imports the checkout's own code for it instead of re-typing it:
+1. **Meaning gate.** If the checkout has `process-ios-sms/meaning_gate.ts`, the stored meaning is `gatedMeaning(sanitized, outcome.meaning ?? messageMeaning(sanitized), parsed.amount ?? null)`, imported from the checkout (index.ts:387). The gate is what records a tip/fee form at its stated total and holds several-movement messages.
+2. **LEN-1 over-length rule** (index.ts:388-393). It uses the checkout's `MAX_TEXT_LENGTH` and `dispositionOf`, and the raw text length when the client under test sends `textLength`. `run.sh` detects that by finding `'textLength'` in the client's `capture_backend_client.dart`: yes at `f4dcabd3`, no for build 147. No message in either set is longer than 130 characters (the limit is 2,000), so this rule changes no result.
+3. **Oracle message types.** If the checkout's `ai_understanding.ts` `MESSAGE_TYPES` contains `own_account_transfer`, the oracle answers what its prompt defines:
+   - `{is_transaction:false, message_type:'own_account_transfer'}` for own-account rows;
+   - `{…'multiple_transactions'}` for `multi_event` rows.
+   
+   Everything else is unchanged. `MESSAGE_EVAL_ORACLE_TYPES=0` restores the older answer. The A8a validator check still uses the transaction-form answer, so its denominator is unchanged (453).
+
+**Why this does not favour the candidate:**
+- Every step is the checkout's own code. Each one applies only when the checkout has it, so earlier commits are unaffected.
+- **Checked:** the new script on `6f771108` reproduces the `6f771108` server results exactly, with 0 of 753 messages different.
+- The tip/total review on the oracle path at `6f771108` (§11) was real `6f771108` behaviour, not a runner artefact. Its `index.ts` had no stated-total rule, and the mirror matched that commit's own line exactly. `f4dcabd3` is the first commit with the rule.
+- The oracle stays the "perfect model" for each commit's own schema.
+
+**If the model returns only the older fields:** I ran the server step with `MESSAGE_EVAL_ORACLE_TYPES=0` on `f4dcabd3` and replayed the changed rows through the `f4dcabd3` device import.
+- The meaning gate still holds the "Savings → Current" and "from account **x to account **y" forms, and all several-movement messages, for review.
+- Two own-account forms are stored as processed `transfer`, and the device books them as a neutral transfer, which counts in no total: the Arabic "تحويل بين حساباتك" and "Own account transfer … completed" (8 held-out messages, 1 development message).
+- No wrong direction, wrong amount or new loss on either set. Own-account results are therefore safe with an older-schema answer; only the review/booked split differs.
+
+### Six-way table (`ab5dc10a` → `5dae2e2d` → `7577f347` → `7dd6efa8` → `6f771108` → `f4dcabd3`)
+
+Counts exclude the 14 policy-dependent rows. Pass marks are for `f4dcabd3`.
+
+| Criterion (bar) | local_only | cloud_det | cloud_primary_oracle |
+|---|---|---|---|
+| A1 non-transactions saved (0) | 24 → 20 → 4 → 0 → 0 → **0** PASS | 44 → 32 → 8 → 0 → 0 → **0** PASS | 0 throughout, **0** PASS |
+| A2 declined/pending saved (0) | 60 → 20 → 5 → 5 → 5 → **0** PASS | 79 → 27 → 12 → 12 → 9 → **0** PASS | 0 throughout, **0** PASS |
+| A3 ambiguous saved (0) | 4 → 4 → 4 → 0 → 0 → **0** PASS | 4 → 4 → 4 → 0 → 0 → **0** PASS | 0 throughout, **0** PASS |
+| A4 wrong amount/currency/direction (≤ 1 %) | 8.0 → 7.1 → 1.8 → 0.0 → 0.0 → **0/0/0 (0.0 %)** PASS | 13.9 → 12.6 → 3.5 → 0.9 → 0.0 → **0/0/0 (0.0 %)** PASS | 4.4 → 4.0 → 2.6 → 1.8 → 1.8 → **0/0/0 (0.0 %)** PASS |
+| A4 injection-bearing wrong (0) | 4 → 0 → 0 → 0 → 0 → **0** PASS | 4 → 0 → 0 → 0 → 0 → **0** PASS | 0 throughout, **0** PASS |
+| A5 duplicates (0) | 0 throughout, **0** PASS | 0 throughout, **0** PASS | 0 throughout, **0** PASS |
+| A6 lost silently (0) | 12 → 0 → 0 → 0 → 0 → **0** PASS | 8 → 0 → 0 → 0 → 0 → **0** PASS | 8 → 0 → 0 → 0 → 0 → **0** PASS |
+| A7 completed to review (≤ 15 / 15 / 5 %) | 34.2 → 31.6 → 28.9 → 28.9 → 27.2 → **27.2 %** (123) FAIL | 7.3 → 11.0 → 8.8 → 8.8 → 8.8 → **8.8 %** (40) PASS | 1.8 → 7.7 → 3.1 → 3.1 → 4.0 → **3.1 %** (14) PASS |
+| A8b correct AI answer not saved (≤ 5 %) | – | – | 16 → 35 → 14 → 14 → 18 → **14 (3.1 %)** PASS |
+| Info: non-transactions sent to review | 117 → 161 → 192 → 196 → 196 → 201 | 81 → 145 → 184 → 192 → 192 → 201 | 201 throughout |
+| Info: wrong type, right direction | 0 throughout | 20 → 4 → 4 → 4 → 4 → 4 | 0 throughout |
+
+**A8a, validators on the correct transaction-form answer** (453):
+- **Server:** 6 (1.3 %), `amount_not_grounded`. PASS.
+- **Device:** **34 (7.5 %), FAIL by the letter of A8a.**
+  - 24 of the 34 are by design at this commit. The device validator now refuses a transaction answer for own-account messages (8, `message_meaning_own_accounts`) and several-movement messages (16, `message_meaning_multiple_amounts`). Those rows are labelled review-acceptable (12 multi-event, 8 own-account), except 4: the Arabic instruction-bearing purchase (j02), whose injected sentence carries a second amount.
+  - Another 6 are `amount_not_grounded` on French and Turkish card messages with a decimal comma (review-acceptable labels).
+  - 4 are `transaction_not_completed` on English completed reversals.
+  - **Counting only rows whose label requires a save, the device rejects 8 (j02 4, reversals 4), 1.8 %.**
+  - Owner/orchestrator decision: whether A8a should exclude review-acceptable rows. The criterion was written before these message types existed, and it is not changed here.
+
+**Server reading alone** (`det`): processed although not completed **0** (was 9); completed messages rejected **102** (was 98; the device recovers them, and A6 stays 0).
+
+**Verdict for `f4dcabd3`:**
+- `cloud_det` and `cloud_primary_oracle` **pass every criterion**, except A8a-device by the letter (above).
+- `local_only` fails **A7 only**.
+- No wrong money and no lost or duplicate message on any path.
+
+### Remaining failing classes at `f4dcabd3` (aggregate)
+
+- **A7, `local_only` (123 of 453, 27.2 %).** The families are unchanged from §11:
+  - unread card-purchase formats: 35;
+  - FX/VAT/tip/service totals: 20;
+  - fees and installments: 16;
+  - cashback/chargeback/refunds/reversals: 16;
+  - Arabic bills and ATM, and "credited to {payee} from your account": 12;
+  - incoming transfers and wallet receipts: 8;
+  - injection-bearing purchases: 8;
+  - advert tails and odd store text: 8.
+  
+  **119 of the 123 already went to review at build 147** (which sent 155). The other 4 are English completed reversals, sent to review since `5dae2e2d`.
+- **Review cost, `cloud_det` (40):** deposit-handling and annual fees, FX "incl. fees", tip/fee totals, "$" purchases, Arabic refunds, English reversals, "credited to {payee} from your account", the Arabic instruction-bearing purchase.
+- **Review cost, `cloud_primary_oracle` (14):** the Arabic instruction-bearing purchase (4), "credited to {payee} from your account" (4), English reversals (4, device validator `transaction_not_completed`), Arabic refunds (2).
+- **A8a-device by the letter:** see above.
+
+### Got worse
+
+Per message, same path; "worse" = a correct save to review, or a new wrong booking.
+
+| Against | local_only | cloud_det | cloud_primary_oracle |
+|---|---|---|---|
+| `ab5dc10a` (= build 147) | 4: English reversals to review | 8: English reversals (4), Arabic instruction-bearing purchase (4), to review | 10: reversals (4), instruction-bearing purchase (4), Arabic refunds (2), to review |
+| `5dae2e2d` | 0 | 3: instruction-bearing purchase to review | 3: same |
+| `7577f347` | 0 | 0 | 0 |
+| `7dd6efa8` | 0 | 0 | 0 |
+| `6f771108` | 0 | 0 | 0 |
+
+No new wrong money against any earlier commit. Improvements against `6f771108`: 5 / 9 / 12.
+
+**Completed messages newly sent to review** (local_only / cloud_det / oracle):
+- against `ab5dc10a`: 4 / 8 / 10;
+- against `5dae2e2d`: 0 / 3 / 3;
+- against `7577f347`, `7dd6efa8` and `6f771108`: 0 / 0 / 0.
+
+### Build 147 after the server deploy (`b6fc0dad` client: today's server → `f4dcabd3` server)
+
+`local_only` does not use the server and is identical.
+
+| Criterion | cloud_det OLD → NEW | cloud_primary_oracle OLD → NEW |
+|---|---|---|
+| A1 non-transactions saved | 44 → **24** | 0 → 0 |
+| A2 declined/pending saved | 79 → **60** | 0 → 0 |
+| A3 ambiguous saved | 4 → 4 | 0 → 0 |
+| A4 wrong amount/currency/direction | 8/16/39 (13.9 %) → **1/0/15 (3.5 %)** | 5/0/15 (4.4 %) → **0/0/0 (0.0 %)** |
+| A4 injection-bearing wrong | 4 → 4 | 0 → 0 |
+| A5 duplicates | 0 → 0 | 0 → 0 |
+| A6 lost silently | 8 → **0** | 8 → **0** |
+| A7 completed to review | 33 (7.3 %) → 36 (8.0 %) | 8 (1.8 %) → 16 (3.5 %) |
+
+**Classes that change totals, `cloud_det`, OLD → NEW:**
+- balance notice saved: 8 → 4;
+- bill due: 12 → 4;
+- marketing: 12 → 4;
+- expected salary: 12 → 12;
+- completed wrong direction: 32 → 12; wrong currency: 16 → 0; wrong amount: 7 → 0; lost: 8 → 0;
+- multi-event wrong direction: 7 → 3; wrong amount: 1 → 1;
+- declined recorded: 43 → 40;
+- pending recorded: 24 → 20;
+- **pending refund recorded: 12 → 0**;
+- ambiguous: 4 → 4.
+
+**`cloud_primary_oracle`:** completed lost 8 → 0, wrong direction 8 → 0; multi-event wrong amount 5 → 0, wrong direction 7 → 0.
+
+**Worse for a build-147 user after the deploy, classes that change totals: 0 on every path.** No message is newly booked as non-completed, wrong direction, wrong amount or wrong currency, and none is newly lost. The two §10/§11 families (Arabic pending-refund notices, "standing order … will be executed tomorrow") are no longer booked. **The deploy condition (zero) is met on this set.** Improvements: 106 messages on `cloud_det`, 28 on the oracle path.
+
+**Completed messages newly sent to review for build 147** (safe, no money effect): `cloud_det` 4 (Arabic instruction-bearing purchase); oracle path 8 (that purchase 4, English reversals 4).
+
+The remaining wrong rows for build 147 on `cloud_det` (24 non-transactions, 60 declined/pending, 15 wrong direction, …) all already exist at build 147 today, and each is lower than or equal to today's count.
+
+### Development siblings (`dev_siblings.jsonl`): DEVELOPMENT numbers, not held-out
+
+These 92 rows were written for, and shown to, the tuners. The numbers below measure fit to known cases, not generalisation, and are **never** part of the held-out numbers above. Format: wrong bookings / sent to review, per family; local_only | cloud_det | cloud_primary_oracle.
+
+| Family (n) | `6f771108` | `f4dcabd3` |
+|---|---|---|
+| (a) pending refunds (21) | 5w · 6w · 0 | **0 · 0 · 0** |
+| (b) future standing orders / scheduled (19) | 3w · 8w · 0 | **0 · 0 · 0** |
+| (b) completed standing orders, counter-example (6) | 2r · 0 · 0 | 2r · 0 · 0 |
+| (c) own-account moves (12) | 5w · 6w · 11w | **0 · 0 · 0** (all review, acceptable) |
+| (c) third-party transfers, counter-example (4) | 0 · 0 · 0 | 0 · 0 · 0 |
+| (d) two purchases (8) | 1w · 6w · 8w | **0 · 0 · 0** (all review, acceptable) |
+| (e) totals with tip/VAT/service (12) | 11r · 2w+5r · 3r | 11r · 8r · **0** |
+| (f) completed English reversals (10) | 4r · 4r · 4r | 4r · 4r · 4r |
+
+The `f4dcabd3` development run fails A7 on every path and A8b on the oracle path. This is because of the review-acceptable own-account and two-purchase rows, and the remaining tip/total and reversal reviews.
+
+The real-model run is still BLOCKED, for the same reason as §5.

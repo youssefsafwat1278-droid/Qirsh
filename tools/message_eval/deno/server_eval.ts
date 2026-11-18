@@ -15,11 +15,12 @@
 //                  MESSAGE_EVAL_GEMINI_KEY is set and MESSAGE_EVAL_MAX_REQUESTS>0
 // Text handed to parseSms is what process-ios-sms/index.ts hands it:
 // redactThirdPartyNames(redactPii(text)).trim().
-// The outcome → stored capture mapping copies index.ts:335-378 (status, state).
+// The outcome → stored capture mapping mirrors index.ts (status, state; at
+// f4dcabd3 lines 381-396 and 432-447), using the checkout's own meaning gate.
 
 type Event = { kind: string; amount: number; currency: string; amount_text: string };
 type Msg = {
-  id: string; text: string; sender: string | null; received_at: string; tz_offset: number;
+  id: string; cls?: string; text: string; sender: string | null; received_at: string; tz_offset: number;
   disposition: string; acceptable: string[]; events: Event[]; policy_dependent: string | null;
 };
 
@@ -30,6 +31,21 @@ const parse = await import(`file://${fns}/process-ios-sms/parse.ts`);
 const redaction = await import(`file://${fns}/_shared/sms_redaction.ts`);
 const validator = await import(`file://${fns}/_shared/ai_candidate_validator.ts`);
 const primary = await import(`file://${fns}/_shared/ai_primary.ts`);
+// index.ts at f4dcabd3 and later: the stored-result meaning goes through
+// process-ios-sms/meaning_gate.ts (gatedMeaning) and the LEN-1 over-length
+// rule. Both are imported from the checkout and used only where they exist.
+const gate = await import(`file://${fns}/process-ios-sms/meaning_gate.ts`).catch(() => null);
+const meaningMod = gate ? await import(`file://${fns}/process-ios-sms/message_meaning.ts`) : null;
+const understanding = await import(`file://${fns}/_shared/ai_understanding.ts`).catch(() => null);
+// The oracle answers in the checkout's own message types: own-account moves and
+// several-movement messages are 'own_account_transfer' / 'multiple_transactions'
+// when (and only when) the checkout's prompt defines them.
+// MESSAGE_EVAL_ORACLE_TYPES=0 keeps the older answer (a transaction) instead.
+const oracleTypes = Deno.env.get('MESSAGE_EVAL_ORACLE_TYPES') !== '0' &&
+  ((understanding?.MESSAGE_TYPES ?? []) as string[]).includes('own_account_transfer');
+// LEN-1: the client sends textLength only from f4dcabd3 on; run.sh says whether
+// the client under test does.
+const clientSendsLength = Deno.env.get('MESSAGE_EVAL_CLIENT_TEXT_LENGTH') === '1';
 
 const msgs: Msg[] = JSON.parse(await Deno.readTextFile(inPath)).messages;
 const realKey = Deno.env.get('MESSAGE_EVAL_GEMINI_KEY') ?? '';
@@ -51,10 +67,14 @@ const CAT: Record<string, string> = {
 };
 
 /** The ground-truth answer, in the model's JSON shape (both prompts). */
-function oracle(m: Msg): Record<string, unknown> {
+function oracle(m: Msg, typed = oracleTypes): Record<string, unknown> {
   const saves = m.disposition === 'save';
   const e = m.events[0];
   if (!saves || !e) return { is_transaction: false };
+  if (typed && e.kind === 'own_transfer') return { is_transaction: false, message_type: 'own_account_transfer' };
+  if (typed && m.events.length > 1 && m.cls === 'multi_event') {
+    return { is_transaction: false, message_type: 'multiple_transactions' };
+  }
   return {
     is_transaction: true, amount: e.amount, amount_text: e.amount_text, currency: e.currency,
     type: TYPE[e.kind], direction: DIR[e.kind], category: CAT[e.kind],
@@ -105,7 +125,7 @@ function sanitize(text: string): string {
 }
 
 // deno-lint-ignore no-explicit-any
-function stored(outcome: any, aiPrimary: boolean, sanitized: string) {
+function stored(outcome: any, aiPrimary: boolean, sanitized: string, rawLength: number) {
   const parsed = { ...(outcome.parsed ?? {}) };
   let status = outcome.accepted && parsed.amount && parsed.currency ? 'processed' : 'rejected';
   // index.ts at 7577f347 and later (lines 377-381): a message whose meaning is
@@ -113,7 +133,15 @@ function stored(outcome: any, aiPrimary: boolean, sanitized: string) {
   // the checkout's parse.ts exports messageMeaning, i.e. exactly where the
   // checkout's own index.ts has this step; older commits are unaffected.
   if (status === 'processed' && typeof parse.messageMeaning === 'function') {
-    const meaning = outcome.meaning ?? parse.messageMeaning(sanitized);
+    let meaning = outcome.meaning ?? parse.messageMeaning(sanitized);
+    if (gate) {
+      // index.ts:387-393 at f4dcabd3.
+      meaning = gate.gatedMeaning(sanitized, meaning, parsed.amount ?? null);
+      if (clientSendsLength && rawLength > meaningMod.MAX_TEXT_LENGTH && meaning.kind !== 'otp' &&
+        meaning.disposition === 'record') {
+        meaning = { ...meaning, kind: 'uncertain', disposition: meaningMod.dispositionOf('uncertain'), reason: 'over_length' };
+      }
+    }
     if (meaning.disposition !== 'record') {
       status = 'rejected';
       parsed.reviewReason = meaning.reason;
@@ -144,7 +172,7 @@ async function runMode(m: Msg, name: string) {
       tzOffsetMinutes: m.tz_offset, locale: 'en', allowAi, aiPrimary,
       beforeAi: () => Promise.resolve(true),
     });
-    return { ...stored(outcome, aiPrimary, text), ms: Math.round(performance.now() - t0) };
+    return { ...stored(outcome, aiPrimary, text, m.text.trim().length), ms: Math.round(performance.now() - t0) };
   } catch (e) {
     return { status: 'error', state: 'error', parsed: {}, error: String(e).slice(0, 200) };
   }
@@ -157,7 +185,8 @@ for (const m of msgs) {
   const r: Record<string, unknown> = { sanitized: sanitize(m.text) };
   for (const name of modes) r[name] = await runMode(m, name);
   // Validators on the correct candidate (completed messages only).
-  const o = oracle(m);
+  // Validators judge the transaction-form answer, as before (same denominator).
+  const o = oracle(m, false);
   if (o.is_transaction === true) {
     const cand = {
       amount: o.amount as number, amount_text: o.amount_text as string, currency: o.currency as string,

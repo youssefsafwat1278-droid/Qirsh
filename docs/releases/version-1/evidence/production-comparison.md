@@ -163,3 +163,28 @@ Result: the applied schema equals the migration files except one `anon` grant, w
 | AI volume | Per-key daily counters 3–25 calls a day |
 | Notifications (7 days) | 1,428 sent, 540 failed, 3 opened, 4 pending. **All 540 failures are `local_ios` with `PlatformException(Error 2003 …)` from one install since 2026-11-07** (passed to the iOS specialist; monitoring signal M5 in RELEASE-PLAN). `notification_retry_queue` empty |
 | Admin panel | `admin.qirsh.site` does not resolve; `qirsh.site` (static legal site) returns 404 for `/admin`, `/dashboard`, `/flags`, `/api/feature-flags`; no Vercel/Netlify configuration in the repository. No internet exposure found |
+
+## 8. Final ops pass at `f4dcabd3` (ops specialist, 2026-11-18)
+
+Read-only again: `functions list`, `functions download --use-api` (into the scratchpad); nothing in production was changed. Commands: `bash tools/deploy_set.sh b6fc0dad f4dcabd3`; `SUPABASE_PROJECT_REF=<ref> BACKEND_PG_HOST=127.0.0.1 BACKEND_PG_PORT=<port> bash tools/prod_compare.sh f4dcabd3 b6fc0dad d1212986`; `SUPABASE_PROJECT_REF=<ref> bash tools/prod_compare.sh 4bde299a a106bd6f`.
+
+**Versions** (unchanged since 2026-11-17): 28 deployed; in or near the set: `account-deletion-worker` v5, `process-notification-retries` v12, `process-ios-sms` v27, `parse-sms` v15, `bank-discovery` v10, `enrich-merchant` v8, `merchant-category-contribution` v3, `sync-captures` v7, `send-push-broadcast` v3, `evaluate-budgets` v11, `evaluate-gamification` v8, `evaluate-goals` v8. `verify_jwt` per function equals `supabase/config.toml` (unchanged since `b6fc0dad`).
+
+**Against `f4dcabd3`: 16 IDENTICAL, 12 DIFFERS.**
+
+| Function | Differs from `f4dcabd3` in | Deployed source equals |
+|---|---|---|
+| `account-deletion-worker` | `_shared/storage_erasure.ts` | `4bde299a` (13 files) |
+| `process-notification-retries` | `_shared/capture_push.ts`, `_shared/apns.ts` | `a106bd6f` |
+| `process-ios-sms` | parser, AI, redaction, budget-gate modules, `parser_rules.json` | `b6fc0dad` |
+| `parse-sms` | same family | `b6fc0dad` |
+| `bank-discovery` | `ai_budget_gate.ts`, `ai_spend_guard.ts`, `gemini_request.ts`, `sms_redaction.ts`, `index.ts` | `b6fc0dad`, `d1212986` |
+| `enrich-merchant` | `ai_budget_gate.ts`, `ai_spend_guard.ts`, `sms_redaction.ts`, `index.ts` | `b6fc0dad`, `d1212986` |
+| `merchant-category-contribution` | `_shared/sms_redaction.ts` | `b6fc0dad`, `d1212986`, `4bde299a` |
+| `sync-captures` (not proposed) | `_shared/money_text.ts` (additive exports), `parser_rules.json` | `b6fc0dad` |
+| `send-push-broadcast` (not proposed) | `_shared/capture_push.ts` (unused exports) | `b6fc0dad` |
+| `evaluate-budgets`, `evaluate-gamification`, `evaluate-goals` (not proposed) | `_shared/apns.ts` (refactor `79a063d8`) | `a106bd6f` |
+
+Every function in the release set therefore has an exact rollback commit; none is without one. `deploy_set.sh b6fc0dad f4dcabd3` prints CHANGED for 8 functions (`bank-discovery`, `enrich-merchant`, `merchant-category-contribution`, `parse-sms`, `process-ios-sms`, `process-notification-retries`, `send-push-broadcast`, `sync-captures`); `account-deletion-worker` is absent from it because `b6fc0dad` already contains `9e19c3e4`.
+
+**Schema of a fresh apply of `f4dcabd3`** (local PostgreSQL 17, `tools/backend_behaviour.sh`: 135 migrations, 13 SQL proofs passed). Per kind, rows and hash: `col` 1044 `a21a417b3719`; `con` 396 `676e94d78dfb`; `cron` 7 `84fc00e184fb`; `fn` 244 `eb753ec02f0d`; `idx` 240 `bc7701444b43`; `pol` 155 `3a19be695b5e`; `tbl` 97 `38b6d3dbfc7b`; `trg` 140 `bf9f45747c1c`. `pol` and `trg` equal production (§7.2); `col`/`con`/`idx`/`tbl`/`fn` differ from §7.2 by exactly M1's two tables and one function (expected until P2); production's schema was not re-read in this pass.

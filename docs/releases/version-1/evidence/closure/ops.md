@@ -147,3 +147,25 @@ Nothing committed.
   - B24 and B26 are open in `DECISIONS-NEEDED.md` and are not in owner brief §3 / D-20.
 
 **Tests:** the legal-text Flutter tests pass, 89/89. The legal text was not changed in this follow-up.
+
+## 9. Follow-up 3 (2026-11-18): final ops pass at `f4dcabd3`
+
+Clean tree at `f4dcabd3`. Production read only (`functions list`, `functions download --use-api`); nothing deployed, applied or changed. Nothing committed.
+
+**1. Production package regenerated** (RELEASE-PLAN (a), (b), (d), (g), (h), Status; production-comparison §8).
+- `deploy_set.sh b6fc0dad f4dcabd3`: CHANGED for 8 functions. `prod_compare.sh f4dcabd3`: **16 IDENTICAL, 12 DIFFERS**. The stale "uncommitted (HEAD d1212986)", "18 IDENTICAL", "21" and "the 18 identical" text is gone (SP-11, SP-15).
+- **Release set (7 functions + M1)**, each with its deployed version and an exact rollback commit (byte-identical closure, verified with `prod_compare.sh`): `account-deletion-worker` v5 = `4bde299a`; `process-notification-retries` v12 = `a106bd6f`; `process-ios-sms` v27, `parse-sms` v15, `bank-discovery` v10, `enrich-merchant` v8, `merchant-category-contribution` v3 = `b6fc0dad`. No function in the set lacks a source.
+- Not deployed: `sync-captures` (additive `money_text.ts` exports, unused by its path), `send-push-broadcast` (unchanged helpers only), `evaluate-*` (refactor only).
+- `merchant-category-contribution` is in the set, low risk: its only change is `redactPii`, which on a key with no digit or `@` can only be narrower now (stop-words); seven synthetic keys gave the same result with old and new copies. It keeps the server's key rule equal to the device's; dropping it has no visible effect beyond rare refusals.
+- P0 is now "download and archive the deployed source bundle of every function in the set" with the exact loop, a tarball plus SHA-256 outside the repository, `prod_compare.sh` against the rollback commits, and stop conditions (download failure, version change, not IDENTICAL to the rollback source, counts ≠ 16/12) (SP-14). Smoke tests S1–S6 and the undo order are written per function.
+- Call-site contract in (g) now states the fail-open exception (guard function missing → call proceeds) instead of "fails closed" only.
+
+**2. Build-147 condition.** RELEASE-PLAN (c) has a marked placeholder table ("TO BE FILLED BY THE ORCHESTRATOR") for the 147 × `b6fc0dad` vs 147 × `f4dcabd3` measurement; it must show 0 total-changing classes worse. If not zero: hold `process-ios-sms` and `parse-sms` (and `process-notification-retries`, which only matters with them) until the new build reaches testers, or ship now only M1, `account-deletion-worker`, `bank-discovery`, `enrich-merchant`, `merchant-category-contribution` — none of these decides whether a 147 message is recorded, its amount or direction.
+
+**3. Privacy policy §8** mirrors the new consent sentence: automatic redaction with the list of what it recognises; it can miss some; it runs on the device, in the Shortcuts action (same rules) and again on the server; the user's own suffix of at most four digits is kept. Added to the deployment-note reconciliation list. STORE-READINESS: note added; **no App privacy answer changes**. Legal-text Flutter tests 89/89.
+
+**4. Backend stage at `f4dcabd3`:** PASSED (own throwaway PostgreSQL 17 in the scratchpad: 135 migrations, 13 proofs). Stopped and removed afterwards.
+
+**5. Config:** `supabase/config.toml` unchanged since `b6fc0dad`; deployed `verify_jwt` equals it for all 28 functions. New shared files and `parser_rules.json` are static imports (bundled by the CLI); no function reads a file at run time.
+
+**Final deploy order:** P0 archive + verify → P1 `account-deletion-worker` → P2 M1 → P3 `process-notification-retries` → `process-ios-sms` → `parse-sms` → `bank-discovery` → `enrich-merchant` → `merchant-category-contribution` → P4 ad flags off → P5 observe. Undo in reverse; `process-notification-retries` only after `process-ios-sms`.

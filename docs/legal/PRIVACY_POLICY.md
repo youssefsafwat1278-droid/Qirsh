@@ -352,24 +352,33 @@ The amount is only sent if it still appears in the sanitized text. We record
 which AI model and instruction version produced each result, to investigate
 errors. On Android this includes bank
 SMS that Qirsh reads automatically and messages you share to Qirsh; on iOS,
-messages you share or pass through the Shortcut. Sanitizing removes:
+messages you share or pass through the Shortcut.
+
+**Sanitizing is automatic, and it can miss some things.** Before a message
+leaves your device — in the app and in the Shortcuts action, which apply the
+same rules — and again on our servers before anything is stored or sent to
+Gemini, Qirsh removes what it recognises as:
 
 - full card numbers,
-- phone numbers,
-- account numbers and IBANs,
-- e-mail addresses,
-- one-time codes that follow a code label,
-- reference numbers that follow a reference label,
-- people's names where they are recognisable from the wording: after a greeting
-  ("Dear …", «عزيزي …») and, in transfers and credits, after words such as
-  "from", "to", "beneficiary", «من», «إلى» or «لصالح».
+- long account numbers, and account numbers that follow an account label,
+- IBANs,
+- mobile phone numbers,
+- verification and one-time codes,
+- e-mail addresses and reference numbers that follow a reference label,
+
+and masks the names of people it detects (for example after a greeting such as
+"Dear …" or «عزيزي …», or after words such as "from", "to", "beneficiary",
+«من», «إلى» or «لصالح» in transfers and credits). Because this is automatic, it
+can miss some of these — for example a name or number written in a way the
+rules do not recognise — and the rest of the message is sent as written.
 
 What stays in the text: the amount and currency, the balance if the bank
-includes it, the merchant or place, dates and times, masked card endings
-(`*1234`), bank names, and any name written in a way these rules do not
-recognise. **This text is still personal financial information about you; it is
-not anonymous.** Requests are linked to your account or device so that we can
-authenticate and rate-limit them.
+includes it, the merchant or place, dates and times, the last digits of your own
+card or account when the bank shows at most four of them (for example
+`***1234`), bank names, and anything the rules did not recognise. **This text is
+still personal financial information about you; it is not anonymous.** Requests
+are linked to your account or device so that we can authenticate and rate-limit
+them.
 
 For a bank sender we do not recognise, the sender's name may also be sent to
 Gemini to identify the bank — only a name made of letters (such as a bank's
@@ -435,7 +444,10 @@ updated" date above always reflects the current version.
     - deletion lifecycle (deleteAccount* and privScheduledForDeletion keys);
     - catalog gated on Cloud consent (consent_authority.dart,
       catalog_sync_service.dart);
-    - country coverage note (countryCoverageNote).
+    - country coverage note (countryCoverageNote);
+    - section 8 redaction list (device SmsSanitizer, native Shortcut
+      sanitizer, server _shared/sms_redaction.ts redactPii; own account
+      suffix of at most four digits kept) — checked at f4dcabd3.
 
   Retention statements in section 6 were checked against migrations 0112
   (7-day capture text, 30-day capture rows, 7-day fingerprints, 30-day

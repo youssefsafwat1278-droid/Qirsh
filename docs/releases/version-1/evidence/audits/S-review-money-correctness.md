@@ -589,3 +589,147 @@ The over-length policy holds. Device worst case at 2,000 characters is 392 ms on
 - Any deployed server.
 - The held-out set.
 - The restore-confirmation and UI parts of `6f771108`.
+
+## Check at f4dcabd3
+
+A narrow check of `f4dcabd3` against `6f771108`, with a clean tree. Model: `claude-opus-5-5`. Synthetic data only. The repo was read-only; everything was run from scratch worktrees.
+
+### Verdict: ACCEPT WITH FOLLOW-UP
+
+No message went from right to wrong on any path, and nothing new throws. Wrong outcomes on the iOS import and the server fell again.
+
+Three things need follow-up:
+- One server-gate hole on the AI path (VAL-1). The device import catches it.
+- A new class of completed messages over-held for review (HOLD-1).
+- One server drop that went from right to silent (FT003).
+
+### Results: 5dae2e2d → 6f771108 → f4dcabd3
+
+708 messages: the original 350, my earlier 278, and 80 new probes at the new rules' edges (rm5). Each cell is wrong / silent / review.
+
+| Set | n | Server `s` | iOS import `eB` |
+|---|---|---|---|
+| original (rm+rm2) | 350 | 14/10/61 → 1/12/24 → 1/11/26 | 29/3/29 → 2/3/20 → 2/3/20 |
+| rm3 | 156 | 12/6/9 → 3/6/7 → 2/6/7 | 17/0/11 → 4/0/8 → 3/0/8 |
+| rm4 | 122 | 14/2/17 → 6/4/14 → 6/4/14 | 12/0/9 → 4/0/12 → 4/0/11 |
+| rm5 (new) | 80 | 12/3/20 → 6/4/19 → **0/5/30** | 17/0/13 → 6/0/12 → **2/0/23** |
+| **Total** | 708 | 52/21/107 → 16/26/64 → **9/26/77** | 75/3/62 → 16/3/52 → **11/3/62** |
+
+**Right → wrong:** 0 on any path.
+
+**Right → silent:** 1, FT003 on the server: "Purchase SAR 45.00 at Jarir card *4521. Standing orders will be executed on the due date" is now `no_movement`. The device sends it to review.
+
+**Completed → review on eB, 6f771108 → f4dcabd3:** 11. The 9 in rm5 are:
+- RF007: "Your expected refund of SAR 150.00 … has been credited" (C017 in rm is the same shape).
+- FT000, FT001, FT006, FT008: purchases with a refund-request or refund-timing footer, in English and Arabic.
+- FT003: a purchase with a standing-order footer.
+- AT004, AT007: third-party transfers that name two account types (`own_accounts`).
+- TO001: "Bill 200, VAT 30, total 230 paid" (`total_with_parts`; it was booked at 230 before).
+
+These 9 were right at `6f771108` (FT000, FT001, FT006 and FT008 were already right on the server and import, wrong only on the device). Also in the rm set: K000, which goes to `multiple_amounts`; that is acceptable.
+
+**Still open from earlier rounds:**
+- NEW-2r is still open on the server: B027, NM016, TL022, NM018, TL024 and C003 are `no_movement`, contrary to the fix claim.
+- CR010 and LN010 are fixed.
+
+**Totals:**
+- A stated total is never recorded as its base figure any more. TO005 and TO008 went from WAMT to review.
+- A total with a stated label records (TO002, TO009).
+- "Including tip" forms (TO006, TO007) stay on review.
+
+### Validator attack: an AI answer accepted for a message that is not a completed movement
+
+30 cases. Each had a model answer of "completed transaction" at the stated amount.
+
+**Holds everywhere:**
+- the device `validateCaptureCandidate` (through `meaningRejectionOf`), on the import with the server row forged as processed
+- server `parse-sms`
+- declined or failed with a filler second sentence, and a status two sentences later
+- over 2,000 characters
+- Arabic declined or pending
+- own-account and several-movement messages
+
+**VAL-1 (S2, server).** In `process-ios-sms/index.ts`, `gatedMeaning(text, meaning, parsed.amount)` promotes `tip_component` / `total_with_parts` to `completed_movement` whenever the answered amount equals the stated total. It never checks for a not-completed cue. `meaningRejectionOf` does check (`isDeclinedText` comes first), but index.ts does not call it.
+
+As a result, these become processed server rows, with a "recorded" push, when the model answers the total:
+- "Purchase SAR 115.00 … incl. tip SAR 15.00 was declined / is pending / Not completed / Reversed"
+- "Pre-authorization … (bill + tip) on hold"
+- "Bill …, VAT …, total SAR 230.00 … Status: failed"
+- the Arabic tip-form forms «…الإجمالي 115 ريال، العملية مرفوضة / قيد المعالجة»
+
+The deterministic parse never accepts them, so this needs a model answer to happen. The `f4dcabd3` device import catches all of them: the validator rejects and the message falls to the local parse, which holds it. A client without that import would book them. `parse-sms` is not affected.
+
+**Accepted on every path, through gaps in the cue words rather than the new rule:**
+- "Awaiting merchant confirmation"
+- "Attempted purchase SAR 45.00"
+- "You will receive SAR 500.00 cashback on 01/12"
+- a total form "… will be charged tomorrow"
+- a tip form "… awaiting authorization"
+
+The last two record on eB at the stated total. The device alone holds them, but `meaningHoldReason` releases the hold at the stated total.
+
+### Redaction (fin → last)
+
+Two sets:
+- the earlier 378 privacy messages
+- 117 fresh probes: 14 name cues × 3 names, 7 account lengths × 8 labels, 7 IBAN forms, and 12 texts where an amount or date sits next to an account number
+
+**Closed:**
+- spaced IBANs, including the forms with hyphens, lower case and "SA 03"
+- every 5–9-digit third-party account after a label I tried, except "acc no." (see the next list)
+- "Standing order to" and the other names after a cue (14 of 28 previous leaks fixed)
+- full own-account numbers
+
+**Still reach the server and the model:**
+- The `To Sara Ahmed: SAR 50.00, IBAN …` shape (name before the colon, no transfer word): 14 of 378.
+- "Payee <Name>" and "Benef. <Name>", even in transfer context.
+- Every name cue in a text with no transfer word ("From:", "Sender", "Recipient name:", "In favour of", "Paid to").
+- "acc no. 55123…": the label is masked as `[NAME]` and the 5–9-digit number survives.
+- With the `payment` type hint on the AI path, «إلى: ليلى حسن علي 76811732 … مجدول» and "To: Sara Ahmed 92214480 … scheduled" keep both the name and the account number.
+
+**New leaks:** 0.
+
+**Over-masking:**
+- No amount or date was lost on any of the 12 texts next to account numbers (12500, 150000, 1500000 IQD, 17112026, 20261117).
+- The server parse of the redacted text gives the same amount and acceptance as the raw text on all 117.
+
+**Swift == server:**
+- Device == server on all 117 fresh texts.
+- I read the Swift Shortcut path against `sms_redaction.ts`. The counterparty cue list, the transfer and purchase context words, the beneficiary rules after «إلى»/"To:" and the IBAN and long-number rules match one for one.
+- XCTest was not run.
+
+### Is the harness's accepted-list honest?
+
+`tools/parser_diff/run.sh 5dae2e2d working-tree` at `f4dcabd3`: exit 0, 0 regressions, **38 messages to review against a budget of 38**.
+
+- **The list is honest in what it prints, but weak as a gate.**
+  - `ACCEPTED_REVIEW` (3 ids) is only printed. The budget was raised from 35 to 38 to absorb them.
+  - The budget is still a message count, set exactly to today's figure. Any 3 other moves to review would pass if those 3 ids disappeared, and there is no headroom.
+  - `ACCEPTED_SERVER` is keyed narrowly: by id, and only for a `not_completed` rejection.
+- **Coverage gap:**
+  - `cases/fu5.json` (100 cases, written with the change) has no completed refund using the "expected/pending refund … credited" wording, no purchase with a refund or standing-order footer, no third-party transfer naming two account types, and no VAT/fee total with "paid".
+  - Those are exactly the 9 completed→review moves above, so the gate cannot see them.
+- **Hygiene:** `tools/parser_diff/__pycache__/diff.cpython-314.pyc` is committed.
+
+### Open defects at f4dcabd3
+
+| ID | Sev | Class | Description |
+|---|---|---|---|
+| VAL-1 | S2 (server; device import safe) | NEW | `gatedMeaning` releases tip or total forms at the stated total with no not-completed check. A declined, pending, failed or reversed tip or VAT total becomes a processed server row with a false push when the model answers the total. |
+| HOLD-1 | S3 | NEW, from `6f771108` | Completed messages over-held for review on every path: (a) an "expected/pending refund … has been credited" refund; (b) a purchase with a refund-request or refund-timing footer, in English and Arabic; (c) a third-party transfer naming two account types; (d) "Bill + VAT = total paid". 11 of 708 moved completed→review. |
+| FT-1 | S3 | NEW, right → silent on the server | A purchase with a "Standing orders will be executed …" footer is server `no_movement` (silent); the device reviews it. The Arabic twin was already silent. |
+| NEW-2r | S3 | Still open (claimed fixed) | 6 completed shapes are `no_movement` on the server (bill-reminder tail, month-total tail, "as scheduled"). |
+| CUE-1 | S3 | Pre-existing | "Awaiting merchant confirmation", "Attempted purchase", "will receive … cashback on 01/12" and "total … will be charged tomorrow" are recorded. |
+| PRIV-1 | S2 | Narrowed, pre-existing | "To <Name>: …" with no transfer word; "Payee" and "Benef." cues; any name cue without transfer context; "acc no. <5–9 digits>"; name and account kept under the `payment` hint. |
+| PRE-* | S3 | Pre-existing | As at `6f771108`: own-account transfer booked as spend (AT008), Arabic refund direction (RF009), and the B147-1 / PAR-1 items, which were not re-measured this round. |
+| HAR-1 | S4 | NEW | Budget equals the measured count (38/38) and is count-based; the fu5 cases do not cover the HOLD-1 shapes; a .pyc is committed. |
+
+### Not checked
+
+- Real AI calls.
+- Build 147 against this server.
+- Timing.
+- The XCTest for the Swift Shortcut.
+- The consent wording (UI).
+- Any deployed server.
+- The held-out set.
