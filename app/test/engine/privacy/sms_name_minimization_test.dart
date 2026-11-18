@@ -29,7 +29,12 @@ void main() {
     for (final c in labelled) {
       test('${c['id']}', () {
         final raw = c['raw'] as String;
-        final out = SmsSanitizer.sanitize(raw);
+        // PRIV-1: a row may carry the device's type hint (`payment`); the
+        // server has none, and the two must still agree.
+        final type = c['type'] == null
+            ? null
+            : TransactionType.values.byName(c['type'] as String);
+        final out = SmsSanitizer.sanitize(raw, detectedType: type);
         expect(out, c['expected'], reason: 'device and server must agree');
         for (final s in (c['secrets'] as List).cast<String>()) {
           expect(out, isNot(contains(s)), reason: '"$s" is a third party\'s');
@@ -37,8 +42,8 @@ void main() {
         for (final k in (c['mustKeep'] as List).cast<String>()) {
           expect(out, contains(k), reason: 'parsing needs "$k"');
         }
-        expect(sanitizeWithMap(raw).text, out);
-        expect(SmsSanitizer.sanitize(out), out);
+        expect(sanitizeWithMap(raw, detectedType: type).text, out);
+        expect(SmsSanitizer.sanitize(out, detectedType: type), out);
       });
     }
   });

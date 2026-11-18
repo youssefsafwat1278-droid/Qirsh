@@ -1029,5 +1029,274 @@
    "٧٥.٥٠",
    "بنجاح"
   ]
+ },
+ {
+  "id": "priv1_to_heading_iban",
+  "raw": "To Sara Ahmed: SAR 50.00, IBAN SA0380000000608010167519",
+  "expected": "To [NAME]: SAR 50.00, IBAN [IBAN]",
+  "secrets": [
+   "Sara",
+   "Ahmed",
+   "0380000000608010167519"
+  ],
+  "mustKeep": [
+   "50.00"
+  ]
+ },
+ {
+  "id": "priv1_to_heading_date",
+  "raw": "To Sara Ahmed: SAR 50.00 on 17/11 scheduled",
+  "expected": "To [NAME]: SAR 50.00 on 17/11 scheduled",
+  "secrets": [
+   "Sara",
+   "Ahmed"
+  ],
+  "mustKeep": [
+   "50.00",
+   "17/11",
+   "scheduled"
+  ]
+ },
+ {
+  "id": "priv1_payee_transfer",
+  "raw": "Transfer SAR 300.00 to Payee Sara Ahmed completed",
+  "expected": "Transfer SAR 300.00 to Payee [NAME] completed",
+  "secrets": [
+   "Sara",
+   "Ahmed"
+  ],
+  "mustKeep": [
+   "300.00",
+   "completed"
+  ]
+ },
+ {
+  "id": "priv1_benef_transfer",
+  "raw": "Transfer SAR 300.00 Benef. Sara Ahmed completed",
+  "expected": "Transfer SAR 300.00 Benef. [NAME] completed",
+  "secrets": [
+   "Sara",
+   "Ahmed"
+  ],
+  "mustKeep": [
+   "300.00",
+   "completed"
+  ]
+ },
+ {
+  "id": "priv1_payee_label",
+  "raw": "Payee: Sara Ahmed SAR 75.00 on 17/11",
+  "expected": "Payee: [NAME] SAR 75.00 on 17/11",
+  "secrets": [
+   "Sara",
+   "Ahmed"
+  ],
+  "mustKeep": [
+   "75.00",
+   "17/11"
+  ]
+ },
+ {
+  "id": "priv1_from_label",
+  "raw": "From: Sara Ahmed SAR 75.00 on 17/11",
+  "expected": "From: [NAME] SAR 75.00 on 17/11",
+  "secrets": [
+   "Sara",
+   "Ahmed"
+  ],
+  "mustKeep": [
+   "75.00",
+   "17/11"
+  ]
+ },
+ {
+  "id": "priv1_sender",
+  "raw": "Sender Sara Ahmed SAR 75.00 on 17/11",
+  "expected": "Sender [NAME] SAR 75.00 on 17/11",
+  "secrets": [
+   "Sara",
+   "Ahmed"
+  ],
+  "mustKeep": [
+   "75.00",
+   "17/11"
+  ]
+ },
+ {
+  "id": "priv1_recipient_name",
+  "raw": "Recipient name: Sara Ahmed SAR 75.00 scheduled for 18/11",
+  "expected": "Recipient name: [NAME] SAR 75.00 scheduled for 18/11",
+  "secrets": [
+   "Sara",
+   "Ahmed"
+  ],
+  "mustKeep": [
+   "75.00",
+   "scheduled",
+   "18/11"
+  ]
+ },
+ {
+  "id": "priv1_in_favour",
+  "raw": "SAR 75.00 in favour of Sara Ahmed on 17/11",
+  "expected": "SAR 75.00 in favour of [NAME] on 17/11",
+  "secrets": [
+   "Sara",
+   "Ahmed"
+  ],
+  "mustKeep": [
+   "75.00",
+   "17/11"
+  ]
+ },
+ {
+  "id": "priv1_paid_to",
+  "raw": "SAR 75.00 paid to Sara Ahmed on 17/11",
+  "expected": "SAR 75.00 paid to [NAME] on 17/11",
+  "secrets": [
+   "Sara",
+   "Ahmed"
+  ],
+  "mustKeep": [
+   "75.00",
+   "paid",
+   "17/11"
+  ]
+ },
+ {
+  "id": "priv1_acc_no_sent",
+  "raw": "SAR 75.00 sent to acc no. 5512345 on 17/11",
+  "expected": "SAR 75.00 sent to acc no. [ACCOUNT] on 17/11",
+  "secrets": [
+   "5512345"
+  ],
+  "mustKeep": [
+   "75.00",
+   "17/11"
+  ]
+ },
+ {
+  "id": "priv1_acc_no_payment",
+  "raw": "Payment SAR 40.00 to acc no. 55123456 scheduled",
+  "expected": "Payment SAR 40.00 to acc no. [ACCOUNT] scheduled",
+  "secrets": [
+   "55123456"
+  ],
+  "mustKeep": [
+   "40.00",
+   "scheduled"
+  ]
+ },
+ {
+  "id": "priv1_payment_hint_ar",
+  "raw": "إلى: ليلى حسن علي 76811732 مبلغ 250 ريال مجدول",
+  "expected": "إلى: [REDACTED] مبلغ 250 ريال مجدول",
+  "secrets": [
+   "ليلى",
+   "حسن",
+   "علي",
+   "76811732"
+  ],
+  "mustKeep": [
+   "250",
+   "مجدول"
+  ],
+  "type": "payment"
+ },
+ {
+  "id": "priv1_payment_hint_en",
+  "raw": "To: Sara Ahmed 92214480 SAR 250.00 scheduled",
+  "expected": "To: [REDACTED] SAR 250.00 scheduled",
+  "secrets": [
+   "Sara",
+   "Ahmed",
+   "92214480"
+  ],
+  "mustKeep": [
+   "250.00",
+   "scheduled"
+  ],
+  "type": "payment"
+ },
+ {
+  "id": "priv1_lisalih_ar",
+  "raw": "لصالح ليلى حسن 250 ريال في 17/11",
+  "expected": "لصالح [NAME] 250 ريال في 17/11",
+  "secrets": [
+   "ليلى",
+   "حسن"
+  ],
+  "mustKeep": [
+   "250",
+   "17/11"
+  ]
+ },
+ {
+  "id": "priv1_bism_ar",
+  "raw": "باسم ليلى حسن مبلغ 250 ريال",
+  "expected": "باسم [NAME] مبلغ 250 ريال",
+  "secrets": [
+   "ليلى",
+   "حسن"
+  ],
+  "mustKeep": [
+   "250"
+  ]
+ },
+ {
+  "id": "priv1_sender_ar",
+  "raw": "المرسل: ليلى حسن 250 ريال",
+  "expected": "المرسل: [NAME] 250 ريال",
+  "secrets": [
+   "ليلى",
+   "حسن"
+  ],
+  "mustKeep": [
+   "250"
+  ]
+ },
+ {
+  "id": "priv1_keep_purchase_from_card",
+  "raw": "Purchase SAR 45.00 at Jarir from card *4521",
+  "expected": "Purchase SAR 45.00 at Jarir from card *4521",
+  "secrets": [],
+  "mustKeep": [
+   "45.00",
+   "Jarir",
+   "*4521"
+  ]
+ },
+ {
+  "id": "priv1_keep_bill_to_merchant",
+  "raw": "Bill payment SAR 120.00 to STC done",
+  "expected": "Bill payment SAR 120.00 to STC done",
+  "secrets": [],
+  "mustKeep": [
+   "120.00",
+   "STC",
+   "done"
+  ]
+ },
+ {
+  "id": "priv1_keep_paid_at",
+  "raw": "Paid SAR 50.00 at STC Store on 17/11",
+  "expected": "Paid SAR 50.00 at STC Store on 17/11",
+  "secrets": [],
+  "mustKeep": [
+   "50.00",
+   "STC Store",
+   "17/11"
+  ]
+ },
+ {
+  "id": "priv1_keep_own_suffix",
+  "raw": "Transfer SAR 80.00 to your account *1234 completed",
+  "expected": "Transfer SAR 80.00 to your account *1234 completed",
+  "secrets": [],
+  "mustKeep": [
+   "80.00",
+   "*1234",
+   "completed"
+  ]
  }
 ]

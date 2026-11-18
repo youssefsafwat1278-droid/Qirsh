@@ -237,13 +237,13 @@ bool localParseOpposesDirection({
 /// ([AiCandidateValidator.statedTotal]) may be recorded.
 String? meaningHoldReason(String text, {num? amount}) {
   final meaning = ParserEngine.meaningOf(text);
-  if ((meaning.reason == 'tip_component' ||
-          meaning.reason == 'total_with_parts') &&
-      amount != null) {
-    final total = AiCandidateValidator.statedTotal(text);
-    if (total != null && (total - amount).abs() < 0.005) return null;
+  // Follow-up 15 (VAL-1): released only by the single rule, which reads
+  // not-completed first.
+  if (meaning.disposition != MessageDisposition.record) {
+    return AiCandidateValidator.meaningRejectionOf(text, amount: amount) == null
+        ? null
+        : meaning.reason;
   }
-  if (meaning.disposition != MessageDisposition.record) return meaning.reason;
   return severalMovements(text, meaning) ? 'multiple_amounts' : null;
 }
 

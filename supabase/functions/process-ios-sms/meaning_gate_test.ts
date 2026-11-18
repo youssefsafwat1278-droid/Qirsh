@@ -84,3 +84,14 @@ Deno.test('declined table: server meaning rejection matches the device rule on e
   }
   assert(review > 0);
 });
+
+// Follow-up 15 (VAL-1): a tip / VAT / service-fee total that reads as
+// declined, pending, failed or reversed is never released at its stated
+// total; a completed one is. App twin: movement_amounts_test.dart.
+Deno.test('total forms: the stated-total release never applies to a not-completed message', async () => {
+  const { default: fixture } = await import('../_shared/fixtures/total_status_cases.json', { with: { type: 'json' } });
+  for (const c of fixture.cases as Array<{ id: string; text: string; amount: number; held: boolean }>) {
+    assertEquals(meaningRejectionOf(c.text, c.amount), c.held ? 'transaction_not_completed' : null, c.id);
+    assertEquals(gatedMeaning(c.text, undefined, c.amount).disposition !== 'record', c.held, c.id);
+  }
+});

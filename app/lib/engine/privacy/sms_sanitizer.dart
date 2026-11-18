@@ -118,7 +118,7 @@ class SmsSanitizer {
   // part is an amount and stays (PRIV-0). Server twin:
   // LABELLED_ACCOUNT_PATTERN.
   static final _labelledAccount = RegExp(
-    r'((?<![\p{L}\p{M}])(?:account|acct|a\/c|ac|حساب|الحساب|لحساب|للحساب|بحساب|حسابك|لحسابك|حسابكم|حسابي)'
+    r'((?<![\p{L}\p{M}])(?:account|acct|acc|a\/c|ac|حساب|الحساب|لحساب|للحساب|بحساب|حسابك|لحسابك|حسابكم|حسابي)'
     r'(?![\p{L}\p{M}])\.?(?:[ \t]+(?:no|number|num|رقم)(?![\p{L}\p{M}])\.?)?[ \t]*[:#]?[ \t]*)'
     '[*xX•#]*$_dc{5,9}(?!$_dc|[.,٫٬]$_dc|[ \\t]*(?:sar|egp|aed|usd|eur|gbp|kwd|qar|bhd|omr|jod|le|sr|riyals?|pounds?|dirhams?|dinars?|dollars?|ريال|جنيه|جم|درهم|دينار|دولار|يورو|ر\\.س)(?![\\p{L}\\p{M}])(?![ \\t]*$_dc))',
     caseSensitive: false,
@@ -265,9 +265,12 @@ class SmsSanitizer {
   static const List<String> nameStopwords = [
     // English
     'your', 'yours', 'you', 'our', 'us', 'the', 'a', 'an', 'account',
-    'accounts', 'acct', 'ac', 'card', 'cards', 'wallet', 'mobile', 'phone',
+    'accounts', 'acct', 'acc', 'ac', 'card', 'cards', 'wallet', 'mobile', 'phone',
     'number', 'no', 'on', 'at', 'in', 'into', 'via', 'using', 'with', 'for',
-    'of', 'to', 'from', 'by', 'ref', 'reference', 'rrn', 'amount', 'amt',
+    'of', 'to', 'from', 'by',
+    // PRIV-1: a person cue is never (the start of) the name it introduces.
+    'beneficiary', 'benef', 'payee', 'sender', 'remitter', 'recipient', 'payer',
+    'ref', 'reference', 'rrn', 'amount', 'amt',
     'is', 'was', 'has', 'have', 'been', 'and', 'or', 'date', 'time',
     'balance', 'bal', 'avl', 'available', 'avail', 'customer', 'customers',
     'client', 'cardholder', 'holder', 'valued', 'sir', 'madam', 'member',
@@ -321,7 +324,7 @@ class SmsSanitizer {
   /// date) ends the run.
   static const Set<String> beneficiaryObjectWords = {
     'you', 'us', 'the', 'a', 'an', 'account',
-    'accounts', 'acct', 'ac', 'card', 'cards', 'wallet', 'mobile', 'phone',
+    'accounts', 'acct', 'acc', 'ac', 'card', 'cards', 'wallet', 'mobile', 'phone',
     'number', 'no', 'name', 'حساب', 'الحساب', 'حسابات',
     'لحساب', 'للحساب', 'بطاقة', 'البطاقة',
     'بطاقه', 'محفظة', 'المحفظة', 'رقم',
@@ -367,6 +370,43 @@ class SmsSanitizer {
     caseSensitive: false,
     unicode: true,
   );
+
+  // PRIV-1: cues that only ever introduce a person (a payee, a beneficiary,
+  // a sender), so they apply in any message. Server twin: PERSON_CUE_PATTERN.
+  static final _personCue = RegExp(
+    r'((?<![\p{L}\p{M}])(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?'
+    r'|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of'
+    r'|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم)'
+    '\\.?(?![\\p{L}\\p{M}])$_cueSep)($_name)',
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  // PRIV-1: a "From:" field label and "paid to" — a person unless the text
+  // reads as a purchase, refund or bill. Server twin: LABEL_CUE_PATTERN.
+  static final _labelCue = RegExp(
+    r'((?<![\p{L}\p{M}])(?:from[ \t]*:|paid[ \t]+to(?![\p{L}\p{M}]))[ \t]*)'
+    '($_name)',
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  // PRIV-1: "To Sara Ahmed: SAR 50.00 …" — a name between "To" at the start
+  // of the text or a sentence and a colon. Server twin: TO_HEADING_PATTERN.
+  static final _toHeading = RegExp(
+    r'((?:^|(?<=[\n.!?؟;؛]))[ \t]*to[ \t]+)'
+    '($_name)(?=[ \\t]*:)',
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  // PRIV-1: a beneficiary run that carries an account or IBAN number is a
+  // person's account, never a merchant, whatever the type hint says.
+  static final _accountId = RegExp('\\[(?:ACCOUNT|IBAN)\\]|$_dc{5,}');
+
+  /// True when a beneficiary match carries an account number (see
+  /// [_accountId]); under a `payment` hint only those runs are stripped.
+  static bool carriesAccountId(String run) => _accountId.hasMatch(run);
 
   static final _transferContext = RegExp(
     r'transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|'
@@ -428,6 +468,10 @@ class SmsSanitizer {
   static RegExp get referencePattern => _reference;
   static RegExp get salutationPattern => _salutation;
   static RegExp get counterpartyPattern => _counterparty;
+  static RegExp get personCuePattern => _personCue;
+  static RegExp get labelCuePattern => _labelCue;
+  static RegExp get toHeadingPattern => _toHeading;
+  static bool isPurchaseContext(String text) => _purchaseContext.hasMatch(text);
 
   /// Returns a sanitized copy of [rawSms] safe for sending to an AI service.
   ///
@@ -477,9 +521,16 @@ class SmsSanitizer {
     // [detectedType]-based, so the server's copy of this rule agrees. Runs
     // before step 7 so a multi-word name after عزيزي is masked in full.
     text = text.replaceAllMapped(_salutation, (m) => '${m.group(1)!}[NAME]');
+    // PRIV-1: a person cue names a person in any message.
+    text = text.replaceAllMapped(_personCue, (m) => '${m.group(1)!}[NAME]');
     if (isCounterpartyContext(text)) {
       text =
           text.replaceAllMapped(_counterparty, (m) => '${m.group(1)!}[NAME]');
+    } else if (!_purchaseContext.hasMatch(text)) {
+      // PRIV-1: with no purchase, refund or bill word, a "From:" label,
+      // "paid to" and a "To <Name>:" heading name a person too.
+      text = text.replaceAllMapped(_labelCue, (m) => '${m.group(1)!}[NAME]');
+      text = text.replaceAllMapped(_toHeading, (m) => '${m.group(1)!}[NAME]');
     }
 
     // 6. Beneficiary / recipient names for non-purchase types
@@ -487,16 +538,23 @@ class SmsSanitizer {
         detectedType == TransactionType.transfer ||
         detectedType == TransactionType.income;
 
-    if (stripBeneficiary) {
-      text = text.replaceAllMapped(
-          _beneficiaryAr, (m) => '${m.group(1)!}: [REDACTED]');
-      text = text.replaceAll(_beneficiaryEn, 'To: [REDACTED]');
-    }
+    // PRIV-1: under a `payment` hint the run after «إلى»/"To:" may be a
+    // merchant and stays, unless it carries an account number (a person's
+    // account): that run is stripped as for any other type, and any other
+    // number left in the sentence is masked whatever the type.
+    text = text.replaceAllMapped(
+        _beneficiaryAr,
+        (m) => stripBeneficiary || carriesAccountId(m.group(0)!)
+            ? '${m.group(1)!}: [REDACTED]'
+            : m.group(0)!);
+    text = text.replaceAllMapped(
+        _beneficiaryEn,
+        (m) => stripBeneficiary || carriesAccountId(m.group(0)!)
+            ? 'To: [REDACTED]'
+            : m.group(0)!);
     text = text.replaceAllMapped(
         _ownDestinationNumber, (m) => '${m.group(1)!}[ACCOUNT]');
-    if (stripBeneficiary) {
-      text = text.replaceAll(_numberInBeneficiarySentence, '[ACCOUNT]');
-    }
+    text = text.replaceAll(_numberInBeneficiarySentence, '[ACCOUNT]');
 
     // 7. Arabic greetings that include a personal name
     text = text.replaceAll(_greeting, '[REDACTED]');

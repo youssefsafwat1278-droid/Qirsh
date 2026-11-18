@@ -1,0 +1,185 @@
+{
+ "_comment": "Follow-up 15 (VAL-1): tip / VAT / service-fee total forms x status, English and Arabic. A not-completed form is never recorded at its stated total; a completed one is. Synthetic. Used by process-ios-sms/meaning_gate_test.ts and app/test/engine/ai/movement_amounts_test.dart.",
+ "cases": [
+  {
+   "id": "tip_en_completed",
+   "text": "Purchase SAR 115.00 at Test Cafe incl. tip SAR 15.00",
+   "amount": 115,
+   "held": false
+  },
+  {
+   "id": "tip_en_declined",
+   "text": "Purchase SAR 115.00 at Test Cafe incl. tip SAR 15.00 was declined.",
+   "amount": 115,
+   "held": true
+  },
+  {
+   "id": "tip_en_pending",
+   "text": "Purchase SAR 115.00 at Test Cafe incl. tip SAR 15.00 is pending.",
+   "amount": 115,
+   "held": true
+  },
+  {
+   "id": "tip_en_failed",
+   "text": "Purchase SAR 115.00 at Test Cafe incl. tip SAR 15.00. Status: failed.",
+   "amount": 115,
+   "held": true
+  },
+  {
+   "id": "tip_en_reversed",
+   "text": "Purchase SAR 115.00 at Test Cafe incl. tip SAR 15.00. Transaction reversed.",
+   "amount": 115,
+   "held": true
+  },
+  {
+   "id": "vat_en_completed",
+   "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 at Test Store",
+   "amount": 230,
+   "held": false
+  },
+  {
+   "id": "vat_en_declined",
+   "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 at Test Store was declined.",
+   "amount": 230,
+   "held": true
+  },
+  {
+   "id": "vat_en_pending",
+   "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 at Test Store is pending.",
+   "amount": 230,
+   "held": true
+  },
+  {
+   "id": "vat_en_failed",
+   "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 at Test Store. Status: failed.",
+   "amount": 230,
+   "held": true
+  },
+  {
+   "id": "vat_en_reversed",
+   "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 at Test Store. Transaction reversed.",
+   "amount": 230,
+   "held": true
+  },
+  {
+   "id": "fee_en_completed",
+   "text": "Order SAR 100.00 + service fee SAR 10.00, total SAR 110.00 at Test Shop",
+   "amount": 110,
+   "held": false
+  },
+  {
+   "id": "fee_en_declined",
+   "text": "Order SAR 100.00 + service fee SAR 10.00, total SAR 110.00 at Test Shop was declined.",
+   "amount": 110,
+   "held": true
+  },
+  {
+   "id": "fee_en_pending",
+   "text": "Order SAR 100.00 + service fee SAR 10.00, total SAR 110.00 at Test Shop is pending.",
+   "amount": 110,
+   "held": true
+  },
+  {
+   "id": "fee_en_failed",
+   "text": "Order SAR 100.00 + service fee SAR 10.00, total SAR 110.00 at Test Shop. Status: failed.",
+   "amount": 110,
+   "held": true
+  },
+  {
+   "id": "fee_en_reversed",
+   "text": "Order SAR 100.00 + service fee SAR 10.00, total SAR 110.00 at Test Shop. Transaction reversed.",
+   "amount": 110,
+   "held": true
+  },
+  {
+   "id": "tip_ar_completed",
+   "text": "شراء 100 ريال لدى مقهى تجريبي + بقشيش 15 ريال، الإجمالي 115 ريال",
+   "amount": 115,
+   "held": false
+  },
+  {
+   "id": "tip_ar_declined",
+   "text": "شراء 100 ريال لدى مقهى تجريبي + بقشيش 15 ريال، الإجمالي 115 ريال، العملية مرفوضة",
+   "amount": 115,
+   "held": true
+  },
+  {
+   "id": "tip_ar_pending",
+   "text": "شراء 100 ريال لدى مقهى تجريبي + بقشيش 15 ريال، الإجمالي 115 ريال، العملية قيد المعالجة",
+   "amount": 115,
+   "held": true
+  },
+  {
+   "id": "tip_ar_failed",
+   "text": "شراء 100 ريال لدى مقهى تجريبي + بقشيش 15 ريال، الإجمالي 115 ريال، فشلت العملية",
+   "amount": 115,
+   "held": true
+  },
+  {
+   "id": "tip_ar_reversed",
+   "text": "شراء 100 ريال لدى مقهى تجريبي + بقشيش 15 ريال، الإجمالي 115 ريال، تم عكس عملية الشراء",
+   "amount": 115,
+   "held": true
+  },
+  {
+   "id": "vat_ar_completed",
+   "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال لدى متجر تجريبي",
+   "amount": 230,
+   "held": false
+  },
+  {
+   "id": "vat_ar_declined",
+   "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال لدى متجر تجريبي، العملية مرفوضة",
+   "amount": 230,
+   "held": true
+  },
+  {
+   "id": "vat_ar_pending",
+   "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال لدى متجر تجريبي، العملية قيد المعالجة",
+   "amount": 230,
+   "held": true
+  },
+  {
+   "id": "vat_ar_failed",
+   "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال لدى متجر تجريبي، فشلت العملية",
+   "amount": 230,
+   "held": true
+  },
+  {
+   "id": "vat_ar_reversed",
+   "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال لدى متجر تجريبي، تم عكس عملية الشراء",
+   "amount": 230,
+   "held": true
+  },
+  {
+   "id": "fee_ar_completed",
+   "text": "طلب 100 ريال + رسوم خدمة 10 ريال، الإجمالي 110 ريال لدى متجر تجريبي",
+   "amount": 110,
+   "held": false
+  },
+  {
+   "id": "fee_ar_declined",
+   "text": "طلب 100 ريال + رسوم خدمة 10 ريال، الإجمالي 110 ريال لدى متجر تجريبي، العملية مرفوضة",
+   "amount": 110,
+   "held": true
+  },
+  {
+   "id": "fee_ar_pending",
+   "text": "طلب 100 ريال + رسوم خدمة 10 ريال، الإجمالي 110 ريال لدى متجر تجريبي، العملية قيد المعالجة",
+   "amount": 110,
+   "held": true
+  },
+  {
+   "id": "fee_ar_failed",
+   "text": "طلب 100 ريال + رسوم خدمة 10 ريال، الإجمالي 110 ريال لدى متجر تجريبي، فشلت العملية",
+   "amount": 110,
+   "held": true
+  },
+  {
+   "id": "fee_ar_reversed",
+   "text": "طلب 100 ريال + رسوم خدمة 10 ريال، الإجمالي 110 ريال لدى متجر تجريبي، تم عكس عملية الشراء",
+   "amount": 110,
+   "held": true
+  }
+ ]
+}

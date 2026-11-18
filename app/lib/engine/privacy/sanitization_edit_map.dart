@@ -143,8 +143,12 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
   var current = rawSms;
 
   /// Apply one pass and fold its edits into `pos`.
-  void pass(RegExp re, String Function(Match) replace, String label) {
-    final matches = re.allMatches(current).toList();
+  void pass(RegExp re, String Function(Match) replace, String label,
+      [bool Function(Match)? applies]) {
+    final matches = [
+      for (final m in re.allMatches(current))
+        if (applies == null || applies(m)) m
+    ];
     if (matches.isEmpty) return;
     // Snapshot liveness so "destroyed by THIS pass" is unambiguous.
     final alive = [for (final p in pos) p != null];
@@ -202,26 +206,29 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
   pass(SmsSanitizer.referencePattern, (m) => '${m.group(1)!}[REF]', '[REF]');
   pass(SmsSanitizer.salutationPattern, (m) => '${m.group(1)!}[NAME]',
       '[NAME]');
+  pass(SmsSanitizer.personCuePattern, (m) => '${m.group(1)!}[NAME]', '[NAME]');
   if (SmsSanitizer.isCounterpartyContext(current)) {
     pass(SmsSanitizer.counterpartyPattern, (m) => '${m.group(1)!}[NAME]',
+        '[NAME]');
+  } else if (!SmsSanitizer.isPurchaseContext(current)) {
+    pass(SmsSanitizer.labelCuePattern, (m) => '${m.group(1)!}[NAME]', '[NAME]');
+    pass(SmsSanitizer.toHeadingPattern, (m) => '${m.group(1)!}[NAME]',
         '[NAME]');
   }
 
   final stripBeneficiary = detectedType == null ||
       detectedType == TransactionType.transfer ||
       detectedType == TransactionType.income;
-  if (stripBeneficiary) {
-    pass(SmsSanitizer.beneficiaryArPattern, (m) => '${m.group(1)!}: [REDACTED]',
-        '[REDACTED]');
-    pass(SmsSanitizer.beneficiaryEnPattern, (_) => 'To: [REDACTED]',
-        '[REDACTED]');
-  }
+  bool strips(Match m) =>
+      stripBeneficiary || SmsSanitizer.carriesAccountId(m.group(0)!);
+  pass(SmsSanitizer.beneficiaryArPattern, (m) => '${m.group(1)!}: [REDACTED]',
+      '[REDACTED]', strips);
+  pass(SmsSanitizer.beneficiaryEnPattern, (_) => 'To: [REDACTED]',
+      '[REDACTED]', strips);
   pass(SmsSanitizer.ownDestinationNumberPattern,
       (m) => '${m.group(1)!}[ACCOUNT]', '[ACCOUNT]');
-  if (stripBeneficiary) {
-    pass(SmsSanitizer.numberInBeneficiarySentencePattern, (_) => '[ACCOUNT]',
-        '[ACCOUNT]');
-  }
+  pass(SmsSanitizer.numberInBeneficiarySentencePattern, (_) => '[ACCOUNT]',
+      '[ACCOUNT]');
   pass(SmsSanitizer.greetingPattern, (_) => '[REDACTED]', '[REDACTED]');
 
   // `sanitize` finishes with .trim(); trimmed characters are dropped, and the

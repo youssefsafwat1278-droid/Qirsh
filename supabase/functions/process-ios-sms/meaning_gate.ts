@@ -34,19 +34,21 @@ const SENTENCE_CUT = /[\n!?؟;؛]|\.(?![0-9])/;
 /**
  * [meaning] (of [text]), or a review meaning when the text names several
  * movements. A tip/fee form (`tip_component`, `total_with_parts`) whose answered [amount] is the
- * total the message states (dev siblings, family e) records.
+ * total the message states (dev siblings, family e) records, unless it reads
+ * as not completed ([meaningRejectionOf]).
  */
 export function gatedMeaning(
   text: string,
   meaning: MessageMeaning = messageMeaning(text),
   amount?: number | null,
 ): MessageMeaning {
-  if ((meaning.reason === 'tip_component' || meaning.reason === 'total_with_parts') && typeof amount === 'number') {
-    const total = statedTotal(text);
-    if (total != null && Math.abs(total - amount) < 0.005) {
-      return { ...meaning, kind: 'completed_movement', disposition: dispositionOf('completed_movement'), reason: 'stated_total' };
-    }
-    return meaning;
+  // Follow-up 15 (VAL-1): a non-record meaning records only when the single
+  // rule says so — a tip/fee form at its stated total with no not-completed
+  // reading (the rule checks that first).
+  if (meaning.disposition !== 'record') {
+    return meaningRejectionOf(text, amount, meaning) == null
+      ? { ...meaning, kind: 'completed_movement', disposition: dispositionOf('completed_movement'), reason: 'stated_total' }
+      : meaning;
   }
   if (meaning.kind !== 'completed_movement' || meaning.footerCount > 0) return meaning;
   // Only sentences the parser itself reads as a movement count (a rule such

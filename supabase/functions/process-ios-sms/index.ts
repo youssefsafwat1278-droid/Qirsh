@@ -30,7 +30,7 @@ import { type FingerprintReservationStore, reserveCaptureFingerprint } from '../
 import { apiError, correlationId } from '../_shared/ai_endpoint.ts';
 import { isDeclinedText, messageMeaning, type ParseOutcome, type ParsedCapture, parseSms } from './parse.ts';
 import { dispositionOf, MAX_TEXT_LENGTH } from './message_meaning.ts';
-import { gatedMeaning } from './meaning_gate.ts';
+import { gatedMeaning, meaningRejectionOf } from './meaning_gate.ts';
 import { AI_PRIMARY_MODE } from '../_shared/ai_primary.ts';
 import { UNDERSTANDING_SYSTEM_VERSION } from '../_shared/ai_understanding.ts';
 import { reserveAiBudget } from '../_shared/ai_budget_gate.ts';
@@ -391,7 +391,9 @@ export async function handleProcessIosSms(
     ) {
       meaning = { ...meaning, kind: 'uncertain', disposition: dispositionOf('uncertain'), reason: 'over_length' };
     }
-    if (status === 'processed' && meaning.disposition !== 'record') {
+    // Follow-up 15 (VAL-1): the single rule decides (not-completed first);
+    // nothing is processed without passing it.
+    if (status === 'processed' && meaningRejectionOf(sanitizedText, parsed.amount ?? null, meaning) != null) {
       status = 'rejected';
       parsed.reviewReason = meaning.reason;
     }

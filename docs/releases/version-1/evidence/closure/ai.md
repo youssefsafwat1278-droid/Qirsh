@@ -840,3 +840,41 @@ The rule is in the parser's files, not my gate: `parser_engine.dart` `_cardRepay
 ## Follow-up 14: LEN-1 on the client
 - The one Dart path to `process-ios-sms` is `CaptureSyncService.retryPendingSend`, which every queued replay, paste/share drain and retry goes through. It now sends `textLength`: the queued `SharedCaptureStore.Payload.textLength` when present (parsed in `NativeCaptureBridge` as a non-negative int), otherwise `text.length` of the raw text. `CaptureBackendClient.processIosSms` omits the key when it is null, so build 147 and old payloads work as today. New tests cover the client body, the replay value both ways, and the bridge parsing; the four test fakes take the new optional parameter.
 - Runs: Deno `process-ios-sms` 460 passed, 0 failed; Flutter `test/features/capture` 1,594 passed; `flutter analyze`, whole app: no issues. The sanitizer test fix is kept as you resolved it.
+
+## Follow-up 15: VAL-1 and the PRIV-1 leftovers
+
+### VAL-1: a tip or total form released while not completed (S2)
+- **Cause:** `gatedMeaning` released `tip_component` / `total_with_parts` as `completed_movement` whenever the answered amount equalled the stated total. It never ran the not-completed check. The device's `meaningHoldReason` had the same gap.
+- **Fix:** one rule, `meaningRejectionOf`, now decides every release, with not-completed checked first.
+  - **Server gate:** `gatedMeaning` (`process-ios-sms/meaning_gate.ts`) records a non-record meaning only when `meaningRejectionOf(text, amount, meaning)` returns null. That is only a tip/fee form at its stated total with no not-completed reading.
+  - **`process-ios-sms/index.ts`:** the single place where a capture can become `processed` now calls `meaningRejectionOf(sanitizedText, parsed.amount, meaning)` directly. This covers the primary and legacy paths.
+  - **Other callers:** `parse-sms` already called the rule (follow-up 13). On the device, `meaningHoldReason`, both validators and the use case all call `AiCandidateValidator.meaningRejectionOf`.
+- **Shared fixture:** `_shared/fixtures/total_status_cases.json` has 30 synthetic rows: tip, VAT and service fee totals, in English and Arabic, crossed with completed, declined, pending, failed and reversed. The cases are checked on the server (`meaning_gate_test.ts`) and on the device (`movement_amounts_test.dart`, which runs the hold, the rule and the import validator).
+  - **Before the fix:** every not-completed row was released, on the server and on the device.
+  - **After the fix:** 24 rows are held with `transaction_not_completed` and the 6 completed rows still record at their total.
+- **Structural test:** `process-ios-sms/processed_gate_contract_test.ts` asserts three things:
+  - exactly one expression can set `status` to `'processed'`;
+  - the `meaningRejectionOf` gate runs after it and before the duplicate lookup, the stored state and the push;
+  - the stored state can say `processed` only through that status.
+- **Cue gap left to the parser:** «تم عكس العملية» after a VAT or fee total is not a cue in `isDeclinedText`, though it is after a tip. That is the parser's cue list, so the fixture uses «تم عكس عملية الشراء».
+
+### PRIV-1: the remaining name and account leaks (S2)
+All changes below are identical in `sms_redaction.ts` and `sms_sanitizer.dart` / `sanitization_edit_map.dart`.
+- **Person cues, any message:** `PERSON_CUE_PATTERN` masks the name after beneficiary, benef., payee, sender, remitter, recipient, payer, on behalf of, in favour of, اسم المستفيد/المرسل, المستفيد, مستفيد, المرسل, المحول, لصالح and باسم. It applies whether or not the text has a transfer word. The cue words are also name stopwords, so "to Payee Sara" gives `to Payee [NAME]`.
+- **Label cues, unless the text is a purchase, refund or bill:** `LABEL_CUE_PATTERN` covers a "From:" label and "paid to". `TO_HEADING_PATTERN` covers "To <Name>:" at the start of the text or of a sentence.
+- **"acc" label:** "acc" is now an account label and a stopword, so "acc no. 5512345" gives `acc no. [ACCOUNT]`.
+- **`payment` hint (device):** a beneficiary run after «إلى»/"To:" that carries an account or IBAN number (5 or more digits, or `[ACCOUNT]`/`[IBAN]`) is now stripped as for any other type. Any other number in the beneficiary sentence is masked whatever the type. A merchant run with no number is still kept.
+- **Labelled leak fixture:** 21 new rows, 93 in all.
+  - 17 leak rows, English and Arabic, two with `"type": "payment"`.
+  - 4 controls: a purchase "from card *4521", "Bill payment … to STC", "Paid … at STC Store", and the user's own "*1234".
+  - The Dart fixture test now passes the row's type hint. The fixture stays the single source for the Swift port.
+- **Over-masking:** none. Every row keeps its amounts, dates, tense and status words, and the own suffix.
+- **Before the fix:** each of the 17 leak shapes leaked, as measured on the server.
+
+### Runs (final tree)
+- **Deno, all:** 1,410 passed, 0 failed, 6 ignored.
+- **Flutter** `engine/privacy`, `engine/ai`, `domain/capture`, `features/capture` and the declined table: 3,661 passed, 0 failed.
+- **`flutter analyze`, whole app:** no issues.
+- **`run.sh 5dae2e2d`:** exit 0. 0 regressions, 38 to review against a budget of 38. The accepted list is unchanged (DEV072, K062, K126).
+- **`server_diff.sh`:** exit 0, 0 regressions. The accepted list is unchanged (DEV084, DEV085, DEV090).
+- **`server_diff.sh HEAD`:** exit 0, 0 regressions.

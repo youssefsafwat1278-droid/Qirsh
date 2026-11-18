@@ -266,3 +266,28 @@ Tests:
 - Queued records from build 147 have no `textLength`. They decode, and the replay can compute it from `text`.
 - An old server ignores the extra key.
 - Build 147 against the new server: no `textLength` is sent, and the server falls back to its own measure.
+
+## Follow-up (2026-11-18, second): PRIV-1 rules ported to the Swift sanitizer
+
+I ported the `ai` FU15 changes in `_shared/sms_redaction.ts` to `BackendCaptureClient.sanitize` in `app/ios/BankMessageShortcuts/BankMessageShortcuts.swift`:
+- "acc" is now an account label and a stopword, and is consumed by the beneficiary rule.
+- The person cues (beneficiary, payee, sender and the rest) are stopwords too.
+- `PERSON_CUE_PATTERN` applies in any message.
+- `LABEL_CUE_PATTERN` ("From:", "paid to") and `TO_HEADING_PATTERN` ("To <Name>:") apply only when the text is neither a transfer nor a purchase, refund or bill, the same branch as the server.
+
+The word lists were regenerated verbatim from the TS: 310 stopwords and 29 beneficiary object words.
+
+Results (`swiftc` harness and Deno server output from the working-tree TS):
+| Set | Swift before this port | Swift now |
+|---|---|---|
+| `sms_redaction_cases.json` (54) | 0 differ | 0 differ |
+| `sms_leak_labelled_cases.json` (93) | 13 differ, 12 with a surviving secret | **0 differ, 0 leaks** |
+| All case-table texts plus both fixtures (2,628) | 30 differ | **0 differ** |
+
+The `"type": "payment"` rows need no type on the Shortcut path, which always strips like the server.
+
+Runs:
+- `flutter build ios --config-only` (22 GB free).
+- XCTest on the iPhone 17 Pro simulator: **200 passed, 0 failed**. One launch denial (SBMainWorkspace) happened and xcodebuild recovered by itself.
+- Flutter source-contract tests that read the Swift files: 365 passed, plus 46 run alone.
+- Scratch DerivedData and `app/build/ios` were removed.

@@ -118,4 +118,33 @@ void main() {
       expect(meaningHoldReason(text, amount: 115), isNull);
     });
   });
+
+  // Follow-up 15 (VAL-1): a tip / VAT / service-fee total that reads as
+  // declined, pending, failed or reversed is never released at its stated
+  // total (hold, import validator, AI validator); a completed one is. Server
+  // twin: process-ios-sms/meaning_gate_test.ts on the same fixture.
+  final totals = ((jsonDecode(File(
+                  '../supabase/functions/_shared/fixtures/total_status_cases.json')
+              .readAsStringSync()) as Map)['cases'] as List)
+      .cast<Map<String, dynamic>>();
+  for (final c in totals) {
+    test('total forms: ${c['id']}', () {
+      final text = c['text'] as String;
+      final amount = c['amount'] as num;
+      final held = c['held'] as bool;
+      expect(AiCandidateValidator.meaningRejectionOf(text, amount: amount),
+          held ? 'transaction_not_completed' : null);
+      expect(meaningHoldReason(text, amount: amount) != null, held);
+      final v = validateCaptureCandidate(
+        candidate: CaptureCandidate(
+            amount: amount.toDouble(),
+            amountText: amount.toStringAsFixed(2),
+            currency: 'SAR',
+            direction: 'debit'),
+        text: text,
+        receivedAt: DateTime.utc(2026, 11, 17),
+      );
+      if (held) expect(v.reason, 'transaction_not_completed');
+    });
+  }
 }

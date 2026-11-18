@@ -1052,7 +1052,7 @@ struct BackendCaptureClient {
     // Labelled account numbers of 5-9 digits; a ≤4-digit suffix and an amount
     // (a currency or a decimal part after it) stay.
     try replace(
-      #"(\#(noLetterBefore)(?:account|acct|a\/c|ac|حساب|الحساب|لحساب|للحساب|بحساب|حسابك|لحسابك|حسابكم|حسابي)"# +
+      #"(\#(noLetterBefore)(?:account|acct|acc|a\/c|ac|حساب|الحساب|لحساب|للحساب|بحساب|حسابك|لحسابك|حسابكم|حسابي)"# +
         #"\#(notLetter)\.?(?:[ \t]+(?:no|number|num|رقم)\#(notLetter)\.?)?[ \t]*[:#]?[ \t]*)"# +
         #"[*xX•#]*\#(d){5,9}(?!\#(d)|[.,٫٬]\#(d)|[ \t]*(?:\#(currency))\#(notLetter)(?![ \t]*\#(d)))"#,
       "$1[ACCOUNT]")
@@ -1081,6 +1081,14 @@ struct BackendCaptureClient {
       #"((?:\#(noLetterBefore)(?:عزيزي|عزيزتي|السيدة|السيد|الأستاذة|الاستاذة|الأستاذ|الاستاذ)"# +
         #"|(?:^|(?<=[\n.!?؟؛;:،,]))[ \t]*(?:dear|hi|hello))\#(notLetter)\#(cueSep))(\#(name))"#,
       "$1[NAME]")
+    // PRIV-1: cues that only ever introduce a person (payee, beneficiary,
+    // sender …) apply in any message, transfer word or not.
+    try replace(
+      #"(\#(noLetterBefore)(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?"# +
+        #"|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of"# +
+        #"|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم)"# +
+        #"\.?\#(notLetter)\#(cueSep))(\#(name))"#,
+      "$1[NAME]")
     // Counterparty cues only when the text reads as a transfer/credit and NOT
     // as a purchase/refund/bill, so "Purchase from AMAZON" keeps its merchant.
     let transferContext = try matches(
@@ -1096,6 +1104,15 @@ struct BackendCaptureClient {
           #"remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|"# +
           #"in[ \t]+favou?r[ \t]+of|mrs|mr|ms|dr|من[ \t]+قبل|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|"# +
           #"مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي)\.?\#(notLetter)\#(cueSep))(\#(name))"#,
+        "$1[NAME]")
+    } else if !purchaseContext {
+      // PRIV-1: with no purchase, refund or bill word, a "From:" label, "paid
+      // to" and a "To <Name>:" heading name a person too.
+      try replace(
+        #"(\#(noLetterBefore)(?:from[ \t]*:|paid[ \t]+to\#(notLetter))[ \t]*)(\#(name))"#,
+        "$1[NAME]")
+      try replace(
+        #"((?:^|(?<=[\n.!?؟;؛]))[ \t]*to[ \t]+)(\#(name))(?=[ \t]*:)"#,
         "$1[NAME]")
     }
     // The beneficiary after «إلى»/«الى»/"To:": the name's letter tokens, the
@@ -1145,41 +1162,41 @@ struct BackendCaptureClient {
   // BENEFICIARY_OBJECT_WORDS, CURRENCY_AFTER, MONTH).
   private static let nameStopwords: [String] = [
     "your", "yours", "you", "our", "us", "the", "a", "an", "account", "accounts",
-    "acct", "ac", "card", "cards", "wallet", "mobile", "phone", "number", "no", "on",
-    "at", "in", "into", "via", "using", "with", "for", "of", "to", "from",
-    "by", "ref", "reference", "rrn", "amount", "amt", "is", "was", "has", "have",
-    "been", "and", "or", "date", "time", "balance", "bal", "avl", "available", "avail",
-    "customer", "customers", "client", "cardholder", "holder", "valued", "sir", "madam", "member", "there",
-    "team", "atm", "branch", "bank", "app", "online", "internet", "instapay", "ipn", "sarie",
-    "mada", "swift", "transfer", "transaction", "trx", "txn", "successful", "successfully", "credit", "debit",
-    "credited", "debited", "cash", "deposit", "salary", "sar", "egp", "aed", "usd", "eur",
-    "gbp", "kwd", "qar", "bhd", "omr", "jod", "le", "sr", "riyal", "riyals",
-    "pound", "pounds", "dirham", "dirhams", "dinar", "dinars", "dollar", "dollars", "transferred", "sent",
-    "received", "paid", "made", "requested", "deposited", "withdrew", "initiated", "will", "would", "name",
-    "حسابك", "حسابكم", "حساب", "الحساب", "حسابات", "لحسابك", "لحساب", "للحساب", "بطاقتك", "بطاقتكم",
-    "بطاقة", "البطاقة", "بطاقه", "رصيدك", "رصيد", "الرصيد", "خلال", "قبل", "في", "على",
-    "عن", "إلى", "الى", "الي", "من", "بمبلغ", "مبلغ", "المبلغ", "بقيمة", "قيمة",
-    "بتاريخ", "تاريخ", "يوم", "اليوم", "الساعة", "الساعه", "ساعة", "وقت", "رقم", "عبر",
-    "بواسطة", "محفظة", "محفظتك", "المحفظة", "ريال", "جنيه", "جم", "درهم", "دينار", "دولار",
-    "يورو", "العميل", "عميلنا", "عملائنا", "عزيزي", "تطبيق", "الصراف", "صراف", "جهاز", "مدى",
-    "سريع", "انستاباي", "حوالة", "حواله", "تحويل", "التحويل", "الحوالة", "واردة", "وارده", "صادرة",
-    "صادره", "البنك", "بنك", "فرع", "عند", "لدى", "و", "تم", "المتاح", "متاح",
-    "المرجع", "مرجع", "رسوم", "عمولة", "قام", "حول", "حوّل", "أرسل", "ارسل", "إرسال",
-    "ارسال", "بتحويل", "بإرسال", "استلم", "أودع", "اودع", "سحب", "دفع", "shall", "tomorrow",
-    "today", "scheduled", "executes", "executed", "execution", "pending", "declined", "rejected", "failed", "unsuccessful",
-    "completed", "approved", "processed", "awaiting", "expected", "upcoming", "reversed", "cancelled", "canceled", "not",
-    "please", "if", "once", "when", "every", "under", "due", "سينفذ", "ستنفذ", "سيتم",
-    "ستتم", "سوف", "غدا", "غداً", "مجدول", "مجدولة", "سيخصم", "سيُخصم", "سيضاف", "سيودع",
-    "جاري", "جارٍ", "قيد", "معلق", "معلقة", "مرفوضة", "مرفوض", "رفض", "فشلت", "فشل",
-    "لم", "تمت", "بنجاح", "يرجى", "الرجاء", "إذا", "اذا", "مستحق", "مستحقة", "savings",
-    "saving", "current", "checking", "chequing", "iban", "insufficient", "funds", "limit", "reason", "technical",
-    "error", "request", "lack", "الآيبان", "الايبان", "آيبان", "ايبان", "التوفير", "توفير", "الادخار",
-    "ادخار", "الجاري"
+    "acct", "acc", "ac", "card", "cards", "wallet", "mobile", "phone", "number", "no",
+    "on", "at", "in", "into", "via", "using", "with", "for", "of", "to",
+    "from", "by", "beneficiary", "benef", "payee", "sender", "remitter", "recipient", "payer", "ref",
+    "reference", "rrn", "amount", "amt", "is", "was", "has", "have", "been", "and",
+    "or", "date", "time", "balance", "bal", "avl", "available", "avail", "customer", "customers",
+    "client", "cardholder", "holder", "valued", "sir", "madam", "member", "there", "team", "atm",
+    "branch", "bank", "app", "online", "internet", "instapay", "ipn", "sarie", "mada", "swift",
+    "transfer", "transaction", "trx", "txn", "successful", "successfully", "credit", "debit", "credited", "debited",
+    "cash", "deposit", "salary", "sar", "egp", "aed", "usd", "eur", "gbp", "kwd",
+    "qar", "bhd", "omr", "jod", "le", "sr", "riyal", "riyals", "pound", "pounds",
+    "dirham", "dirhams", "dinar", "dinars", "dollar", "dollars", "transferred", "sent", "received", "paid",
+    "made", "requested", "deposited", "withdrew", "initiated", "will", "would", "name", "حسابك", "حسابكم",
+    "حساب", "الحساب", "حسابات", "لحسابك", "لحساب", "للحساب", "بطاقتك", "بطاقتكم", "بطاقة", "البطاقة",
+    "بطاقه", "رصيدك", "رصيد", "الرصيد", "خلال", "قبل", "في", "على", "عن", "إلى",
+    "الى", "الي", "من", "بمبلغ", "مبلغ", "المبلغ", "بقيمة", "قيمة", "بتاريخ", "تاريخ",
+    "يوم", "اليوم", "الساعة", "الساعه", "ساعة", "وقت", "رقم", "عبر", "بواسطة", "محفظة",
+    "محفظتك", "المحفظة", "ريال", "جنيه", "جم", "درهم", "دينار", "دولار", "يورو", "العميل",
+    "عميلنا", "عملائنا", "عزيزي", "تطبيق", "الصراف", "صراف", "جهاز", "مدى", "سريع", "انستاباي",
+    "حوالة", "حواله", "تحويل", "التحويل", "الحوالة", "واردة", "وارده", "صادرة", "صادره", "البنك",
+    "بنك", "فرع", "عند", "لدى", "و", "تم", "المتاح", "متاح", "المرجع", "مرجع",
+    "رسوم", "عمولة", "قام", "حول", "حوّل", "أرسل", "ارسل", "إرسال", "ارسال", "بتحويل",
+    "بإرسال", "استلم", "أودع", "اودع", "سحب", "دفع", "shall", "tomorrow", "today", "scheduled",
+    "executes", "executed", "execution", "pending", "declined", "rejected", "failed", "unsuccessful", "completed", "approved",
+    "processed", "awaiting", "expected", "upcoming", "reversed", "cancelled", "canceled", "not", "please", "if",
+    "once", "when", "every", "under", "due", "سينفذ", "ستنفذ", "سيتم", "ستتم", "سوف",
+    "غدا", "غداً", "مجدول", "مجدولة", "سيخصم", "سيُخصم", "سيضاف", "سيودع", "جاري", "جارٍ",
+    "قيد", "معلق", "معلقة", "مرفوضة", "مرفوض", "رفض", "فشلت", "فشل", "لم", "تمت",
+    "بنجاح", "يرجى", "الرجاء", "إذا", "اذا", "مستحق", "مستحقة", "savings", "saving", "current",
+    "checking", "chequing", "iban", "insufficient", "funds", "limit", "reason", "technical", "error", "request",
+    "lack", "الآيبان", "الايبان", "آيبان", "ايبان", "التوفير", "توفير", "الادخار", "ادخار", "الجاري"
   ]
   private static let beneficiaryObjectWords: Set<String> = [
-    "you", "us", "the", "a", "an", "account", "accounts", "acct", "ac", "card",
-    "cards", "wallet", "mobile", "phone", "number", "no", "name", "حساب", "الحساب", "حسابات",
-    "لحساب", "للحساب", "بطاقة", "البطاقة", "بطاقه", "محفظة", "المحفظة", "رقم"
+    "you", "us", "the", "a", "an", "account", "accounts", "acct", "acc", "ac",
+    "card", "cards", "wallet", "mobile", "phone", "number", "no", "name", "حساب", "الحساب",
+    "حسابات", "لحساب", "للحساب", "بطاقة", "البطاقة", "بطاقه", "محفظة", "المحفظة", "رقم"
   ]
   private static let currencyAfter: [String] = [
     "sar", "egp", "aed", "usd", "eur", "gbp", "kwd", "qar", "bhd", "omr",

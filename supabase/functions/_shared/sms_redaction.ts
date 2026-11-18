@@ -87,7 +87,7 @@ const SPACED_IBAN_PATTERN = new RegExp(
 /// ***1234») stays, and a figure followed by a currency or a decimal part is
 /// an amount and stays (PRIV-0).
 const LABELLED_ACCOUNT_PATTERN = new RegExp(
-  `((?<![\\p{L}\\p{M}])(?:account|acct|a\\/c|ac|حساب|الحساب|لحساب|للحساب|بحساب|حسابك|لحسابك|حسابكم|حسابي)` +
+  `((?<![\\p{L}\\p{M}])(?:account|acct|acc|a\\/c|ac|حساب|الحساب|لحساب|للحساب|بحساب|حسابك|لحسابك|حسابكم|حسابي)` +
     `(?![\\p{L}\\p{M}])\\.?(?:[ \\t]+(?:no|number|num|رقم)(?![\\p{L}\\p{M}])\\.?)?[ \\t]*[:#]?[ \\t]*)` +
     `[*xX•#]*${D}{5,9}(?!${D}|[.,\u066B\u066C]${D}|[ \\t]*(?:sar|egp|aed|usd|eur|gbp|kwd|qar|bhd|omr|jod|le|sr|riyals?|pounds?|dirhams?|dinars?|dollars?|ريال|جنيه|جم|درهم|دينار|دولار|يورو|ر\\.س)(?![\\p{L}\\p{M}])(?![ \\t]*${D}))`,
   'giu',
@@ -165,6 +165,7 @@ const NAME_STOPWORDS = [
   'account',
   'accounts',
   'acct',
+  'acc',
   'ac',
   'card',
   'cards',
@@ -185,6 +186,14 @@ const NAME_STOPWORDS = [
   'to',
   'from',
   'by',
+  // PRIV-1: a person cue is never (the start of) the name it introduces.
+  'beneficiary',
+  'benef',
+  'payee',
+  'sender',
+  'remitter',
+  'recipient',
+  'payer',
   'ref',
   'reference',
   'rrn',
@@ -477,6 +486,7 @@ const BENEFICIARY_OBJECT_WORDS = new Set([
   'account',
   'accounts',
   'acct',
+  'acc',
   'ac',
   'card',
   'cards',
@@ -596,6 +606,30 @@ const COUNTERPARTY_PATTERN = new RegExp(
   'giu',
 );
 
+/// PRIV-1: cues that only ever introduce a person (a payee, a beneficiary, a
+/// sender), so they apply in any message, transfer word or not.
+const PERSON_CUE_PATTERN = new RegExp(
+  `((?<![\\p{L}\\p{M}])(?:beneficiary(?:[ \\t]+name)?|benef|payee(?:[ \\t]+name)?|sender(?:[ \\t]+name)?` +
+    `|remitter(?:[ \\t]+name)?|recipient(?:[ \\t]+name)?|payer(?:[ \\t]+name)?|on[ \\t]+behalf[ \\t]+of|in[ \\t]+favou?r[ \\t]+of` +
+    `|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم)` +
+    `\\.?(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
+  'giu',
+);
+
+/// PRIV-1: a "From:" field label and "paid to" — a person unless the message
+/// reads as a purchase, refund or bill (then a merchant).
+const LABEL_CUE_PATTERN = new RegExp(
+  `((?<![\\p{L}\\p{M}])(?:from[ \\t]*:|paid[ \\t]+to(?![\\p{L}\\p{M}]))[ \\t]*)(${NAME})`,
+  'giu',
+);
+
+/// PRIV-1: "To Sara Ahmed: SAR 50.00 …" — a name between "To" at the start of
+/// the text or a sentence and a colon.
+const TO_HEADING_PATTERN = new RegExp(
+  `((?:^|(?<=[\\n.!?؟;؛]))[ \\t]*to[ \\t]+)(${NAME})(?=[ \\t]*:)`,
+  'giu',
+);
+
 const TRANSFER_CONTEXT =
   /transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|\bsent\b|standing\s+order|حوال|تحويل|حول|وارد|استلام|استلمت|إيداع|ايداع|أودع|اودع|مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
 const PURCHASE_CONTEXT =
@@ -612,8 +646,15 @@ export function isCounterpartyContext(text: string): boolean {
 /// Masks personal names with `[NAME]`, keeping the cue. Salutations always;
 /// counterparties only in a transfer/credit context.
 export function redactPersonNames(text: string): string {
-  const greeted = text.replace(SALUTATION_PATTERN, '$1[NAME]');
-  return isCounterpartyContext(greeted) ? greeted.replace(COUNTERPARTY_PATTERN, '$1[NAME]') : greeted;
+  const greeted = text.replace(SALUTATION_PATTERN, '$1[NAME]')
+    // PRIV-1: a person cue names a person in any message.
+    .replace(PERSON_CUE_PATTERN, '$1[NAME]');
+  if (isCounterpartyContext(greeted)) return greeted.replace(COUNTERPARTY_PATTERN, '$1[NAME]');
+  // PRIV-1: with no purchase, refund or bill word, a "From:" label, "paid
+  // to" and a "To <Name>:" heading name a person too.
+  return PURCHASE_CONTEXT.test(greeted)
+    ? greeted
+    : greeted.replace(LABEL_CUE_PATTERN, '$1[NAME]').replace(TO_HEADING_PATTERN, '$1[NAME]');
 }
 
 /// Third-party names: personal names (see [redactPersonNames]), the transfer
