@@ -105,9 +105,20 @@ function sanitize(text: string): string {
 }
 
 // deno-lint-ignore no-explicit-any
-function stored(outcome: any, aiPrimary: boolean) {
+function stored(outcome: any, aiPrimary: boolean, sanitized: string) {
   const parsed = { ...(outcome.parsed ?? {}) };
-  const status = outcome.accepted && parsed.amount && parsed.currency ? 'processed' : 'rejected';
+  let status = outcome.accepted && parsed.amount && parsed.currency ? 'processed' : 'rejected';
+  // index.ts at 7577f347 and later (lines 377-381): a message whose meaning is
+  // not a recordable movement is never stored as processed. Applied only when
+  // the checkout's parse.ts exports messageMeaning, i.e. exactly where the
+  // checkout's own index.ts has this step; older commits are unaffected.
+  if (status === 'processed' && typeof parse.messageMeaning === 'function') {
+    const meaning = outcome.meaning ?? parse.messageMeaning(sanitized);
+    if (meaning.disposition !== 'record') {
+      status = 'rejected';
+      parsed.reviewReason = meaning.reason;
+    }
+  }
   if (status !== 'rejected') parsed.duplicateStatus = 'normal';
   const transient = outcome.aiTransientFailure === true &&
     (!aiPrimary || outcome.aiProviderUnavailable === true);
@@ -133,7 +144,7 @@ async function runMode(m: Msg, name: string) {
       tzOffsetMinutes: m.tz_offset, locale: 'en', allowAi, aiPrimary,
       beforeAi: () => Promise.resolve(true),
     });
-    return { ...stored(outcome, aiPrimary), ms: Math.round(performance.now() - t0) };
+    return { ...stored(outcome, aiPrimary, text), ms: Math.round(performance.now() - t0) };
   } catch (e) {
     return { status: 'error', state: 'error', parsed: {}, error: String(e).slice(0, 200) };
   }
