@@ -1,0 +1,282 @@
+[
+{
+"id": "NC_V00",
+"text": "Purchase of SAR 100.00 at SHOPX was not successful, merchant declined",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V01",
+"text": "Your payment of SAR 100.00 to STC was returned",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V02",
+"text": "Payment of SAR 100.00 to STC unsuccessful - please try again",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V03",
+"text": "Transaction of SAR 100.00 at SHOPX could not be authorised",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V04",
+"text": "Your transfer of SAR 300.00 to Ali has been rejected by the beneficiary bank",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V05",
+"text": "Purchase SAR 100.00 at SHOPX not posted",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V06",
+"text": "لم تنجح عملية الشراء بمبلغ 100 ريال لدى SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V07",
+"text": "تعذرت عملية الشراء بمبلغ 100 ريال لدى SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V08",
+"text": "Payment SAR 100.00 to STC: Failed",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V09",
+"text": "Your purchase of SAR 100.00 at SHOPX was reversed by the merchant",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V10",
+"text": "Transfer SAR 300.00 to Ali pending approval",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "NC_V11",
+"text": "عملية تحويل بمبلغ 300 ريال إلى علي بانتظار الموافقة",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "CU_W00",
+"text": "Bounced cheque fee SAR 100.00 debited from account *5678",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "CU_W01",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Your dispute for an earlier transaction is under review.",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "CU_W02",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Refused transactions are not charged.",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "CU_W03",
+"text": "تم خصم 100 ريال لدى SHOPX. تم إلغاء رسوم العملية",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "CU_W04",
+"text": "Refund of SAR 100.00 credited to card *1234. Your earlier payment did not go through.",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "CU_W05",
+"text": "Purchase SAR 100.00 at Under Review Cafe card *1234",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "CU_W06",
+"text": "Payment of SAR 100.00 to STC completed. Previous attempt did not go through.",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "CU_W07",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Disputes are under review within 5 days",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "R00",
+"text": "Payment of SAR 100.00 to STC was returned",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "R01",
+"text": "Transfer of SAR 500.00 to Ali was returned to your account",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "R02",
+"text": "Purchase of SAR 100.00 at SHOPX could not be authorised",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "R03",
+"text": "Your payment of SAR 300.00 was not posted",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "R04",
+"text": "تعذرت عملية الشراء بمبلغ 100 ريال لدى SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "R05",
+"text": "تعذر تنفيذ التحويل بمبلغ 500 ريال",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "R06",
+"text": "تحويل 500 ريال بانتظار الموافقة",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "R07",
+"text": "عملية شراء 100 ريال بانتظار الموافقه",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "R08",
+"text": "Purchase SAR 100 at SHOPX could not be authorized",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "R09",
+"text": "Payment SAR 100 to STC has been returned",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "R10",
+"text": "Refund of SAR 100.00 credited to card *1234 for the item that was returned",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "R11",
+"text": "Purchase of SAR 100.00 at SHOPX approved. An earlier attempt could not be authorised.",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "R12",
+"text": "Salary SAR 12,000.00 credited to account *5678. Bonus not posted yet.",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "R13",
+"text": "تم تحويل 500 ريال إلى علي. طلب البطاقة الجديدة بانتظار الموافقة",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "R14",
+"text": "Cheque SAR 500.00 was returned unpaid. Returned cheque fee SAR 50.00 debited",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "R15",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. If the transaction was returned contact us",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "R16",
+"text": "Purchase of SAR 250.00 at Returned Goods Outlet card *1234",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "R17",
+"text": "شراء 100 ريال لدى SHOPX. إذا تعذرت العملية اتصل بنا",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "R18",
+"text": "Payment of SAR 100.00 to STC posted to account *5678",
+"truth": {
+"kind": "k"
+}
+},
+{
+"id": "R19",
+"text": "Refund SAR 60.00 credited: goods were returned to merchant",
+"truth": {
+"kind": "k"
+}
+}
+]

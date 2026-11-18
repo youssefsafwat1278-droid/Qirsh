@@ -45,13 +45,10 @@ class CurrencyChoiceSheet extends StatelessWidget {
     final l = context.l10n;
     final c = context.colors;
     final own = country.defaultCurrency;
-    return SizedBox(
-      key: const ValueKey('currency-choice-sheet'),
-      height: MediaQuery.sizeOf(context).height * .85,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
+    // SP-09: at large text the title and explanation scroll with the list
+    // instead of filling the fixed-height sheet (it overflowed at 2x+).
+    final largeText = MediaQuery.textScalerOf(context).scale(16) > 20;
+    final header = Padding(
             padding: const EdgeInsets.fromLTRB(AppSpacing.gutter, AppSpacing.s2,
                 AppSpacing.gutter, AppSpacing.s2),
             child: Column(
@@ -71,13 +68,21 @@ class CurrencyChoiceSheet extends StatelessWidget {
                         .copyWith(height: 1.5)),
               ],
             ),
-          ),
+          );
+    return SizedBox(
+      key: const ValueKey('currency-choice-sheet'),
+      height: MediaQuery.sizeOf(context).height * .85,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!largeText) header,
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.only(bottom: AppSpacing.s6),
-              itemCount: storableCurrencies.length,
-              itemBuilder: (context, index) {
-                final code = storableCurrencies[index];
+              itemCount: storableCurrencies.length + (largeText ? 1 : 0),
+              itemBuilder: (context, i) {
+                if (largeText && i == 0) return header;
+                final code = storableCurrencies[largeText ? i - 1 : i];
                 return ListTile(
                   key: ValueKey('currency-$code'),
                   title: Text(Currency.codeWithLabel(context, code),
@@ -111,15 +116,10 @@ class _CountryPickerSheetState extends State<CountryPickerSheet> {
     final c = context.colors;
     final language = Localizations.localeOf(context).languageCode;
     final results = searchCountries(_query, language);
-    return SizedBox(
-      height: MediaQuery.sizeOf(context).height * .85,
-      child: Padding(
-        padding:
-            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
+    // SP-09: at large text the title, note and search field scroll with the
+    // list instead of filling the fixed-height sheet (it overflowed at 2x+).
+    final largeText = MediaQuery.textScalerOf(context).scale(16) > 20;
+    final header = Padding(
               padding: const EdgeInsets.fromLTRB(
                   AppSpacing.gutter, AppSpacing.s2, AppSpacing.gutter, 0),
               child: Column(
@@ -139,6 +139,7 @@ class _CountryPickerSheetState extends State<CountryPickerSheet> {
                     textInputAction: TextInputAction.search,
                     decoration: InputDecoration(
                       hintText: l.countryPickerSearchHint,
+                      hintMaxLines: largeText ? 4 : null,
                       prefixIcon: const Icon(Icons.search_rounded),
                     ),
                     onChanged: (value) => setState(() => _query = value),
@@ -146,16 +147,35 @@ class _CountryPickerSheetState extends State<CountryPickerSheet> {
                   const SizedBox(height: AppSpacing.s2),
                 ],
               ),
-            ),
+            );
+    return SizedBox(
+      height: MediaQuery.sizeOf(context).height * .85,
+      child: Padding(
+        padding:
+            EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (!largeText) header,
             Expanded(
-              child: results.isEmpty
+              child: results.isEmpty && !largeText
                   ? Center(
                       child: Text(l.countryPickerNoResults,
                           style: AppTypography.body(c.textSecondary)))
                   : ListView.builder(
                       padding: const EdgeInsets.only(bottom: AppSpacing.s6),
-                      itemCount: results.length,
-                      itemBuilder: (context, index) {
+                      itemCount: (largeText ? 1 : 0) +
+                          (results.isEmpty ? 1 : results.length),
+                      itemBuilder: (context, i) {
+                        if (largeText && i == 0) return header;
+                        final index = largeText ? i - 1 : i;
+                        if (results.isEmpty) {
+                          return Padding(
+                              padding: const EdgeInsets.all(AppSpacing.gutter),
+                              child: Text(l.countryPickerNoResults,
+                                  textAlign: TextAlign.center,
+                                  style: AppTypography.body(c.textSecondary)));
+                        }
                         final country = results[index];
                         final selected = country.code ==
                             widget.current?.trim().toUpperCase();

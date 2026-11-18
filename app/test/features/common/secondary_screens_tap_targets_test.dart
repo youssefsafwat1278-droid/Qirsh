@@ -10,7 +10,9 @@ import 'primary_screen_harness.dart';
 // (page and sheet), add / edit transaction, paste, Accounts and the sign-out
 // sheet.
 void main() {
-  final secondary = largeTextScreens.skip(primaryScreens.length);
+  final secondary = largeTextScreens
+      .skip(primaryScreens.length)
+      .where((s) => !onboardingAndRecordsScreens.contains(s));
   for (final language in ['en', 'ar']) {
     for (final size in const [Size(390, 844), Size(320, 568)]) {
       for (final screen in secondary) {

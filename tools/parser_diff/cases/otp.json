@@ -1,0 +1,275 @@
+[
+{
+"id": "O00",
+"text": "482913 is your code for the purchase of SAR 250.00 at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O01",
+"text": "Your code is 482913 for purchase SAR 250.00 at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O02",
+"text": "Use code 482913 for purchase of SAR 250.00 at SHOPX. Valid 5 minutes",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O03",
+"text": "Enter code 482913 at checkout to pay SAR 250.00 to SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O04",
+"text": "Code 482913: confirm payment of SAR 250.00 to SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O05",
+"text": "482913 is the code to approve SAR 250.00 at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O06",
+"text": "SHOPX: SAR 250.00 purchase code 482913. Valid 5 minutes",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O07",
+"text": "Use code 482913 to complete your purchase of SAR 250.00 at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O08",
+"text": "482913 is your OTP for purchase of SAR 250.00 at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O09",
+"text": "OTP 482913 for SAR 250.00 at SHOPX. Do not share",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O10",
+"text": "Your one time password for SAR 250.00 at SHOPX: 482913",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O11",
+"text": "482913 is your authentication code for SAR 250.00 at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O12",
+"text": "482913 is your secure code for online payment SAR 250.00",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O13",
+"text": "Enter the code 482913 to authorise payment SAR 250.00 at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O14",
+"text": "Use 482913 as your code to pay SAR 250.00 at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O15",
+"text": "رمز التحقق 482913 لعملية شراء بمبلغ 250 ريال لدى SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O16",
+"text": "الرمز 482913 لإتمام عملية شراء بمبلغ 250 ريال لدى SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O17",
+"text": "رمزك 482913 لعملية شراء 250 ريال لدى SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O18",
+"text": "كود 482913 لتأكيد دفع 250 ريال",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "O19",
+"text": "482913 هو رمز عملية الشراء بمبلغ 250 ريال",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Z083",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Ref 483920",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z084",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Auth code 123456",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z085",
+"text": "Purchase of SAR 100.00 at SHOPX. Approval code 482913",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z086",
+"text": "POS purchase SAR 100.00 SHOPX card *1234 approval code: 551204",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z087",
+"text": "Purchase SAR 100.00 at SHOPX. Authorization code 771234. Never share your OTP",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z088",
+"text": "Payment of SAR 230.00 to STC. Reference code 908172",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z089",
+"text": "Purchase of SAR 100.00 at SHOPX. Use code 482913 for your next order discount",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z090",
+"text": "Purchase of SAR 100.00 at SHOPX. Transaction code 4821",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z091",
+"text": "Purchase of SAR 100.00 at SHOPX. Auth: 482913",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z092",
+"text": "Purchase of SAR 100.00 at SHOPX. Confirmation number 482913",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z093",
+"text": "Purchase of SAR 100.00 at SHOPX. Order 482913 is your code for pickup",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z094",
+"text": "Purchase of SAR 100.00 at SHOPX. 482913 is the auth code",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z095",
+"text": "عملية شراء بمبلغ 100 ريال لدى SHOPX رقم المرجع 483920",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z096",
+"text": "عملية شراء بمبلغ 100 ريال لدى SHOPX رمز الموافقة 123456",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z097",
+"text": "Bill payment SAR 230.00 to STC. Code 48213 is your receipt number",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z098",
+"text": "Purchase of SAR 100.00 at SHOPX. Enter code 482913 at the counter to collect your order",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z099",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Ref: 483920. Verification code not required.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "C296",
+"text": "Use 482913 as OTP to complete SAR 100.00 purchase at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "C302",
+"text": "Enter code 482913 to approve the purchase of SAR 100.00 at SHOPX. Do not share this OTP.",
+"truth": {
+"kind": "n"
+}
+}
+]

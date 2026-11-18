@@ -1,0 +1,332 @@
+[
+{
+"id": "G003a",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G003b",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G004a",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G004b",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nAvailable card limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G005a",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G005b",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G006a",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G006b",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G007a",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G007b",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nAvailable card limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G008a",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G008b",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G009a",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G009b",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nAvailable card limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G010a",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G010b",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nAvailable card limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G011a",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "الراجحي"
+},
+{
+"id": "G011b",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "الراجحي"
+},
+{
+"id": "G012a",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "riyad"
+},
+{
+"id": "G012b",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "riyad"
+},
+{
+"id": "G013a",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "stcbank"
+},
+{
+"id": "G013b",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nAvailable card limit: SAR 9,000.00",
+"sender": "stcbank"
+},
+{
+"id": "G014a",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "anb"
+},
+{
+"id": "G014b",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "anb"
+},
+{
+"id": "G015a",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "anb"
+},
+{
+"id": "G015b",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "anb"
+},
+{
+"id": "G016a",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BSF"
+},
+{
+"id": "G016b",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "BSF"
+},
+{
+"id": "G017a",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G017b",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G018a",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G018b",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G019a",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G019b",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G020a",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G020b",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G021a",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G021b",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G022a",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "البلاد"
+},
+{
+"id": "G022b",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "البلاد"
+},
+{
+"id": "G023a",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023b",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G024a",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "بنك دبي"
+},
+{
+"id": "G024b",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "بنك دبي"
+},
+{
+"id": "G025a",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "SNB"
+},
+{
+"id": "G025b",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "SNB"
+},
+{
+"id": "G026a",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "SNB"
+},
+{
+"id": "G026b",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "SNB"
+},
+{
+"id": "G028a",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "D360"
+},
+{
+"id": "G028b",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nAvailable card limit: SAR 9,000.00",
+"sender": "D360"
+},
+{
+"id": "G033a",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G033b",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G034a",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G034b",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nAvailable card limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G035a",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G035b",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G036a",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G036b",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G037a",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G037b",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G038a",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G038b",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G039a",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G039b",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G040a",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G040b",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+}
+]

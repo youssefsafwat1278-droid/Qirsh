@@ -17,6 +17,7 @@ import '../common/app_card.dart';
 import '../common/motion.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/large_text.dart';
 import '../../core/theme/widgets/mali_glass.dart';
 import '../../core/theme/widgets/navy_sheet_theme.dart';
 import '../../core/utils/currency.dart';
@@ -349,10 +350,17 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: visible.length,
+                          // SP-10: fewer, taller tiles at large text and on
+                          // an SE-width phone, so category names wrap whole
+                          // instead of being cut.
                           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 4,
+                            crossAxisCount: isLargeText(context)
+                                ? 2
+                                : MediaQuery.sizeOf(context).width < 360 ? 3 : 4,
                             crossAxisSpacing: 8, mainAxisSpacing: 8,
-                            mainAxisExtent: 100 * MediaQuery.textScalerOf(context).scale(1)),
+                            mainAxisExtent: isLargeText(context)
+                                ? 40 + 6 + 20 + MediaQuery.textScalerOf(context).scale(12) * 1.25 * 4
+                                : 100 * MediaQuery.textScalerOf(context).scale(1)),
                           itemBuilder: (context, index) {
                             final choice = visible[index];
                             final selected = _categoryId == choice.$1;
@@ -390,7 +398,7 @@ class _BudgetFormContentState extends ConsumerState<_BudgetFormContent> {
                                             child: avatar)
                                         : avatar,
                                     const SizedBox(height: 6),
-                                    Text(choice.$2, textAlign: TextAlign.center, maxLines: 2,
+                                    Text(choice.$2, textAlign: TextAlign.center, maxLines: linesUnlessLargeText(context, 2),
                                       overflow: TextOverflow.ellipsis,
                                       style: AppTypography.caption(selected ? c.actionText : c.textSecondary)
                                           .copyWith(fontWeight: selected ? FontWeight.w600 : null, height: 1.25)),

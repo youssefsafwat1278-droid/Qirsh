@@ -1,0 +1,243 @@
+[
+{
+"id": "SM01a",
+"text": "Purchase of SAR 120.00 at Jarir with card *4521. Transaction declined, please use another card.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "SM01b",
+"text": "Purchase of AED 45.75 at Carrefour with card *4521. Declined: exceeds your credit limit.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "SM01c",
+"text": "Purchase of KWD 120.00 at Talabat with card *4521. Status: Declined (card limit).",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "SM01d",
+"text": "Purchase of AED 45.75 at Carrefour with card *4521. Transaction pending, previous transaction still being processed.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "SM01e",
+"text": "POS SAR 45.00 at Kudu card *4521. Insufficient funds, try another card.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "SM01f",
+"text": "Purchase of SAR 250.00 at Extra on card *4521 was declined. Please try another card.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "SM01g",
+"text": "Online purchase AED 340.00 at Amazon card *4521. Not completed, please click here to verify.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "SM01h",
+"text": "شراء 450 ريال لدى اكسترا بطاقة 4521. مرفوضة - تجاوز حد البطاقة.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "SM01i",
+"text": "POS\nCard: *4521\nAmount: SAR 89.00\nMerchant: Noon\nDeclined: exceeds your credit limit.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "SM02a",
+"text": "SAR 50.00 deducted from your card *4521, Jarir, 17/11/2026",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "SM02b",
+"text": "Card *4521 charged SAR 35.00 at Kudu on 17/11/2026, 21:40",
+"truth": {
+"kind": "d",
+"amt": 35,
+"cur": "SAR"
+}
+},
+{
+"id": "SM02c",
+"text": "Dear customer, SAR 60.00 has been deducted from account 4521, balance SAR 940.00",
+"truth": {
+"kind": "d",
+"amt": 60,
+"cur": "SAR"
+}
+},
+{
+"id": "SM02d",
+"text": "تم خصم 50.00 ريال من بطاقتك 4521, لدى جرير",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "SM03a",
+"text": "Purchase SAR 450.00 at Extra card *4521, 45 points credited to your account",
+"truth": {
+"kind": "d",
+"amt": 450,
+"cur": "SAR"
+}
+},
+{
+"id": "SM03b",
+"text": "Purchase SAR 450.00 at Extra card *4521, points credited to your account",
+"truth": {
+"kind": "d",
+"amt": 450,
+"cur": "SAR"
+}
+},
+{
+"id": "SM03c",
+"text": "POS SAR 120.00 at Jarir card *4521 - 12 miles credited to your account",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "SM03d",
+"text": "Purchase SAR 89.00 at Noon card *4521, cashback points credited to your account",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "SM03e",
+"text": "شراء 300 ريال لدى جرير بطاقة 4521 وتمت إضافة 30 نقطة إلى حسابك",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "SM04a",
+"text": "Purchase SAR 230.00 at Jarir with card *4521, eligible for installments",
+"truth": {
+"kind": "d",
+"amt": 230,
+"cur": "SAR"
+}
+},
+{
+"id": "SM04b",
+"text": "Please note SAR 500.00 has been debited from your account *4521 for your loan instalment due on 1 Nov",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "SM04c",
+"text": "يرجى العلم بأنه تم خصم 500 ريال لقسط مستحق",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "SM04d",
+"text": "Purchase SAR 120.00 at Jarir card *4521, offer valid till 30 Nov",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "SM05a",
+"text": "Fee SAR 5.00 debited from account *4521. Total bal 12,345.00",
+"truth": {
+"kind": "d",
+"amt": 5,
+"cur": "SAR"
+}
+},
+{
+"id": "SM05b",
+"text": "POS SAR 230.00 at Extra incl. VAT card *4521. Total due 4,500.00 by 25 Nov",
+"truth": {
+"kind": "d",
+"amt": 230,
+"cur": "SAR"
+}
+},
+{
+"id": "SM05c",
+"text": "تحويل 1,000 ريال إلى علي، رسوم 5 ريال. الرصيد الإجمالي 20,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "SM06a",
+"text": "Purchase SAR 80.00 at Danube card *4521. Cashback SAR 4.00 credited",
+"truth": {
+"kind": "d",
+"amt": 80,
+"cur": "SAR"
+}
+},
+{
+"id": "SM06b",
+"text": "Purchase SAR 120.00 at Jarir card *4521. Previous purchase SAR 80.00 at Panda",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "SM07a",
+"text": "SAR 1,000.00 sent to Ali completed. Previous transfer declined.",
+"truth": {
+"kind": "d",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "SM07b",
+"text": "Transaction unauthorised: SAR 100.00 at CAFE ONE",
+"truth": {
+"kind": "n"
+}
+}
+]

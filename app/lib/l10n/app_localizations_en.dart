@@ -5909,7 +5909,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get rpConfirmBody =>
-      'The restore merges this backup into the data on this device. Records missing here are brought back. Anything you added, changed or deleted after the backup was made stays as it is now; when a record exists in both, the more recently edited copy is kept. On a device with no records yet, the whole backup is restored, settings included. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?';
+      'The restore merges this backup into the data on this device. Records missing here are brought back. Anything you added, changed or deleted after the backup was made stays as it is now; when a record exists in both, the more recently edited copy is kept. Saved category rules for merchants stay as they are on this device; rules that are only in the backup are not added. On a device with no records yet (no accounts, transactions, plans, rules or custom categories), the whole backup is restored, settings and rules included. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?';
 
   @override
   String get rpCancel => 'Cancel';

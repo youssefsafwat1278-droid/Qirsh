@@ -882,5 +882,73 @@
       "accepted": false,
       "reason": "direction_contradiction"
     }
+  },
+  {
+    "name": "SM-05: 'Total bal' is a balance, not a charged total (fee accepted)",
+    "sanitized_text": "Fee SAR 5.00 debited from account *4521. Total bal 12,345.00",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 5,
+      "amount_text": "5.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR"
+    }
+  },
+  {
+    "name": "SM-05: 'Total due' is not a charged total (VAT-inclusive purchase accepted)",
+    "sanitized_text": "POS SAR 230.00 at Extra incl. VAT card *4521. Total due 4,500.00 by 25 Nov",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 230,
+      "amount_text": "230.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR"
+    }
+  },
+  {
+    "name": "SM-05: 'Total balance SAR' is not a charged total",
+    "sanitized_text": "Purchase SAR 230.00 at Extra incl. VAT. Total balance SAR 4,500.00",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 230,
+      "amount_text": "230.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR"
+    }
+  },
+  {
+    "name": "SM-05: Arabic 'الرصيد الإجمالي' is a balance, not a charged total",
+    "sanitized_text": "تحويل 1,000 ريال إلى علي، رسوم 5 ريال. الرصيد الإجمالي 20,000 ريال",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 1000,
+      "amount_text": "1,000",
+      "currency": "SAR",
+      "type": "transfer",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR"
+    }
   }
 ]

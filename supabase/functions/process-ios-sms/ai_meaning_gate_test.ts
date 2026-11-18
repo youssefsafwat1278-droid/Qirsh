@@ -1,6 +1,7 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { handleProcessIosSms } from './index.ts';
 import { fakeCapture } from './capture_rpc_fake.ts';
+import { messageMeaning } from './parse.ts';
 
 // Closure round, follow-up 6 (4): the parser's message meaning overrules a
 // model answer. A clear notice, or a review kind (ATM cash deposit, several
@@ -46,12 +47,35 @@ const answer = (amount: number, type: string, direction: string) => ({
 
 const held: Array<[string, string, ReturnType<typeof answer>]> = [
   ['Cash deposit SAR 1,500.00 to account *5678 via ATM', 'cash_deposit', answer(1500, 'income', 'credit')],
-  ['Purchase SAR 120.00 at SHOP. Cashback SAR 12.00 credited to your card', 'multiple_amounts',
+  ['Purchase SAR 120.00 at SHOP. Purchase SAR 45.00 at CAFE', 'multiple_amounts',
     answer(120, 'payment', 'debit')],
   ['Your bill of SAR 230.00 is due on 25/06. Pay now to avoid late fees.', 'bill_due',
     answer(230, 'payment', 'debit')],
   ['Your salary of SAR 9,000.00 is expected on 27/06', 'scheduled_or_expected', answer(9000, 'income', 'credit')],
 ];
+
+// Parser follow-up 3 (SM-01): the `uncertain` kind (other_event_status,
+// truncated_status, status_disputed) is review, never money, whatever the
+// model answers. A text that also reads as declined is rejected before any AI
+// request, so the stored reason may be absent; it is never processed.
+const uncertain: Array<[string, string, ReturnType<typeof answer>]> = [
+  ['SAR 1,000.00 sent to Ali completed. Previous transfer declined.', 'other_event_status',
+    answer(1000, 'transfer', 'debit')],
+  ['Purchase of SAR 80.00 at SHOP with card *1234 was decl', 'truncated_status', answer(80, 'payment', 'debit')],
+];
+for (const mode of ['ai_primary_v1', undefined]) {
+  for (const [text, reason, candidate] of uncertain) {
+    Deno.test(`${mode ?? 'legacy'}: an uncertain message (${reason}) is never processed money`, async () => {
+      assertEquals(messageMeaning(text).kind, 'uncertain', text);
+      assertEquals(messageMeaning(text).reason, reason, text);
+      const r = await run(text, candidate, mode);
+      assertEquals(r.row.status, 'rejected', text);
+      assertEquals(r.json.capture.status, 'rejected', text);
+      const stored = (r.row.parsed as { reviewReason?: string }).reviewReason;
+      assertEquals(stored === undefined || stored === reason, true, text);
+    });
+  }
+}
 
 for (const mode of ['ai_primary_v1', undefined]) {
   for (const [text, reason, candidate] of held) {

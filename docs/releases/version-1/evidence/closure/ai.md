@@ -587,3 +587,26 @@ These need no logic change:
 ## Follow-up 8 — points/miles are not a money flow (mirrors parser follow-up 2)
 - `_shared/ai_candidate_validator.ts` now skips a flow phrase followed by points, miles, نقاط or نقطة, but not نقاط البيع. Both `directionOfFlow` and the bare-destination check in `directionOfWording` use this. The regex is identical to `message_meaning.ts`'s; it is copied because `message_meaning.ts` imports the validator and uses it at load time, so importing back would create a cycle. A new parity test (`directionOfFlow === flowOf`, 8 texts) pins the two together. The Dart validator has no copy (`bookedDirection` uses `DirectionSignal.detect`), so it needed no change.
 - 4 new shared fixtures (`ai_candidate_cases.json`): 3 correct payments with a "credited points/miles / تمت إضافة نقاط" phrase in the amount's sentence are accepted, and a real money credit is still rejected as `direction_contradiction`. The 3 accept fixtures and the parity test failed before the fix and pass after. Runs: Deno `_shared` + `process-ios-sms` + `parse-sms`: 812 passed, 0 failed. Flutter `test/engine/ai` (it runs the same fixtures): 121 passed. Lint: clean.
+
+## Follow-up 9 — review S (SM-05, SM-07), shared reward rule, `uncertain` kind
+- **(1) Shared reward rule.** `_shared/ai_candidate_validator.ts` no longer has its own `POINTS_AFTER` copy. `firstMoneyFlow` now calls the parser's `isRewardFlow` from `_shared/money_text.ts`. The parity test (`directionOfFlow === flowOf`) stays and now covers 10 texts, including "45 points credited" and "إضافة 30 نقطة".
+- **(2) SM-05: three-letter words read as currencies in totals.** In `chargedTotal` (Dart `AiCandidateValidator`, which `validated_capture` also uses, and TS), the optional currency before the total figure is now one of the detection currency codes (`currencyCodes` / `CURRENCY_CODES`), not any 3-letter word. «الرصيد الإجمالي» (total balance) is not a charged total. "Total bal", "Total balance SAR" and "Total due" therefore no longer reject a correct amount.
+  - 4 new shared fixtures (Total bal, Total due, Total balance SAR, الرصيد الإجمالي) in `ai_candidate_cases.json`, run on both sides. 3 of the 4 failed with the old pattern; Total balance SAR passed there too and is kept as a guard. All 4 pass now. The tip-total fixtures are unchanged and still pass.
+  - Not mine: `parse.ts` has the same check (parser-owned).
+- **(3) SM-07: redaction merged sentences.** In `_shared/sms_redaction.ts`, a period that ends a sentence (followed by a space or the end of the text) can no longer be part of a name. The «إلى/الى» and "To:" rules now stop at the end of the sentence instead of the end of the line.
+  - Initials and titles ("Mr. Ali") keep their period, so the name after them is still masked.
+  - Example: "sent to Ali completed. Previous transfer declined." becomes "sent to [NAME]. Previous transfer declined." Before, it was "sent to [NAME] transfer declined.".
+  - New test "third-party redaction never merges two sentences" (5 cases): it fails on HEAD's `sms_redaction.ts` and passes now. A guard test for "Mr. Ali" passes before and after.
+  - All 61 existing redaction and privacy tests and the shared redaction fixture still pass.
+  - Not changed (pre-existing): "To A. Ali" is not masked, because "a" is a stopword; the old pattern did the same.
+  - For the privacy owner: the Dart `SmsSanitizer._nameToken` has the same period behaviour. The device parses the raw text, so this does not change device parsing. The shared fixture has no case for it, so the two still agree on every fixture.
+- **(4) `uncertain` kind.** Every gate keys on `disposition != record`, and `uncertain` has disposition review on both sides, so no code change was needed. New tests:
+  - Server (`process-ios-sms/ai_meaning_gate_test.ts`), AI-primary and legacy: `other_event_status` and `truncated_status` texts with a model "transaction" answer are rejected, never processed.
+  - Device (`test/domain/usecases/ai_meaning_gate_test.dart`): the kind is uncertain, `meaningHoldReason` holds it (import paths), no AI request is made, nothing is recorded, and the message is never silent.
+  - I could not build a `status_disputed` text by hand; it goes through the same disposition.
+  - Changed expectation (caused by the parser's follow-up 3): "Purchase … Cashback SAR 12.00 credited to your card" is now recorded (the cashback is a reward footer). The `multiple_amounts` case now uses two purchases, as the server test does.
+- **Runs**
+  - Deno, all of `supabase/functions` (`-A`): 1,170 passed, 0 failed, 6 ignored.
+  - Parser differential harness (`tools/parser_diff/run.sh 5dae2e2d`): 0 regressions, 0 throws on every path, 0 base not-completed texts now recorded. eB right 1,215 and eN 1,048 (one more each than the parser's pd5); s is unchanged.
+  - `flutter analyze` on the touched files: clean.
+  - Flutter `test/engine/ai`, `test/domain/capture`, `test/domain/usecases`, `test/features/capture` (`-j 2`): 1,875 passed, 0 failed.

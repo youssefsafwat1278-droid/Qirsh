@@ -22,25 +22,33 @@ class BackupScreen extends ConsumerWidget {
     final async = ref.watch(backupStatusProvider);
     final c = context.colors;
     final isGuest = AppSession.instance.isGuest;
+    final content = async.when(
+      skipLoadingOnReload: true,
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(child: Text(context.l10n.txnError)),
+      data: (status) => isGuest
+          ? const _GuestBackupGate()
+          : status.enabled
+              ? _EnabledView(status: status)
+              : const _EnableFlow(),
+    );
+    // SP-09: at large text the header scrolls away with the content instead
+    // of taking a fixed share of the screen (the column overflowed at 3.1x).
+    final largeText = MediaQuery.textScalerOf(context).scale(16) > 20;
     return Scaffold(
       backgroundColor: c.bg,
-      body: Column(
-        children: [
-          const _BackupHeader(),
-          Expanded(
-            child: async.when(
-              skipLoadingOnReload: true,
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, _) => Center(child: Text(context.l10n.txnError)),
-              data: (status) => isGuest
-                  ? const _GuestBackupGate()
-                  : status.enabled
-                      ? _EnabledView(status: status)
-                      : const _EnableFlow(),
+      body: largeText
+          ? NestedScrollView(
+              headerSliverBuilder: (context, _) =>
+                  const [SliverToBoxAdapter(child: _BackupHeader())],
+              body: content,
+            )
+          : Column(
+              children: [
+                const _BackupHeader(),
+                Expanded(child: content),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }

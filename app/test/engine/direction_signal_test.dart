@@ -21,8 +21,17 @@ void main() {
 
     test('both families present → unknown (not decisive)', () {
       expect(
-        DirectionSignal.detect('شراء عبر بطاقة، تم إيداع نقاط المكافآت'),
+        DirectionSignal.detect('شراء واسترداد مبلغ'),
         TxnDirection.unknown,
+      );
+    });
+
+    // Follow-up 3 (SM-03): a flow that moves reward points is not a money
+    // flow, so a purchase that credits points is a purchase.
+    test('reward points credited next to a purchase → debit', () {
+      expect(
+        DirectionSignal.detect('شراء عبر بطاقة، تم إيداع نقاط المكافآت'),
+        TxnDirection.debit,
       );
     });
 

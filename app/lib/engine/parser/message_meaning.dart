@@ -38,6 +38,12 @@ enum MessageKind {
 
   /// No event sentence (no unlabelled amount): decided by the legacy rules.
   undetermined,
+
+  /// Follow-up 3: the text does not settle whether the movement completed (a
+  /// status that may belong to another operation, a status that the footers
+  /// and the whole message disagree on, a status cut off mid-word): kept for
+  /// review, never recorded and never silent.
+  uncertain,
 }
 
 /// How the capture pipeline should treat the message.
@@ -113,6 +119,17 @@ class MessageMeaning {
     'first attempt', 'dispute', 'السابقة', 'السابق', 'سابقة',
   ];
 
+  /// Follow-up 3 (SM-01): an [otherEventMarkers] word attaches a status cue
+  /// to another operation only through one of these nouns ("Previous
+  /// transaction declined", "العملية السابقة مرفوضة"); "declined, please use
+  /// another card" is this event's status.
+  static const List<String> otherEventNouns = [
+    'transaction', 'transactions', 'attempt', 'attempts', 'purchase',
+    'purchases', 'payment', 'payments', 'transfer', 'transfers', 'withdrawal',
+    'operation', 'charge', 'txn', 'trx', 'عملية', 'العملية', 'محاولة',
+    'المحاولة', 'معاملة', 'المعاملة', 'حركة', 'الحركة',
+  ];
+
   /// An amount that is owed or due, not paid.
   static const List<String> dueMarkers = [
     'is due', 'are due', 'due on', 'due by', 'due date', 'due tomorrow',
@@ -142,6 +159,8 @@ class MessageMeaning {
     'when you', 'next purchase', 'offer ends', 'offer valid', 'limited time',
     'احصل', 'اربح', 'افتح', 'قسّط', 'قسط مشترياتك', 'للحصول', 'ربحت',
     'مشترياتك القادمة', 'عملية الشراء القادمة', 'ينتهي العرض',
+    'on every', 'for every', 'up to', 'على كل', 'لكل', 'win', 'and win',
+    'to claim', 'على مشترياتك',
   ];
 
   /// A summary or settings notice ("Your spending this month: …").
@@ -188,6 +207,24 @@ class MessageMeaning {
   static const List<String> tenseMarkers = [
     'will', 'will be', 'to be', 'shall', 'once', 'if', 'when', 'please',
     'request', 'سيتم', 'سوف', 'إذا', 'عند', 'يرجى', 'الرجاء', 'طلب',
+    'every',
+  ];
+
+  /// Follow-up 3 (SM-04): a courtesy opener is not a request ("Please note
+  /// SAR 500 has been debited", "يرجى العلم بأنه تم خصم"): it is read as
+  /// plain text before the tense of a done verb is judged.
+  static const List<String> noticeOpeners = [
+    'please note', 'kindly note', 'please be informed', 'please be advised',
+    'kindly be informed', 'يرجى العلم', 'نود إعلامكم', 'نود اعلامكم',
+    'نحيطكم علما',
+  ];
+
+  /// Follow-up 3 (SM-04): words that lead a completed card or cash movement.
+  /// The clause that carries the figure with one of these (or a done verb)
+  /// and no notice, offer or future word of its own states a movement; an
+  /// offer, due or "will be posted" tail does not undo it.
+  static const List<String> movementLeads = [
+    'purchase', 'pos', 'withdrawal', 'شراء', 'سحب', 'مشتريات',
   ];
 
   /// Follow-up: a [doneVerbs] word whose clause holds one of these is a

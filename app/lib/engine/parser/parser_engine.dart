@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import '../../domain/finance/money_input.dart';
 import '../models/parsed_transaction.dart';
 import '../models/transaction_source.dart';
@@ -82,7 +84,7 @@ class ParserEngine {
   static final RegExp _chargedAmount = RegExp(
     r'(?<![a-z])(?:amount charged|charged amount|charged|billed|equivalent(?: to)?|'
     r'amount in [a-z]{3}|deducted|المبلغ المخصوم|بما يعادل|ما يعادل)'
-    r'\s*(?:amount|of)?\s*:?\s*'
+    r'\s*(?:amount|of|as)?\s*:?\s*'
     r'(?:([A-Za-z]{2,3}|[^\sA-Za-z0-9]{1,3})\s?([0-9][0-9,]*(?:\.[0-9]+)?)|'
     r'([0-9][0-9,]*(?:\.[0-9]+)?)\s?([A-Za-z]{3}|[^\sA-Za-z0-9]{1,3}))',
     caseSensitive: false,
@@ -165,11 +167,29 @@ class ParserEngine {
     'd360',
   ];
 
+  /// Follow-up 3 (SM-09): the longest text the parser reads. A bank SMS or
+  /// notification is far shorter (ten concatenated SMS parts are about 1,600
+  /// characters); of a longer pasted text the parser reads its first and
+  /// last [maxTextLength] / 2 characters as separate lines (a status at
+  /// either end still decides it), so a parse stays well inside the
+  /// 2-second isolate limit. Mirrors `MAX_TEXT_LENGTH` in
+  /// `process-ios-sms/message_meaning.ts`.
+  static const int maxTextLength = 2000;
+
+  /// [rawText] bounded to its head and tail (idempotent).
+  static String bounded(String rawText) {
+    if (rawText.length <= maxTextLength) return rawText;
+    const half = maxTextLength ~/ 2;
+    return '${rawText.substring(0, half)}\n'
+        '${rawText.substring(rawText.length - half)}';
+  }
+
   static bool isIgnoredMessage(
     String rawText, {
     String? senderId,
     List<BankProfile> bankProfiles = const [],
   }) {
+    rawText = bounded(rawText);
     final text = Normalizer.normalizeCurrencyTokens(
       Normalizer.normalize(rawText),
     );
@@ -215,6 +235,7 @@ class ParserEngine {
     List<BankProfile> bankProfiles = const [],
     bool wholeText = false,
   }) {
+    rawText = bounded(rawText);
     if (meaningOf(rawText).kind == MessageKind.noMovementNotice) return true;
     final text = Normalizer.normalizeCurrencyTokens(
       Normalizer.normalize(rawText),
@@ -281,6 +302,7 @@ class ParserEngine {
   /// EGP 900" is one purchase). A message holding an OTP code keeps every
   /// sentence. Mirrors `clauseScope` in `process-ios-sms/message_meaning.ts`.
   static ClauseScope clauseScope(String rawText) {
+    rawText = bounded(rawText);
     final hit = _scopeCache.remove(rawText);
     if (hit != null) return _scopeCache[rawText] = hit;
     final scope = _clauseScope(rawText);
@@ -325,42 +347,80 @@ class ParserEngine {
     final field = [
       for (final p in pieces) isFieldLine(text.substring(p.start, p.end))
     ];
+    // Whether each piece sits on the line just above a field line.
+    final aboveField = List<bool>.filled(pieces.length, false);
+    for (var k = pieces.length - 2; k >= 0; k--) {
+      aboveField[k] = text.substring(pieces[k].end, pieces[k].next) == '\n'
+          ? field[k + 1]
+          : aboveField[k + 1];
+    }
+    // Follow-up 3 (SM-01): a sentence with a status cue (declined, failed,
+    // pending, reversed …) is never a footer, whatever else it holds
+    // ("Transaction declined, please use another card").
+    final cue = [
+      for (final p in pieces)
+        TransactionStateCues.hasStatusCue(text.substring(p.start, p.end))
+    ];
+    // Follow-up 3 (SM-06): an event sentence about a cashback or reward
+    // credit, or about another operation ("Previous purchase SAR 80 at …"),
+    // is a side event: a footer next to the transaction's own sentence.
+    final side = [
+      for (var i = 0; i < pieces.length; i++)
+        roles[i] == _Role.event &&
+            !notices[i] &&
+            !field[i] &&
+            !cue[i] &&
+            _isSideEvent(
+                text.substring(pieces[i].start, pieces[i].end).toLowerCase())
+    ];
     final anyMovement = [
       for (var i = 0; i < pieces.length; i++)
-        roles[i] == _Role.event && !notices[i] && !field[i]
+        roles[i] == _Role.event && !notices[i] && !field[i] && !side[i]
     ].any((x) => x);
     // An advert or OTP sentence is set aside only next to an event sentence
     // that names a movement in its own words (a money word, a done verb, a
     // flow): "عرض خاص! وفر SAR 50 …" stays one advert.
     final namedMovement = [
       for (var i = 0; i < pieces.length; i++)
-        if (roles[i] == _Role.event && !notices[i] && !field[i])
+        if (roles[i] == _Role.event && !notices[i] && !field[i] && !side[i])
           _namesMovement(
               text.substring(pieces[i].start, pieces[i].end).toLowerCase())
     ].any((x) => x);
     final core = StringBuffer();
+    final coreEvents = <String>[];
     var footers = 0;
     for (var i = 0; i < pieces.length; i++) {
       final p = pieces[i];
       final s = text.substring(p.start, p.end);
       final lower = s.toLowerCase();
-      final header = !field[i] && _beforeFieldLine(text, pieces, field, i);
+      final header = !field[i] && aboveField[i];
       final footer = !header &&
+          !cue[i] &&
           (roles[i] == _Role.figure ||
-              (anyMovement && notices[i]) ||
+              (anyMovement && (notices[i] || side[i])) ||
               (roles[i] == _Role.text &&
                   _footerCue(lower) &&
                   (namedMovement || !hasIgnoreWord(lower))));
       if (footer && s.trim().isNotEmpty) footers++;
-      if (!footer) core.write(s);
+      if (!footer) {
+        core.write(s);
+        if (roles[i] == _Role.event) coreEvents.add(s);
+      }
       core.write(text.substring(p.end, p.next));
     }
     return ClauseScope(
         text: text,
         core: core.toString(),
         eventSentences: events,
-        footerCount: footers);
+        footerCount: footers,
+        coreEvents: coreEvents);
   }
+
+  /// A cashback or reward credit, or another operation's figure.
+  static bool _isSideEvent(String lower) =>
+      _hasAnyWord(lower, MessageMeaning.rewardMarkers) ||
+      _hasAnyWord(lower, const ['cashback', 'cash back', 'استرداد نقدي', 'كاش باك']) ||
+      TransactionStateCues.namesOtherEvent(lower);
 
   /// [lower] names a money movement in its own words.
   static bool _namesMovement(String lower) =>
@@ -373,6 +433,7 @@ class ParserEngine {
   /// before any amount is trusted. Mirrors `meaningOf` in
   /// `process-ios-sms/message_meaning.ts`.
   static MessageMeaning meaningOf(String rawText) {
+    rawText = bounded(rawText);
     final scope = clauseScope(rawText);
     final all = scope.text.toLowerCase();
     if ((_otpCode.hasMatch(all) && hasIgnoreWord(all)) || isPurchaseCode(all)) {
@@ -414,12 +475,36 @@ class ParserEngine {
             footerCount: scope.footerCount,
             eventCount: events,
             currencyAbsent: currencyAbsent);
-    if (TransactionStateCues.isNotCompleted(rawText)) {
+    if (TransactionStateCues.isNotCompletedText(scope.core)) {
+      // Follow-up 3 (SM-01): a status that an "other operation" phrase ties
+      // to another transaction ("Previous transaction declined") next to a
+      // completed one: the text does not settle it — review, not record.
+      final own = [
+        for (final p in _sentences(scope.core))
+          if (!TransactionStateCues.isOtherEventStatus(
+              scope.core.substring(p.start, p.end)))
+            scope.core.substring(p.start, p.next)
+      ].join();
+      if (!TransactionStateCues.isNotCompletedText(own) &&
+          scope.coreEvents.any((s) =>
+              !TransactionStateCues.isOtherEventStatus(s) &&
+              _namesMovement(s.toLowerCase()))) {
+        return of(MessageKind.uncertain, 'other_event_status');
+      }
       return of(
           MessageKind.notCompleted,
           _hasAnyWord(core, MessageMeaning.pendingWords)
               ? 'pending'
               : 'declined_or_failed');
+    }
+    // Follow-up 3 (SM-01): the whole message reads as not completed but its
+    // clause core does not (a footer decided it): review, never record.
+    if (TransactionStateCues.isNotCompletedText(scope.text)) {
+      return of(MessageKind.uncertain, 'status_disputed');
+    }
+    // A status cut off mid-word after the transaction ("… was decl").
+    if (_truncatedStatus.hasMatch(scope.text.trimRight().toLowerCase())) {
+      return of(MessageKind.uncertain, 'truncated_status');
     }
     // Field lines detail a header; the header's sentences say what happened.
     final stated = scope.eventSentences.where((s) => !isFieldLine(s));
@@ -436,7 +521,7 @@ class ParserEngine {
     if (_isCashDeposit(core)) {
       return of(MessageKind.cashDeposit, 'cash_deposit', TxnDirection.credit);
     }
-    if (_distinctMovementAmounts(scope.eventSentences) > 1 &&
+    if (_distinctMovementAmounts(scope.coreEvents) > 1 &&
         const ParserEngine()._extractChargedPair(scope.text, null) == null) {
       return of(MessageKind.multipleEvents, 'multiple_amounts');
     }
@@ -449,6 +534,9 @@ class ParserEngine {
   /// upcoming or expected operation, an offer, a summary — with no
   /// [MessageMeaning.doneVerbs] word outside a future or conditional clause.
   static String? _noMovementReason(String s) {
+    for (final w in MessageMeaning.noticeOpeners) {
+      s = s.replaceAll(w, ' ');
+    }
     String? reason;
     if (_hasAnyWord(s, MessageMeaning.summaryMarkers)) {
       return 'summary';
@@ -470,6 +558,10 @@ class ParserEngine {
       }
       return null;
     }
+    // Follow-up 3 (SM-04): the clause that carries the figure states a
+    // completed movement with no notice word of its own ("Purchase SAR 230
+    // at Jarir …, eligible for installments"): the tail does not undo it.
+    if (s.split(_figureClauseCut).any(_statesMovement)) return null;
     for (final m in _doneVerb.allMatches(s)) {
       final clause = s.substring(_lastClauseCut(s, m.start), m.start);
       if (!_hasAnyWord(clause, MessageMeaning.tenseMarkers)) {
@@ -478,6 +570,13 @@ class ParserEngine {
     }
     return reason;
   }
+
+  static final RegExp _figureClauseCut = RegExp(r'[,،:]| [-–—] ');
+
+  /// A status word cut off mid-word at the end of the text, after its
+  /// subject: "… was decl", "… is pen".
+  static final RegExp _truncatedStatus = RegExp(
+      r'(?:was|is|been|status:?|transaction|txn)\s+(?:decli?n?e?|reje?c?t?e?|fail?e?|pend?i?n?|canc?e?l?l?e?|reve?r?s?e?|unsu?c?c?e?s?s?f?u?)$');
 
   static final RegExp _doneVerb = RegExp(
       '(?<![a-zء-ي])(?:${MessageMeaning.doneVerbs.map(RegExp.escape).join('|')})(?![a-zء-ي])');
@@ -540,6 +639,16 @@ class ParserEngine {
       final ex = engine._extractAmounts([s], text: s, bank: null);
       final a = ex.transactionAmount;
       if (a != null) amounts.add(a.toStringAsFixed(3));
+      // Follow-up 3: one sentence that both takes money out and puts money
+      // in, with two different figures ("تم خصم 300 ريال … وإيداع راتب
+      // 9,000 ريال"), states two movements.
+      if (DirectionSignal.hasDebitFlow(s) && DirectionSignal.hasCreditFlow(s)) {
+        for (final c in ex.candidates) {
+          if (c.isStrongTransaction && c.value > 0) {
+            amounts.add(c.value.toStringAsFixed(3));
+          }
+        }
+      }
     }
     return amounts.length;
   }
@@ -555,16 +664,14 @@ class ParserEngine {
   static final Map<String, RegExp> _wordPatterns = {};
 
   /// A footer cue in a sentence with no amount.
+  /// (A sentence with a status cue is never a footer: [_clauseScope].)
   static bool _footerCue(String s) =>
       hasIgnoreWord(s) ||
       _hasAnyWord(s, MessageMeaning.rewardMarkers) ||
       noticeWords.any((w) => containsIgnoreWord(s, w)) ||
-      (TransactionStateCues.hasCue(s) &&
-          _hasAnyWord(s, MessageMeaning.otherEventMarkers)) ||
-      (!TransactionStateCues.hasCue(s) &&
-          (_hasAnyWord(s, MessageMeaning.dueMarkers) ||
-              _hasAnyWord(s, MessageMeaning.offerMarkers) ||
-              _hasAnyWord(s, MessageMeaning.summaryMarkers)));
+      _hasAnyWord(s, MessageMeaning.dueMarkers) ||
+      _hasAnyWord(s, MessageMeaning.offerMarkers) ||
+      _hasAnyWord(s, MessageMeaning.summaryMarkers);
 
   /// The direction of the transaction clause: its flow ([MessageMeaning.direction]),
   /// else the money words of its factual (not hypothetical) clauses.
@@ -582,9 +689,12 @@ class ParserEngine {
   }
 
   static final Map<String, _Role> _roleCache = {};
+  static final RegExp _percentage = RegExp(r'[0-9][0-9.,]*\s?[%٪]');
 
   static _Role _readRole(String s) {
     if (s.isEmpty) return _Role.text;
+    // A percentage ("خصم 50%", "5% cashback") is never an amount that moved.
+    s = s.replaceAll(_percentage, ' ');
     const engine = ParserEngine();
     final ex = engine._extractAmounts([s], text: s, bank: null);
     if (ex.foreignAmount != null) return _Role.event;
@@ -599,20 +709,6 @@ class ParserEngine {
       return _Role.figure;
     }
     return _Role.text;
-  }
-
-  /// Whether piece [i] sits on the line just above a field line.
-  static bool _beforeFieldLine(
-      String text,
-      List<({int start, int end, int next})> pieces,
-      List<bool> field,
-      int i) {
-    for (var k = i; k + 1 < pieces.length; k++) {
-      if (text.substring(pieces[k].end, pieces[k].next) == '\n') {
-        return field[k + 1];
-      }
-    }
-    return false;
   }
 
   /// [value] up to its first sentence end: a period followed by a space and
@@ -649,8 +745,12 @@ class ParserEngine {
     var from = 0;
     for (final m in _sentenceMark.allMatches(text)) {
       if (m[0] == '.') {
+        // Only the few characters before the dot can hold an abbreviation
+        // (a bounded window keeps this linear on "Avl. Bal. …" text).
         final word = _wordBeforeDot
-            .firstMatch(text.substring(from, m.start).toLowerCase())
+            .firstMatch(text
+                .substring(math.max(from, m.start - 12), m.start)
+                .toLowerCase())
             ?.group(1);
         if (word != null && MessageMeaning.abbreviations.contains(word)) {
           continue;
@@ -692,7 +792,7 @@ class ParserEngine {
   /// movement anywhere ([hasMoneyWord]). Used by the AI candidate validator;
   /// mirrors `isNonTransactionText` in `_shared/ai_candidate_validator.ts`.
   static bool isNonTransactionText(String text, {String? merchant}) {
-    final lower = Normalizer.normalize(text).toLowerCase();
+    final lower = Normalizer.normalize(bounded(text)).toLowerCase();
     if (_otpCode.hasMatch(lower)) return true;
     final outside = outsideMerchant(lower, merchant);
     return (hasIgnoreWord(outside) ||
@@ -705,8 +805,8 @@ class ParserEngine {
   /// as a transaction amount: an AI answer naming it is not grounded. Mirrors
   /// `LABELLED_FIGURE` in `_shared/ai_candidate_validator.ts`.
   static bool isAccountFigure(String rawText, double amount) {
-    final text = Normalizer.separateGluedCurrency(
-        Normalizer.normalizeCurrencyTokens(Normalizer.normalize(rawText)));
+    final text = Normalizer.separateGluedCurrency(Normalizer.normalizeCurrencyTokens(
+        Normalizer.normalize(bounded(rawText))));
     final candidates = const ParserEngine()
         ._extractAmounts(text.split('\n'), text: text, bank: null)
         .candidates;
@@ -916,6 +1016,7 @@ class ParserEngine {
     String defaultCurrency = 'SAR',
     DateTime? now,
   }) {
+    rawText = bounded(rawText);
     var text = Normalizer.normalizeCurrencyTokens(
       Normalizer.normalize(rawText),
     );
@@ -974,6 +1075,7 @@ class ParserEngine {
           MessageKind.ownAccountTransfer,
           MessageKind.cashDeposit,
           MessageKind.multipleEvents,
+          MessageKind.uncertain,
         }.contains(meaning.kind)) {
       return ParseResult.notTransaction(
           bankKey: bank?.bankKey, amountDetected: true, meaning: meaning);
@@ -998,8 +1100,11 @@ class ParserEngine {
     // "deposit", "salary" or "payment" (V1-082).
     var type = catalogMatch != null
         ? _catalogRuleType(catalogMatch.rule)
-        : _flowType(_typeOutsideMerchant(coreLower, merchantResult.merchant, bank),
-            meaning.direction, coreLower);
+        : _flowType(
+            _typeOutsideMerchant(withoutNoticeTails(coreLower),
+                merchantResult.merchant, bank),
+            meaning.direction,
+            coreLower);
     final amountExtraction = _extractAmounts(lines, text: text, bank: bank);
     final ruleAmount = parseCatalogAmount(catalogMatch?.amountText);
     final amount = ruleAmount ?? amountExtraction.transactionAmount;
@@ -1231,10 +1336,53 @@ class ParserEngine {
   static String _ignoreScope(String rawText) {
     final scope = clauseScope(rawText);
     return (meaningOf(rawText).kind == MessageKind.completedMovement
-            ? scope.core
+            ? withoutNoticeTails(scope.core)
             : scope.text)
         .toLowerCase();
   }
+
+  /// Follow-up 3 (SM-04): [core] without the notice tails of a sentence
+  /// whose figure clause states a completed movement: an offer, due, future
+  /// or summary clause with no figure ("Purchase SAR 120 at Jarir …, offer
+  /// valid till 30 Nov"). The tail neither silences the purchase (an ignore
+  /// word) nor decides its type ("احصل على 5% استرداد" is not a refund).
+  /// Mirrors `withoutNoticeTails` in `process-ios-sms/message_meaning.ts`.
+  static String withoutNoticeTails(String core) {
+    final out = StringBuffer();
+    for (final p in _sentences(core)) {
+      final s = core.substring(p.start, p.end);
+      final clauses = s.split(_figureClauseCut);
+      final lower = clauses.map((c) => c.toLowerCase()).toList();
+      if (lower.any(_statesMovement)) {
+        final cuts = _figureClauseCut.allMatches(s).toList();
+        for (var k = 0; k < clauses.length; k++) {
+          final tail = !_amountWithCurrency.hasMatch(lower[k]) &&
+              _hasNoticeWord(lower[k]);
+          out.write(tail ? ' ' * clauses[k].length : clauses[k]);
+          if (k < cuts.length) out.write(cuts[k][0]);
+        }
+      } else {
+        out.write(s);
+      }
+      out.write(core.substring(p.end, p.next));
+    }
+    return out.toString();
+  }
+
+  static bool _hasNoticeWord(String lower) =>
+      _hasAnyWord(lower, MessageMeaning.summaryMarkers) ||
+      _hasAnyWord(lower, MessageMeaning.dueMarkers) ||
+      _hasAnyWord(lower, MessageMeaning.futureMarkers) ||
+      _hasAnyWord(lower, MessageMeaning.offerMarkers);
+
+  /// A clause that carries a figure and states a completed movement (a
+  /// movement lead or a done verb) with no notice or tense word of its own.
+  static bool _statesMovement(String clause) =>
+      _amountWithCurrency.hasMatch(clause) &&
+      !_hasNoticeWord(clause) &&
+      !_hasAnyWord(clause, MessageMeaning.tenseMarkers) &&
+      (_hasAnyWord(clause, MessageMeaning.movementLeads) ||
+          _doneVerb.hasMatch(clause));
 
   TransactionType _detectType(String lower, BankProfile? bank) {
     if (bank != null) {
@@ -1421,9 +1569,12 @@ class ParserEngine {
     final chargedRaw = m.group(2) ?? m.group(3)!;
     final chargedCurrency = _extractCurrency(m.group(1) ?? m.group(4)!);
     if (chargedCurrency == null) return null;
-    final chargedText = normalizeLocalizedDecimal(chargedRaw);
-    final chargedValue = double.tryParse(chargedText);
-    if (chargedValue == null || chargedValue <= 0) return null;
+    final chargedText = _decimalOrNull(chargedRaw);
+    final chargedValue =
+        chargedText == null ? null : double.tryParse(chargedText);
+    if (chargedText == null || chargedValue == null || chargedValue <= 0) {
+      return null;
+    }
     // The original amount: the strongest transaction candidate outside the
     // charged phrase whose own currency is a different one.
     final rest = text.replaceRange(m.start, m.end, ' ');
@@ -1432,7 +1583,10 @@ class ParserEngine {
     for (final line in lines) {
       for (final match in _plainNumber.allMatches(line)) {
         final raw = match.group(1)!;
-        final value = double.tryParse(normalizeLocalizedDecimal(raw));
+        // Follow-up 3 (SM-02): a number with a trailing comma ("*4521,")
+        // is not a decimal; it is skipped, never thrown on.
+        final text = _decimalOrNull(raw);
+        final value = text == null ? null : double.tryParse(text);
         if (value == null) continue;
         final c = _classifyAmountCandidate(
             line: line,
@@ -1459,32 +1613,43 @@ class ParserEngine {
         hasAmbiguity: false,
         candidates: const [],
         foreignAmount: c.value,
-        foreignAmountText: normalizeLocalizedDecimal(c.raw),
+        foreignAmountText: _decimalOrNull(c.raw),
         foreignCurrency: cur,
       );
     }
     return null;
   }
 
+  /// [raw] as a plain decimal, or null when it is not one (a trailing
+  /// comma, a malformed grouping): the parser never throws on message text.
+  static String? _decimalOrNull(String raw) {
+    try {
+      return normalizeLocalizedDecimal(raw);
+    } on Exception {
+      return null;
+    }
+  }
+
   _AmountExtraction? _extractInternationalParens(String text) {
     final match = _intlParens.firstMatch(text);
     if (match != null) {
-      final foreignText = normalizeLocalizedDecimal(match.group(2)!);
-      final localText = normalizeLocalizedDecimal(match.group(4)!);
-      final foreignAmount = double.tryParse(foreignText);
-      final localAmount = double.tryParse(localText);
+      final foreignText = _decimalOrNull(match.group(2)!);
+      final localText = _decimalOrNull(match.group(4)!);
+      final foreignAmount =
+          foreignText == null ? null : double.tryParse(foreignText);
+      final localAmount = localText == null ? null : double.tryParse(localText);
       if (foreignAmount != null && localAmount != null) {
         final balance = _extractBalanceFromText(text);
         return _AmountExtraction(
           transactionAmount: localAmount,
-          transactionAmountText: localText,
+          transactionAmountText: localText!,
           currency: match.group(3)!.toUpperCase(),
           balance: balance?.value,
           balanceText: balance?.text,
           hasAmbiguity: false,
           candidates: const [],
           foreignAmount: foreignAmount,
-          foreignAmountText: foreignText,
+          foreignAmountText: foreignText!,
           foreignCurrency: match.group(1)!.toUpperCase(),
         );
       }
@@ -1492,8 +1657,9 @@ class ParserEngine {
 
     final amountFirst = _intlParensAmountFirst.firstMatch(text);
     if (amountFirst == null) return null;
-    final foreignText = normalizeLocalizedDecimal(amountFirst.group(1)!);
-    final localText = normalizeLocalizedDecimal(amountFirst.group(3)!);
+    final foreignText = _decimalOrNull(amountFirst.group(1)!);
+    final localText = _decimalOrNull(amountFirst.group(3)!);
+    if (foreignText == null || localText == null) return null;
     final foreignAmount = double.tryParse(foreignText);
     final localAmount = double.tryParse(localText);
     if (foreignAmount == null || localAmount == null) return null;
@@ -2312,10 +2478,15 @@ class ClauseScope {
     required this.core,
     required this.eventSentences,
     required this.footerCount,
-  });
+    List<String>? coreEvents,
+  }) : coreEvents = coreEvents ?? eventSentences;
 
   final String text;
   final String core;
   final List<String> eventSentences;
   final int footerCount;
+
+  /// The event sentences kept in [core] (a cashback credit or another
+  /// operation's figure next to the transaction is set aside).
+  final List<String> coreEvents;
 }

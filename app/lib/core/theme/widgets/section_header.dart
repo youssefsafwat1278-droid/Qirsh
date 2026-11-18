@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../app_typography.dart';
+import '../large_text.dart';
 import '../mali_tokens.dart';
 
 /// SectionHeader — consistent title (+ optional trailing action) for every
@@ -34,7 +35,7 @@ class SectionHeader extends StatelessWidget {
         Expanded(
           child: Text(
             title,
-            maxLines: 1,
+            maxLines: linesUnlessLargeText(context, 1),
             overflow: TextOverflow.ellipsis,
             // Compact UI system: section titles use the 19px role token.
             style:

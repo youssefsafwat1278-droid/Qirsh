@@ -1,0 +1,310 @@
+[
+{
+"id": "Q00",
+"text": "Minimum payment due SAR 115.00 on card *1234 by 25/11/2026",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q01",
+"text": "Your credit card statement: total due SAR 2,340.00, minimum payment SAR 115.00, due 25/11",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q02",
+"text": "Your credit limit has been increased to SAR 20,000. Enjoy your purchases!",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q03",
+"text": "Congratulations on your first purchase with your new card. Limit SAR 10,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q04",
+"text": "Your card *1234 is activated. Use it for purchases up to SAR 10,000 credit limit",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q05",
+"text": "Your new card has been activated. Daily purchase limit SAR 5,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q06",
+"text": "Card renewal: your new card will be delivered. Annual fee SAR 250 will be charged next month",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q07",
+"text": "Your e-statement is ready. Payment due SAR 1,200.00 by 25/11",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q08",
+"text": "PIN changed successfully. Daily ATM withdrawal limit SAR 5,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q09",
+"text": "Beneficiary added: Ali. Transfer limit SAR 5,000 per day",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q10",
+"text": "Your salary advance limit is SAR 3,000. Apply in the app",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q11",
+"text": "Special offer: get SAR 50 cashback on your next purchase above SAR 500",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q12",
+"text": "Limited offer! Transfer SAR 1,000 abroad with zero fees this week",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q13",
+"text": "You won SAR 500! Make a purchase to claim",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q14",
+"text": "Exclusive offer: SAR 100 off on purchases at Test Mall. Click https://bank.example",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q15",
+"text": "Click here to get SAR 200 cashback on your first payment: https://bank.example/x",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q16",
+"text": "اربح 1000 ريال عند الشراء ببطاقتك",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q17",
+"text": "عرض: استرداد نقدي 50 ريال على مشترياتك فوق 500 ريال",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q18",
+"text": "تم رفع الحد الائتماني لبطاقتك إلى 20,000 ريال، استمتع بمشترياتك",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q19",
+"text": "تم تفعيل بطاقتك. حد الشراء اليومي 5,000 ريال",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q20",
+"text": "كشف حسابك جاهز. المبلغ المستحق 1,200 ريال، الحد الأدنى للسداد 115 ريال",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q21",
+"text": "تذكير: موعد سداد 1,200 ريال لبطاقتك *1234 بتاريخ 25/11",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q22",
+"text": "Reminder: your bill payment of SAR 300.00 to Test Electricity is due tomorrow",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q23",
+"text": "Your scheduled transfer of SAR 2,000.00 to Landlord will run on 01/12",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q24",
+"text": "Upcoming payment: SAR 89.00 to Test Gym on 01/12",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q25",
+"text": "Your refund request of SAR 99.00 has been received and is being reviewed",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q26",
+"text": "Your salary of SAR 12,000 is expected on 27/11",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q27",
+"text": "ATM withdrawal limit changed to SAR 10,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q28",
+"text": "Your POS transaction limit is now SAR 8,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q29",
+"text": "Transaction alert settings updated: alerts for purchases above SAR 100",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q30",
+"text": "Deposit SAR 1,000 this month and win SAR 100",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q31",
+"text": "Open a savings account with a minimum deposit of SAR 1,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q32",
+"text": "Your card *1234 has been renewed. Annual fee of SAR 250 will be debited on activation",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q33",
+"text": "Balance inquiry: available balance SAR 5,234.00 on account *5678",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q34",
+"text": "Your credit card payment is due. Statement balance SAR 3,000.00",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q35",
+"text": "To activate your card, make a purchase of any amount. Credit limit SAR 15,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q36",
+"text": "Your account has been closed. Remaining balance SAR 0.00 transferred",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q37",
+"text": "For complaints about transaction of SAR 100 call 8001234",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q38",
+"text": "Your installment plan: SAR 500 monthly payment for 12 months approved",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q39",
+"text": "Cashback of up to SAR 300 on purchases at Test Store. Terms apply",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q40",
+"text": "مبروك! ربحت 500 ريال، قم بعملية شراء للحصول عليها",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q41",
+"text": "Your monthly spending summary: purchases SAR 4,500, payments SAR 2,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q42",
+"text": "Payment reminder: SAR 115 minimum due on 25/11. Pay now via app",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "Q43",
+"text": "Your card limit is SAR 9,000. Available for purchases: SAR 8,500",
+"truth": {
+"kind": "n"
+}
+}
+]

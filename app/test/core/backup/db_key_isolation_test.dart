@@ -40,6 +40,10 @@ void main() {
 
   Future<AppDatabase> open(DatabaseKeyStore ks) =>
       seededDb(AppDatabase.open(executor: NativeDatabase.memory(), keyStore: ks));
+  // A restore destination is a new device: no account yet (A-7), so the whole
+  // backup applies (SP-02).
+  Future<AppDatabase> openNew(DatabaseKeyStore ks) =>
+      AppDatabase.open(executor: NativeDatabase.memory(), keyStore: ks);
 
   Future<String> keyRef(AppDatabase db) async =>
       (await db.customSelect('SELECT db_encryption_key_ref AS r FROM user_settings;')
@@ -49,7 +53,7 @@ void main() {
   test('restore makes ZERO key-store calls; destination key A is untouched and '
       'foreign key B never lands in Drift', () async {
     final dstKeyStore = _SpyKeyStore('key-A');
-    final dst = await open(dstKeyStore);
+    final dst = await openNew(dstKeyStore);
     addTearDown(dst.close);
 
     final src = await open(_SpyKeyStore('key-src'));

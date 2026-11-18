@@ -1,0 +1,1298 @@
+[
+{
+"id": "R00_0",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R00_1",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R00_2",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R00_3",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R00_4",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R00_5",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R01_0",
+"text": "Payroll credit SAR 8,500.00 to account *5678",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R01_1",
+"text": "Payroll credit SAR 8,500.00 to account *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R01_2",
+"text": "Payroll credit SAR 8,500.00 to account *5678\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R01_3",
+"text": "Payroll credit SAR 8,500.00 to account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R01_4",
+"text": "Payroll credit SAR 8,500.00 to account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R01_5",
+"text": "Payroll credit SAR 8,500.00 to account *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R02_0",
+"text": "Your payroll of SAR 8,500.00 has been posted to account *5678",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R02_1",
+"text": "Your payroll of SAR 8,500.00 has been posted to account *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R02_2",
+"text": "Your payroll of SAR 8,500.00 has been posted to account *5678\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R02_3",
+"text": "Your payroll of SAR 8,500.00 has been posted to account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R02_4",
+"text": "Your payroll of SAR 8,500.00 has been posted to account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R02_5",
+"text": "Your payroll of SAR 8,500.00 has been posted to account *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R03_0",
+"text": "SAR 300.00 posted to your account *5678 from Ali",
+"truth": {
+"kind": "c",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "R03_1",
+"text": "SAR 300.00 posted to your account *5678 from Ali Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "R03_2",
+"text": "SAR 300.00 posted to your account *5678 from Ali\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "R03_3",
+"text": "SAR 300.00 posted to your account *5678 from Ali\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "R03_4",
+"text": "SAR 300.00 posted to your account *5678 from Ali. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "R03_5",
+"text": "SAR 300.00 posted to your account *5678 from Ali. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "R04_0",
+"text": "Refund of SAR 89.00 posted to card *4521",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R04_1",
+"text": "Refund of SAR 89.00 posted to card *4521 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R04_2",
+"text": "Refund of SAR 89.00 posted to card *4521\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R04_3",
+"text": "Refund of SAR 89.00 posted to card *4521\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R04_4",
+"text": "Refund of SAR 89.00 posted to card *4521. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R04_5",
+"text": "Refund of SAR 89.00 posted to card *4521. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R05_0",
+"text": "Transfer of SAR 750.00 from Ali posted to account *5678",
+"truth": {
+"kind": "c",
+"amt": 750,
+"cur": "SAR"
+}
+},
+{
+"id": "R05_1",
+"text": "Transfer of SAR 750.00 from Ali posted to account *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 750,
+"cur": "SAR"
+}
+},
+{
+"id": "R05_2",
+"text": "Transfer of SAR 750.00 from Ali posted to account *5678\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 750,
+"cur": "SAR"
+}
+},
+{
+"id": "R05_3",
+"text": "Transfer of SAR 750.00 from Ali posted to account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 750,
+"cur": "SAR"
+}
+},
+{
+"id": "R05_4",
+"text": "Transfer of SAR 750.00 from Ali posted to account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 750,
+"cur": "SAR"
+}
+},
+{
+"id": "R05_5",
+"text": "Transfer of SAR 750.00 from Ali posted to account *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 750,
+"cur": "SAR"
+}
+},
+{
+"id": "R06_0",
+"text": "Salary SAR 9,000 posted to your account *5678",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R06_1",
+"text": "Salary SAR 9,000 posted to your account *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R06_2",
+"text": "Salary SAR 9,000 posted to your account *5678\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R06_3",
+"text": "Salary SAR 9,000 posted to your account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R06_4",
+"text": "Salary SAR 9,000 posted to your account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R06_5",
+"text": "Salary SAR 9,000 posted to your account *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R07_0",
+"text": "تم قيد مبلغ 2,000 ريال لحسابك *5678",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R07_1",
+"text": "تم قيد مبلغ 2,000 ريال لحسابك *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R07_2",
+"text": "تم قيد مبلغ 2,000 ريال لحسابك *5678\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R07_3",
+"text": "تم قيد مبلغ 2,000 ريال لحسابك *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R07_4",
+"text": "تم قيد مبلغ 2,000 ريال لحسابك *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R07_5",
+"text": "تم قيد مبلغ 2,000 ريال لحسابك *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R08_0",
+"text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R08_1",
+"text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R08_2",
+"text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R08_3",
+"text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R08_4",
+"text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R08_5",
+"text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R09_0",
+"text": "تم قيد راتب 9,000 ريال لحسابك *5678",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R09_1",
+"text": "تم قيد راتب 9,000 ريال لحسابك *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R09_2",
+"text": "تم قيد راتب 9,000 ريال لحسابك *5678\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R09_3",
+"text": "تم قيد راتب 9,000 ريال لحسابك *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R09_4",
+"text": "تم قيد راتب 9,000 ريال لحسابك *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R09_5",
+"text": "تم قيد راتب 9,000 ريال لحسابك *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 9000,
+"cur": "SAR"
+}
+},
+{
+"id": "R10_0",
+"text": "Your refund of SAR 120.00 has been approved and credited to card *4521",
+"truth": {
+"kind": "c",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "R10_1",
+"text": "Your refund of SAR 120.00 has been approved and credited to card *4521 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "R10_2",
+"text": "Your refund of SAR 120.00 has been approved and credited to card *4521\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "R10_3",
+"text": "Your refund of SAR 120.00 has been approved and credited to card *4521\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "R10_4",
+"text": "Your refund of SAR 120.00 has been approved and credited to card *4521. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "R10_5",
+"text": "Your refund of SAR 120.00 has been approved and credited to card *4521. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "R11_0",
+"text": "Cashback SAR 25.00 approved for card *4521",
+"truth": {
+"kind": "c",
+"amt": 25,
+"cur": "SAR"
+}
+},
+{
+"id": "R11_1",
+"text": "Cashback SAR 25.00 approved for card *4521 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 25,
+"cur": "SAR"
+}
+},
+{
+"id": "R11_2",
+"text": "Cashback SAR 25.00 approved for card *4521\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 25,
+"cur": "SAR"
+}
+},
+{
+"id": "R11_3",
+"text": "Cashback SAR 25.00 approved for card *4521\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 25,
+"cur": "SAR"
+}
+},
+{
+"id": "R11_4",
+"text": "Cashback SAR 25.00 approved for card *4521. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 25,
+"cur": "SAR"
+}
+},
+{
+"id": "R11_5",
+"text": "Cashback SAR 25.00 approved for card *4521. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 25,
+"cur": "SAR"
+}
+},
+{
+"id": "R12_0",
+"text": "Incoming transfer SAR 500.00 approved, account *5678",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "R12_1",
+"text": "Incoming transfer SAR 500.00 approved, account *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "R12_2",
+"text": "Incoming transfer SAR 500.00 approved, account *5678\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "R12_3",
+"text": "Incoming transfer SAR 500.00 approved, account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "R12_4",
+"text": "Incoming transfer SAR 500.00 approved, account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "R12_5",
+"text": "Incoming transfer SAR 500.00 approved, account *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "R13_0",
+"text": "Direct debit refund SAR 89.00 to account *5678",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R13_1",
+"text": "Direct debit refund SAR 89.00 to account *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R13_2",
+"text": "Direct debit refund SAR 89.00 to account *5678\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R13_3",
+"text": "Direct debit refund SAR 89.00 to account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R13_4",
+"text": "Direct debit refund SAR 89.00 to account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R13_5",
+"text": "Direct debit refund SAR 89.00 to account *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R14_0",
+"text": "Standing order SAR 1,000.00 received from Ali into account *5678",
+"truth": {
+"kind": "c",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "R14_1",
+"text": "Standing order SAR 1,000.00 received from Ali into account *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "R14_2",
+"text": "Standing order SAR 1,000.00 received from Ali into account *5678\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "R14_3",
+"text": "Standing order SAR 1,000.00 received from Ali into account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "R14_4",
+"text": "Standing order SAR 1,000.00 received from Ali into account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "R14_5",
+"text": "Standing order SAR 1,000.00 received from Ali into account *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "R15_0",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R15_1",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp Credit limit: SAR 20,000",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R15_2",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp\nCard activated",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R15_3",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp\nYour e-statement is available in the app",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R15_4",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp. تم تفعيل البطاقة",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R15_5",
+"text": "Payroll SAR 8,500.00 to account *5678 from Test Corp. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "R16_0",
+"text": "Card *4521 authorised SAR 45.00 at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R16_1",
+"text": "Card *4521 authorised SAR 45.00 at Test Diner Credit limit: SAR 20,000",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R16_2",
+"text": "Card *4521 authorised SAR 45.00 at Test Diner\nCard activated",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R16_3",
+"text": "Card *4521 authorised SAR 45.00 at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R16_4",
+"text": "Card *4521 authorised SAR 45.00 at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R16_5",
+"text": "Card *4521 authorised SAR 45.00 at Test Diner. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R17_0",
+"text": "Direct debit SAR 89.00 Test Gym account *5678",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R17_1",
+"text": "Direct debit SAR 89.00 Test Gym account *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R17_2",
+"text": "Direct debit SAR 89.00 Test Gym account *5678\nCard activated",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R17_3",
+"text": "Direct debit SAR 89.00 Test Gym account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R17_4",
+"text": "Direct debit SAR 89.00 Test Gym account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R17_5",
+"text": "Direct debit SAR 89.00 Test Gym account *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R18_0",
+"text": "Standing order SAR 2,000.00 to Landlord executed",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R18_1",
+"text": "Standing order SAR 2,000.00 to Landlord executed Credit limit: SAR 20,000",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R18_2",
+"text": "Standing order SAR 2,000.00 to Landlord executed\nCard activated",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R18_3",
+"text": "Standing order SAR 2,000.00 to Landlord executed\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R18_4",
+"text": "Standing order SAR 2,000.00 to Landlord executed. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R18_5",
+"text": "Standing order SAR 2,000.00 to Landlord executed. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R19_0",
+"text": "عمولة 5 ريال على حسابك *5678",
+"truth": {
+"kind": "d",
+"amt": 5,
+"cur": "SAR"
+}
+},
+{
+"id": "R19_1",
+"text": "عمولة 5 ريال على حسابك *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "d",
+"amt": 5,
+"cur": "SAR"
+}
+},
+{
+"id": "R19_2",
+"text": "عمولة 5 ريال على حسابك *5678\nCard activated",
+"truth": {
+"kind": "d",
+"amt": 5,
+"cur": "SAR"
+}
+},
+{
+"id": "R19_3",
+"text": "عمولة 5 ريال على حسابك *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 5,
+"cur": "SAR"
+}
+},
+{
+"id": "R19_4",
+"text": "عمولة 5 ريال على حسابك *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 5,
+"cur": "SAR"
+}
+},
+{
+"id": "R19_5",
+"text": "عمولة 5 ريال على حسابك *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 5,
+"cur": "SAR"
+}
+},
+{
+"id": "R20_0",
+"text": "خصم مباشر 89 ريال لصالح نادي تجريبي من حسابك *5678",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R20_1",
+"text": "خصم مباشر 89 ريال لصالح نادي تجريبي من حسابك *5678 Credit limit: SAR 20,000",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R20_2",
+"text": "خصم مباشر 89 ريال لصالح نادي تجريبي من حسابك *5678\nCard activated",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R20_3",
+"text": "خصم مباشر 89 ريال لصالح نادي تجريبي من حسابك *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R20_4",
+"text": "خصم مباشر 89 ريال لصالح نادي تجريبي من حسابك *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R20_5",
+"text": "خصم مباشر 89 ريال لصالح نادي تجريبي من حسابك *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "R21_0",
+"text": "أمر مستديم 2000 ريال إلى المالك نُفذ من حسابك",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R21_1",
+"text": "أمر مستديم 2000 ريال إلى المالك نُفذ من حسابك Credit limit: SAR 20,000",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R21_2",
+"text": "أمر مستديم 2000 ريال إلى المالك نُفذ من حسابك\nCard activated",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R21_3",
+"text": "أمر مستديم 2000 ريال إلى المالك نُفذ من حسابك\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R21_4",
+"text": "أمر مستديم 2000 ريال إلى المالك نُفذ من حسابك. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R21_5",
+"text": "أمر مستديم 2000 ريال إلى المالك نُفذ من حسابك. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "R22_0",
+"text": "SAR 45.00 approved at Test Diner card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R22_1",
+"text": "SAR 45.00 approved at Test Diner card *4521 Credit limit: SAR 20,000",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R22_2",
+"text": "SAR 45.00 approved at Test Diner card *4521\nCard activated",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R22_3",
+"text": "SAR 45.00 approved at Test Diner card *4521\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R22_4",
+"text": "SAR 45.00 approved at Test Diner card *4521. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R22_5",
+"text": "SAR 45.00 approved at Test Diner card *4521. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R23_0",
+"text": "Posted: SAR 45.00 Test Diner card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R23_1",
+"text": "Posted: SAR 45.00 Test Diner card *4521 Credit limit: SAR 20,000",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R23_2",
+"text": "Posted: SAR 45.00 Test Diner card *4521\nCard activated",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R23_3",
+"text": "Posted: SAR 45.00 Test Diner card *4521\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R23_4",
+"text": "Posted: SAR 45.00 Test Diner card *4521. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "R23_5",
+"text": "Posted: SAR 45.00 Test Diner card *4521. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+}
+]

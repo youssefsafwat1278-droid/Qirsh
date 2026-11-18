@@ -131,7 +131,20 @@ class DirectionSignal {
       return detectWords(core);
     }
     if (flow != TxnDirection.unknown) return flow;
-    return detectWords(core);
+    // A flow that moves reward points ("12 miles credited to your account")
+    // is not a money word either (follow-up 3, SM-03).
+    return detectWords(_withoutRewardFlows(core.toLowerCase()));
+  }
+
+  static String _withoutRewardFlows(String lower) {
+    for (final flow in [_debitFlow, _creditFlow]) {
+      for (final m in flow.allMatches(lower).toList().reversed) {
+        if (isRewardFlow(lower, m.start, m.end)) {
+          lower = lower.replaceRange(m.start, m.end, ' ' * (m.end - m.start));
+        }
+      }
+    }
+    return lower;
   }
 
   static final RegExp _creditVerbFlow = _flowPattern([
@@ -158,6 +171,7 @@ class DirectionSignal {
     'from account', 'money out', 'outgoing', 'outward',
     'تم خصم', 'خصم مبلغ', 'تم سحب', 'مبلغ صادر', 'حوالة صادرة',
     'تحويل صادر', 'من حسابك', 'من بطاقتك', 'تم الدفع', 'تم دفع', 'تم سداد',
+    'منك إلى', 'منك الى',
   ];
 
   /// Incoming structure: a credit verb or "… into / to your account".
@@ -170,6 +184,7 @@ class DirectionSignal {
     'inward', 'incoming', 'تم إيداع', 'تم ايداع',
     'حوالة واردة', 'تحويل وارد', 'تم استلام', 'استلمت', 'مبلغ وارد',
     'إلى حسابك', 'الى حسابك', 'تمت إضافة', 'تم إضافة', 'إضافتها',
+    'إليك', 'اليك',
   ];
 
   static final RegExp _debitFlow = _flowPattern(debitFlow);
@@ -216,17 +231,37 @@ class DirectionSignal {
   }
 
   /// The first [flow] phrase in [lower] that moves money: "تم إيداع نقاط
-  /// المكافآت" / "credited points 45" move loyalty points, not money.
-  /// Mirrors `firstMoneyFlow` in `process-ios-sms/message_meaning.ts`.
+  /// المكافآت" / "credited points 45" move loyalty points, not money, and so
+  /// does a flow whose own clause names the points ("Purchase SAR 450 …, 45
+  /// points credited to your account": follow-up 3, SM-03).
+  /// Mirrors `firstMoneyFlow` in `process-ios-sms/message_meaning.ts` and
+  /// `isRewardFlow` in `_shared/money_text.ts`.
   static RegExpMatch? _firstMoneyFlow(RegExp flow, String lower) {
     for (final m in flow.allMatches(lower)) {
-      if (!_pointsAfter.hasMatch(lower.substring(m.end))) return m;
+      if (!isRewardFlow(lower, m.start, m.end)) return m;
     }
     return null;
   }
 
-  static final RegExp _pointsAfter = RegExp(
-      r'^\s*(?:(?:reward|loyalty|bonus)\s+)?(?:points|miles)(?![a-z])|^\s*(?:ال)?نقاط(?!\s*البيع)|^\s*نقطة');
+  /// Whether the flow phrase at [start]..[end] of [lower] moves reward points
+  /// or miles: a reward unit right after it (a count may come first), or in
+  /// its own clause before it.
+  static bool isRewardFlow(String lower, int start, int end) {
+    if (_rewardAfter.hasMatch(lower.substring(end))) return true;
+    var from = 0;
+    for (final c in _rewardClauseCut.allMatches(lower.substring(0, start))) {
+      from = c.end;
+    }
+    return _rewardUnit.hasMatch(lower.substring(from, start));
+  }
+
+  static const String _rewardUnits =
+      r'(?:(?:reward|loyalty|bonus|cashback)\s+)?(?:points|miles)(?![a-z])|(?:ال)?نقاط(?!\s*البيع)|نقطة|نقطه|أميال|اميال';
+  static final RegExp _rewardAfter =
+      RegExp('^\\s*(?:[0-9][0-9,.]*\\s*)?(?:$_rewardUnits)');
+  static final RegExp _rewardUnit = RegExp('(?<![a-z])(?:$_rewardUnits)');
+  static final RegExp _rewardClauseCut =
+      RegExp(r'[\n,،:;!?؟؛]|\.(?![0-9])| [-–—] ');
 
   /// The direction implied by a classified [TransactionType], or
   /// [TxnDirection.unknown] when the type is inherently ambiguous (transfer).

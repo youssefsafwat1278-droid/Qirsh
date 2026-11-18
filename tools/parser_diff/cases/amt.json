@@ -1,0 +1,1492 @@
+[
+{
+"id": "A000",
+"text": "Purchase of SAR 89.50 at Test Mart with card *4521. Available balance: SAR 3,210.40",
+"truth": {
+"kind": "d",
+"amt": 89.5,
+"cur": "SAR"
+}
+},
+{
+"id": "A001",
+"text": "Purchase of SAR 89.50 at Test Mart with card *4521. Credit limit: SAR 20,000",
+"truth": {
+"kind": "d",
+"amt": 89.5,
+"cur": "SAR"
+}
+},
+{
+"id": "A002",
+"text": "Purchase SAR 120.00 at Test Shop. Avl Bal SAR 1,880.00. Limit SAR 5,000",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "A003",
+"text": "POS purchase SAR 45.25 Test Cafe card *1234 balance SAR 954.75",
+"truth": {
+"kind": "d",
+"amt": 45.25,
+"cur": "SAR"
+}
+},
+{
+"id": "A004",
+"text": "Card *1234 purchase SAR 230.00 at Test Electronics. Remaining limit SAR 4,770.00",
+"truth": {
+"kind": "d",
+"amt": 230,
+"cur": "SAR"
+}
+},
+{
+"id": "A005",
+"text": "Debit card purchase SAR 15.00 at Test Bakery on 17/11 10:22. Bal: SAR 2,450.10",
+"truth": {
+"kind": "d",
+"amt": 15,
+"cur": "SAR"
+}
+},
+{
+"id": "A006",
+"text": "Online purchase USD 49.99 (SAR 187.46) at TestStore. Fee SAR 4.69. Available limit SAR 9,812.54",
+"truth": {
+"kind": "d",
+"amt": 187.46,
+"cur": "SAR"
+}
+},
+{
+"id": "A007",
+"text": "Purchase AED 120.00 (SAR 122.70) at Test Duty Free, exchange rate 1.0225. Card limit SAR 15,000",
+"truth": {
+"kind": "d",
+"amt": 122.7,
+"cur": "SAR"
+}
+},
+{
+"id": "A008",
+"text": "Purchase of EUR 35.00 at Test Bistro Paris. Amount in SAR 143.20. Foreign fee SAR 3.58. Balance SAR 6,000.00",
+"truth": {
+"kind": "d",
+"amt": 143.2,
+"cur": "SAR"
+}
+},
+{
+"id": "A009",
+"text": "Spent SAR 75.00 at Test Fuel with card *9876. Outstanding balance SAR 1,075.00. Minimum due SAR 53.75",
+"truth": {
+"kind": "d",
+"amt": 75,
+"cur": "SAR"
+}
+},
+{
+"id": "A010",
+"text": "Card purchase SAR 410.00 at Test Furniture. Credit limit SAR 10,000. Available SAR 9,590.00",
+"truth": {
+"kind": "d",
+"amt": 410,
+"cur": "SAR"
+}
+},
+{
+"id": "A011",
+"text": "Purchase: SAR 60.00\nMerchant: Test Pharmacy\nCard: *4521\nAvailable balance: SAR 60.00",
+"truth": {
+"kind": "d",
+"amt": 60,
+"cur": "SAR"
+}
+},
+{
+"id": "A012",
+"text": "Purchase: SAR 1,250.00\nAt: Test Jewels\nBalance: SAR 1,250.00",
+"truth": {
+"kind": "d",
+"amt": 1250,
+"cur": "SAR"
+}
+},
+{
+"id": "A013",
+"text": "Purchase SAR 300.00 Test Hotel. Daily limit SAR 5,000. Remaining daily limit SAR 4,700",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "A014",
+"text": "Purchase SAR 18.00 at Test Cafe. Points earned 18. Points balance 1,240",
+"truth": {
+"kind": "d",
+"amt": 18,
+"cur": "SAR"
+}
+},
+{
+"id": "A015",
+"text": "Purchase SAR 99.00 at Test Gym, VAT SAR 12.91 included. Balance SAR 901.00",
+"truth": {
+"kind": "d",
+"amt": 99,
+"cur": "SAR"
+}
+},
+{
+"id": "A016",
+"text": "Payment of SAR 250.00 to Test Telecom. Amount due was SAR 250.00. Balance SAR 750.00",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "A017",
+"text": "Mada purchase 34.50 SAR at Test Grocery. Available balance 2,000.00 SAR",
+"truth": {
+"kind": "d",
+"amt": 34.5,
+"cur": "SAR"
+}
+},
+{
+"id": "A018",
+"text": "Purchase amount: SAR 56.00, Balance: SAR 444.00, Limit: SAR 5,000.00, Merchant: Test Books",
+"truth": {
+"kind": "d",
+"amt": 56,
+"cur": "SAR"
+}
+},
+{
+"id": "A019",
+"text": "You spent SAR 23.00 at Test Juice. Your remaining balance is SAR 77.00",
+"truth": {
+"kind": "d",
+"amt": 23,
+"cur": "SAR"
+}
+},
+{
+"id": "A020",
+"text": "Withdrawal SAR 500.00 ATM Test Branch. Balance SAR 2,500.00. Daily withdrawal limit SAR 10,000",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "A021",
+"text": "ATM cash withdrawal of SAR 1,000 from card *4521. Avl bal SAR 12,345.67",
+"truth": {
+"kind": "d",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "A022",
+"text": "Salary credited SAR 12,000.00 to account *7788. Balance SAR 15,430.00",
+"truth": {
+"kind": "c",
+"amt": 12000,
+"cur": "SAR"
+}
+},
+{
+"id": "A023",
+"text": "Transfer received SAR 2,500.00 from Test Person. Available balance SAR 4,100.00",
+"truth": {
+"kind": "c",
+"amt": 2500,
+"cur": "SAR"
+}
+},
+{
+"id": "A024",
+"text": "Refund of SAR 89.00 from Test Store credited to card *4521. Available limit SAR 9,089.00",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "A025",
+"text": "Transfer of SAR 700.00 to Test Person completed. Fee SAR 0.58. Balance SAR 1,299.42",
+"truth": {
+"kind": "d",
+"amt": 700,
+"cur": "SAR"
+}
+},
+{
+"id": "A026",
+"text": "Bill payment SAR 145.30 Test Electricity account 1029384756. Balance SAR 854.70",
+"truth": {
+"kind": "d",
+"amt": 145.3,
+"cur": "SAR"
+}
+},
+{
+"id": "A027",
+"text": "Purchase SAR 12.00 Test Parking, installment 1 of 1. Limit available SAR 1,988",
+"truth": {
+"kind": "d",
+"amt": 12,
+"cur": "SAR"
+}
+},
+{
+"id": "A028",
+"text": "Purchase of USD 20.00 at TestApp. Rate 3.75. Charged SAR 75.00. Card limit SAR 8,000",
+"truth": {
+"kind": "d",
+"amt": 75,
+"cur": "SAR"
+}
+},
+{
+"id": "A029",
+"text": "Purchase SAR 5,000.00 at Test Motors. Credit limit SAR 5,000.00",
+"truth": {
+"kind": "d",
+"amt": 5000,
+"cur": "SAR"
+}
+},
+{
+"id": "A030",
+"text": "Amount due paid: SAR 500.00 for card *4521. Thank you",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "A031",
+"text": "Outstanding amount settled SAR 1,200.00 for credit card *4521",
+"truth": {
+"kind": "d",
+"amt": 1200,
+"cur": "SAR"
+}
+},
+{
+"id": "A032",
+"text": "Balance transfer of SAR 3,000 completed to card *4521",
+"truth": {
+"kind": "d",
+"amt": 3000,
+"cur": "SAR"
+}
+},
+{
+"id": "A033",
+"text": "Minimum payment of SAR 115.00 received for card *4521. Thank you",
+"truth": {
+"kind": "d",
+"amt": 115,
+"cur": "SAR"
+}
+},
+{
+"id": "A034",
+"text": "Limit increase fee SAR 50.00 deducted from account *7788",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "A035",
+"text": "Remaining installment SAR 400.00 debited from account *7788",
+"truth": {
+"kind": "d",
+"amt": 400,
+"cur": "SAR"
+}
+},
+{
+"id": "A036",
+"text": "Payment due SAR 300 paid successfully for card *4521",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "A037",
+"text": "Outstanding balance payment SAR 2,000.00 received. Thank you",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "A038",
+"text": "Minimum due SAR 115.00 paid from account *7788",
+"truth": {
+"kind": "d",
+"amt": 115,
+"cur": "SAR"
+}
+},
+{
+"id": "A039",
+"text": "Credit card payment SAR 1,500.00 received. Remaining balance SAR 500.00",
+"truth": {
+"kind": "d",
+"amt": 1500,
+"cur": "SAR"
+}
+},
+{
+"id": "A040",
+"text": "Card payment received: SAR 750.00. Outstanding: SAR 0.00",
+"truth": {
+"kind": "d",
+"amt": 750,
+"cur": "SAR"
+}
+},
+{
+"id": "A041",
+"text": "Paid SAR 220.00 towards outstanding balance of card *4521",
+"truth": {
+"kind": "d",
+"amt": 220,
+"cur": "SAR"
+}
+},
+{
+"id": "A042",
+"text": "Amount due of SAR 340.00 has been debited from account *7788",
+"truth": {
+"kind": "d",
+"amt": 340,
+"cur": "SAR"
+}
+},
+{
+"id": "A043",
+"text": "Available balance top-up of SAR 100.00 completed via Test Wallet",
+"truth": {
+"kind": "c",
+"amt": 100,
+"cur": "SAR"
+}
+},
+{
+"id": "A044",
+"text": "Remaining amount SAR 600.00 transferred to Test Person",
+"truth": {
+"kind": "d",
+"amt": 600,
+"cur": "SAR"
+}
+},
+{
+"id": "A045",
+"text": "Limit SAR 50 purchase at Test Kiosk approved, amount SAR 50.00",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "A046",
+"text": "Balance inquiry fee SAR 3.00 deducted from account *7788",
+"truth": {
+"kind": "d",
+"amt": 3,
+"cur": "SAR"
+}
+},
+{
+"id": "A047",
+"text": "Installment SAR 400.00 debited (3 of 12). Remaining SAR 3,600.00",
+"truth": {
+"kind": "d",
+"amt": 400,
+"cur": "SAR"
+}
+},
+{
+"id": "A048",
+"text": "Card *4521 outstanding of SAR 980.00 paid in full",
+"truth": {
+"kind": "d",
+"amt": 980,
+"cur": "SAR"
+}
+},
+{
+"id": "A049",
+"text": "Total due SAR 1,045.00 paid via Test Bank app",
+"truth": {
+"kind": "d",
+"amt": 1045,
+"cur": "SAR"
+}
+},
+{
+"id": "A050",
+"text": "شراء بمبلغ 150.00 ريال لدى متجر تجريبي بطاقة *4521 الرصيد المتاح 2,350.00 ريال",
+"truth": {
+"kind": "d",
+"amt": 150,
+"cur": "SAR"
+}
+},
+{
+"id": "A051",
+"text": "تم خصم 250 ريال من رصيدك لدى متجر تجريبي",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "A052",
+"text": "خصم من رصيدك 250 ريال لدى متجر تجريبي",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "A053",
+"text": "شراء 75.50 ريال من مقهى تجريبي. الرصيد 924.50 ريال",
+"truth": {
+"kind": "d",
+"amt": 75.5,
+"cur": "SAR"
+}
+},
+{
+"id": "A054",
+"text": "عملية شراء بقيمة 320 ريال لدى متجر تجريبي. الحد المتاح 4,680 ريال",
+"truth": {
+"kind": "d",
+"amt": 320,
+"cur": "SAR"
+}
+},
+{
+"id": "A055",
+"text": "شراء بمبلغ 99 ريال. المتبقي من الحد 901 ريال",
+"truth": {
+"kind": "d",
+"amt": 99,
+"cur": "SAR"
+}
+},
+{
+"id": "A056",
+"text": "تم سداد المبلغ المستحق 500 ريال لبطاقة *4521",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "A057",
+"text": "سداد المستحق 1,200 ريال لبطاقة الائتمان *4521",
+"truth": {
+"kind": "d",
+"amt": 1200,
+"cur": "SAR"
+}
+},
+{
+"id": "A058",
+"text": "تم خصم 45 ريال رسوم خدمة من حساب *7788. الرصيد 955 ريال",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A059",
+"text": "شراء 230 ريال لدى متجر تجريبي شامل ضريبة القيمة المضافة 30 ريال",
+"truth": {
+"kind": "d",
+"amt": 230,
+"cur": "SAR"
+}
+},
+{
+"id": "A060",
+"text": "شراء دولي 50.00 دولار (187.50 ريال) لدى متجر تجريبي. رسوم 4.69 ريال",
+"truth": {
+"kind": "d",
+"amt": 187.5,
+"cur": "SAR"
+}
+},
+{
+"id": "A061",
+"text": "إيداع راتب 12,000.00 ريال في حساب *7788. الرصيد 15,000.00 ريال",
+"truth": {
+"kind": "c",
+"amt": 12000,
+"cur": "SAR"
+}
+},
+{
+"id": "A062",
+"text": "حوالة واردة 2,500 ريال من شخص تجريبي. الرصيد المتاح 4,100 ريال",
+"truth": {
+"kind": "c",
+"amt": 2500,
+"cur": "SAR"
+}
+},
+{
+"id": "A063",
+"text": "استرداد 89 ريال من متجر تجريبي إلى بطاقة *4521. الحد المتاح 9,089 ريال",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "A064",
+"text": "سحب نقدي 500 ريال من صراف تجريبي. الرصيد 2,500 ريال",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "A065",
+"text": "شراء ٢٥٠٫٠٠ ريال لدى متجر تجريبي. الرصيد ١٬٧٥٠٫٠٠ ريال",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "A066",
+"text": "شراء بمبلغ ٨٩٫٥٠ ر.س لدى متجر تجريبي بطاقة ٤٥٢١",
+"truth": {
+"kind": "d",
+"amt": 89.5,
+"cur": "SAR"
+}
+},
+{
+"id": "A067",
+"text": "تم شراء بمبلغ 60 ريال لدى صيدلية تجريبية. رصيدك المتاح 60 ريال",
+"truth": {
+"kind": "d",
+"amt": 60,
+"cur": "SAR"
+}
+},
+{
+"id": "A068",
+"text": "تحويل صادر 700 ريال إلى شخص تجريبي. رسوم 0.58 ريال. الرصيد 1,299.42 ريال",
+"truth": {
+"kind": "d",
+"amt": 700,
+"cur": "SAR"
+}
+},
+{
+"id": "A069",
+"text": "سداد فاتورة 145.30 ريال لشركة الكهرباء التجريبية. الرصيد 854.70 ريال",
+"truth": {
+"kind": "d",
+"amt": 145.3,
+"cur": "SAR"
+}
+},
+{
+"id": "A070",
+"text": "خصم قسط 400 ريال (3 من 12). المتبقي 3,600 ريال",
+"truth": {
+"kind": "d",
+"amt": 400,
+"cur": "SAR"
+}
+},
+{
+"id": "A071",
+"text": "شراء بمبلغ 18 ريال. النقاط المكتسبة 18. رصيد النقاط 1,240",
+"truth": {
+"kind": "d",
+"amt": 18,
+"cur": "SAR"
+}
+},
+{
+"id": "A072",
+"text": "تم سداد 115 ريال الحد الأدنى للمستحق لبطاقة *4521",
+"truth": {
+"kind": "d",
+"amt": 115,
+"cur": "SAR"
+}
+},
+{
+"id": "A073",
+"text": "شراء عبر الإنترنت 49.99 ريال لدى متجر تجريبي. حد البطاقة 10,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 49.99,
+"cur": "SAR"
+}
+},
+{
+"id": "A074",
+"text": "مدفوعات 300 ريال لدى فندق تجريبي. حد الشراء اليومي 5,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "A075",
+"text": "سحب 1,000 ريال. حد السحب اليومي 10,000 ريال. الرصيد 12,345.67 ريال",
+"truth": {
+"kind": "d",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "A076",
+"text": "تحويل 2,000 ريال إلى شخص تجريبي. حد التحويل المتبقي 8,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "A077",
+"text": "شراء 410 ريال لدى متجر أثاث تجريبي. الحد الائتماني 10,000 ريال. المتاح 9,590 ريال",
+"truth": {
+"kind": "d",
+"amt": 410,
+"cur": "SAR"
+}
+},
+{
+"id": "A078",
+"text": "تم خصم مبلغ 250 ريال من رصيدك لدى متجر تجريبي",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "A079",
+"text": "مبلغ 75 ريال خصم من الرصيد لشراء من مقهى تجريبي",
+"truth": {
+"kind": "d",
+"amt": 75,
+"cur": "SAR"
+}
+},
+{
+"id": "A080",
+"text": "شراء 34.50 ريال بطاقة مدى *1234 لدى بقالة تجريبية في 17/11 الساعة 10:22",
+"truth": {
+"kind": "d",
+"amt": 34.5,
+"cur": "SAR"
+}
+},
+{
+"id": "A081",
+"text": "Purchase SAR 12,345.67 at Test Motors card *4521",
+"truth": {
+"kind": "d",
+"amt": 12345.67,
+"cur": "SAR"
+}
+},
+{
+"id": "A082",
+"text": "Purchase SAR 1,000,000.00 at Test Realty card *4521",
+"truth": {
+"kind": "d",
+"amt": 1000000,
+"cur": "SAR"
+}
+},
+{
+"id": "A083",
+"text": "Purchase SAR 1250 at Test Store card *4521. Balance SAR 1250",
+"truth": {
+"kind": "d",
+"amt": 1250,
+"cur": "SAR"
+}
+},
+{
+"id": "A084",
+"text": "Purchase SAR 0.99 at TestApp card *4521",
+"truth": {
+"kind": "d",
+"amt": 0.99,
+"cur": "SAR"
+}
+},
+{
+"id": "A085",
+"text": "Purchase SAR 7 at Test Kiosk card *4521",
+"truth": {
+"kind": "d",
+"amt": 7,
+"cur": "SAR"
+}
+},
+{
+"id": "A086",
+"text": "Purchase SAR 2.5 at Test Kiosk card *4521",
+"truth": {
+"kind": "d",
+"amt": 2.5,
+"cur": "SAR"
+}
+},
+{
+"id": "A087",
+"text": "Purchase of 89.50 SAR at Test Mart. Balance 89.50 SAR",
+"truth": {
+"kind": "d",
+"amt": 89.5,
+"cur": "SAR"
+}
+},
+{
+"id": "A088",
+"text": "SAR45.00 spent at Test Cafe card *1234",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A089",
+"text": "45SR spent at Test Cafe card *1234",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A090",
+"text": "Paid 45.00 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "A091",
+"text": "Purchase ٤٥ ر.س Test Cafe card *1234",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A092",
+"text": "شراء ٣٬٤٥٠٫٧٥ ريال لدى متجر تجريبي",
+"truth": {
+"kind": "d",
+"amt": 3450.75,
+"cur": "SAR"
+}
+},
+{
+"id": "A093",
+"text": "POS 4521 Test Mart 89.50",
+"truth": {
+"kind": "d",
+"amt": 89.5
+}
+},
+{
+"id": "A094",
+"text": "Purchase SAR 89.50 Test Mart. Avail bal SAR 89.50. Limit 89.50",
+"truth": {
+"kind": "d",
+"amt": 89.5,
+"cur": "SAR"
+}
+},
+{
+"id": "A095",
+"text": "EGP 1,250.00 debited from card 4907 at Test Market. Available 3,750.00",
+"truth": {
+"kind": "d",
+"amt": 1250,
+"cur": "EGP"
+}
+},
+{
+"id": "A096",
+"text": "Purchase AED 300.00 at Test Mall Dubai. Available limit AED 9,700.00",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "AED"
+}
+},
+{
+"id": "A097",
+"text": "Purchase USD 10.00 at TestApp. Available limit USD 990.00",
+"truth": {
+"kind": "d",
+"amt": 10,
+"cur": "USD"
+}
+},
+{
+"id": "A098",
+"text": "Debited KWD 12.500 at Test Store. Balance KWD 487.500",
+"truth": {
+"kind": "d",
+"amt": 12.5,
+"cur": "KWD"
+}
+},
+{
+"id": "A099",
+"text": "Purchase SAR 3,000 at Test Store. Previous balance SAR 5,000. New balance SAR 2,000",
+"truth": {
+"kind": "d",
+"amt": 3000,
+"cur": "SAR"
+}
+},
+{
+"id": "A100",
+"text": "Purchase SAR 1.00 at Test Verify card *4521. Available balance SAR 1.00",
+"truth": {
+"kind": "d",
+"amt": 1,
+"cur": "SAR"
+}
+},
+{
+"id": "A101",
+"text": "Purchase SAR 45.00 at Test Cafe. Ref 12500",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A102",
+"text": "Purchase SAR 45.00 at Test Cafe. Auth 004521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A103",
+"text": "Purchase SAR 45.00 at Test Cafe. Approval code 482913",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A104",
+"text": "Purchase SAR 45.00 at Test Cafe. Auth code: 123456. Card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A105",
+"text": "Purchase approved SAR 45.00 at Test Cafe, auth code 7788",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A106",
+"text": "Ref 12500: Purchase SAR 45.00 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A107",
+"text": "Auth 004521 Purchase SAR 45.00 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A108",
+"text": "Purchase SAR 45.00 at Test Cafe. RRN 431212345678",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A109",
+"text": "Purchase SAR 45.00 at Test Cafe. Txn ID 99812",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A110",
+"text": "Purchase SAR 45.00 at Test Cafe, reference 7788123",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A111",
+"text": "Card 4521 purchase 45.00 SAR Test Cafe 17/11/2026 10:22",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A112",
+"text": "Card ending 4521 used for SAR 45.00 at Test Cafe on 17-11-2026 at 10:22",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A113",
+"text": "Purchase SAR 45.00 at Test Cafe on 2026-11-17 22:15 card **4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A114",
+"text": "Purchase SAR 45.00 at Test Cafe. 5% cashback SAR 2.25 credited",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A115",
+"text": "Purchase SAR 200.00 at Test Shop. 10% discount applied",
+"truth": {
+"kind": "d",
+"amt": 200,
+"cur": "SAR"
+}
+},
+{
+"id": "A116",
+"text": "Purchase SAR 45.00 at Test Cafe. Cashback SAR 2.25",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A117",
+"text": "Purchase SAR 45.00 at Test Cafe. Tip SAR 5.00. Total SAR 50.00"
+},
+{
+"id": "A118",
+"text": "Purchase SAR 45.00 at Test Cafe. Points 45. Code 2024",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A119",
+"text": "شراء 45 ريال لدى مقهى تجريبي. رقم المرجع 12500",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A120",
+"text": "شراء 45 ريال لدى مقهى تجريبي. رمز الموافقة 482913",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A121",
+"text": "شراء 45 ريال لدى مقهى تجريبي. رقم العملية 004521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A122",
+"text": "شراء 45 ريال لدى مقهى تجريبي بطاقة 4521 بتاريخ 17/11/2026 الساعة 22:15",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A123",
+"text": "Purchase SAR 45.00 at Test Cafe. Ref: 2500.00",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A124",
+"text": "Purchase SAR 45.00 Test Store 4521 Ref:120050 Bal:955.00",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A125",
+"text": "Transfer SAR 500.00 to IBAN SA0380000000608010167519. Ref 7781234",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "A126",
+"text": "Transfer SAR 500.00 to account 1234567890. Ref 778123",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "A127",
+"text": "Purchase SAR 45.00 at Test Cafe, approval 482913, card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A128",
+"text": "Approval code 482913. Purchase SAR 45.00 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A129",
+"text": "Purchase SAR 45.00 at Store 1250 card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A130",
+"text": "Purchase SAR 45.00 at Test Cafe. Your code for next order: 1250",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A131",
+"text": "Fee SAR 15.00 debited for card replacement, account *7788",
+"truth": {
+"kind": "d",
+"amt": 15,
+"cur": "SAR"
+}
+},
+{
+"id": "A132",
+"text": "Annual card fee SAR 250.00 charged to card *4521. Credit limit SAR 10,000",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "A133",
+"text": "VAT SAR 2.25 on fee SAR 15.00 debited from account *7788"
+},
+{
+"id": "A134",
+"text": "Purchase SAR 115.00 incl. VAT SAR 15.00 at Test Shop",
+"truth": {
+"kind": "d",
+"amt": 115,
+"cur": "SAR"
+}
+},
+{
+"id": "A135",
+"text": "Installment 3 of 12: SAR 400.00 debited for Test Furniture",
+"truth": {
+"kind": "d",
+"amt": 400,
+"cur": "SAR"
+}
+},
+{
+"id": "A136",
+"text": "Installment payment SAR 400.00 (3/12) debited. Remaining installments 9",
+"truth": {
+"kind": "d",
+"amt": 400,
+"cur": "SAR"
+}
+},
+{
+"id": "A137",
+"text": "Tabby installment SAR 150.00 paid. Remaining SAR 300.00",
+"truth": {
+"kind": "d",
+"amt": 150,
+"cur": "SAR"
+}
+},
+{
+"id": "A138",
+"text": "Cashback of SAR 25.00 credited to card *4521",
+"truth": {
+"kind": "c",
+"amt": 25,
+"cur": "SAR"
+}
+},
+{
+"id": "A139",
+"text": "Points redeemed: 1,000 points for SAR 10.00 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 10,
+"cur": "SAR"
+}
+},
+{
+"id": "A140",
+"text": "Late payment fee SAR 100.00 charged to card *4521. Minimum due SAR 215.00",
+"truth": {
+"kind": "d",
+"amt": 100,
+"cur": "SAR"
+}
+},
+{
+"id": "A141",
+"text": "Monthly fee SAR 15.00 deducted. Balance SAR 985.00",
+"truth": {
+"kind": "d",
+"amt": 15,
+"cur": "SAR"
+}
+},
+{
+"id": "A142",
+"text": "رسوم شهرية 15 ريال خصمت من حساب *7788. الرصيد 985 ريال",
+"truth": {
+"kind": "d",
+"amt": 15,
+"cur": "SAR"
+}
+},
+{
+"id": "A143",
+"text": "ضريبة 2.25 ريال على رسوم 15 ريال خصمت من حسابك"
+},
+{
+"id": "A144",
+"text": "قسط 3 من 12 بمبلغ 400 ريال خصم من حسابك",
+"truth": {
+"kind": "d",
+"amt": 400,
+"cur": "SAR"
+}
+},
+{
+"id": "A145",
+"text": "كاش باك 25 ريال أضيف إلى بطاقتك *4521",
+"truth": {
+"kind": "c",
+"amt": 25,
+"cur": "SAR"
+}
+},
+{
+"id": "A146",
+"text": "Tip of SAR 10.00 added to purchase at Test Restaurant. Total SAR 110.00"
+},
+{
+"id": "A147",
+"text": "Purchase SAR 230.00 at Test Shop. Instalment plan: 4 payments of SAR 57.50",
+"truth": {
+"kind": "d",
+"amt": 230,
+"cur": "SAR"
+}
+},
+{
+"id": "A148",
+"text": "Interest SAR 32.40 charged to card *4521. Outstanding SAR 2,032.40",
+"truth": {
+"kind": "d",
+"amt": 32.4,
+"cur": "SAR"
+}
+},
+{
+"id": "A149",
+"text": "Profit SAR 120.00 credited to savings account *7788. Balance SAR 10,120.00",
+"truth": {
+"kind": "c",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "A150",
+"text": "Dividend SAR 300.00 credited to account *7788",
+"truth": {
+"kind": "c",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "A151",
+"text": "Purchase SAR 50.00 at Limit Cafe card *1234",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "A152",
+"text": "Purchase SAR 50.00 at Balance Gym card *1234",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "A153",
+"text": "Purchase SAR 50.00 at Outstanding Burgers card *1234",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "A154",
+"text": "Purchase SAR 50.00 at Remaining Books card *1234",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "A155",
+"text": "Purchase SAR 50.00 at Available Store card *1234",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "A156",
+"text": "شراء 50 ريال لدى مطعم الحد الفاصل",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "A157",
+"text": "شراء 50 ريال لدى مقهى المتاح",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "A158",
+"text": "Purchase at Test Cafe: SAR 45.00. Balance: SAR 955.00. Available credit: SAR 4,045.00",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A159",
+"text": "Credit card payment of SAR 2,000 received. Available limit SAR 10,000",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "A160",
+"text": "Your payment of SAR 500 towards the amount due has been received",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "A161",
+"text": "Bal SAR 955.00 after purchase SAR 45.00 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A162",
+"text": "Balance: SAR 955.00\nPurchase: SAR 45.00\nMerchant: Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A163",
+"text": "Available limit SAR 4,955.00. Purchase SAR 45.00 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A164",
+"text": "الرصيد 955 ريال بعد شراء 45 ريال لدى مقهى تجريبي",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A165",
+"text": "رصيدك المتاح 955 ريال. شراء 45 ريال لدى مقهى تجريبي",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A166",
+"text": "Purchase SAR 45 at Test Cafe; limit 5000; bal 955",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "A167",
+"text": "Spent SAR 45 Test Cafe | Avl Bal SAR 955 | Limit SAR 5,000",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+}
+]

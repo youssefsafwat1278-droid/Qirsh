@@ -42,6 +42,17 @@ import 'package:money_companion/features/settings/settings_screen.dart';
 import 'package:money_companion/features/subscriptions/subscriptions_screen.dart';
 import 'package:money_companion/features/transactions/transactions_screen.dart';
 import 'package:money_companion/l10n/app_localizations.dart';
+import 'package:money_companion/core/i18n/country_catalog.dart';
+import 'package:money_companion/features/backup/backup_screen.dart';
+import 'package:money_companion/features/consent/smart_analysis_consent_sheet.dart';
+import 'package:money_companion/features/onboarding/auth_screen.dart';
+import 'package:money_companion/features/onboarding/country_picker_sheet.dart';
+import 'package:money_companion/features/onboarding/language_screen.dart';
+import 'package:money_companion/features/onboarding/onboarding_consent_steps.dart';
+import 'package:money_companion/features/onboarding/restore_prompt_screen.dart';
+import 'package:money_companion/features/onboarding/setup_screen.dart';
+import 'package:money_companion/features/settings/delete_account_screen.dart';
+import 'package:money_companion/features/settings/privacy_screen.dart';
 
 class _Keys implements DatabaseKeyStore {
   @override
@@ -172,6 +183,25 @@ class _SheetHostState extends State<_SheetHost> {
   Widget build(BuildContext context) => const Scaffold(body: SizedBox.expand());
 }
 
+class _ConsumerSheetHost extends ConsumerStatefulWidget {
+  const _ConsumerSheetHost(this.open);
+  final Future<void> Function(BuildContext context, WidgetRef ref) open;
+  @override
+  ConsumerState<_ConsumerSheetHost> createState() => _ConsumerSheetHostState();
+}
+
+class _ConsumerSheetHostState extends ConsumerState<_ConsumerSheetHost> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+        (_) => mounted ? widget.open(context, ref) : null);
+  }
+
+  @override
+  Widget build(BuildContext context) => const Scaffold(body: SizedBox.expand());
+}
+
 final _syntheticPending = TransactionEntity(
   id: 'scan-2',
   amountMoney: Money(2150, 'SAR'),
@@ -225,6 +255,37 @@ final largeTextScreens = <PrimaryScreen>[
   PrimaryScreen('Accounts', () => const AccountsScreen()),
   PrimaryScreen('Sign-out sheet',
       () => _SheetHost((c) => showSignOutSheet(c, pending: _unsyncedSample))),
+  ...onboardingAndRecordsScreens,
+];
+
+/// SP-09 (closure round): onboarding, consent, privacy, deletion and backup
+/// surfaces, added to the large-text gate only (their tap targets belong to
+/// other owners' scans).
+final onboardingAndRecordsScreens = <PrimaryScreen>[
+  PrimaryScreen('Onboarding language', () => const OnboardingLanguageScreen()),
+  PrimaryScreen('Sign-in', () => const OnboardingAuthScreen()),
+  PrimaryScreen('Onboarding setup', () => const OnboardingSetupScreen()),
+  PrimaryScreen('Country picker',
+      () => _SheetHost((c) => showCountryPicker(c, current: 'SA'))),
+  PrimaryScreen('Currency choice',
+      () => Scaffold(
+          body: CurrencyChoiceSheet(country: countryByCode('EG')!))),
+  PrimaryScreen('Consent step (cloud)',
+      () => Scaffold(
+          body: OnboardingConsentStep(
+              kind: OnboardingConsentKind.cloud, onDone: (_) {}))),
+  PrimaryScreen('Consent step (smart analysis)',
+      () => Scaffold(
+          body: OnboardingConsentStep(
+              kind: OnboardingConsentKind.smartAnalysis, onDone: (_) {}))),
+  PrimaryScreen('Consent sheet',
+      () => _ConsumerSheetHost(
+          (c, ref) => showSmartAnalysisConsentSheet(c, ref))),
+  PrimaryScreen('Privacy', () => const PrivacyScreen()),
+  PrimaryScreen('Delete account', () => const DeleteAccountScreen()),
+  PrimaryScreen('Backup and restore', () => const BackupScreen()),
+  PrimaryScreen('Restore prompt',
+      () => const RestorePromptScreen(onboardingFlow: true)),
 ];
 
 Future<void> loadAppFont(WidgetTester tester) => tester.runAsync(() async {

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/large_text.dart';
 import '../../core/theme/widgets/mali_glass.dart';
 import '../../core/utils/app_lucide_icons.dart';
 
@@ -105,7 +106,7 @@ class AppSheetScaffold extends StatelessWidget {
                                   Text(
                                     title!,
                                     textAlign: TextAlign.center,
-                                    maxLines: 2,
+                                    maxLines: linesUnlessLargeText(context, 2),
                                     overflow: TextOverflow.ellipsis,
                                     style:
                                         AppTypography.calmTitle(c.textPrimary)
@@ -116,7 +117,7 @@ class AppSheetScaffold extends StatelessWidget {
                                   Text(
                                     subtitle!,
                                     textAlign: TextAlign.center,
-                                    maxLines: 2,
+                                    maxLines: linesUnlessLargeText(context, 2),
                                     overflow: TextOverflow.ellipsis,
                                     style:
                                         AppTypography.caption(c.textSecondary)

@@ -71,7 +71,7 @@ class SceneDelegate: FlutterSceneDelegate {
     }
   }
 
-  // B24: cover as soon as the scene stops being active (app switcher swipe,
+  // V1-034: cover as soon as the scene stops being active (app switcher swipe,
   // Control Center, a system sheet), not only once it is in the background,
   // so the switcher never catches the live screen mid-transition. Removed again
   // in sceneDidBecomeActive. Idempotent: a second install is a no-op.

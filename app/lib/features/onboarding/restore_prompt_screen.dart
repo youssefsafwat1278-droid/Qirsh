@@ -283,6 +283,9 @@ class _RestorePromptScreenState extends ConsumerState<RestorePromptScreen> {
                       hintText: _useRecoveryCode
                           ? context.l10n.recoveryCodeHint
                           : context.l10n.backupPasswordHint,
+                      // SP-10: the hint wraps instead of being cut off on a
+                      // narrow phone or at large text.
+                      hintMaxLines: 4,
                       hintStyle: AppTypography.callout(
                         c.textLight.withValues(alpha: 0.55),
                       ),

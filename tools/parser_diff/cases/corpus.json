@@ -1,0 +1,1317 @@
+[
+{
+"id": "K000_dart:eg_cib_prepaid_fawry_debit",
+"text": "تم خصم 60.00EGP من بطاقة المدفوعة مقدماً رقم 4907 عند FAWRY*SNTRAL NWR ALA يوم 14/03 الساعه 22:29 المتاح 28.14  للمزيد إتصل ب 19623",
+"sender": "CIB"
+},
+{
+"id": "K001_dart:eg_debit_orange_available_balance_t",
+"text": "Your Debit Card **5398 had a Successful transaction of EGP 33.00 @Orange, your available bal. is hidden. for lost/stolen card call 00000",
+"sender": "BANK-EG"
+},
+{
+"id": "K002_dart:ae_adib_unsupported_trx_of_aed_avl_",
+"text": "Trx. of AED 50.00 on your a/c ****0535 at ABU DHABI NATIONAL OIL ABU DHABI AE. Avl Bal is AED 12956.50",
+"sender": "ADIB"
+},
+{
+"id": "K003_dart:sa_ar_pos_starbucks_short_date",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03",
+"sender": "BANK-SA"
+},
+{
+"id": "K004_dart:sa_international_online_purchase_fe",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80",
+"sender": "BANK-SA"
+},
+{
+"id": "K005_dart:sa_ar_online_purchase_account_maske",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06",
+"sender": "BANK-SA"
+},
+{
+"id": "K006_dart:sa_ar_online_purchase_fee_zero",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32",
+"sender": "BANK-SA"
+},
+{
+"id": "K007_dart:sa_en_online_purchase_account_and_c",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11",
+"sender": "BANK-SA"
+},
+{
+"id": "K008_dart:sa_ar_pos_merchant_label_balance",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19",
+"sender": "BANK-SA"
+},
+{
+"id": "K009_dart:kwd_international_purchase_fx_walle",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16",
+"sender": "BANK-SA"
+},
+{
+"id": "K010_dart:sa_internal_outward_transfer",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07",
+"sender": "BANK-SA"
+},
+{
+"id": "K011_dart:sa_rajhi_mada_pos_starbucks",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03",
+"sender": "الراجحي"
+},
+{
+"id": "K012_dart:sa_riyad_online_barq_funding",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06",
+"sender": "riyad"
+},
+{
+"id": "K013_dart:sa_stc_bank_transfer_outward",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07",
+"sender": "stcbank"
+},
+{
+"id": "K014_dart:sa_anb_atm_deposit_income",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47",
+"sender": "anb"
+},
+{
+"id": "K015_dart:sa_anb_govt_traffic_fine",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49",
+"sender": "anb"
+},
+{
+"id": "K016_dart:sa_bsf_pos_three_amounts",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12",
+"sender": "BSF"
+},
+{
+"id": "K017_dart:sa_stc_bank_income_sar_glued",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM",
+"sender": "stcbank"
+},
+{
+"id": "K018_dart:sa_stc_bank_intl_purchase_april_mdy",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30",
+"sender": "stcbank"
+},
+{
+"id": "K019_dart:sa_stc_bank_pos_april_dmy",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00",
+"sender": "stcbank"
+},
+{
+"id": "K020_dart:sa_stc_bank_transfer_arabic",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23",
+"sender": "stcbank"
+},
+{
+"id": "K021_dart:sa_stc_bank_intl_foreign_only",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48",
+"sender": "stcbank"
+},
+{
+"id": "K022_dart:sa_albilad_mada_pos",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24",
+"sender": "البلاد"
+},
+{
+"id": "K023_dart:sa_aljazira_biqeema_label",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "K024_dart:ae_dubai_bank_card_payment",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025",
+"sender": "بنك دبي"
+},
+{
+"id": "K025_dart:known_bank_known_merchant_auto_conf",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50",
+"sender": "SNB"
+},
+{
+"id": "K026_dart:unknown_merchant_high_parse_pending",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30",
+"sender": "SNB"
+},
+{
+"id": "K027_dart:ambiguous_date_unknown_bank_5_6_202",
+"text": "Purchase SAR 99.00 at RESTAURANT on 5/6/2026 12:00",
+"sender": "UNKNOWN-BANK"
+},
+{
+"id": "K028_dart:ambiguous_d360_intl_fee_balance",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80",
+"sender": "D360"
+},
+{
+"id": "K029_dart:ignore_account_freeze_admin",
+"text": "عزيزي عميل anb، تم تجميد حسابك لعدم تحديث بياناتك البنكية. يمكنك تحديث بياناتك من خلال تطبيق anb أو زيارة أقرب فرع",
+"sender": "anb"
+},
+{
+"id": "K030_dart:ignore_device_logout_security",
+"text": "لحمايتك تم تسجيل خروج أحد أجهزتك من القنوات الرقمية، بسبب تسجيل دخول أكثر من جهاز",
+"sender": "anb"
+},
+{
+"id": "K031_dart:ignore_complaint_closed_notice",
+"text": "Dear Customer, We would like to inform you that Your Complaint (Reference 0011389642) has been Closed.",
+"sender": "CIB"
+},
+{
+"id": "K032_dart:ignore_adib_chequebook_request",
+"text": "Dear Customer, thank you for requesting a new chequebook for your A/C NO: ****0535. Your request will be fulfilled at the earliest. Sincerely, ADIB",
+"sender": "ADIB"
+},
+{
+"id": "K033_sample:cardPaymentAr",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50",
+"sender": "x"
+},
+{
+"id": "K034_sample:cardPaymentEn",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45",
+"sender": "x"
+},
+{
+"id": "K035_sample:atmWithdrawal",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50",
+"sender": "x"
+},
+{
+"id": "K036_sample:transfer",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A",
+"sender": "x"
+},
+{
+"id": "K037_sample:salaryIncome",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50",
+"sender": "x"
+},
+{
+"id": "K038_sample:refund",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE",
+"sender": "x"
+},
+{
+"id": "K039_sample:stcPay",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456",
+"sender": "x"
+},
+{
+"id": "K040_sample:arabicIndicDigits",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠",
+"sender": "x"
+},
+{
+"id": "K041_sample:otpMessage",
+"text": "رمز الدخول الخاص بك هو ٤٥٨٩٢١ لا تشاركه مع أحد",
+"sender": "x"
+},
+{
+"id": "K042_sample:promoMessage",
+"text": "عرض خاص! خصم ٥٠٪ على جميع المنتجات هذا الأسبوع فقط",
+"sender": "x"
+},
+{
+"id": "K043_admin/cases[0]/body",
+"text": "تم خصم مبلغ 350.00 ريال من حسابك لدى STARBUCKS COFFEE بتاريخ 16/06/2026. الرصيد المتاح: 4,250.00 ريال",
+"sender": "x"
+},
+{
+"id": "K044_admin/cases[1]/body",
+"text": "إضافة 1,000.00 ريال إلى محفظتك من تحويل وارد",
+"sender": "x"
+},
+{
+"id": "K045_admin/cases[2]/body",
+"text": "تم خصم مبلغ 75.50 ريال من حسابك لدى PANDA بتاريخ 01/08/2026",
+"sender": "x"
+},
+{
+"id": "K046_admin/cases[3]/body",
+"text": "رمز التحقق الخاص بك هو 348912. لا تشاركه مع أحد.",
+"sender": "x"
+},
+{
+"id": "K047_contract/cases[0]/text",
+"text": "Purchase of 75.00 SAR at SHOP ONE with card ending 4321 on 2026-06-16",
+"sender": "x"
+},
+{
+"id": "K048_contract/cases[1]/text",
+"text": "Deposit of 1200.00 EGP received in your account",
+"sender": "x"
+},
+{
+"id": "K049_contract/cases[2]/text",
+"text": "تم خصم 250.50 SAR من بطاقتك لدى متجر الاختبار",
+"sender": "x"
+},
+{
+"id": "K050_contract/cases[3]/text",
+"text": "تم إيداع 3000.00 جنيه في حسابك",
+"sender": "x"
+},
+{
+"id": "K051_contract/cases[4]/text",
+"text": "تم خصم ١٢٥٫٥٠ SAR من بطاقتك",
+"sender": "x"
+},
+{
+"id": "K052_contract/cases[5]/text",
+"text": "تم خصم ١٬٢٥٠٫٥٠ SAR من بطاقتك",
+"sender": "x"
+},
+{
+"id": "K053_contract/cases[6]/text",
+"text": "Purchase 1,250.50 EGP at SHOP ONE",
+"sender": "x"
+},
+{
+"id": "K054_contract/cases[7]/text",
+"text": "Purchase 250.00 SAR at SHOP ONE on 2026-06-16",
+"sender": "x"
+},
+{
+"id": "K055_contract/cases[8]/text",
+"text": "Purchase 250.00 SAR at SHOP ONE on 16.06.2026",
+"sender": "x"
+},
+{
+"id": "K056_contract/cases[9]/text",
+"text": "Purchase 250.00 SAR at SHOP ONE at 14:30",
+"sender": "x"
+},
+{
+"id": "K057_contract/cases[10]/text",
+"text": "Purchase 99.00 SAR at SHOP ONE card *1234",
+"sender": "x"
+},
+{
+"id": "K058_contract/cases[11]/text",
+"text": "Purchase 99.00 SAR at SHOP ONE card ending 1234",
+"sender": "x"
+},
+{
+"id": "K059_contract/cases[12]/text",
+"text": "Purchase 99.00 SAR from account 9876543210 at SHOP ONE",
+"sender": "x"
+},
+{
+"id": "K060_contract/cases[13]/text",
+"text": "Purchase 1250.50 SAR at SHOP ONE",
+"sender": "x"
+},
+{
+"id": "K061_contract/cases[14]/text",
+"text": "Purchase 75.00 SAR at SHOP ONE",
+"sender": "x"
+},
+{
+"id": "K062_contract/cases[15]/text",
+"text": "Paid 75.00 SAR / 750.00 SAR",
+"sender": "x"
+},
+{
+"id": "K063_contract/cases[17]/text",
+"text": "Purchase 50.00 USD at SHOP ONE",
+"sender": "x"
+},
+{
+"id": "K064_contract/cases[18]/text",
+"text": "Deposit of 50.00 SAR received in your account",
+"sender": "x"
+},
+{
+"id": "K065_contract/cases[20]/text",
+"text": "Purchase 75.00 SAR at SHOP ONE card ending 4321",
+"sender": "x"
+},
+{
+"id": "K066_contract/cases[21]/text",
+"text": "Purchase 75.00 SAR at SHOP ONE on 2025-01-01",
+"sender": "x"
+},
+{
+"id": "K067_contract/cases[22]/text",
+"text": "Transaction of 75.00 SAR at SHOP ONE",
+"sender": "x"
+},
+{
+"id": "K068_contract/cases[25]/text",
+"text": "Transfer of 75.00 SAR to SHOP ONE",
+"sender": "x"
+},
+{
+"id": "K069_redact[0]/raw",
+"text": "Purchase of SAR 120.50 at STARBUCKS RIYADH with card *4321 on 05/11/2026 14:30. Avl bal SAR 2,310.00",
+"sender": "x"
+},
+{
+"id": "K070_redact[1]/raw",
+"text": "Purchase from AMAZON SA SAR 99.00 card ending 4321 on 05/11",
+"sender": "x"
+},
+{
+"id": "K071_redact[2]/raw",
+"text": "Purchase at FROM SCRATCH CAFE SAR 45.00 card *4321",
+"sender": "x"
+},
+{
+"id": "K072_redact[3]/raw",
+"text": "Purchase at DEAR DIARY CAFE SAR 20.00 card *4321",
+"sender": "x"
+},
+{
+"id": "K073_redact[4]/raw",
+"text": "POS purchase SAR 75.00 at MR PRICE card *4321",
+"sender": "x"
+},
+{
+"id": "K074_redact[5]/raw",
+"text": "Online purchase EGP 349.99 at NOON.COM using card **5398 on 06/11 21:05",
+"sender": "x"
+},
+{
+"id": "K075_redact[6]/raw",
+"text": "Your Debit Card **5398 had a Successful transaction of EGP 33.00 @Orange on 04/11",
+"sender": "x"
+},
+{
+"id": "K076_redact[7]/raw",
+"text": "Refund of SAR 99.00 from NOON credited to card *1111 on 07/11",
+"sender": "x"
+},
+{
+"id": "K077_redact[8]/raw",
+"text": "Cash withdrawal SAR 500.00 from ATM RIYADH BRANCH card *1234 on 05/11 10:00",
+"sender": "x"
+},
+{
+"id": "K078_redact[9]/raw",
+"text": "Transfer received from MOHAMED ALI HASSAN amount SAR 1,250.00 on 05/11 10:22",
+"sender": "x"
+},
+{
+"id": "K079_redact[10]/raw",
+"text": "Your account **1234 was credited by EGP 500.00 from AHMED M*** via IPN on 12/05 IPN REF# 123456789",
+"sender": "x"
+},
+{
+"id": "K080_redact[11]/raw",
+"text": "InstaPay transfer sent to Sara Mahmoud EGP 300.00 on 01/11 Ref 7788991",
+"sender": "x"
+},
+{
+"id": "K081_redact[12]/raw",
+"text": "You transferred SAR 200.00 to KHALID OMAR from account ***9911 on 03/11",
+"sender": "x"
+},
+{
+"id": "K082_redact[13]/raw",
+"text": "Transfer of SAR 900.00 Beneficiary Name: NOURA SALEH Date 03/11",
+"sender": "x"
+},
+{
+"id": "K083_redact[14]/raw",
+"text": "Salary of SAR 15,000.00 credited to your account from ACME TRADING LLC on 27/10",
+"sender": "x"
+},
+{
+"id": "K084_redact[15]/raw",
+"text": "Dear Ahmed Ali, your card *1234 was charged SAR 50.00 at STARBUCKS",
+"sender": "x"
+},
+{
+"id": "K085_redact[16]/raw",
+"text": "Dear Customer, SAR 50.00 was spent at JARIR on card *1234",
+"sender": "x"
+},
+{
+"id": "K086_redact[17]/raw",
+"text": "Mr. AHMED ALI transferred SAR 200.00 to your account",
+"sender": "x"
+},
+{
+"id": "K087_redact[18]/raw",
+"text": "SAR 100.00 credited from A.HASSAN to account ***1234",
+"sender": "x"
+},
+{
+"id": "K088_redact[19]/raw",
+"text": "Your OTP is 483920 for purchase of SAR 99.00 at NOON. Do not share.",
+"sender": "x"
+},
+{
+"id": "K089_redact[20]/raw",
+"text": "Get 20% cashback from NOON this weekend! Call 0551234567 or email offers@bank.com",
+"sender": "x"
+},
+{
+"id": "K090_redact[21]/raw",
+"text": "Transfer received SAR 700.00 IBAN SA0380000000608010167519 card 4539 1488 0343 6467 phone +201012345678",
+"sender": "x"
+},
+{
+"id": "K091_redact[22]/raw",
+"text": "Transaction of EGP 5000000.00 Ref 5000000.00 at CARREFOUR",
+"sender": "x"
+},
+{
+"id": "K092_redact[23]/raw",
+"text": "Bill payment SAR 300.00 to STC ref 123456 on 02/11",
+"sender": "x"
+},
+{
+"id": "K093_redact[24]/raw",
+"text": "شراء عبر نقاط البيع بمبلغ 230.75 ريال من كارفور بطاقة *9876 في 05/11 14:30",
+"sender": "x"
+},
+{
+"id": "K094_redact[25]/raw",
+"text": "شراء من بنده بمبلغ 88.00 ريال بطاقة مدى *4455 يوم 06/11",
+"sender": "x"
+},
+{
+"id": "K095_redact[26]/raw",
+"text": "تم خصم 60.00EGP من بطاقة المدفوعة مقدماً رقم 4907 عند FAWRY*SNTRAL NWR ALA يوم 14/03 الساعه 22:29",
+"sender": "x"
+},
+{
+"id": "K096_redact[27]/raw",
+"text": "حوالة واردة من محمد عبدالله آل سعود بمبلغ 5000 ريال إلى حسابك ***1234 في 05/11",
+"sender": "x"
+},
+{
+"id": "K097_redact[28]/raw",
+"text": "تم تحويل 500 ريال من حسابك ***1234 لصالح سارة الاسمري بتاريخ 05/11",
+"sender": "x"
+},
+{
+"id": "K098_redact[29]/raw",
+"text": "تم استلام حوالة من: خالد سعيد مبلغ 750 جنيه رقم المرجع 99887766",
+"sender": "x"
+},
+{
+"id": "K099_redact[30]/raw",
+"text": "عزيزي محمد أحمد، تم خصم 50 ريال من بطاقتك *1234 لدى ستاربكس",
+"sender": "x"
+},
+{
+"id": "K100_redact[31]/raw",
+"text": "السيد خالد العتيبي قام بتحويل 300 ريال إلى حسابك",
+"sender": "x"
+},
+{
+"id": "K101_redact[32]/raw",
+"text": "سحب نقدي 1000 ريال من الصراف الآلي فرع العليا بطاقة *1234",
+"sender": "x"
+},
+{
+"id": "K102_redact[33]/raw",
+"text": "استرداد مبلغ 120 ريال من نون إلى بطاقتك *1111",
+"sender": "x"
+},
+{
+"id": "K103_redact[34]/raw",
+"text": "رمز التحقق: 8391 لعملية شراء بمبلغ 99 ريال",
+"sender": "x"
+},
+{
+"id": "K104_redact[35]/raw",
+"text": "تم إيداع راتب 12000 ريال في حسابك من شركة الأفق",
+"sender": "x"
+},
+{
+"id": "K105_redact[36]/raw",
+"text": "حوالة واردة من فهد ناصر بمبلغ ٥٠٠ ريال حساب ١٢٣٤٥٦٧٨٩٠١٢٣",
+"sender": "x"
+},
+{
+"id": "K106_srvrules/examples[0]/text",
+"text": "عملية شراء\nبطاقة مدى **1234\nمبلغ: 57.50 ر.س\nلدى: STARBUCKS\nفي 2026-07-01",
+"sender": "x"
+},
+{
+"id": "K107_srvrules/examples[1]/text",
+"text": "Purchase of SAR 89.00 at AMAZON.SA with card ending 5678",
+"sender": "x"
+},
+{
+"id": "K108_srvrules/examples[2]/text",
+"text": "تم خصم ١٥٠.٥٠ ريال من بطاقتك رقم ٩٨٧٦ لدى مطعم البيك",
+"sender": "x"
+},
+{
+"id": "K109_srvrules/examples[3]/text",
+"text": "تم إيداع راتب بمبلغ 12,500.00 ريال في حسابك **3210",
+"sender": "x"
+},
+{
+"id": "K110_srvrules/examples[4]/text",
+"text": "حوالة واردة بمبلغ 500 د.إ من AHMED ALI",
+"sender": "x"
+},
+{
+"id": "K111_srvrules/examples[5]/text",
+"text": "تم خصم 250 ج.م من بطاقتك 4321 لدى فودافون كاش",
+"sender": "x"
+},
+{
+"id": "K112_srvrules/examples[6]/text",
+"text": "Your account XX9012 has been credited with USD 1,000.00 salary transfer",
+"sender": "x"
+},
+{
+"id": "K113_srvrules/examples[7]/text",
+"text": "رمز التحقق الخاص بك هو 123456 لا تشاركه مع أحد",
+"sender": "x"
+},
+{
+"id": "K114_srvrules/examples[8]/text",
+"text": "عرض خاص! خصم 50% لدى ماكدونالدز",
+"sender": "x"
+},
+{
+"id": "K115_ai[0]/sanitized_text",
+"text": "تم خصم 1250.00 EGP من بطاقتك لدى NOON",
+"sender": "x"
+},
+{
+"id": "K116_ai[1]/sanitized_text",
+"text": "Purchase 500.00 EGP at NOON",
+"sender": "x"
+},
+{
+"id": "K117_ai[2]/sanitized_text",
+"text": "Purchase 0.00 EGP at NOON",
+"sender": "x"
+},
+{
+"id": "K118_ai[3]/sanitized_text",
+"text": "Purchase 1,250.50 EGP at NOON",
+"sender": "x"
+},
+{
+"id": "K119_ai[4]/sanitized_text",
+"text": "تم خصم ١٬٢٥٠٫٠٠ EGP لدى نون",
+"sender": "x"
+},
+{
+"id": "K120_ai[5]/sanitized_text",
+"text": "تم خصم ١٢٥٠.٠٠ EGP لدى نون",
+"sender": "x"
+},
+{
+"id": "K121_ai[6]/sanitized_text",
+"text": "Purchase 75.00 SAR at NOON",
+"sender": "x"
+},
+{
+"id": "K122_ai[7]/sanitized_text",
+"text": "Purchase 12.50 EGP at NOON",
+"sender": "x"
+},
+{
+"id": "K123_ai[8]/sanitized_text",
+"text": "Purchase 1250.00 EGP at NOON",
+"sender": "x"
+},
+{
+"id": "K124_ai[10]/sanitized_text",
+"text": "Purchase 100.00 EGP at LOCAL SHOP",
+"sender": "x"
+},
+{
+"id": "K125_ai[11]/sanitized_text",
+"text": "Purchase 100.00 EGP / 100.00 SAR",
+"sender": "x"
+},
+{
+"id": "K126_ai[12]/sanitized_text",
+"text": "Purchase 100.00 EGP then 200.00 EGP",
+"sender": "x"
+},
+{
+"id": "K127_ai[13]/sanitized_text",
+"text": "Paid 75.00 at SHOP",
+"sender": "x"
+},
+{
+"id": "K128_ai[14]/sanitized_text",
+"text": "Paid 75.00 SAR at SHOP",
+"sender": "x"
+},
+{
+"id": "K129_ai[15]/sanitized_text",
+"text": "خصم 75.00 ر.س لدى المتجر",
+"sender": "x"
+},
+{
+"id": "K130_ai[16]/sanitized_text",
+"text": "شراء 300.00 ج.م من المتجر",
+"sender": "x"
+},
+{
+"id": "K131_ai[17]/sanitized_text",
+"text": "خصم 40.00 ريال من حسابك",
+"sender": "x"
+},
+{
+"id": "K132_ai[18]/sanitized_text",
+"text": "دفع 55.00 جنيه للمتجر",
+"sender": "x"
+},
+{
+"id": "K133_ai[20]/sanitized_text",
+"text": "Purchase $20.00 at SHOP",
+"sender": "x"
+},
+{
+"id": "K134_ai[22]/sanitized_text",
+"text": "Purchase 75.00 SAR at Noon  Shop",
+"sender": "x"
+},
+{
+"id": "K135_ai[28]/sanitized_text",
+"text": "تم إيداع 500.00 EGP في حسابك",
+"sender": "x"
+},
+{
+"id": "K136_ai[32]/sanitized_text",
+"text": "Purchase 500.00 EGP refund pending",
+"sender": "x"
+},
+{
+"id": "K137_declined_old/cases[0]/text",
+"text": "تم رفض عملية شراء بمبلغ 250.00 ريال لدى CAFE ONE بطاقة مدى **1234",
+"sender": "x"
+},
+{
+"id": "K138_declined_old/cases[1]/text",
+"text": "Purchase declined: SAR 250.00 at CAFE ONE card **1234",
+"sender": "x"
+},
+{
+"id": "K139_declined_old/cases[2]/text",
+"text": "Transaction failed. Purchase of SAR 99.00 at SHOP TWO card **1234",
+"sender": "x"
+},
+{
+"id": "K140_declined_old/cases[3]/text",
+"text": "عملية غير ناجحة: شراء بمبلغ 75.00 ريال لدى SHOP TWO بطاقة **1234",
+"sender": "x"
+},
+{
+"id": "K141_declined_old/cases[4]/text",
+"text": "عملية شراء مرفوضة بمبلغ ١٢٠٫٥٠ ريال لدى CAFE ONE بطاقة **١٢٣٤",
+"sender": "x"
+},
+{
+"id": "K142_declined_old/cases[5]/text",
+"text": "تعذر إتمام عملية شراء بمبلغ 300.00 ريال لدى SHOP TWO لعدم كفاية الرصيد",
+"sender": "x"
+},
+{
+"id": "K143_declined_old/cases[6]/text",
+"text": "رفضت عملية شراء 80.00 ريال لدى CAFE ONE: الرصيد غير كافٍ",
+"sender": "x"
+},
+{
+"id": "K144_declined_old/cases[7]/text",
+"text": "Purchase of SAR 410.00 at SHOP TWO was rejected: insufficient funds",
+"sender": "x"
+},
+{
+"id": "K145_declined_old/cases[8]/text",
+"text": "Purchase of SAR 410.00 at SHOP TWO not processed - credit limit exceeded",
+"sender": "x"
+},
+{
+"id": "K146_declined_old/cases[9]/text",
+"text": "فشلت عملية الشراء بمبلغ 60.00 ريال لدى CAFE ONE بسبب تجاوز الحد",
+"sender": "x"
+},
+{
+"id": "K147_declined_old/cases[10]/text",
+"text": "Purchase SAR 55.00 at CAFE ONE unsuccessful. Card **1234",
+"sender": "x"
+},
+{
+"id": "K148_declined_old/cases[11]/text",
+"text": "تم رفض عملية شراء بمبلغ 250.00 ر.س لدى CAFE ONE بطاقة 1234",
+"sender": "x"
+},
+{
+"id": "K149_declined_old/cases[12]/text",
+"text": "عملية غير ناجحة: شراء بمبلغ ٧٥٫٠٠ ر.س لدى SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K150_declined_old/cases[13]/text",
+"text": "تعذر إتمام عملية شراء بمبلغ 300.00 ر.س لعدم كفاية الرصيد",
+"sender": "x"
+},
+{
+"id": "K151_declined_old/cases[14]/text",
+"text": "عملية شراء بمبلغ 250.00 ريال لدى CAFE ONE بطاقة مدى **1234",
+"sender": "x"
+},
+{
+"id": "K152_declined_old/cases[15]/text",
+"text": "Purchase of SAR 99.00 at SHOP TWO card **1234",
+"sender": "x"
+},
+{
+"id": "K153_declined_old/cases[16]/text",
+"text": "عملية شراء بمبلغ 45.00 ريال لدى CAFE ONE. إذا لم تقم بهذه العملية اتصل بنا لرفض العملية",
+"sender": "x"
+},
+{
+"id": "K154_declined_old/cases[17]/text",
+"text": "عملية شراء بمبلغ 45.00 ريال لدى CAFE ONE. إذا لم يتم التعرف على العملية اتصل بنا",
+"sender": "x"
+},
+{
+"id": "K155_declined_old/cases[18]/text",
+"text": "Purchase of SAR 45.00 at CAFE ONE. If you did not make this transaction, call us. Failure to report may delay a dispute.",
+"sender": "x"
+},
+{
+"id": "K156_declined_old/cases[19]/text",
+"text": "تم استرجاع مبلغ العملية المرفوضة 250.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K157_declined_old/cases[20]/text",
+"text": "Refund for failed transaction: SAR 99.00 from SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K158_declined_old/cases[21]/text",
+"text": "Reversal of declined purchase SAR 99.00 at SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K159_declined_old/cases[22]/text",
+"text": "Refund for failed transaction: SAR 99.00 credited from SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K160_declined_old/cases[23]/text",
+"text": "تم استرداد مبلغ العملية المرفوضة 250.00 ر.س",
+"sender": "x"
+},
+{
+"id": "K161_declined_old/cases[24]/text",
+"text": "Your purchase of SAR 250.00 at Shop X was declined. If amount was deducted it will be refunded.",
+"sender": "x"
+},
+{
+"id": "K162_declined_old/cases[25]/text",
+"text": "Purchase of SAR 100 at Shop X declined. Any held amount will be reversed.",
+"sender": "x"
+},
+{
+"id": "K163_declined_old/cases[26]/text",
+"text": "Purchase of SAR 100 at Shop X declined. Your account was not credited or debited.",
+"sender": "x"
+},
+{
+"id": "K164_declined_old/cases[28]/text",
+"text": "عملية شراء مرفوضة بمبلغ 100.00 ريال لدى CAFE ONE. لاسترداد المبلغ اتصل بنا",
+"sender": "x"
+},
+{
+"id": "K165_declined_old/cases[29]/text",
+"text": "Transfer of SAR 300 to Ali was rejected. Amount credited back to your account.",
+"sender": "x"
+},
+{
+"id": "K166_declined_old/cases[30]/text",
+"text": "Refund failed: SAR 99.00 from SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K167_declined_old/cases[31]/text",
+"text": "Refund will be processed for failed transaction SAR 99.00 at SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K168_declined_old/cases[32]/text",
+"text": "سيتم استرداد مبلغ العملية المرفوضة 99.00 ريال لدى SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K169_declined_old/cases[33]/text",
+"text": "لم تتم العملية: شراء بمبلغ 100.00 ريال لدى CAFE ONE بطاقة **1234",
+"sender": "x"
+},
+{
+"id": "K170_declined_old/cases[34]/text",
+"text": "العملية لم تتم: شراء بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K171_declined_old/cases[35]/text",
+"text": "العملية لم تكتمل: شراء بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K172_declined_old/cases[36]/text",
+"text": "عملية شراء بمبلغ 100.00 ريال لدى CAFE ONE لم تكتمل",
+"sender": "x"
+},
+{
+"id": "K173_declined_old/cases[37]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE could not be processed",
+"sender": "x"
+},
+{
+"id": "K174_declined_old/cases[38]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE denied",
+"sender": "x"
+},
+{
+"id": "K175_declined_old/cases[39]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE not approved",
+"sender": "x"
+},
+{
+"id": "K176_declined_old/cases[40]/text",
+"text": "عملية شراء غير مقبولة بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K177_declined_old/cases[41]/text",
+"text": "عملية شراء ملغاة بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K178_declined_old/cases[42]/text",
+"text": "عملية شراء ملغية بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K179_declined_old/cases[43]/text",
+"text": "تم إلغاء العملية: شراء بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K180_declined_old/cases[44]/text",
+"text": "تم الغاء العملية: شراء بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K181_declined_old/cases[45]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE cancelled",
+"sender": "x"
+},
+{
+"id": "K182_declined_old/cases[46]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE canceled",
+"sender": "x"
+},
+{
+"id": "K183_declined_old/cases[47]/text",
+"text": "عملية شراء مرفوضه بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K184_declined_old/cases[48]/text",
+"text": "رفض عملية شراء بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K185_declined_old/cases[49]/text",
+"text": "رفض العملية: شراء بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K186_declined_old/cases[50]/text",
+"text": "عملية فاشله: شراء بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K187_declined_old/cases[51]/text",
+"text": "Your transaction was unsuccessful: purchase of SAR 100.00 at CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K188_declined_old/cases[52]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE was DECLINED",
+"sender": "x"
+},
+{
+"id": "K189_declined_old/cases[53]/text",
+"text": "Txn declined: SAR 100.00 at CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K190_declined_old/cases[54]/text",
+"text": "Purchase SAR 100.00 at CAFE ONE. Status: Declined",
+"sender": "x"
+},
+{
+"id": "K191_declined_old/cases[55]/text",
+"text": "شراء بمبلغ 100.00 ريال لدى CAFE ONE الحالة: مرفوضة",
+"sender": "x"
+},
+{
+"id": "K192_declined_old/cases[56]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE was not successful",
+"sender": "x"
+},
+{
+"id": "K193_declined_old/cases[57]/text",
+"text": "رُفضت عملية شراء بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K194_declined_old/cases[58]/text",
+"text": "عملية شراء مـرفوضة بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K195_declined_old/cases[59]/text",
+"text": "Purchase of SAR 100 at Failed Ventures card *1234",
+"sender": "x"
+},
+{
+"id": "K196_declined_old/cases[60]/text",
+"text": "شراء بمبلغ 100 SAR لدى مرفوض للتجارة",
+"sender": "x"
+},
+{
+"id": "K197_declined_old/cases[61]/text",
+"text": "Purchase SAR 100 at Rejected Records Store",
+"sender": "x"
+},
+{
+"id": "K198_declined_old/cases[62]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE card **1234. If you did not make this transaction, it can be rejected by calling us.",
+"sender": "x"
+},
+{
+"id": "K199_declined_old/cases[63]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Report unsuccessful or unauthorized transactions to 8001234",
+"sender": "x"
+},
+{
+"id": "K200_declined_old/cases[64]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Transactions exceeding limit will be declined.",
+"sender": "x"
+},
+{
+"id": "K201_declined_old/cases[65]/text",
+"text": "عملية شراء بمبلغ 100.00 ريال لدى CAFE ONE بطاقة **1234. للاعتراض على العمليات المرفوضة اتصل بنا",
+"sender": "x"
+},
+{
+"id": "K202_declined_old/cases[66]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Transactions may be declined above your limit.",
+"sender": "x"
+},
+{
+"id": "K203_declined_old/cases[67]/text",
+"text": "عملية شراء بمبلغ 100.00 ريال لدى CAFE ONE بطاقة **1234. قد يتم رفض العمليات التي تتجاوز الحد",
+"sender": "x"
+},
+{
+"id": "K204_declined_old/cases[68]/text",
+"text": "عملية شراء بمبلغ 100.00 ريال لدى CAFE ONE بطاقة **1234. سيتم رفض العمليات المشبوهة",
+"sender": "x"
+},
+{
+"id": "K205_declined_old/cases[69]/text",
+"text": "Refund of SAR 99.00 failed",
+"sender": "x"
+},
+{
+"id": "K206_declined_old/cases[70]/text",
+"text": "فشل استرداد مبلغ 99.00 ريال لدى SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K207_declined_old/cases[71]/text",
+"text": "Reversal failed: SAR 99.00 at SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K208_declined_old/cases[72]/text",
+"text": "Your refund of SAR 99.00 from SHOP TWO was declined",
+"sender": "x"
+},
+{
+"id": "K209_declined_old/cases[73]/text",
+"text": "Refund of SAR 99.00 from SHOP TWO could not be processed",
+"sender": "x"
+},
+{
+"id": "K210_declined_old/cases[74]/text",
+"text": "عملية الاسترداد بمبلغ ٩٩٫٠٠ ريال لدى SHOP TWO مرفوضة",
+"sender": "x"
+},
+{
+"id": "K211_declined_old/cases[75]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE voided",
+"sender": "x"
+},
+{
+"id": "K212_declined_old/cases[76]/text",
+"text": "Transaction void: SAR 100.00 at CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K213_declined_old/cases[77]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE not authorised",
+"sender": "x"
+},
+{
+"id": "K214_declined_old/cases[78]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE was not authorized",
+"sender": "x"
+},
+{
+"id": "K215_declined_old/cases[79]/text",
+"text": "Transaction unauthorised: SAR 100.00 at CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K216_declined_old/cases[80]/text",
+"text": "Payment failed: SAR 100.00 to CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K217_declined_old/cases[81]/text",
+"text": "Unable to process your purchase of SAR 100.00 at CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K218_declined_old/cases[82]/text",
+"text": "Transaction error: purchase of SAR 100.00 at CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K219_declined_old/cases[83]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE timed out",
+"sender": "x"
+},
+{
+"id": "K220_declined_old/cases[84]/text",
+"text": "Authorization expired: SAR 100.00 at CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K221_declined_old/cases[85]/text",
+"text": "لم يتم خصم مبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K222_declined_old/cases[86]/text",
+"text": "عملية شراء بمبلغ ١٠٠٫٠٠ ريال لدى CAFE ONE لم تنفذ",
+"sender": "x"
+},
+{
+"id": "K223_declined_old/cases[87]/text",
+"text": "عملية ملغية: شراء بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K224_declined_old/cases[88]/text",
+"text": "تم الإلغاء: شراء بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K225_declined_old/cases[89]/text",
+"text": "عملية شراء غير مصرح بها بمبلغ 100.00 ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K226_declined_old/cases[90]/text",
+"text": "انتهت صلاحية العملية: شراء بمبلغ ١٠٠٫٠٠ ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K227_declined_old/cases[91]/text",
+"text": "If you did not request this, retry: purchase of SAR 100.00 at CAFE ONE declined",
+"sender": "x"
+},
+{
+"id": "K228_declined_old/cases[92]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE was not completed due to insufficient balance",
+"sender": "x"
+},
+{
+"id": "K229_declined_old/cases[93]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE not completed",
+"sender": "x"
+},
+{
+"id": "K230_declined_old/cases[94]/text",
+"text": "Purchase of SAR 100.00 at The Failed Co card **1234",
+"sender": "x"
+},
+{
+"id": "K231_declined_old/cases[95]/text",
+"text": "Payment of SAR 100.00 to Failed Co card **1234",
+"sender": "x"
+},
+{
+"id": "K232_declined_old/cases[96]/text",
+"text": "عملية شراء بمبلغ 100.00 ريال لدى شركة مرفوض بطاقة **1234",
+"sender": "x"
+},
+{
+"id": "K233_declined_old/cases[97]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Declined transactions incur no fee.",
+"sender": "x"
+},
+{
+"id": "K234_declined_old/cases[98]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Not you? Call us to have it rejected.",
+"sender": "x"
+},
+{
+"id": "K235_declined_old/cases[99]/text",
+"text": "عملية شراء بمبلغ ١٠٠٫٠٠ ريال لدى CAFE ONE. العمليات المرفوضة لا تخضع لرسوم",
+"sender": "x"
+},
+{
+"id": "K236_declined_old/cases[100]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Unauthorized transaction? Call 8001234",
+"sender": "x"
+},
+{
+"id": "K237_declined_old/cases[101]/text",
+"text": "Refund transaction of SAR 99.00 from SHOP TWO credited to your card",
+"sender": "x"
+},
+{
+"id": "K238_declined_old/cases[102]/text",
+"text": "تم استرجاع مبلغ ١٩٩٫٠٠ ريال من SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K239_declined_old/cases[103]/text",
+"text": "Reversal of SAR 99.00 at SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K240_declined_old/cases[104]/text",
+"text": "Purchase of SAR 100.00 at SHOP X reversed",
+"sender": "x"
+},
+{
+"id": "K241_declined_old/cases[105]/text",
+"text": "Your purchase of SAR 100.00 at SHOP X has been reversed",
+"sender": "x"
+},
+{
+"id": "K242_declined_old/cases[106]/text",
+"text": "Payment of SAR 100.00 to SHOP X reversed",
+"sender": "x"
+},
+{
+"id": "K243_declined_old/cases[107]/text",
+"text": "تم عكس عملية الشراء بمبلغ 100.00 ريال لدى SHOP X",
+"sender": "x"
+},
+{
+"id": "K244_declined_old/cases[108]/text",
+"text": "عملية الشراء بمبلغ ١٠٠٫٠٠ ريال لدى SHOP X معكوسة",
+"sender": "x"
+},
+{
+"id": "K245_declined_old/cases[109]/text",
+"text": "Purchase of SAR 100.00 at SHOP X reversed and credited to your account",
+"sender": "x"
+},
+{
+"id": "K246_declined_old/cases[110]/text",
+"text": "Declined transactions: 1. Purchase of SAR 100.00 at SHOP X",
+"sender": "x"
+},
+{
+"id": "K247_declined_old/cases[111]/text",
+"text": "Failed transactions (1): purchase of SAR 100.00 at SHOP X",
+"sender": "x"
+},
+{
+"id": "K248_declined_old/cases[112]/text",
+"text": "العمليات المرفوضة: ١. شراء بمبلغ 100.00 ريال لدى SHOP X",
+"sender": "x"
+},
+{
+"id": "K249_declined_old/cases[113]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE. Your card expired on 30/11/2026",
+"sender": "x"
+},
+{
+"id": "K250_declined_old/cases[114]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE approved. Previous attempt declined.",
+"sender": "x"
+},
+{
+"id": "K251_declined_old/cases[115]/text",
+"text": "عملية شراء مَرْفُوضَة بمبلغ ١٠٠٫٠٠ ريال لدى CAFE ONE",
+"sender": "x"
+},
+{
+"id": "K252_declined_old/cases[116]/text",
+"text": "Reversal of SAR 100.00 credited to your account",
+"sender": "x"
+},
+{
+"id": "K253_declined_old/cases[117]/text",
+"text": "تم استرجاع مبلغ 100.00 ريال إلى حسابك",
+"sender": "x"
+},
+{
+"id": "K254_declined_old/cases[118]/text",
+"text": "Refund for failed transaction: SAR 99.00",
+"sender": "x"
+},
+{
+"id": "K255_declined_old/cases[119]/text",
+"text": "Refund SAR 99.00 from SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K256_declined_old/cases[120]/text",
+"text": "Refund of SAR 99.00 from SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K257_declined_old/cases[121]/text",
+"text": "استرداد مبلغ ٩٩٫٠٠ ريال من SHOP TWO",
+"sender": "x"
+},
+{
+"id": "K258_declined_old/cases[122]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE card **1234. For unauthorized use call 8001234",
+"sender": "x"
+},
+{
+"id": "K259_declined_old/cases[123]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Declined transactions incur no fee",
+"sender": "x"
+},
+{
+"id": "K260_declined_old/cases[124]/text",
+"text": "Purchase of SAR 100.00 at FAILED BURGER card **1234",
+"sender": "x"
+},
+{
+"id": "K261_declined_old/cases[125]/text",
+"text": "عملية شراء بمبلغ ١٠٠٫٠٠ ريال لدى مطعم مرفوض بطاقة **1234",
+"sender": "x"
+},
+{
+"id": "K262_declined_old/cases[126]/text",
+"text": "Purchase of SAR 100.00 at CAFE ONE card **1234. Disputed purchases may be reversed",
+"sender": "x"
+}
+]

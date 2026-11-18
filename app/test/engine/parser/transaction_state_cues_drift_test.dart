@@ -97,6 +97,10 @@ void main() {
       'ownDestination': MessageMeaning.ownDestination,
       'futureTense': MessageMeaning.futureTense,
       'rewardMarkers': MessageMeaning.rewardMarkers,
+      // Follow-up 3 (SM-01, SM-04).
+      'otherEventNouns': MessageMeaning.otherEventNouns,
+      'noticeOpeners': MessageMeaning.noticeOpeners,
+      'movementLeads': MessageMeaning.movementLeads,
       'debitFlow': DirectionSignal.debitFlow,
       'creditFlow': DirectionSignal.creditFlow,
     };

@@ -23,10 +23,13 @@ Deno.test('parse-sms: the meaning gate runs on the primary path before any provi
 Deno.test('parse-sms: held messages are what the gate holds; a completed purchase is not', () => {
   for (const text of [
     'Cash deposit SAR 1,500.00 to account *5678 via ATM',
-    'Purchase SAR 120.00 at SHOP. Cashback SAR 12.00 credited to your card',
+    'Purchase SAR 120.00 at SHOP. Purchase SAR 45.00 at CAFE',
     'Your bill of SAR 230.00 is due on 25/06. Pay now to avoid late fees.',
     'Your salary of SAR 9,000.00 is expected on 27/06',
   ]) assert(messageMeaning(text).disposition !== 'record', text);
   assertEquals(messageMeaning('Purchase of SAR 80.00 at SHOP with card *1234. Never share your OTP with anyone.')
+    .disposition, 'record');
+  // Follow-up 3 (SM-06): a cashback line is a side event of the purchase.
+  assertEquals(messageMeaning('Purchase SAR 120.00 at SHOP. Cashback SAR 12.00 credited to your card')
     .disposition, 'record');
 });

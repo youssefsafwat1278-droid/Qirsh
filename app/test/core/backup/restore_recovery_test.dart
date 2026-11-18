@@ -86,6 +86,33 @@ Future<void> seedRich(AppDatabase db) async {
   await backfillNonPlanningMoneyV30(db);
 }
 
+/// SP-08: a full-apply destination holds no user record (SP-02), but its
+/// settings, seeded catalog, learned merchant data and progress are populated
+/// and must survive a rolled-back delete phase.
+Future<void> seedNewDevice(AppDatabase db) async {
+  const now = '2026-05-01T00:00:00.000Z';
+  final categoryId = (await db
+          .customSelect('SELECT id FROM categories LIMIT 1;')
+          .getSingle())
+      .read<String>('id');
+  await db.customStatement("UPDATE user_settings SET country = 'PRESERVE-ME';");
+  await db.customStatement(
+      "UPDATE categories SET server_id = 'srv:' || id, sync_status = 'synced';");
+  await db.customStatement(
+      "INSERT INTO merchants(id, raw_name, normalized_name, first_seen_at, "
+      "last_seen_at) VALUES ('m-keep', 'KeepShop', 'keepshop', '$now', '$now');");
+  await db.customStatement(
+      'INSERT INTO merchant_category_map(id, merchant_id, category_id, '
+      "is_user_confirmed, confidence, updated_at) VALUES ('mm-keep', 'm-keep', "
+      "'$categoryId', 0, 0.5, '$now');");
+  await db.customStatement(
+      "INSERT OR REPLACE INTO achievements(id, key, name_ar, unlocked_at, progress) "
+      "VALUES ('a-keep', 'synthetic_keep', 'إنجاز', '$now', 1.0);");
+  await db.customStatement(
+      'INSERT OR REPLACE INTO streaks(id, current_streak, longest_streak, '
+      "last_active_date, freezes_available) VALUES ('s-keep', 4, 9, '$now', 1);");
+}
+
 Future<void> seedSource(AppDatabase db) async {
   final categoryId = (await db
           .customSelect('SELECT id FROM categories LIMIT 1;')
@@ -132,6 +159,9 @@ void main() {
 
   Future<AppDatabase> openMemory() => seededDb(AppDatabase.open(
       executor: NativeDatabase.memory(), keyStore: _MemoryKeyStore()));
+  // A new device: no account yet (A-7).
+  Future<AppDatabase> openNewDevice() => AppDatabase.open(
+      executor: NativeDatabase.memory(), keyStore: _MemoryKeyStore());
   Future<AppDatabase> openFile(String path) => seededDb(AppDatabase.open(
       executor: NativeDatabase(File(path)), keyStore: _MemoryKeyStore()));
 
@@ -162,24 +192,29 @@ void main() {
           final src = await openMemory();
           addTearDown(src.close);
           await seedSource(src);
-          final dst = await openMemory();
+          final dst = merge ? await openMemory() : await openNewDevice();
           addTearDown(dst.close);
           if (merge) {
             await seedRich(dst);
           } else {
-            await dst.customStatement(
-                "UPDATE user_settings SET country = 'PRESERVE-ME';");
+            await seedNewDevice(dst);
           }
 
           final before = await digest(dst);
           final plan = await planFrom(src);
+          var reached = false;
           final result = await RestoreService(dst).execute(
             plan: plan,
             onFaultPoint: (p) {
-              if (p == point) throw StateError('injected fault at $point');
+              if (p == point) {
+                reached = true;
+                throw StateError('injected fault at $point');
+              }
             },
           );
 
+          expect(reached, isTrue,
+              reason: 'the fault point must be on this restore path');
           expect(result.isCommitted, isFalse,
               reason: 'a fault must never report a committed restore');
           expect(await digest(dst), before,
@@ -193,6 +228,28 @@ void main() {
         });
       }
     }
+  });
+
+  test('a merge never reaches the delete phase: every device row survives '
+      'a committed merge restore', () async {
+    final src = await openMemory();
+    addTearDown(src.close);
+    await seedSource(src);
+    final dst = await openMemory();
+    addTearDown(dst.close);
+    await seedRich(dst);
+    final seen = <String>[];
+    final result = await RestoreService(dst)
+        .execute(plan: await planFrom(src), onFaultPoint: seen.add);
+    expect(result.isCommitted, isTrue);
+    expect(seen, contains('afterFirstInsert')); // the callback is wired
+    expect(seen, isNot(contains('afterFirstDelete')));
+    expect(seen, isNot(contains('afterSeveralDeletes')));
+    final ids = [
+      for (final r in await dst.customSelect('SELECT id FROM transactions;').get())
+        r.read<String>('id')
+    ];
+    expect(ids, containsAll(['keepA', 'keepB', 'newTx']));
   });
 
   group('§Blocker-4 — durable crash/replay on a file-backed database', () {

@@ -421,7 +421,7 @@ class SettingsV2Row extends StatelessWidget {
         ? null
         : Text(
             value!,
-            maxLines: large ? 3 : 1,
+            maxLines: large ? 50 : 3,
             overflow: TextOverflow.ellipsis,
             textAlign: large ? TextAlign.start : TextAlign.end,
             textDirection: valueLtr ? TextDirection.ltr : null,
@@ -453,7 +453,7 @@ class SettingsV2Row extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         subtitle!,
-                        maxLines: 3,
+                        maxLines: large ? 50 : 3,
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.caption(c.textMuted),
                       ),

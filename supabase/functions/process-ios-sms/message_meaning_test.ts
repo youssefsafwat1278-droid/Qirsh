@@ -13,13 +13,30 @@ const outcome = (text: string) =>
 Deno.test('a cue applies to its own clause: footers never exclude the event', () => {
   for (const [text, amount, currency] of [
     ['Purchase completed for EGP 250; card payment due EGP 900', 250, 'EGP'],
-    ['Purchase of SAR 100.00 at CAFE ONE approved. Previous attempt declined.', 100, 'SAR'],
     ['عملية شراء بمبلغ 120 ريال لدى متجر تجريبي. تذكير: موعد سداد بطاقتك 25/11', 120, 'SAR'],
   ] as const) {
     const p = parse(text);
     assert(isResolved(p), text);
     assertEquals([p.direction, p.type, p.amount, p.currency], ['debit', 'payment', amount, currency], text);
   }
+});
+
+// Follow-up 3 (SM-01): a status sentence is never a footer. A purchase next to
+// "Previous attempt declined" was read not completed at 5dae2e2d; it is now
+// review (the whole-message status and the footer logic disagree), never
+// recorded. SM-06: a cashback line next to a purchase is a side event.
+Deno.test('a status sentence next to a movement is review; a cashback line is a side event', () => {
+  for (const text of [
+    'Purchase of SAR 100.00 at CAFE ONE approved. Previous attempt declined.',
+    'Purchase of SAR 100.00 at SHOPX approved. Previous attempt declined.',
+  ]) {
+    assertEquals(isResolved(parse(text)), false, text);
+    const m = messageMeaning(text);
+    assertEquals([m.kind, m.reason, m.disposition], ['uncertain', 'other_event_status', 'review'], text);
+  }
+  const p = parse('SAR 45.00 paid at Test Mart; cashback SAR 2 credited');
+  assert(isResolved(p));
+  assertEquals([p.direction, p.type, p.amount], ['debit', 'payment', 45]);
 });
 
 Deno.test('clear notices and future or pending clauses are never accepted', async () => {
@@ -79,7 +96,9 @@ Deno.test('undecidable movements stay unresolved (review), never recorded', () =
     ['SAR 1,000 debited from *1111 and deposited to *2222', 'own_account_transfer'],
     ['Transfer of SAR 2,000.00 from your account *1234 to your account *5678', 'own_account_transfer'],
     ['تحويل 2,000 ريال من حسابك *1234 إلى حسابك *5678 عبر التطبيق', 'own_account_transfer'],
-    ['SAR 45.00 paid at Test Mart; cashback SAR 2 credited', 'multiple_events'],
+    // Follow-up 3 (SM-06): a cashback line is a side event, not a second
+    // purchase; two purchases in one message stay in review.
+    ['SAR 45.00 paid at Test Mart; SAR 20.00 paid at Test Cafe', 'multiple_events'],
   ] as const) {
     const p = parse(text);
     assertEquals([isResolved(p), p.direction], [false, 'unknown'], text);

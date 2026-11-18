@@ -5,6 +5,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/widgets/section_photo_header.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/large_text.dart';
 
 final _navBlur = ImageFilter.blur(sigmaX: 12, sigmaY: 12);
 
@@ -50,16 +51,20 @@ class AppHeader extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final c = context.colors;
     if (sectionPhoto != null) {
-      return QirshSectionHero(
+      // SP-10: at large text the hero grows so its title and subtitle wrap
+      // whole — but only where its height is free (a screen header); in a
+      // Scaffold's fixed app-bar slot it keeps the fixed height.
+      return LayoutBuilder(builder: (context, box) => QirshSectionHero(
         photo: sectionPhoto!, title: title, subtitle: subtitle,
-        height: sectionHeight, expandForText: false,
+        height: sectionHeight,
+        expandForText: isLargeText(context) && !box.hasBoundedHeight,
         leading: leading ?? (showBack && Navigator.of(context).canPop()
             ? const BackButton(color: Colors.white) : null),
         trailing: trailing == null && action == null ? null : Row(
           mainAxisSize: MainAxisSize.min,
           children: [if (trailing != null) trailing!, if (action != null) action!],
         ),
-      );
+      ));
     }
     // v2 QNavBar scroll edge (immersive): clear at rest, frosted glass once
     // content scrolls beneath it. Screens that extend their body behind the

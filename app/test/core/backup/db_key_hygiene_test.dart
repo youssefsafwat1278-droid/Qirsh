@@ -39,6 +39,12 @@ void main() {
         executor: NativeDatabase.memory(),
         keyStore: _MemoryKeyStore(key),
       ));
+  // A restore destination is a new device: no account yet (A-7), so the whole
+  // backup applies (SP-02).
+  Future<AppDatabase> openNew(String key) => AppDatabase.open(
+        executor: NativeDatabase.memory(),
+        keyStore: _MemoryKeyStore(key),
+      );
 
   Future<String> keyRef(AppDatabase db) async =>
       (await db.customSelect('SELECT db_encryption_key_ref AS r FROM user_settings;')
@@ -104,7 +110,7 @@ void main() {
         .cast<Map<String, dynamic>>()
         .first['db_encryption_key_ref'] = 'FOREIGN-$_rawKeyCanary';
 
-    final dst = await open('destination-device-key');
+    final dst = await openNew('destination-device-key');
     addTearDown(dst.close);
     await RestoreBackupUseCase(dst).call(snapshot);
 
@@ -155,7 +161,7 @@ void main() {
         .cast<Map<String, dynamic>>()
         .first['db_encryption_key_ref'] = 'USER-A-$_rawKeyCanary';
 
-    final userB = await open('user-b-device-key');
+    final userB = await openNew('user-b-device-key');
     addTearDown(userB.close);
     await RestoreBackupUseCase(userB).call(snapshot);
 

@@ -268,6 +268,16 @@
         "finding": "REL-05"
       },
       {
+        "file": "integration_local/sync_e2e_local_supabase_test.dart",
+        "kind": "skip",
+        "contextContains": "skip: _twoDevicesNotRun",
+        "count": 2,
+        "class": "live-external",
+        "reason": "Unconditional. S9 and S9b (two-device conflict resolution) use two devices side by side; the account fence admits one database per process, so they need a two-process harness and are NOT RUN, never counted as passing. Conflict rules are covered in-process against the fake backend only.",
+        "finding": "REL-05",
+        "removeWhen": "a two-process local-stack harness runs S9 and S9b"
+      },
+      {
         "file": "integration_local/restore_then_sync_local_supabase_test.dart",
         "kind": "skip",
         "contextContains": "LOCAL_SUPABASE_URL not set",

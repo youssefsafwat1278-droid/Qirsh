@@ -14,7 +14,7 @@
 //    Arabic-Indic digits);
 //  - the amount and amount_text must each be a whole numeric token of the
 //    text (not part of a date, time, card/account number or larger number).
-import { canonicalMoneyText } from './money_text.ts';
+import { canonicalMoneyText, isRewardFlow } from './money_text.ts';
 import rules from '../process-ios-sms/parser_rules.json' with { type: 'json' };
 
 // Round 3 closure: the parser's currency table (parser_rules.json
@@ -148,15 +148,14 @@ const flowPattern = (words: string[]) =>
 const DEBIT_FLOW_RE = flowPattern(MEANING.debitFlow);
 const CREDIT_FLOW_RE = flowPattern(MEANING.creditFlow);
 
-// A flow phrase followed by points/miles moves rewards, not money ("credited
-// points 45"); نقاط البيع (point of sale) is not skipped. Same rule as
-// message_meaning.firstMoneyFlow / DirectionSignal._firstMoneyFlow (parser
-// follow-up 2); ai_direction_flow_test.ts checks directionOfFlow === flowOf.
-const POINTS_AFTER = /^\s*(?:(?:reward|loyalty|bonus)\s+)?(?:points|miles)(?![a-z])|^\s*(?:ال)?نقاط(?!\s*البيع)|^\s*نقطة/;
-
+// A flow phrase that moves reward points or miles is not a money flow
+// ("credited points 45", "45 points credited"); نقاط البيع is not one. The
+// rule is the parser's own `isRewardFlow` (_shared/money_text.ts), shared with
+// message_meaning.firstMoneyFlow; ai_direction_flow_test.ts checks
+// directionOfFlow === flowOf.
 function firstMoneyFlow(re: RegExp, lower: string): RegExpExecArray | null {
   for (const m of lower.matchAll(new RegExp(re.source, re.flags + 'g'))) {
-    if (!POINTS_AFTER.test(lower.slice(m.index! + m[0].length))) return m as RegExpExecArray;
+    if (!isRewardFlow(lower, m.index!, m.index! + m[0].length)) return m as RegExpExecArray;
   }
   return null;
 }
@@ -245,10 +244,13 @@ export function directionContradictsWording(
 // AiCandidateValidator.chargedTotal; shared fixtures pin both.
 const TOTAL_COMPONENT =
   /(?<![a-z])(?:tips?|gratuity|service charge|fees?|vat|tax)(?![a-z])|بقشيش|إكرامية|اكرامية|ضريبة|رسوم|عمولة/i;
+// SM-05: the optional currency slot is a detection currency code (never any
+// three letters: "Total bal 12,345.00" is a balance, not a total), and
+// «الرصيد الإجمالي» (total balance) is not a charged total.
 const CHARGED_TOTAL = new RegExp(
   '(?:(?<![a-z])(?:grand total|total(?: amount)?(?: charged| paid| debited| deducted)?)' +
-    '|الإجمالي|الاجمالي|إجمالي المبلغ|اجمالي المبلغ|المبلغ الإجمالي|المبلغ الاجمالي|المجموع)' +
-    '\\s*(?:of|is|:|=)?\\s*(?:[a-z]{3}\\s?)?([0-9][0-9,]*(?:\\.[0-9]+)?)',
+    '|(?<!الرصيد\\s)(?:الإجمالي|الاجمالي)|إجمالي المبلغ|اجمالي المبلغ|المبلغ الإجمالي|المبلغ الاجمالي|المجموع)' +
+    `\\s*(?:of|is|:|=)?\\s*(?:(?:${CURRENCY_CODES.join('|')})(?![a-z])\\s?)?([0-9][0-9,]*(?:\\.[0-9]+)?)`,
   'i',
 );
 

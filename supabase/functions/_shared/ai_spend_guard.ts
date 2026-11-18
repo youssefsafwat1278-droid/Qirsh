@@ -9,6 +9,9 @@
 // client-called endpoints, return the existing retryable error so the client
 // keeps its local result in review). The guard FAILS CLOSED: any RPC error,
 // thrown error or malformed reply is `allowed: false, reason: 'unavailable'`.
+// The call-site wrapper _shared/ai_budget_gate.ts makes one exception: a
+// missing RPC (PGRST202 / 42883, migration not applied or rolled back) lets
+// the provider call proceed — fail open, no ceiling.
 
 export type AiBudgetBucket = 'gemini' | 'places';
 

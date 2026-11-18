@@ -145,7 +145,7 @@ void main() {
     expect(find.byKey(const Key('signOutRemoveData')), findsNothing);
   });
 
-  // V1-067 / decision B26 (a): with Smart Analysis & Cloud Sync off nothing
+  // V1-067 (copy defect fix): with Smart Analysis & Cloud Sync off nothing
   // syncs on sign-in, so the sheet must not say it does.
   testWidgets('Cloud off: unsynced warning says changes are not synced',
       (tester) async {

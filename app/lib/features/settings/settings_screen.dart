@@ -36,6 +36,7 @@ import '../app/local_read_cleanup_notice.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/large_text.dart';
 import '../../core/theme/theme_mode_controller.dart';
 import '../../core/theme/widgets/navy_sheet_theme.dart';
 import '../../core/theme/widgets/app_toast.dart';
@@ -1985,13 +1986,13 @@ class _ProfileCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(name,
-                    maxLines: 1,
+                    maxLines: linesUnlessLargeText(context, 2),
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.cardTitle(c.textPrimary)),
                 if (levelKey != null && totalXp != null) ...[
                   const SizedBox(height: 2),
                   Text(_levelLine(context, levelKey, totalXp!),
-                      maxLines: 1,
+                      maxLines: linesUnlessLargeText(context, 2),
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.caption(c.textMuted)),
                   const SizedBox(height: AppSpacing.s2),
@@ -2096,7 +2097,7 @@ class _IdentityHeader extends StatelessWidget {
                     const EdgeInsets.only(top: AppSpacing.s3, bottom: 2),
                 child: Text(name,
                     textAlign: TextAlign.center,
-                    maxLines: 1,
+                    maxLines: linesUnlessLargeText(context, 2),
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.sectionTitle(c.textPrimary)),
               ),
@@ -2214,7 +2215,7 @@ class _DestinationTile extends StatelessWidget {
                 children: [
                   Icon(item.icon, size: 28, color: c.actionText),
                   Text(item.title,
-                      maxLines: 2,
+                      maxLines: linesUnlessLargeText(context, 2),
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.subhead(c.textPrimary)),
                 ],

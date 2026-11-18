@@ -50,7 +50,7 @@ String unsyncedItemsList(BuildContext context, UnsyncedInventory inv) {
 ///
 /// [cloudSyncOn] is the Smart Analysis & Cloud Sync choice. When it is `false`
 /// nothing syncs on sign-in either, so the sheet says the changes stay on this
-/// device and are not synced while it is off (V1-067, decision B26 (a)). When it
+/// device and are not synced while it is off (V1-067, a copy defect fix; not an owner decision). When it
 /// is unknown (`null`) the sheet does not promise either way.
 Future<SignOutChoice?> showSignOutSheet(
   BuildContext context, {

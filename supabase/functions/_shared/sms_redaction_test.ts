@@ -242,3 +242,23 @@ Deno.test('parse-sms drops a placeholder merchant_name before returning/storing 
   const src = Deno.readTextFileSync(new URL('../parse-sms/index.ts', import.meta.url));
   assertStringIncludes(src, 'REDACTION_PLACEHOLDER.test(result.merchant_name)');
 });
+
+// SM-07: redaction keeps sentence boundaries, so the server parses the same
+// sentence structure as the device; the name is still masked. Synthetic only.
+Deno.test('third-party redaction never merges two sentences', () => {
+  const cases: Array<[string, string]> = [
+    ['SAR 1,000.00 sent to Ali completed. Previous transfer declined.',
+      'SAR 1,000.00 sent to [NAME]. Previous transfer declined.'],
+    ['تم تحويل 100 ريال الى علي. العملية السابقة مرفوضة', 'تم تحويل 100 ريال الى: [REDACTED]. العملية السابقة مرفوضة'],
+    ['Transfer To: Sara Ali. Previous attempt declined.', 'Transfer To: [REDACTED]. Previous attempt declined.'],
+    ['حوالة الى: سارة الاسمري مبلغ 1,000.00 ريال. شكرا', 'حوالة الى: [REDACTED]. شكرا'],
+    ['Transfer received from AHMED ALI.', 'Transfer received from [NAME].'],
+  ];
+  for (const [raw, expected] of cases) assertEquals(redactThirdPartyNames(redactPii(raw)), expected, raw);
+});
+
+Deno.test('a title or initial period does not end the name', () => {
+  const out = redactThirdPartyNames('Transfer to Mr. Ali Hassan SAR 500.00. Thank you');
+  assertEquals(out, 'Transfer to [NAME] SAR 500.00. Thank you');
+  assert(!out.includes('Ali') && !out.includes('Hassan'));
+});

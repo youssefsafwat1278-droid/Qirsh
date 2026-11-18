@@ -1,0 +1,1433 @@
+[
+{
+"id": "MA00",
+"text": "Wages paid to employee SAR 3,000 from your account *5678",
+"truth": {
+"kind": "d",
+"amt": 3000,
+"cur": "SAR"
+}
+},
+{
+"id": "MA01",
+"text": "Payroll of SAR 12,000.00 paid to staff from account *5678",
+"truth": {
+"kind": "d",
+"amt": 12000,
+"cur": "SAR"
+}
+},
+{
+"id": "MA02",
+"text": "Transfer of SAR 500.00 into account of Ali Hassan from your account *5678",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "MA03",
+"text": "You sent SAR 200 into account IBAN SA44 of Omar",
+"truth": {
+"kind": "d",
+"amt": 200,
+"cur": "SAR"
+}
+},
+{
+"id": "MA04",
+"text": "Salary transfer SAR 4,000 to Test Staff debited from your account *5678",
+"truth": {
+"kind": "d",
+"amt": 4000,
+"cur": "SAR"
+}
+},
+{
+"id": "MA05",
+"text": "Payroll payment SAR 45,000.00 debited from account *5678",
+"truth": {
+"kind": "d",
+"amt": 45000,
+"cur": "SAR"
+}
+},
+{
+"id": "MA06",
+"text": "Cashback reversal SAR 15.00 deducted from your card *4521",
+"truth": {
+"kind": "d",
+"amt": 15,
+"cur": "SAR"
+}
+},
+{
+"id": "MA07",
+"text": "Fee SAR 25.00 added to your account *5678",
+"truth": {
+"kind": "d",
+"amt": 25,
+"cur": "SAR"
+}
+},
+{
+"id": "MA08",
+"text": "Annual card fee SAR 250.00 posted to your account",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "MA09",
+"text": "Charge of SAR 49.99 posted to account *5678 for Test Streaming",
+"truth": {
+"kind": "d",
+"amt": 49.99,
+"cur": "SAR"
+}
+},
+{
+"id": "MA10",
+"text": "Late payment fee SAR 100 posted to your account *5678",
+"truth": {
+"kind": "d",
+"amt": 100,
+"cur": "SAR"
+}
+},
+{
+"id": "MA11",
+"text": "SAR 120 sent to your contact Ali from account *5678",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "MA12",
+"text": "You got charged SAR 45.00 at Test Diner card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "MA13",
+"text": "Topped up STC Pay wallet with SAR 100 from your card *4521",
+"truth": {
+"kind": "d",
+"amt": 100,
+"cur": "SAR"
+}
+},
+{
+"id": "MA14",
+"text": "Mobile recharge SAR 50 topped up, paid from card *4521",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "MA15",
+"text": "تم تحويل 1,500 ريال من حسابك إلى حساب أحمد",
+"truth": {
+"kind": "d",
+"amt": 1500,
+"cur": "SAR"
+}
+},
+{
+"id": "MA16",
+"text": "حوالة صادرة 2,000 ريال لحساب محمد من حسابك 5678",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "MA17",
+"text": "تم دفع 300 ريال لحسابك في شركة الكهرباء",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "MA18",
+"text": "رسوم تحويل 5 ريال خصمت من حسابك",
+"truth": {
+"kind": "d",
+"amt": 5,
+"cur": "SAR"
+}
+},
+{
+"id": "MA19",
+"text": "Instant transfer of SAR 250.00 from your account *5678 into account of Ali",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "MA20",
+"text": "Outgoing transfer SAR 250.00 into account IBAN SA00 of Ali",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "MA21",
+"text": "Wages transfer of SAR 3,000 to Test Staff from your account *5678",
+"truth": {
+"kind": "d",
+"amt": 3000,
+"cur": "SAR"
+}
+},
+{
+"id": "MA22",
+"text": "Payroll Services Co: SAR 2,500.00 debited from account *5678",
+"truth": {
+"kind": "d",
+"amt": 2500,
+"cur": "SAR"
+}
+},
+{
+"id": "MA23",
+"text": "Cashback Store purchase SAR 60.00 card *4521",
+"truth": {
+"kind": "d",
+"amt": 60,
+"cur": "SAR"
+}
+},
+{
+"id": "MA24",
+"text": "Purchase SAR 75.00 at Test Mart posted to your account *5678",
+"truth": {
+"kind": "d",
+"amt": 75,
+"cur": "SAR"
+}
+},
+{
+"id": "MA25",
+"text": "Debit posted to your account *5678: SAR 300.00",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "MA26",
+"text": "SAR 300.00 debit added to your account *5678",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "MA27",
+"text": "Standing order SAR 1,000 paid from your account *5678 to Test Landlord",
+"truth": {
+"kind": "d",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "MA28",
+"text": "Direct debit SAR 89.00 collected from your account for Test Insurance",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "MA29",
+"text": "Transfer SAR 1,000 to Ali for rent deposit",
+"truth": {
+"kind": "d",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "MA30",
+"text": "Transfer of SAR 2,000 to deposit account of Test Developer",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "MA31",
+"text": "تحويل 2,000 ريال لإيداع دفعة شقة إلى حساب خالد",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "MA32",
+"text": "Money sent to Yousef SAR 200",
+"truth": {
+"kind": "d",
+"amt": 200,
+"cur": "SAR"
+}
+},
+{
+"id": "MA33",
+"text": "You transferred SAR 800.00 to Sara. Ref 12345",
+"truth": {
+"kind": "d",
+"amt": 800,
+"cur": "SAR"
+}
+},
+{
+"id": "MA34",
+"text": "SAR 150 transferred to your friend Ali's account from *5678",
+"truth": {
+"kind": "d",
+"amt": 150,
+"cur": "SAR"
+}
+},
+{
+"id": "MA35",
+"text": "Bill payment SAR 230 to STC posted to account *5678",
+"truth": {
+"kind": "d",
+"amt": 230,
+"cur": "SAR"
+}
+},
+{
+"id": "MA36",
+"text": "ATM cash withdrawal SAR 500.00 card *4521",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "MA37",
+"text": "Wages of SAR 1,200.00 paid via WPS from your account *5678",
+"truth": {
+"kind": "d",
+"amt": 1200,
+"cur": "SAR"
+}
+},
+{
+"id": "MA38",
+"text": "Payroll processing fee SAR 35.00 charged to account *5678",
+"truth": {
+"kind": "d",
+"amt": 35,
+"cur": "SAR"
+}
+},
+{
+"id": "MA39",
+"text": "Cashback card annual fee SAR 150 deducted from account *5678",
+"truth": {
+"kind": "d",
+"amt": 150,
+"cur": "SAR"
+}
+},
+{
+"id": "MB00",
+"text": "Salary SAR 12,000.00 credited to your account *5678",
+"truth": {
+"kind": "c",
+"amt": 12000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB01",
+"text": "Your salary of SAR 9,500 has been deposited to account *5678",
+"truth": {
+"kind": "c",
+"amt": 9500,
+"cur": "SAR"
+}
+},
+{
+"id": "MB02",
+"text": "Payroll SAR 8,500.00 deposited into your account *5678 from Test Corp",
+"truth": {
+"kind": "c",
+"amt": 8500,
+"cur": "SAR"
+}
+},
+{
+"id": "MB03",
+"text": "Transfer received SAR 1,200 from Ali Hassan to account *5678",
+"truth": {
+"kind": "c",
+"amt": 1200,
+"cur": "SAR"
+}
+},
+{
+"id": "MB04",
+"text": "Incoming transfer of SAR 300.00 from Omar to your account *5678",
+"truth": {
+"kind": "c",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "MB05",
+"text": "You received SAR 450 from Sara via SARIE",
+"truth": {
+"kind": "c",
+"amt": 450,
+"cur": "SAR"
+}
+},
+{
+"id": "MB06",
+"text": "Refund of SAR 89.00 from Test Mart credited to card *4521",
+"truth": {
+"kind": "c",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "MB07",
+"text": "Refund credited: SAR 120.00 Test Store card *4521",
+"truth": {
+"kind": "c",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "MB08",
+"text": "Cash deposit SAR 2,000 via ATM to account *5678",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB09",
+"text": "ATM cash deposit SAR 1,500.00 account *5678",
+"truth": {
+"kind": "c",
+"amt": 1500,
+"cur": "SAR"
+}
+},
+{
+"id": "MB10",
+"text": "إيداع نقدي عبر الصراف 1,000 ريال في حساب 5678",
+"truth": {
+"kind": "c",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB11",
+"text": "تم إيداع راتبك 10,000 ريال في حسابك 5678",
+"truth": {
+"kind": "c",
+"amt": 10000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB12",
+"text": "حوالة واردة 2,500 ريال من أحمد إلى حسابك 5678",
+"truth": {
+"kind": "c",
+"amt": 2500,
+"cur": "SAR"
+}
+},
+{
+"id": "MB13",
+"text": "تم استلام 700 ريال من محمد",
+"truth": {
+"kind": "c",
+"amt": 700,
+"cur": "SAR"
+}
+},
+{
+"id": "MB14",
+"text": "استرداد مبلغ 150 ريال من متجر الاختبار لبطاقتك 4521",
+"truth": {
+"kind": "c",
+"amt": 150,
+"cur": "SAR"
+}
+},
+{
+"id": "MB15",
+"text": "SAR 3,000 deposited to your account *5678 by Test Corp",
+"truth": {
+"kind": "c",
+"amt": 3000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB16",
+"text": "Wages SAR 2,800 received in your account *5678",
+"truth": {
+"kind": "c",
+"amt": 2800,
+"cur": "SAR"
+}
+},
+{
+"id": "MB17",
+"text": "Cashback SAR 25.00 credited to your card *4521",
+"truth": {
+"kind": "c",
+"amt": 25,
+"cur": "SAR"
+}
+},
+{
+"id": "MB18",
+"text": "SAR 500.00 added to your account *5678 from Ali",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "MB19",
+"text": "SAR 1,000 arrived in your account *5678 from Omar",
+"truth": {
+"kind": "c",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB20",
+"text": "You got SAR 250 from Ali",
+"truth": {
+"kind": "c",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "MB21",
+"text": "SAR 200 sent to you by Sara",
+"truth": {
+"kind": "c",
+"amt": 200,
+"cur": "SAR"
+}
+},
+{
+"id": "MB22",
+"text": "Payroll SAR 7,000 posted to your account *5678",
+"truth": {
+"kind": "c",
+"amt": 7000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB23",
+"text": "وصلك 500 ريال من أحمد",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "MB24",
+"text": "أودع خالد 1,000 ريال في حسابك 5678",
+"truth": {
+"kind": "c",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB25",
+"text": "قيد 2,000 ريال لحسابك من شركة الاختبار",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB26",
+"text": "Deposit of SAR 5,000 to account *5678 - Branch cash deposit",
+"truth": {
+"kind": "c",
+"amt": 5000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB27",
+"text": "Your account *5678 has been credited with SAR 640.00",
+"truth": {
+"kind": "c",
+"amt": 640,
+"cur": "SAR"
+}
+},
+{
+"id": "MB28",
+"text": "Reversal of SAR 45.00 credited to card *4521 (Test Diner)",
+"truth": {
+"kind": "c",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "MB29",
+"text": "Interest SAR 32.40 credited to your savings account *5678",
+"truth": {
+"kind": "c",
+"amt": 32.4,
+"cur": "SAR"
+}
+},
+{
+"id": "MB30",
+"text": "Dividend SAR 210.00 credited to account *5678",
+"truth": {
+"kind": "c",
+"amt": 210,
+"cur": "SAR"
+}
+},
+{
+"id": "MB31",
+"text": "Mada refund SAR 60.00 Test Cafe card *4521",
+"truth": {
+"kind": "c",
+"amt": 60,
+"cur": "SAR"
+}
+},
+{
+"id": "MB32",
+"text": "Inward transfer SAR 900 from Bank X to your account *5678",
+"truth": {
+"kind": "c",
+"amt": 900,
+"cur": "SAR"
+}
+},
+{
+"id": "MB33",
+"text": "Transfer in: SAR 400.00 from Ali",
+"truth": {
+"kind": "c",
+"amt": 400,
+"cur": "SAR"
+}
+},
+{
+"id": "MB34",
+"text": "Your wallet was topped up with SAR 100 by Ali",
+"truth": {
+"kind": "c",
+"amt": 100,
+"cur": "SAR"
+}
+},
+{
+"id": "MB35",
+"text": "تم إضافة 300 ريال إلى حسابك 5678 من سارة",
+"truth": {
+"kind": "c",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "MB36",
+"text": "راتب شهر نوفمبر 11,000 ريال أودع في حسابك",
+"truth": {
+"kind": "c",
+"amt": 11000,
+"cur": "SAR"
+}
+},
+{
+"id": "MB37",
+"text": "Cash deposited at ATM SAR 800 account *5678",
+"truth": {
+"kind": "c",
+"amt": 800,
+"cur": "SAR"
+}
+},
+{
+"id": "MB38",
+"text": "Deposited SAR 1,250.00 into account *5678 at Test Branch ATM",
+"truth": {
+"kind": "c",
+"amt": 1250,
+"cur": "SAR"
+}
+},
+{
+"id": "MB39",
+"text": "Money in: SAR 75.00 from Ali to account *5678",
+"truth": {
+"kind": "c",
+"amt": 75,
+"cur": "SAR"
+}
+},
+{
+"id": "MC00",
+"text": "mPOS purchase SAR 45.00 at Test Cafe card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "MC01",
+"text": "ePOS SAR 30.00 Test Shop card *4521",
+"truth": {
+"kind": "d",
+"amt": 30,
+"cur": "SAR"
+}
+},
+{
+"id": "MC02",
+"text": "POS: SAR 60.00 Test Mart card *4521",
+"truth": {
+"kind": "d",
+"amt": 60,
+"cur": "SAR"
+}
+},
+{
+"id": "MC03",
+"text": "POS purchase SAR 89.00 at Test Mart",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "MC04",
+"text": "Card *4521 POS SAR 12.50 Test Kiosk",
+"truth": {
+"kind": "d",
+"amt": 12.5,
+"cur": "SAR"
+}
+},
+{
+"id": "MC05",
+"text": "POS-SAR 40.00-Test Bakery",
+"truth": {
+"kind": "d",
+"amt": 40,
+"cur": "SAR"
+}
+},
+{
+"id": "MC06",
+"text": "SAR 55.00 POS Test Pharmacy card *4521",
+"truth": {
+"kind": "d",
+"amt": 55,
+"cur": "SAR"
+}
+},
+{
+"id": "MC07",
+"text": "Transaction posted SAR 70.00 Test Mart card *4521",
+"truth": {
+"kind": "d",
+"amt": 70,
+"cur": "SAR"
+}
+},
+{
+"id": "MC08",
+"text": "Amount SAR 99.00 posted at Test Store card *4521",
+"truth": {
+"kind": "d",
+"amt": 99,
+"cur": "SAR"
+}
+},
+{
+"id": "MC09",
+"text": "SAR 2,000 deposited to your account *5678",
+"truth": {
+"kind": "c",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "MC10",
+"text": "Repossession fee SAR 300.00 debited from account *5678",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "MC11",
+"text": "Repos Cafe SAR 45.00 card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "MC12",
+"text": "Positano Restaurant SAR 210.00 card *4521",
+"truth": {
+"kind": "d",
+"amt": 210,
+"cur": "SAR"
+}
+},
+{
+"id": "MC13",
+"text": "Posh Store SAR 75.00 card *4521",
+"truth": {
+"kind": "d",
+"amt": 75,
+"cur": "SAR"
+}
+},
+{
+"id": "MC14",
+"text": "شراء نقاط بيع POS بمبلغ 45 ريال بطاقة 4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "MC15",
+"text": "Purchase via POS terminal SAR 33.00 Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 33,
+"cur": "SAR"
+}
+},
+{
+"id": "MC16",
+"text": "SAR 18.00 spent at mPOS Test Truck card *4521",
+"truth": {
+"kind": "d",
+"amt": 18,
+"cur": "SAR"
+}
+},
+{
+"id": "MC17",
+"text": "ePOS payment SAR 120 Test Online card *4521",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "MC18",
+"text": "Your card *4521 was used at POS for SAR 64.00",
+"truth": {
+"kind": "d",
+"amt": 64,
+"cur": "SAR"
+}
+},
+{
+"id": "MC19",
+"text": "Card *4521 SAR 23.00 Test Cafe (posted)",
+"truth": {
+"kind": "d",
+"amt": 23,
+"cur": "SAR"
+}
+},
+{
+"id": "MD00",
+"text": "Deposit SAR 500.00 to your account *5678",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "MD01",
+"text": "Cheque deposit SAR 3,000 credited to account *5678",
+"truth": {
+"kind": "c",
+"amt": 3000,
+"cur": "SAR"
+}
+},
+{
+"id": "MD02",
+"text": "Security deposit SAR 1,000 paid to Test Landlord from account *5678",
+"truth": {
+"kind": "d",
+"amt": 1000,
+"cur": "SAR"
+}
+},
+{
+"id": "MD03",
+"text": "Time deposit of SAR 20,000 booked from account *5678",
+"truth": {
+"kind": "t",
+"amt": 20000,
+"cur": "SAR"
+}
+},
+{
+"id": "MD04",
+"text": "Deposit refund SAR 500 credited to your account *5678",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "MD05",
+"text": "Your deposit of SAR 200 at ATM 1234 was successful",
+"truth": {
+"kind": "c",
+"amt": 200,
+"cur": "SAR"
+}
+},
+{
+"id": "MD06",
+"text": "Cash deposit machine: SAR 600 credited to account *5678",
+"truth": {
+"kind": "c",
+"amt": 600,
+"cur": "SAR"
+}
+},
+{
+"id": "MD07",
+"text": "إيداع شيك بمبلغ 4,000 ريال في حسابك 5678",
+"truth": {
+"kind": "c",
+"amt": 4000,
+"cur": "SAR"
+}
+},
+{
+"id": "MD08",
+"text": "Deposit SAR 250 paid to Test Hotel card *4521",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "MD09",
+"text": "Deposited cheque SAR 1,800 to account *5678",
+"truth": {
+"kind": "c",
+"amt": 1800,
+"cur": "SAR"
+}
+},
+{
+"id": "MD10",
+"text": "Fixed deposit matured SAR 25,000 credited to account *5678",
+"truth": {
+"kind": "c",
+"amt": 25000,
+"cur": "SAR"
+}
+},
+{
+"id": "MD11",
+"text": "ايداع 900 ريال عبر جهاز الصراف حساب 5678",
+"truth": {
+"kind": "c",
+"amt": 900,
+"cur": "SAR"
+}
+},
+{
+"id": "MD12",
+"text": "Deposit handling charge SAR 15.00 debited from account *5678",
+"truth": {
+"kind": "d",
+"amt": 15,
+"cur": "SAR"
+}
+},
+{
+"id": "MD13",
+"text": "Rent deposit SAR 2,000 transferred to Test Realty from account *5678",
+"truth": {
+"kind": "d",
+"amt": 2000,
+"cur": "SAR"
+}
+},
+{
+"id": "MD14",
+"text": "إيداع راتب 8,000 ريال حساب 5678",
+"truth": {
+"kind": "c",
+"amt": 8000,
+"cur": "SAR"
+}
+},
+{
+"id": "ME00",
+"text": "Your bill of SAR 300 is due on 25 Nov",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "ME01",
+"text": "Payment of SAR 1,200 is scheduled for 1 Dec from account *5678",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "ME02",
+"text": "Outstanding SAR 2,000 to be paid by 5 Dec",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "ME03",
+"text": "Your credit card outstanding SAR 2,000 will be debited on 1 Dec",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "ME04",
+"text": "Minimum due SAR 115 by 5 Dec on card *4521",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "ME05",
+"text": "Upcoming payment: SAR 450.00 to Test Telecom on 3 Dec",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "ME06",
+"text": "Scheduled transfer of SAR 500 to Ali will be executed tomorrow",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "ME07",
+"text": "Amount due SAR 980.00 on card *4521, due date 28/11",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "ME08",
+"text": "قسط بقيمة 1,500 ريال مستحق بتاريخ 1/12",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "ME09",
+"text": "سيتم خصم 300 ريال من حسابك بتاريخ 1/12",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "ME10",
+"text": "Purchase SAR 120.00 at Test Mart card *4521. Statement due date 25/11",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "ME11",
+"text": "Paid SAR 500.00 to credit card *4521. Remaining due SAR 1,500",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "ME12",
+"text": "Bill payment SAR 300.00 to STC done. Next bill due 25 Dec",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "ME13",
+"text": "Installment SAR 1,500 debited from account *5678. Next installment due 1 Jan",
+"truth": {
+"kind": "d",
+"amt": 1500,
+"cur": "SAR"
+}
+},
+{
+"id": "ME14",
+"text": "Card *4521 purchase SAR 89.00 Test Shop. Minimum due SAR 115 by 5 Dec",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "ME15",
+"text": "تم خصم 1,500 ريال قسط شهري. القسط القادم مستحق 1/1",
+"truth": {
+"kind": "d",
+"amt": 1500,
+"cur": "SAR"
+}
+},
+{
+"id": "ME16",
+"text": "Outstanding amount settled SAR 1,200 from account *5678",
+"truth": {
+"kind": "d",
+"amt": 1200,
+"cur": "SAR"
+}
+},
+{
+"id": "ME17",
+"text": "Debited SAR 230.00 for STC bill. Due amount SAR 0.00",
+"truth": {
+"kind": "d",
+"amt": 230,
+"cur": "SAR"
+}
+},
+{
+"id": "ME18",
+"text": "Transfer SAR 700 to Ali completed. Scheduled transfer of SAR 700 next month",
+"truth": {
+"kind": "d",
+"amt": 700,
+"cur": "SAR"
+}
+},
+{
+"id": "ME19",
+"text": "Purchase SAR 64.00 at Test Cafe card *4521. Payment due 30 Nov",
+"truth": {
+"kind": "d",
+"amt": 64,
+"cur": "SAR"
+}
+},
+{
+"id": "MF00",
+"text": "Purchase amount: SAR 45.00 at Test Cafe card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "MF01",
+"text": "Amount: SAR 250.00 Merchant: JARIR Card: *4521",
+"truth": {
+"kind": "d",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "MF02",
+"text": "Total: SAR 89.90 at Test Mart card *4521",
+"truth": {
+"kind": "d",
+"amt": 89.9,
+"cur": "SAR"
+}
+},
+{
+"id": "MF03",
+"text": "Value SAR 60.00 Test Shop mada *4521",
+"truth": {
+"kind": "d",
+"amt": 60,
+"cur": "SAR"
+}
+},
+{
+"id": "MF04",
+"text": "Purchase\nCard: *4521\nAmount: SAR 120.00\nAt: Test Mart\nAvailable balance: SAR 3,000.00",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "MF05",
+"text": "Purchase\nAmount SAR 75\nBalance SAR 900",
+"truth": {
+"kind": "d",
+"amt": 75,
+"cur": "SAR"
+}
+},
+{
+"id": "MF06",
+"text": "POS purchase\nAmount: 45.00 SAR\nRemaining limit: 9,955.00 SAR",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "MF07",
+"text": "Credit card purchase SAR 300.00 at Test Electronics. Available limit SAR 4,700.00",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "MF08",
+"text": "Available limit SAR 5,000 debited SAR 50 at Test Mart",
+"truth": {
+"kind": "d",
+"amt": 50,
+"cur": "SAR"
+}
+},
+{
+"id": "MF09",
+"text": "Purchase of SAR 89.50 at Test Mart. Available balance: SAR 3,210.40",
+"truth": {
+"kind": "d",
+"amt": 89.5,
+"cur": "SAR"
+}
+},
+{
+"id": "MF10",
+"text": "شراء بمبلغ 45 ريال من متجر الاختبار الرصيد المتاح 3,000 ريال",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "MF11",
+"text": "شراء عبر نقاط البيع\nالمبلغ: 120 ريال\nالرصيد: 2,880 ريال",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "MF12",
+"text": "Amount SAR 33.00 charged to card *4521 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 33,
+"cur": "SAR"
+}
+},
+{
+"id": "MF13",
+"text": "Fee: SAR 5.75 charged to card *4521",
+"truth": {
+"kind": "d",
+"amt": 5.75,
+"cur": "SAR"
+}
+},
+{
+"id": "MF14",
+"text": "Transaction amount SAR 199.00 Test Online card *4521 balance SAR 801.00",
+"truth": {
+"kind": "d",
+"amt": 199,
+"cur": "SAR"
+}
+},
+{
+"id": "MF15",
+"text": "Debit card purchase. Amt: SAR 64.00. Merchant: Test Bakery. Bal: SAR 1,000",
+"truth": {
+"kind": "d",
+"amt": 64,
+"cur": "SAR"
+}
+},
+{
+"id": "MF16",
+"text": "Spent SAR 18.50 at Test Cafe. Limit remaining SAR 981.50",
+"truth": {
+"kind": "d",
+"amt": 18.5,
+"cur": "SAR"
+}
+},
+{
+"id": "MF17",
+"text": "Withdrawal amount: SAR 500.00 ATM Test Branch card *4521",
+"truth": {
+"kind": "d",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "MF18",
+"text": "Purchase SAR 1,250.00 at Test Furniture. Credit limit SAR 20,000.00",
+"truth": {
+"kind": "d",
+"amt": 1250,
+"cur": "SAR"
+}
+},
+{
+"id": "MF19",
+"text": "Amount SAR 410.00 debited from account *5678 for Test Utility",
+"truth": {
+"kind": "d",
+"amt": 410,
+"cur": "SAR"
+}
+},
+{
+"id": "MG00",
+"text": "Get SAR 100 cashback into your account when you spend SAR 1,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "MG01",
+"text": "Earn cashback of SAR 50 when you spend SAR 500 this week",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "MG02",
+"text": "أودع 1,000 ريال واحصل على مكافأة",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "MG03",
+"text": "Your wallet can be topped up with SAR 50 or more",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "MG04",
+"text": "Salary advance up to SAR 5,000 can be added to your account. Apply now",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "MG05",
+"text": "Payroll card limit SAR 3,000 is now active",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "MG06",
+"text": "Your expected salary of SAR 12,000 will be credited on 27 Nov",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "MG07",
+"text": "Deposit SAR 1,000 or more to get a free card",
+"truth": {
+"kind": "n"
+}
+}
+]

@@ -10,6 +10,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/di/app_providers.dart';
+import '../../core/theme/large_text.dart';
 import '../../core/backend/auth_client_provider.dart';
 import '../../core/session/app_session.dart';
 import '../../core/theme/app_assets.dart';
@@ -1016,7 +1017,7 @@ class _BlueZone extends ConsumerWidget {
             children: [
               Text(greeting, style: AppTypography.caption(c.textSecondary)),
               Text(name,
-                  maxLines: 1,
+                  maxLines: linesUnlessLargeText(context, 2),
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.cardTitle(c.textPrimary)),
             ],
@@ -1159,7 +1160,9 @@ class _BlueZone extends ConsumerWidget {
                 },
               ),
             ));
-        if (MediaQuery.textScalerOf(context).scale(16) > 20) {
+        // SP-10: stacked at large text and on an SE-width phone, where the
+        // account name beside the period segments was cut.
+        if (isLargeText(context) || MediaQuery.sizeOf(context).width < 360) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -1184,7 +1187,7 @@ class _BlueZone extends ConsumerWidget {
         children: [
           Flexible(
             child: Text(heroLabel,
-                maxLines: 1,
+                maxLines: linesUnlessLargeText(context, 1),
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.caption(
                     Colors.white.withValues(alpha: 0.72))),
@@ -1258,7 +1261,7 @@ class _BlueZone extends ConsumerWidget {
           const SizedBox(width: 6),
           Flexible(
             child: Text(text,
-                maxLines: 1,
+                maxLines: linesUnlessLargeText(context, 1),
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.overline(
                     good ? Colors.white : const Color(0xFFFFD9A8))),
@@ -1318,7 +1321,7 @@ class _BlueZone extends ConsumerWidget {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(accountLabel,
-                        maxLines: 1,
+                        maxLines: linesUnlessLargeText(context, 2),
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.subhead(Colors.white)
                             .copyWith(fontWeight: FontWeight.w600)),
@@ -1382,7 +1385,7 @@ class _BlueZone extends ConsumerWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(items[i].$1,
-                          maxLines: 1,
+                          maxLines: linesUnlessLargeText(context, 1),
                           overflow: TextOverflow.ellipsis,
                           style: AppTypography.caption(
                               Colors.white.withValues(alpha: .72))),
@@ -1804,7 +1807,8 @@ class _QuickActions extends StatelessWidget {
                 const SizedBox(width: 6),
                 Flexible(
                   child: Text(label,
-                      maxLines: 1,
+                      maxLines: linesUnlessLargeText(context, 2),
+                      textAlign: TextAlign.center,
                       overflow: TextOverflow.ellipsis,
                       style: AppTypography.subhead(c.textPrimary)
                           .copyWith(fontWeight: FontWeight.w600)),
@@ -2260,7 +2264,7 @@ class _ReviewSection extends ConsumerWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(title,
-                              maxLines: 1,
+                              maxLines: linesUnlessLargeText(context, 1),
                               overflow: TextOverflow.ellipsis,
                               style: AppTypography.bodyStrong(
                                   t.textOnCanvasPrimary)),

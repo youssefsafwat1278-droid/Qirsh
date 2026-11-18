@@ -68,6 +68,8 @@ Deno.test('directionOfFlow agrees with the parser flowOf, points included', asyn
     'تمت إضافة النقاط 12 إلى رصيدك',
     'تم خصم 45.00 ريال عبر نقاط البيع لدى المتجر',
     'SAR 45.00 credited to your account from SHOP',
+    'Card purchase SAR 45.00 at SHOP. 45 points credited to your account',
+    'POS SAR 45.00 at SHOP, إضافة 30 نقطة',
     'SAR 500.00 deposited to beneficiary Ali from your account *1234',
   ]) {
     assertEquals(directionOfFlow(text), flowOf(text), text);

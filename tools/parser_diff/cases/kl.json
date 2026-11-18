@@ -1,0 +1,1085 @@
+[
+{
+"id": "K_R1a",
+"text": "Your purchase of SAR 250.00 at Shop X was declined. If amount was deducted it will be refunded."
+},
+{
+"id": "K_R1b",
+"text": "Purchase of SAR 100 at Shop X declined. Any held amount will be reversed."
+},
+{
+"id": "K_R1c",
+"text": "Purchase of SAR 100 at Shop X declined. Your account was not credited or debited."
+},
+{
+"id": "K_R1d",
+"text": "عملية شراء مرفوضة. لاسترداد المبلغ اتصل بنا"
+},
+{
+"id": "K_R1d2",
+"text": "عملية شراء بمبلغ 100 SAR مرفوضة. لاسترداد المبلغ اتصل بنا"
+},
+{
+"id": "K_R1e",
+"text": "Transfer of SAR 300 to Ali was rejected. Amount credited back to your account."
+},
+{
+"id": "K_R1f",
+"text": "عملية شراء بمبلغ 100.00 SAR لدى SHOPX لم تتم العملية"
+},
+{
+"id": "K_R1g",
+"text": "عملية شراء بمبلغ 100.00 SAR لدى SHOPX العملية لم تكتمل"
+},
+{
+"id": "K_R1h",
+"text": "Purchase of SAR 100.00 at SHOPX could not be processed"
+},
+{
+"id": "K_R1i",
+"text": "Purchase of SAR 100.00 at SHOPX denied"
+},
+{
+"id": "K_R1j",
+"text": "Purchase of SAR 100.00 at SHOPX not approved"
+},
+{
+"id": "K_R1k",
+"text": "عملية شراء بمبلغ 100.00 SAR لدى SHOPX غير مقبولة"
+},
+{
+"id": "K_R1l",
+"text": "عملية شراء بمبلغ 100.00 SAR لدى SHOPX ملغاة"
+},
+{
+"id": "K_R1m",
+"text": "Purchase of SAR 100.00 at SHOPX cancelled"
+},
+{
+"id": "K_R1n",
+"text": "عملية شراء بمبلغ 100.00 SAR لدى SHOPX مرفوضه"
+},
+{
+"id": "K_R1o",
+"text": "رفض عملية شراء بمبلغ 100.00 SAR لدى SHOPX"
+},
+{
+"id": "K_R1p",
+"text": "عملية فاشله شراء بمبلغ 100.00 SAR لدى SHOPX"
+},
+{
+"id": "K_R2a",
+"text": "Purchase of SAR 100 at Failed Ventures card *1234"
+},
+{
+"id": "K_R2b",
+"text": "شراء بمبلغ 100 SAR لدى مرفوض للتجارة"
+},
+{
+"id": "K_R2c",
+"text": "Purchase SAR 100 at Rejected Records Store"
+},
+{
+"id": "K_R2d",
+"text": "Purchase of SAR 100 at Shop X. If you did not make this transaction, it can be rejected by calling us."
+},
+{
+"id": "K_R2e",
+"text": "Purchase of SAR 100 at Shop X. Report unsuccessful or unauthorized transactions to 8001234"
+},
+{
+"id": "K_R2f",
+"text": "Purchase of SAR 100 at Shop X. Transactions exceeding limit will be declined."
+},
+{
+"id": "K_R2g",
+"text": "شراء بمبلغ 100 SAR لدى متجر. للاعتراض على العمليات المرفوضة اتصل بنا"
+},
+{
+"id": "K_R4a",
+"text": "رُفضت عملية شراء بمبلغ 100 ريال لدى SHOPX"
+},
+{
+"id": "K_R4b",
+"text": "عملية شراء مـرفوضة بمبلغ 100 ريال لدى SHOPX"
+},
+{
+"id": "K_R4c",
+"text": "تم رفض عملية شراء بمبلغ 250.00 ريال لدى SHOPX"
+},
+{
+"id": "K_N01",
+"text": "تم رفض عملية شراء بمبلغ ١٠٠٫٠٠ ريال لدى SHOPX"
+},
+{
+"id": "K_N02",
+"text": "Purchase of SAR 100.00 at SHOPX was approved, not rejected."
+},
+{
+"id": "K_N03",
+"text": "Your purchase of SAR 100.00 at SHOPX is not declined."
+},
+{
+"id": "K_N04",
+"text": "Purchase of SAR 100.00 at SHOPX declined. Approved on retry."
+},
+{
+"id": "K_N05",
+"text": "Purchase of SAR 100.00 at SHOPX approved. Previous attempt declined."
+},
+{
+"id": "K_N06",
+"text": "Partial reversal of SAR 40.00 for purchase at SHOPX credited to your card *1234"
+},
+{
+"id": "K_N07",
+"text": "Pre-authorization of SAR 500.00 at HOTEL X on card *1234. Available balance SAR 1,000.00"
+},
+{
+"id": "K_N08",
+"text": "Hold of SAR 500.00 at HOTEL X on card *1234 released."
+},
+{
+"id": "K_N09",
+"text": "Purchase of SAR 100.00 at SHOPX is pending."
+},
+{
+"id": "K_N10",
+"text": "ATM withdrawal of SAR 500.00 failed. Card *1234"
+},
+{
+"id": "K_N11",
+"text": "Cash withdrawal of SAR 500.00 from ATM 123 could not be dispensed. Card *1234"
+},
+{
+"id": "K_N12",
+"text": "تعذر صرف مبلغ 500.00 ريال من الصراف الآلي بطاقة *1234"
+},
+{
+"id": "K_N13",
+"text": "Your transfer of SAR 300.00 to Ali could not be sent."
+},
+{
+"id": "K_N14",
+"text": "لم يتم تحويل مبلغ 300.00 ريال إلى علي"
+},
+{
+"id": "K_N15",
+"text": "Bill payment of SAR 200.00 to STC failed."
+},
+{
+"id": "K_N16",
+"text": "سداد فاتورة بمبلغ 200.00 ريال لم ينجح"
+},
+{
+"id": "K_N17",
+"text": "Online purchase (card not present) of SAR 100.00 at SHOPX declined"
+},
+{
+"id": "K_N18",
+"text": "E-commerce purchase of SAR 100.00 at SHOPX blocked. Card *1234"
+},
+{
+"id": "K_N19",
+"text": "Merchant: Failed Ventures\nPurchase SAR 100.00 card *1234"
+},
+{
+"id": "K_N20",
+"text": "POS purchase SAR 100.00 FAILED VENTURES LLC card *1234"
+},
+{
+"id": "K_N21",
+"text": "Purchase of SAR 100.00 at Café Cancelled card *1234"
+},
+{
+"id": "K_N22",
+"text": "Purchase of SAR 100.00 via Void Coffee card *1234"
+},
+{
+"id": "K_N23",
+"text": "Purchase of SAR 100.00 at SHOPX\nCard *1234\nAvailable balance SAR 5,000.00\nNever share your OTP or password."
+},
+{
+"id": "K_N24",
+"text": "Purchase of SAR 100.00 at SHOPX declined.\nAvailable balance SAR 50.00"
+},
+{
+"id": "K_N25",
+"text": "Refund of SAR 30.00 for purchase SAR 100.00 at SHOPX"
+},
+{
+"id": "K_N26",
+"text": "‏تم رفض‏ عملية‏ شراء‏ بمبلغ 100.00 SAR لدى SHOPX"
+},
+{
+"id": "K_N27",
+"text": "Your card payment of SAR 100.00 at SHOPX was successful. It was not declined."
+},
+{
+"id": "K_N28",
+"text": "Payment of SAR 100.00 to Ali reversed."
+},
+{
+"id": "K_N29",
+"text": "Transaction reversed: SAR 100.00 at SHOPX"
+},
+{
+"id": "K_N30",
+"text": "POS reversal SAR 100.00 SHOPX card *1234"
+},
+{
+"id": "K_N31",
+"text": "Transaction Report - Purchase SAR 100.00 at SHOPX declined"
+},
+{
+"id": "K_N32",
+"text": "Payment of SAR 100.00 to STC will be declined due to insufficient funds"
+},
+{
+"id": "K_N33",
+"text": "Your scheduled transfer of SAR 300.00 to Ali will be processed tomorrow"
+},
+{
+"id": "K_N34",
+"text": "Purchase of SAR 100.00 at SHOPX was declined, need assistance? Call 8001234"
+},
+{
+"id": "K_N35",
+"text": "تم رفض عملية شراء بمبلغ 100.00 ريال لدى SHOPX، هل تحتاج مساعدة؟"
+},
+{
+"id": "K_N36",
+"text": "Refund of SAR 100.00 credited for your purchase at SHOPX that was declined"
+},
+{
+"id": "K_N37",
+"text": "استرداد مبلغ 100.00 ريال لعملية شراء مرفوضة لدى SHOPX"
+},
+{
+"id": "K_N38",
+"text": "Purchase of SAR 100.00 at Hotpot Restaurant card *1234"
+},
+{
+"id": "K_N39",
+"text": "Declined transactions SAR 100.00 at SHOPX card *1234"
+},
+{
+"id": "K_N40",
+"text": "Purchase of SAR 100.00 at SHOPX was declined. Purchase of SAR 80.00 at SHOPX approved."
+},
+{
+"id": "K_N41",
+"text": "Transaction pending: SAR 100.00 at SHOPX card *1234"
+},
+{
+"id": "K_N42",
+"text": "عملية شراء بمبلغ 100 ريال من متجر مرفوضة"
+},
+{
+"id": "K_N43",
+"text": "Purchase of SAR 100.00 at SHOPX. Status: Approved (not declined)"
+},
+{
+"id": "K_N44",
+"text": "Your purchase of SAR 100.00 at SHOPX has been voided"
+},
+{
+"id": "K_N45",
+"text": "Purchase SAR 100.00 at SHOPX. Insufficient funds."
+},
+{
+"id": "K_N46",
+"text": "تم خصم 100.00 ريال من بطاقتك لدى SHOPX وتم استرجاعه"
+},
+{
+"id": "K_N47",
+"text": "Credit: SAR 100.00 reversal of failed ATM withdrawal"
+},
+{
+"id": "K_N48",
+"text": "Purchase of SAR 1,250.00 at SHOPX declined"
+},
+{
+"id": "K_N49",
+"text": "Purchase of SAR 100.00 at SHOPX was approved"
+},
+{
+"id": "K_N50",
+"text": "Salary of SAR 9,000.00 credited to your account"
+},
+{
+"id": "K_N51",
+"text": "شراء بمبلغ 100.00 ريال لدى SHOPX بطاقة *1234 تمت بنجاح"
+},
+{
+"id": "K_N52",
+"text": "Your purchase at SHOPX of SAR 100.00 was successful. Note: payments to unverified merchants may be declined."
+},
+{
+"id": "K_N53",
+"text": "Purchase of SAR 100.00 at SHOPX. Card ending 1234. Not you? Call us to report. Txn declined if limit exceeded."
+},
+{
+"id": "K_N54",
+"text": "تمت عملية شراء بمبلغ 100.00 ريال لدى SHOPX. العمليات المرفوضة لا تخصم"
+},
+{
+"id": "K_N55",
+"text": "Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Purchase of SAR 100.00 at SHOPX declined"
+},
+{
+"id": "K_N56",
+"text": "Purchase of SAR 100.00 at SHOPX declined Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, Dear valued customer, "
+},
+{
+"id": "K_K1",
+"text": "Refund of SAR 99.00 failed"
+},
+{
+"id": "K_K2",
+"text": "Your purchase of SAR 100.00 at SHOPX was voided"
+},
+{
+"id": "K_K3",
+"text": "Purchase of SAR 100.00 at SHOPX not authorised"
+},
+{
+"id": "K_K4",
+"text": "If you need help, retry: purchase of SAR 100.00 at SHOPX declined"
+},
+{
+"id": "K_K5",
+"text": "تم استرجاع مبلغ 100.00 ريال إلى حسابك"
+},
+{
+"id": "K_K6",
+"text": "Reversal of declined purchase SAR 100.00 credited"
+},
+{
+"id": "K_K7",
+"text": "Purchase of SAR 100.00 at SHOPX declined. Need help? Call 8001234"
+},
+{
+"id": "K_K8",
+"text": "Purchase of SAR 100.00 at SHOPX declined, call us if you need help"
+},
+{
+"id": "K_K9",
+"text": "Dear customer, your purchase of SAR 100.00 at SHOPX on card *1234 was declined; if you have questions call 8001234"
+},
+{
+"id": "K_K10",
+"text": "Transaction report: Purchase SAR 100.00 at SHOPX declined"
+},
+{
+"id": "K_K11",
+"text": "Purchase SAR 100.00 at SHOPX. Reason: declined by issuer"
+},
+{
+"id": "L_L01",
+"text": "Purchase of SAR 100.00 at SHOPX approved. Available balance SAR 4,900.00; pending transactions may not be reflected.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L02",
+"text": "POS purchase SAR 85.50 at SHOPX card *1234. Your pending balance is SAR 300.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L03",
+"text": "Purchase of SAR 100.00 at SHOPX. Track your spending in the app.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L04",
+"text": "Purchase of SAR 45.00 at Household Store card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L05",
+"text": "Purchase of SAR 30.00 at Holden Cafe card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L06",
+"text": "Purchase of SAR 22.00 at Bus Stop Cafe card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L07",
+"text": "Purchase of SAR 60.00 at One Stop Shop card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L08",
+"text": "Purchase of SAR 70.00 at Offer Mart card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L09",
+"text": "Purchase of SAR 80.00 at Click Pharmacy card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L10",
+"text": "Purchase of SAR 55.00 at Promo Burger card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L11",
+"text": "Purchase of SAR 40.00 at Won Kitchen card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L12",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. If your card is lost it will be blocked immediately, call 8001234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L13",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Blocked cards can be reactivated in the app.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L14",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. For complaints call 8001234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L15",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Details: https://bank.example/tx",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L16",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Check our latest offers in the app.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L17",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Never share your verification code.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L18",
+"text": "عملية شراء بمبلغ 100.00 ريال لدى SHOPX بطاقة *1234. الرصيد المتاح 4,900.00 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L19",
+"text": "شراء عبر نقاط البيع بمبلغ ١٢٠٫٥٠ ريال لدى SHOPX بطاقة مدى *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L20",
+"text": "سحب نقدي بمبلغ 500.00 ريال من الصراف الآلي بطاقة *1234. الرصيد 3,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L21",
+"text": "ATM withdrawal SAR 500.00 card *1234 at ATM 77. Balance SAR 3,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L22",
+"text": "Bill payment of SAR 200.00 to STC completed successfully. Ref 99812",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L23",
+"text": "سداد فاتورة بمبلغ 200.00 ريال إلى STC تم بنجاح",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L24",
+"text": "Standing order of SAR 1,500.00 to Ali executed from account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L25",
+"text": "تم تنفيذ أمر مستديم بمبلغ 1500.00 ريال إلى علي",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L26",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Transactions above SAR 5,000 will be declined.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L27",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Your daily limit is SAR 10,000; purchases beyond it will be declined.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L28",
+"text": "Purchase of SAR 100.00 at Hold Me Bakery card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L29",
+"text": "Payment of SAR 100.00 to Stop & Go Market card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L30",
+"text": "Purchase of SAR 19.99 at Promotion Plaza card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "L_L31",
+"text": "Salary of SAR 9,000.00 credited to your account *5678. Available balance SAR 12,000.00",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "L_L32",
+"text": "تم إيداع راتب بمبلغ 9000.00 ريال في حسابك *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "L_L33",
+"text": "Incoming transfer of SAR 300.00 from Ali credited to your account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "L_L34",
+"text": "حوالة واردة بمبلغ 300.00 ريال من علي إلى حسابك *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "L_L35",
+"text": "Refund of SAR 99.00 from Shop X credited to your card *1234",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "L_L36",
+"text": "تم استرداد مبلغ 99 ريال من متجر SHOPX إلى بطاقتك",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "L_L37",
+"text": "Refund of SAR 99.00 from SHOPX credited. Available balance SAR 5,099.00; pending transactions may not be reflected.",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "L_L38",
+"text": "Refund of SAR 99.00 for your returned order at SHOPX credited to card *1234",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "L_L39",
+"text": "Deposit of SAR 1,000.00 received in account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "L_L40",
+"text": "Salary of SAR 9,000.00 credited. Card *1234 blocked transactions are not affected.",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "L_L41",
+"text": "Payment of SAR 100.00 to STC did not go through",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L42",
+"text": "Your payment of SAR 100.00 to STC has not been completed",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L43",
+"text": "Transaction of SAR 100.00 at SHOPX was refused",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L44",
+"text": "We could not process your payment of SAR 100.00 to STC",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L45",
+"text": "Your payment of SAR 100.00 cannot be completed",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L46",
+"text": "عملية سحب نقدي بمبلغ 500 ريال لم تتم",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L47",
+"text": "تم إلغاء شراء بمبلغ 100 ريال لدى SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L48",
+"text": "Purchase of SAR 100.00 at SHOPX. Merchant declined transaction.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L49",
+"text": "Purchase of SAR 100.00 at SHOPX: status changed from pending to declined",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L50",
+"text": "Failed payments SAR 100.00 to STC card *1234",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L51",
+"text": "Purchase of SAR 100.00 at SHOPX blocked for online use",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L52",
+"text": "Your transfer of SAR 300.00 to Ali has not been processed",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L53",
+"text": "Payment to STC SAR 100.00 bounced",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L54",
+"text": "Purchase of SAR 100.00 at SHOPX - Declined",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L55",
+"text": "Unsuccessful transaction: SAR 100.00 at SHOPX card *1234",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L56",
+"text": "Purchase SAR 100.00 at SHOPX was not authorized by the issuer",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L57",
+"text": "Dear customer, the purchase of SAR 100.00 at SHOPX could not be completed due to insufficient balance.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L58",
+"text": "Your standing order of SAR 1,500.00 to Ali was not executed due to insufficient funds",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L59",
+"text": "لم يتم تنفيذ الأمر المستديم بمبلغ 1500 ريال لعدم كفاية الرصيد",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L60",
+"text": "Transfer of SAR 300.00 to Ali is under review",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L61",
+"text": "Your transfer of SAR 300.00 to Ali is being processed",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L62",
+"text": "تحويل بمبلغ 300 ريال إلى علي قيد التنفيذ",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L63",
+"text": "Purchase of SAR 100.00 at SHOPX awaiting confirmation",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L64",
+"text": "عملية شراء بمبلغ ١٠٠ ريال لدى SHOPX مرفوضة",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L65",
+"text": "Purchase attempt of SAR 100.00 at SHOPX with card *1234 was declined. Available balance SAR 50.00",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L66",
+"text": "Card *1234 has been blocked. Purchase of SAR 100.00 at SHOPX not completed.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L67",
+"text": "Your card *1234 is blocked. Attempted purchase SAR 100.00 at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L68",
+"text": "Your purchase of SAR 100.00 at SHOPX failed, please try again?",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L69",
+"text": "Report: your purchase of SAR 100.00 at SHOPX was rejected",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L70",
+"text": "Purchase of SAR 100.00 at SHOPX could not be completed. If you have been charged it will be refunded",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L71",
+"text": "Your OTP for purchase of SAR 100.00 at SHOPX is 482913. Do not share it.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L72",
+"text": "Use 482913 as OTP to complete SAR 100.00 purchase at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L73",
+"text": "482913 is the code to confirm your purchase of SAR 100.00 at SHOPX. Never share your OTP.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L74",
+"text": "OTP 482913 for SAR 100.00 at SHOPX. Valid 5 minutes.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L75",
+"text": "Verification code for transaction of SAR 100.00 at SHOPX: 4821",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L76",
+"text": "رمز التحقق لعملية شراء بمبلغ 100 ريال لدى SHOPX هو 4821",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L77",
+"text": "أدخل رمز التحقق ٤٨٢١ لإتمام عملية الشراء بمبلغ 100 ريال",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L78",
+"text": "Enter code 482913 to approve the purchase of SAR 100.00 at SHOPX. Do not share this OTP.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L79",
+"text": "Exclusive offers: get SAR 50 cashback on purchases of SAR 200 at SHOPX",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L80",
+"text": "Promotional: earn SAR 100 bonus when you spend SAR 1,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L81",
+"text": "You clicked to join! Spend SAR 500 and get SAR 50 back",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L82",
+"text": "Congratulations, you are the winning customer of SAR 1,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L83",
+"text": "عرض خاص: احصل على 100 ريال عند الشراء بمبلغ 500 ريال",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L84",
+"text": "We promoted your card limit to SAR 20,000",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L85",
+"text": "Your card *1234 is now active. Credit limit SAR 10,000.00",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L86",
+"text": "Your credit limit has been changed to SAR 15,000.00",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "L_L87",
+"text": "تم تفعيل بطاقتك *1234. الحد الائتماني 10,000 ريال",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "LX_M01",
+"text": "Purchase of SAR 100.00 at SHOPX. Merchant rejected the payment.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "LX_M02",
+"text": "Card payment SAR 100.00 at SHOPX - merchant declined",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "LX_M03",
+"text": "Your payment of SAR 100.00 has not been approved",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "LX_M04",
+"text": "Payment of SAR 100.00 to STC will be processed",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "LX_M05",
+"text": "Purchase SAR 100.00 at SHOPX. Purchases over SAR 500 will be declined",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "LX_M06",
+"text": "تم خصم مبلغ 100 ريال لدى SHOPX. سيتم تنفيذ العمليات المعلقة لاحقا",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "LX_M07",
+"text": "Transaction SAR 100.00 at SHOPX card *1234. Disputed transactions may be reversed",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "LX_M08",
+"text": "POS purchase SAR 100.00 at SHOPX. Card expiry 12/27",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "LX_M09",
+"text": "Purchase of SAR 100.00 at SHOPX. Your card expired cards will be replaced",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "LX_M10",
+"text": "Refund of SAR 99.00 from SHOPX credited. If you were charged for a declined purchase, call us.",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "LX_M11",
+"text": "Refund of SAR 99.00 from SHOPX credited to card *1234. Transactions above SAR 5,000 will be declined",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "LX_M12",
+"text": "تم استرداد مبلغ 99 ريال من متجر SHOPX. العمليات المرفوضة لا تخصم",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "LX_M13",
+"text": "Payment of SAR 100.00 via Stopwatch Store card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "LX_M14",
+"text": "Purchase of SAR 100.00 at SHOPX approved. Daily limit SAR 5,000; pending SAR 0.00",
+"truth": {
+"kind": "d"
+}
+}
+]

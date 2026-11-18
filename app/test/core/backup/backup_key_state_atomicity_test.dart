@@ -242,6 +242,12 @@ void main() {
         executor: NativeDatabase.memory(),
         keyStore: _MemoryKeyStore(),
       ));
+  // A restore destination is a new device: no account yet (A-7), so the whole
+  // backup, settings included, applies (SP-02).
+  Future<AppDatabase> openNewDevice() => AppDatabase.open(
+        executor: NativeDatabase.memory(),
+        keyStore: _MemoryKeyStore(),
+      );
 
   group('H-23 — enable key-state publication is fail-closed', () {
     // Non-vacuity: with the prior owner-first implementation, every case below
@@ -336,7 +342,7 @@ void main() {
         'local_data_owner_generation': 'generation-A',
       });
       final source = await openMemory();
-      final destination = await openMemory();
+      final destination = await openNewDevice();
       addTearDown(source.close);
       addTearDown(destination.close);
       await source.customStatement("UPDATE user_settings SET country = 'EG';");
@@ -434,7 +440,7 @@ void main() {
         'local_data_owner_generation': 'generation-1',
       });
       final source = await openMemory();
-      final destination = await openMemory();
+      final destination = await openNewDevice();
       addTearDown(source.close);
       addTearDown(destination.close);
       await source.customStatement("UPDATE user_settings SET country = 'EG';");

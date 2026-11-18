@@ -528,7 +528,9 @@ Deno.test('declined table: not completed is never confirmed money, on every serv
   // ceiling here and in declined_state_cues_table_test.dart), and every pin
   // says whether it characterizes a safe deviation or an open defect; a row
   // outside it is an acceptance row. 758 before the clause-scope fixes.
-  const MAX_DEVIATIONS = 700;
+  // Follow-up 3 (SM-08): equal to the count (six purchases next to another
+  // event's status sentence are now review, never recorded).
+  const MAX_DEVIATIONS = 703;
   assert(declinedDeviations.count <= MAX_DEVIATIONS, `allowlist grew: ${declinedDeviations.count}`);
   for (const p of declinedDeviations.rows as Array<{ defect?: string; pin?: string; text: string }>) {
     assertEquals(p.pin, p.defect ? 'open_defect' : 'safe_deviation', p.text);

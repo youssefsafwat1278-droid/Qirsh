@@ -16,8 +16,11 @@ import 'package:money_companion/engine/parser/transaction_state_cues.dart';
 /// Synthetic messages only.
 const _casesPath = '../supabase/functions/process-ios-sms/declined_cases.json';
 // Round 3 (closure): the ceiling of the deviations allowlist (700 after the
-// clause-scope fixes moved 58 rows to acceptance; it was 758).
-const _maxDeviations = 700;
+// clause-scope fixes moved 58 rows to acceptance; it was 758). Follow-up 3
+// (SM-08): equal to the count, 703 — six purchases next to another event's
+// status sentence ("Previous attempt declined", read not completed at
+// 5dae2e2d) are now review on both sides, never recorded.
+const _maxDeviations = 703;
 const _deviationsPath =
     '../supabase/functions/process-ios-sms/declined_cases_deviations.json';
 const _notCompleted = 'transaction_not_completed';

@@ -1,3 +1,4 @@
+import 'message_meaning.dart';
 import 'normalizer.dart';
 import 'parser_engine.dart';
 
@@ -188,6 +189,51 @@ class TransactionStateCues {
 
   /// Whether [lower] holds a declined/not-completed cue word at all.
   static bool hasCue(String lower) => _declined.hasMatch(foldForCues(lower));
+
+  /// Follow-up 3 (SM-01): a declined/not-completed cue or a reversal word.
+  static bool hasStatusCue(String lower) {
+    final text = foldForCues(lower);
+    return _declined.hasMatch(text) || _reversal.hasMatch(text);
+  }
+
+  /// The not-completed rule over [text] as given (no clause scope): the
+  /// reading of the whole message.
+  static bool isNotCompletedText(String text) => _isNotCompletedText(text);
+
+  /// Follow-up 3 (SM-01): every status cue in [sentence] belongs to another
+  /// operation — an [MessageMeaning.otherEventMarkers] word ties an
+  /// [MessageMeaning.otherEventNouns] noun before the cue ("Previous
+  /// transaction declined", "Your earlier attempt was declined", `العملية
+  /// السابقة مرفوضة`). "Transaction declined, please use another card" is
+  /// this event's own status. Mirrors `isOtherEventStatus` in
+  /// `process-ios-sms/parse.ts`.
+  static bool isOtherEventStatus(String sentence) {
+    final text = foldForCues(sentence);
+    final cues = _declined.allMatches(text).toList();
+    return cues.isNotEmpty &&
+        cues.every((m) => _otherSubject.hasMatch(text.substring(0, m.start)));
+  }
+
+  /// Whether [sentence] names another operation ("previous purchase",
+  /// `العملية السابقة`).
+  static bool namesOtherEvent(String sentence) =>
+      _otherSubject.hasMatch(foldForCues(sentence));
+
+  static final RegExp _otherSubject = () {
+    const markers = MessageMeaning.otherEventMarkers;
+    const nouns = MessageMeaning.otherEventNouns;
+    final latinMarkers = markers.where((w) => _isLatin(w) && !w.contains(' '));
+    final latinPhrases = markers.where((w) => _isLatin(w) && w.contains(' '));
+    final arMarkers = markers.where((w) => !_isLatin(w)).map(foldForCues);
+    final arNouns = nouns.where((w) => !_isLatin(w)).map(foldForCues);
+    return RegExp('(?<![a-z])(?:(?:${latinMarkers.join('|')})'
+        r'\s+(?:\S+\s+){0,2}?'
+        '(?:${nouns.where(_isLatin).join('|')})|${latinPhrases.join('|')})'
+        '(?![a-z])'
+        '|(?:${arNouns.join('|')})'
+        r'\s+'
+        '(?:${arMarkers.join('|')})');
+  }();
 
   static bool _isNotCompletedText(String rawText) {
     final text = foldForCues(rawText);

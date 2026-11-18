@@ -115,7 +115,8 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
         SELECT merchants.raw_name AS raw_name, categories.key AS category_key
         FROM merchant_category_map
         INNER JOIN merchants ON merchants.id = merchant_category_map.merchant_id
-        INNER JOIN categories ON categories.id = merchant_category_map.category_id;
+        INNER JOIN categories ON categories.id = merchant_category_map.category_id
+        WHERE categories.deleted_at IS NULL;
       ''',
     ).get();
 
@@ -135,6 +136,7 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
         INNER JOIN categories ON categories.id = merchant_category_map.category_id
         WHERE merchants.normalized_name = ?
           AND merchant_category_map.is_user_confirmed = 1
+          AND categories.deleted_at IS NULL
         LIMIT 1;
       ''',
       variables: [
@@ -153,6 +155,7 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
         INNER JOIN merchants ON merchants.id = merchant_category_map.merchant_id
         INNER JOIN categories ON categories.id = merchant_category_map.category_id
         WHERE merchant_category_map.is_user_confirmed = 1
+          AND categories.deleted_at IS NULL
         ORDER BY merchant_category_map.updated_at DESC, merchants.raw_name;
       ''',
     ).get();

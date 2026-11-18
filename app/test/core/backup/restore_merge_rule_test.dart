@@ -11,8 +11,12 @@
 // snapshot builder, outbox, reconciler, backfill, push and pull over the
 // in-memory cloud (fake_ledger_cloud.dart). Synthetic data only.
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/data/repositories/drift_category_repository.dart';
+import 'package:money_companion/data/repositories/drift_merchant_category_repository.dart';
 import 'package:money_companion/domain/finance/money.dart';
+import 'package:money_companion/l10n/app_localizations.dart';
 
 import '../../features/capture/ledger_admission_fixture.dart';
 import 'fake_ledger_cloud.dart';
@@ -192,5 +196,153 @@ void main() {
       'Synthetic shop m7-B': ['30.00']
     });
     expect(d.cloud.rows, hasLength(1));
+  });
+
+  // ── Follow-up 3 (review SP-01 / SP-02) ──────────────────────────────────
+  // Saved merchant rules (merchant_category_map) are HARD-deleted ("Forget this
+  // rule", category deletion): nothing on the device records the removal, so a
+  // merge cannot tell "removed after the backup" from "never here". The
+  // device's rules are therefore kept exactly as they are; the backup adds none
+  // and changes none.
+  Future<String?> ruleFor(String merchant) =>
+      DriftMerchantCategoryRepository(d.db).userConfirmedCategoryFor(merchant);
+
+  test('SP-01 a saved rule removed after the backup stays removed', () async {
+    await d.add('r1-A', '10');
+    final rules = DriftMerchantCategoryRepository(d.db);
+    await rules.confirmMerchantCategory(
+        rawMerchant: 'Synthetic Rule Shop',
+        categoryKey: 'restaurants',
+        isUserConfirmed: true);
+    final backup = await d.backup();
+    await rules.forgetUserConfirmedRule('Synthetic Rule Shop');
+
+    await d.restore(backup);
+    expect(await ruleFor('Synthetic Rule Shop'), isNull);
+  });
+
+  test('SP-01 rules of a category deleted after the backup do not come back '
+      'and nothing points at the deleted category', () async {
+    await d.add('r2-A', '10');
+    final categories = DriftCategoryRepository(d.db);
+    final custom = await categories.createCategory(
+        nameAr: 'فئة اصطناعية', icon: 'tag', color: '#000000', isIncome: false);
+    final rules = DriftMerchantCategoryRepository(d.db);
+    await rules.confirmMerchantCategory(
+        rawMerchant: 'Synthetic Custom Shop',
+        categoryKey: custom.key,
+        isUserConfirmed: true);
+    final backup = await d.backup();
+    await categories.deleteCategory(custom.id);
+
+    await d.restore(backup);
+    expect(await ruleFor('Synthetic Custom Shop'), isNull);
+    expect(
+        await d.db
+            .customSelect('SELECT m.id FROM merchant_category_map m '
+                'JOIN categories c ON c.id = m.category_id '
+                'WHERE c.deleted_at IS NOT NULL')
+            .get(),
+        isEmpty);
+  });
+
+  test('SP-01 a rule changed after the backup keeps the newer choice', () async {
+    await d.add('r3-A', '10');
+    final rules = DriftMerchantCategoryRepository(d.db);
+    await rules.confirmMerchantCategory(
+        rawMerchant: 'Synthetic Pick Shop',
+        categoryKey: 'restaurants',
+        isUserConfirmed: true);
+    final backup = await d.backup();
+    await rules.confirmMerchantCategory(
+        rawMerchant: 'Synthetic Pick Shop',
+        categoryKey: 'shopping',
+        isUserConfirmed: true);
+
+    await d.restore(backup);
+    expect(await ruleFor('Synthetic Pick Shop'), 'shopping');
+  });
+
+  test('a deletion on the device is kept even when the backup copy carries a '
+      'later timestamp (another clock)', () async {
+    await d.add('r4-A', '10');
+    await d.add('r4-B', '20');
+    final backup = await d.backup();
+    await d.repo.deleteTransaction('r4-B');
+    final txns = (backup['tables'] as Map)['transactions'] as List;
+    for (final t in txns.cast<Map<String, dynamic>>()) {
+      if (t['id'] == 'r4-B') t['updated_at'] = '2099-01-01T00:00:00.000Z';
+    }
+
+    await d.restore(backup);
+    expect((await row('r4-B'))['status'], 'ignored');
+  });
+
+  // SP-02: full apply (which empties the restored tables) is for a device that
+  // holds no records of its own. Accounts, cards, saved rules, custom
+  // categories and sender mappings are records too.
+  Future<List<String>> ids(String table) async => [
+        for (final r in await d.db.customSelect('SELECT id FROM $table').get())
+          r.read<String>('id')
+      ];
+
+  test('SP-02 an account created after the backup on a device with no '
+      'transactions is kept', () async {
+    final backup = await d.backup();
+    const now = '2026-07-06T12:00:00.000Z';
+    await d.db.customStatement(
+        'INSERT INTO accounts(id, name, currency, type, is_default, sort_order, '
+        'created_at, updated_at) VALUES '
+        "('acc-new', 'Synthetic new account', 'SAR', 'bank', 0, 2, '$now', '$now');");
+    await d.restore(backup);
+    expect(await ids('accounts'), containsAll(['acc', 'acc-new']));
+  });
+
+  test('SP-02 a custom category and a saved rule made after the backup on a '
+      'device with no transactions are kept', () async {
+    final backup = await d.backup();
+    // Device now holds no account, transaction or other financial record: only
+    // the category and the rule made below.
+    await d.db.customStatement('DELETE FROM accounts;');
+    final custom = await DriftCategoryRepository(d.db).createCategory(
+        nameAr: 'فئة جديدة', icon: 'tag', color: '#000000', isIncome: false);
+    await DriftMerchantCategoryRepository(d.db).confirmMerchantCategory(
+        rawMerchant: 'Synthetic Later Shop',
+        categoryKey: 'restaurants',
+        isUserConfirmed: true);
+    await d.restore(backup);
+    expect(await ids('categories'), contains(custom.id));
+    expect(await ruleFor('Synthetic Later Shop'), 'restaurants');
+  });
+
+  test('a device with no records of its own still takes the whole backup, '
+      'settings included', () async {
+    await d.add('r7-A', '10');
+    await d.db.customStatement(
+        "UPDATE user_settings SET country = 'BACKUP-COUNTRY';");
+    final backup = await d.backup();
+    await d.db.customStatement('DELETE FROM transactions;');
+    await d.db.customStatement('DELETE FROM ledger_sync_outbox;');
+    await d.db.customStatement('DELETE FROM accounts;');
+    await d.db.customStatement("UPDATE user_settings SET country = 'NEW-PHONE';");
+
+    await d.restore(backup);
+    expect(await ids('accounts'), ['acc']);
+    expect(await d.live(), {'Synthetic shop r7-A': '10.00'});
+    expect(
+        (await d.db.customSelect('SELECT country FROM user_settings').getSingle())
+            .read<String>('country'),
+        'BACKUP-COUNTRY');
+  });
+
+  test('the restore confirmation tells the user how rules and a device with '
+      'records are handled (SP-01, SP-02)', () {
+    final en = lookupAppL10n(const Locale('en')).rpConfirmBody;
+    expect(en, contains('rules that are only in the backup are not added'));
+    expect(en, contains('no accounts, transactions, plans, rules or custom '
+        'categories'));
+    final ar = lookupAppL10n(const Locale('ar')).rpConfirmBody;
+    expect(ar, contains('ولا تُضاف القواعد الموجودة في النسخة فقط'));
+    expect(ar, contains('لا حسابات ولا عمليات'));
   });
 }

@@ -204,39 +204,22 @@ class AppTransactionRow extends StatelessWidget {
                       // chip (moved off the title line).
                       if (subtitle != null || isPending || awaitingPrice) ...[
                         const SizedBox(height: 2),
-                        // UX-09: at large text the meta line wraps (the review
-                        // badge moves under the category · time text instead
-                        // of pushing past the row's edge).
-                        if (large)
-                          Wrap(
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            runSpacing: 4,
-                            children: [
-                              if (subtitle != null)
-                                Text(
-                                  subtitle!,
-                                  style: AppTypography.caption(c.textMuted),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ...badges,
-                            ],
-                          )
-                        else
-                          Row(
-                            children: [
-                              if (subtitle != null)
-                                Flexible(
-                                  child: Text(
-                                    subtitle!,
-                                    style: AppTypography.caption(c.textMuted),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ...badges,
-                            ],
-                          ),
+                        // UX-09 / SP-10: the meta line wraps — the review
+                        // badge moves under the category · time text, and the
+                        // text takes a second line, instead of being cut by
+                        // the badge or the amount column.
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          runSpacing: 4,
+                          children: [
+                            if (subtitle != null)
+                              Text(
+                                subtitle!,
+                                style: AppTypography.caption(c.textMuted),
+                              ),
+                            ...badges,
+                          ],
+                        ),
                       ],
                       // UX-09: at large text the amount takes its own line
                       // under the title at full size, instead of a side

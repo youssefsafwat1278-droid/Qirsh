@@ -4,14 +4,17 @@ import rules from './parser_rules.json' with { type: 'json' };
 import { canonicalMoneyText } from '../_shared/money_text.ts';
 import {
   applyLocalForms,
+  bounded,
   captureAmount,
   clauseScope,
+  type CueDeps,
   cutAtSentenceEnd,
   currencyIn,
   EXPLICIT_OWN_TRANSFER,
   isOwnAccountMove,
   meaningOf,
   type MessageMeaning,
+  withoutNoticeTails,
 } from './message_meaning.ts';
 import {
   type AiCandidate,
@@ -149,7 +152,7 @@ function isIgnoredText(normalized: string): boolean {
   // Round 3: an ignore word in a footer sentence never silences a completed
   // movement; any other message keeps its whole text (ParserEngine._ignoreScope).
   const scope = messageMeaning(normalized).kind === 'completed_movement'
-    ? clauseScope(normalized, hasDeclinedCue).core
+    ? withoutNoticeTails(clauseScope(normalized, CUE_DEPS).core)
     : normalized;
   const lower = outsideMerchant(scope.toLowerCase(), extractMerchant(normalized));
   return (rules.ignoreKeywords as string[]).some((w) => containsIgnoreWord(lower, w)) ||
@@ -336,13 +339,46 @@ function failsLater(text: string, credit: Cue): boolean {
  * reminder) does not decide this event's status (clauseScope).
  */
 export function isDeclinedText(raw: string): boolean {
-  return isDeclinedCore(clauseScope(normalize(raw), hasDeclinedCue).core);
+  return isDeclinedCore(clauseScope(normalize(raw), CUE_DEPS).core);
 }
 
-/** A declined cue anywhere in [s] (TransactionStateCues.hasCue). */
-function hasDeclinedCue(s: string): boolean {
-  return new RegExp(DECLINED.source).test(foldForCues(s));
+/** A declined cue or a reversal word anywhere in [s] (TransactionStateCues.hasStatusCue). */
+function hasStatusCue(s: string): boolean {
+  const text = foldForCues(s);
+  return new RegExp(DECLINED.source).test(text) || new RegExp(REVERSAL.source).test(text);
 }
+
+// Follow-up 3 (SM-01): an otherEventMarkers word tying an otherEventNouns noun
+// before a cue ("Previous transaction declined", العملية السابقة مرفوضة).
+// Mirrors TransactionStateCues._otherSubject.
+const MEANING_WORDS = rules.messageMeaning as Record<string, string[]>;
+const OTHER_SUBJECT = (() => {
+  const isLatin = (w: string) => /[a-z]/.test(w);
+  const markers = MEANING_WORDS.otherEventMarkers;
+  const nouns = MEANING_WORDS.otherEventNouns;
+  const latinMarkers = markers.filter((w) => isLatin(w) && !w.includes(' '));
+  const latinPhrases = markers.filter((w) => isLatin(w) && w.includes(' '));
+  const arMarkers = markers.filter((w) => !isLatin(w)).map(foldForCues);
+  const arNouns = nouns.filter((w) => !isLatin(w)).map(foldForCues);
+  return new RegExp(
+    `(?<![a-z])(?:(?:${latinMarkers.join('|')})\\s+(?:\\S+\\s+){0,2}?(?:${nouns.filter(isLatin).join('|')})|` +
+      `${latinPhrases.join('|')})(?![a-z])|(?:${arNouns.join('|')})\\s+(?:${arMarkers.join('|')})`,
+  );
+})();
+
+/** [s] names another operation (TransactionStateCues.namesOtherEvent). */
+function namesOtherEvent(s: string): boolean {
+  return OTHER_SUBJECT.test(foldForCues(s));
+}
+
+/** Every status cue of [s] belongs to another operation (TransactionStateCues.isOtherEventStatus). */
+function isOtherEventStatus(s: string): boolean {
+  const text = foldForCues(s);
+  const found = [...text.matchAll(DECLINED)];
+  return found.length > 0 && found.every((m) => OTHER_SUBJECT.test(text.slice(0, m.index!)));
+}
+
+const CUE_DEPS: CueDeps = { hasStatusCue, namesOtherEvent };
 
 function isDeclinedCore(raw: string): boolean {
   const text = foldForCues(raw);
@@ -407,6 +443,8 @@ export async function parseSms(input: {
   /** AI linearization point: must commit before any AI request; false => AI never starts. */
   beforeAi?: () => Promise<boolean>;
 }): Promise<ParseOutcome> {
+  // Follow-up 3 (SM-09): the parser reads at most MAX_TEXT_LENGTH characters.
+  input = { ...input, text: bounded(input.text) };
   if (input.aiPrimary && input.allowAi) return parsePrimarySms(input);
   const deterministic = deterministicParse(input.text, input.receivedAt, input.tzOffsetMinutes);
   const fallback: ParsedCapture = {
@@ -548,7 +586,7 @@ export function deterministicParse(
     ? 'unknown'
     : meaning.direction !== 'unknown'
     ? meaning.direction
-    : detectDirection(clauseScope(normalized, hasDeclinedCue).core.toLowerCase());
+    : detectDirection(clauseScope(normalized, CUE_DEPS).core.toLowerCase());
   const type = direction === 'credit' ? (isRefundText(lower) ? 'refund' : 'income')
     : direction === 'debit' ? 'payment' : 'unknown';
   const category = type === 'income' ? 'income' : inferCategory(merchant, type);
@@ -736,7 +774,8 @@ function normalize(input: string): string {
 /** The message's meaning (message_meaning.ts) over the normalized text. */
 export function messageMeaning(text: string): MessageMeaning {
   return meaningOf(normalize(text), {
-    hasDeclinedCue,
+    ...CUE_DEPS,
+    isOtherEventStatus,
     isNotCompletedCore: isDeclinedCore,
     namesDirection: (s) => detectDirection(s.toLowerCase()) !== 'unknown',
     hasChargedPair: (t) => chargedPair(t) !== null,
@@ -750,7 +789,7 @@ export function messageMeaning(text: string): MessageMeaning {
 const FIG = '([0-9][0-9,]*(?:\\.[0-9]+)?)';
 const CHARGED_AFTER = new RegExp(
   '(?<![a-z])(?:amount charged|charged amount|charged|billed|equivalent(?: to)?|amount in [a-z]{3}|deducted|' +
-    'المبلغ المخصوم|بما يعادل|ما يعادل)\\s*(?:amount|of)?\\s*:?\\s*' +
+    'المبلغ المخصوم|بما يعادل|ما يعادل)\\s*(?:amount|of|as)?\\s*:?\\s*' +
     `(?:([A-Za-z]{2,3})\\s?${FIG}|${FIG}\\s?([A-Za-z]{3}))`,
   'i',
 );

@@ -1,0 +1,1304 @@
+[
+{
+"id": "P00_0",
+"text": "SAR 250.00 Test Cafe 14:02",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P00_1",
+"text": "SAR 250.00 Test Cafe 14:02. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P00_4",
+"text": "SAR 250.00 Test Cafe 14:02\nPIN-verified",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P01_0",
+"text": "SAR 250.00 at Test Cafe card *1234 14:02",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P01_2",
+"text": "SAR 250.00 at Test Cafe card *1234 14:02\nStatement date 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P01_5",
+"text": "SAR 250.00 at Test Cafe card *1234 14:02. Card activated",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P02_0",
+"text": "250.00 SAR Test Cafe 17/11 14:02",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P02_3",
+"text": "250.00 SAR Test Cafe 17/11 14:02. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P02_6",
+"text": "250.00 SAR Test Cafe 17/11 14:02\nYour e-statement is available in the app",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P03_0",
+"text": "POS 4521 Test Mart 89.50",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P03_4",
+"text": "POS 4521 Test Mart 89.50\nPIN-verified",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P03_7",
+"text": "POS 4521 Test Mart 89.50. Credit limit: SAR 20,000",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P04_0",
+"text": "POS SAR 89.50 Test Mart *4521",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P04_5",
+"text": "POS SAR 89.50 Test Mart *4521. Card activated",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P04_1",
+"text": "POS SAR 89.50 Test Mart *4521. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P05_0",
+"text": "Mada *4521 SAR 89.50 Test Mart 17/11/26",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P05_6",
+"text": "Mada *4521 SAR 89.50 Test Mart 17/11/26\nYour e-statement is available in the app",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P05_2",
+"text": "Mada *4521 SAR 89.50 Test Mart 17/11/26\nStatement date 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P06_0",
+"text": "Card *4521: SAR 64.00 @ Test Bakery",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P06_7",
+"text": "Card *4521: SAR 64.00 @ Test Bakery. Credit limit: SAR 20,000",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P06_3",
+"text": "Card *4521: SAR 64.00 @ Test Bakery. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P07_0",
+"text": "Apple Pay *4521 SAR 32.75 Test Coffee",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P07_1",
+"text": "Apple Pay *4521 SAR 32.75 Test Coffee. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P07_4",
+"text": "Apple Pay *4521 SAR 32.75 Test Coffee\nPIN-verified",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P08_0",
+"text": "Online: USD 12.99 Test Stream card *4521",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P08_2",
+"text": "Online: USD 12.99 Test Stream card *4521\nStatement date 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P08_5",
+"text": "Online: USD 12.99 Test Stream card *4521. Card activated",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P09_0",
+"text": "بطاقة *4521 مبلغ 89.50 ريال Test Mart",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P09_3",
+"text": "بطاقة *4521 مبلغ 89.50 ريال Test Mart. تم تجديد البطاقة",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P09_6",
+"text": "بطاقة *4521 مبلغ 89.50 ريال Test Mart\nكشف حسابك متاح في التطبيق",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P10_0",
+"text": "مدى *4521 ٨٩٫٥٠ ر.س Test Mart",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P10_4",
+"text": "مدى *4521 ٨٩٫٥٠ ر.س Test Mart\nتم التحقق بالرقم السري",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P10_7",
+"text": "مدى *4521 ٨٩٫٥٠ ر.س Test Mart. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P11_0",
+"text": "مبلغ: SAR 120.00\nلدى: Test Mart\nبطاقة: *4521",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P11_5",
+"text": "مبلغ: SAR 120.00\nلدى: Test Mart\nبطاقة: *4521. تم تفعيل البطاقة",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P11_1",
+"text": "مبلغ: SAR 120.00\nلدى: Test Mart\nبطاقة: *4521. الحد الائتماني المتاح 9,000.00 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P12_0",
+"text": "SAR 120.00 settled at Test Mart with card *4521",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P12_6",
+"text": "SAR 120.00 settled at Test Mart with card *4521\nYour e-statement is available in the app",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P12_2",
+"text": "SAR 120.00 settled at Test Mart with card *4521\nStatement date 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P13_0",
+"text": "Your card *4521 was used for SAR 120.00 at Test Mart",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P13_7",
+"text": "Your card *4521 was used for SAR 120.00 at Test Mart. Credit limit: SAR 20,000",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P13_3",
+"text": "Your card *4521 was used for SAR 120.00 at Test Mart. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P14_0",
+"text": "SAR 75.00 taken from account *5678 for Test Gym",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P14_1",
+"text": "SAR 75.00 taken from account *5678 for Test Gym. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P14_4",
+"text": "SAR 75.00 taken from account *5678 for Test Gym\nPIN-verified",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P15_0",
+"text": "SAR 75.00 collected from account *5678 by Test Insurance",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P15_2",
+"text": "SAR 75.00 collected from account *5678 by Test Insurance\nStatement date 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P15_5",
+"text": "SAR 75.00 collected from account *5678 by Test Insurance. Card activated",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P16_0",
+"text": "You were billed SAR 199.00 by Test Telecom on card *4521",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P16_3",
+"text": "You were billed SAR 199.00 by Test Telecom on card *4521. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P16_6",
+"text": "You were billed SAR 199.00 by Test Telecom on card *4521\nYour e-statement is available in the app",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P17_0",
+"text": "SAR 45.00 booked on card *4521 at Test Diner",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P17_4",
+"text": "SAR 45.00 booked on card *4521 at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P17_7",
+"text": "SAR 45.00 booked on card *4521 at Test Diner. Credit limit: SAR 20,000",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P18_0",
+"text": "SAR 45.00 processed on card *4521 at Test Diner",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P18_5",
+"text": "SAR 45.00 processed on card *4521 at Test Diner. Card activated",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P18_1",
+"text": "SAR 45.00 processed on card *4521 at Test Diner. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P19_0",
+"text": "Test Diner: SAR 45.00 approved on card *4521",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P19_6",
+"text": "Test Diner: SAR 45.00 approved on card *4521\nYour e-statement is available in the app",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P19_2",
+"text": "Test Diner: SAR 45.00 approved on card *4521\nStatement date 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P20_0",
+"text": "Card *4521 authorised SAR 45.00 at Test Diner",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P20_7",
+"text": "Card *4521 authorised SAR 45.00 at Test Diner. Credit limit: SAR 20,000",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P20_3",
+"text": "Card *4521 authorised SAR 45.00 at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P21_0",
+"text": "SAR 300.00 posted to card *4521 - Test Hotel",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P21_1",
+"text": "SAR 300.00 posted to card *4521 - Test Hotel. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P21_4",
+"text": "SAR 300.00 posted to card *4521 - Test Hotel\nPIN-verified",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P22_0",
+"text": "سُدد مبلغ 300 ريال لـ Test Electricity من حساب *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P22_2",
+"text": "سُدد مبلغ 300 ريال لـ Test Electricity من حساب *5678\nتاريخ كشف الحساب 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P22_5",
+"text": "سُدد مبلغ 300 ريال لـ Test Electricity من حساب *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P23_0",
+"text": "خُصم 120 ريال من بطاقة *4521 لدى Test Mart",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P23_3",
+"text": "خُصم 120 ريال من بطاقة *4521 لدى Test Mart. تم تجديد البطاقة",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P23_6",
+"text": "خُصم 120 ريال من بطاقة *4521 لدى Test Mart\nكشف حسابك متاح في التطبيق",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P24_0",
+"text": "قُيّد مبلغ 120 ريال على بطاقتك *4521 لدى Test Mart",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P24_4",
+"text": "قُيّد مبلغ 120 ريال على بطاقتك *4521 لدى Test Mart\nتم التحقق بالرقم السري",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P24_7",
+"text": "قُيّد مبلغ 120 ريال على بطاقتك *4521 لدى Test Mart. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P25_0",
+"text": "قيد مبلغ 120 ريال على حسابك *5678 لصالح Test Mart",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P25_5",
+"text": "قيد مبلغ 120 ريال على حسابك *5678 لصالح Test Mart. تم تفعيل البطاقة",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P25_1",
+"text": "قيد مبلغ 120 ريال على حسابك *5678 لصالح Test Mart. الحد الائتماني المتاح 9,000.00 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P26_0",
+"text": "تمت عملية بمبلغ 120 ريال لدى Test Mart",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P26_6",
+"text": "تمت عملية بمبلغ 120 ريال لدى Test Mart\nكشف حسابك متاح في التطبيق",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P26_2",
+"text": "تمت عملية بمبلغ 120 ريال لدى Test Mart\nتاريخ كشف الحساب 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P27_0",
+"text": "نُفذت مدفوعات بمبلغ 120 ريال إلى Test Mart",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P27_7",
+"text": "نُفذت مدفوعات بمبلغ 120 ريال إلى Test Mart. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P27_3",
+"text": "نُفذت مدفوعات بمبلغ 120 ريال إلى Test Mart. تم تجديد البطاقة",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P28_0",
+"text": "سُحب مبلغ 500 ريال نقداً من حسابك *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P28_1",
+"text": "سُحب مبلغ 500 ريال نقداً من حسابك *5678. الحد الائتماني المتاح 9,000.00 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P28_4",
+"text": "سُحب مبلغ 500 ريال نقداً من حسابك *5678\nتم التحقق بالرقم السري",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P29_0",
+"text": "أودع مبلغ 2,000 ريال في حسابك *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P29_2",
+"text": "أودع مبلغ 2,000 ريال في حسابك *5678\nتاريخ كشف الحساب 25/11/2026",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P29_5",
+"text": "أودع مبلغ 2,000 ريال في حسابك *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P30_0",
+"text": "قُيّد لحسابك *5678 مبلغ 2,000 ريال",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P30_3",
+"text": "قُيّد لحسابك *5678 مبلغ 2,000 ريال. تم تجديد البطاقة",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P30_6",
+"text": "قُيّد لحسابك *5678 مبلغ 2,000 ريال\nكشف حسابك متاح في التطبيق",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P31_0",
+"text": "Your account *5678 has been topped up with SAR 500.00",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P31_4",
+"text": "Your account *5678 has been topped up with SAR 500.00\nPIN-verified",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P31_7",
+"text": "Your account *5678 has been topped up with SAR 500.00. Credit limit: SAR 20,000",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P32_0",
+"text": "SAR 500.00 added to your account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P32_5",
+"text": "SAR 500.00 added to your account *5678. Card activated",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P32_1",
+"text": "SAR 500.00 added to your account *5678. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P33_0",
+"text": "SAR 500.00 landed in your account *5678 from Ali",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P33_6",
+"text": "SAR 500.00 landed in your account *5678 from Ali\nYour e-statement is available in the app",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P33_2",
+"text": "SAR 500.00 landed in your account *5678 from Ali\nStatement date 25/11/2026",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P34_0",
+"text": "شراء بمبلغ ١٢٠٫٠٠ ريال لدى Test Mart بطاقة *٤٥٢١",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P34_7",
+"text": "شراء بمبلغ ١٢٠٫٠٠ ريال لدى Test Mart بطاقة *٤٥٢١. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P34_3",
+"text": "شراء بمبلغ ١٢٠٫٠٠ ريال لدى Test Mart بطاقة *٤٥٢١. تم تجديد البطاقة",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P35_0",
+"text": "تم خصم ٢٥٠ ريال من بطاقتك *٤٥٢١ لدى Test Cafe",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P35_1",
+"text": "تم خصم ٢٥٠ ريال من بطاقتك *٤٥٢١ لدى Test Cafe. الحد الائتماني المتاح 9,000.00 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P35_4",
+"text": "تم خصم ٢٥٠ ريال من بطاقتك *٤٥٢١ لدى Test Cafe\nتم التحقق بالرقم السري",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P36_0",
+"text": "إيداع راتب بمبلغ ١٢٬٠٠٠ ريال في حسابك *٥٦٧٨",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P36_2",
+"text": "إيداع راتب بمبلغ ١٢٬٠٠٠ ريال في حسابك *٥٦٧٨\nتاريخ كشف الحساب 25/11/2026",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P36_5",
+"text": "إيداع راتب بمبلغ ١٢٬٠٠٠ ريال في حسابك *٥٦٧٨. تم تفعيل البطاقة",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P37_0",
+"text": "حوالة واردة بمبلغ ٧٥٠ ريال من محمد إلى حسابك *٥٦٧٨",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P37_3",
+"text": "حوالة واردة بمبلغ ٧٥٠ ريال من محمد إلى حسابك *٥٦٧٨. تم تجديد البطاقة",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P37_6",
+"text": "حوالة واردة بمبلغ ٧٥٠ ريال من محمد إلى حسابك *٥٦٧٨\nكشف حسابك متاح في التطبيق",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P38_0",
+"text": "Annual card fee SAR 250.00 applied to card *4521",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P38_4",
+"text": "Annual card fee SAR 250.00 applied to card *4521\nPIN-verified",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P38_7",
+"text": "Annual card fee SAR 250.00 applied to card *4521. Credit limit: SAR 20,000",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P39_0",
+"text": "Late payment charge SAR 100.00 on card *4521",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P39_5",
+"text": "Late payment charge SAR 100.00 on card *4521. Card activated",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P39_1",
+"text": "Late payment charge SAR 100.00 on card *4521. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P40_0",
+"text": "Monthly account maintenance fee SAR 15.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P40_6",
+"text": "Monthly account maintenance fee SAR 15.00\nYour e-statement is available in the app",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P40_2",
+"text": "Monthly account maintenance fee SAR 15.00\nStatement date 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P41_0",
+"text": "Foreign transaction fee SAR 3.25 card *4521",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P41_7",
+"text": "Foreign transaction fee SAR 3.25 card *4521. Credit limit: SAR 20,000",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P41_3",
+"text": "Foreign transaction fee SAR 3.25 card *4521. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P42_0",
+"text": "Card replacement fee SAR 30.00 deducted from account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P42_1",
+"text": "Card replacement fee SAR 30.00 deducted from account *5678. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P42_4",
+"text": "Card replacement fee SAR 30.00 deducted from account *5678\nPIN-verified",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P43_0",
+"text": "Fee: SAR 5.75 for SMS service, account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P43_2",
+"text": "Fee: SAR 5.75 for SMS service, account *5678\nStatement date 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P43_5",
+"text": "Fee: SAR 5.75 for SMS service, account *5678. Card activated",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P44_0",
+"text": "رسوم إصدار بطاقة 30 ريال من حسابك *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P44_3",
+"text": "رسوم إصدار بطاقة 30 ريال من حسابك *5678. تم تجديد البطاقة",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P44_6",
+"text": "رسوم إصدار بطاقة 30 ريال من حسابك *5678\nكشف حسابك متاح في التطبيق",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P45_0",
+"text": "رسوم كشف حساب 10 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P45_4",
+"text": "رسوم كشف حساب 10 ريال\nتم التحقق بالرقم السري",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P45_7",
+"text": "رسوم كشف حساب 10 ريال. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P46_0",
+"text": "Standing order SAR 2,000.00 to Landlord executed from account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P46_5",
+"text": "Standing order SAR 2,000.00 to Landlord executed from account *5678. Card activated",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P46_1",
+"text": "Standing order SAR 2,000.00 to Landlord executed from account *5678. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P47_0",
+"text": "Standing order to Ali SAR 500.00 processed",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P47_6",
+"text": "Standing order to Ali SAR 500.00 processed\nYour e-statement is available in the app",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P47_2",
+"text": "Standing order to Ali SAR 500.00 processed\nStatement date 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P48_0",
+"text": "Scheduled payment of SAR 300.00 to Test Electricity done",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P48_7",
+"text": "Scheduled payment of SAR 300.00 to Test Electricity done. Credit limit: SAR 20,000",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P48_3",
+"text": "Scheduled payment of SAR 300.00 to Test Electricity done. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P49_0",
+"text": "Direct debit SAR 89.00 Test Gym account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P49_1",
+"text": "Direct debit SAR 89.00 Test Gym account *5678. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P49_4",
+"text": "Direct debit SAR 89.00 Test Gym account *5678\nPIN-verified",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P50_0",
+"text": "أمر دائم بمبلغ 2000 ريال إلى المالك نُفذ من حسابك *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P50_2",
+"text": "أمر دائم بمبلغ 2000 ريال إلى المالك نُفذ من حسابك *5678\nتاريخ كشف الحساب 25/11/2026",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P50_5",
+"text": "أمر دائم بمبلغ 2000 ريال إلى المالك نُفذ من حسابك *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "P51_0",
+"text": "Salary SAR 12,000.00 credited to account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P51_3",
+"text": "Salary SAR 12,000.00 credited to account *5678. Your card renewal is due 01/2027",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P51_6",
+"text": "Salary SAR 12,000.00 credited to account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P52_0",
+"text": "Payroll SAR 12,000.00 to account *5678 from Test Corp",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P52_4",
+"text": "Payroll SAR 12,000.00 to account *5678 from Test Corp\nPIN-verified",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P52_7",
+"text": "Payroll SAR 12,000.00 to account *5678 from Test Corp. Credit limit: SAR 20,000",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P53_0",
+"text": "Your wages of SAR 12,000.00 have arrived in account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P53_5",
+"text": "Your wages of SAR 12,000.00 have arrived in account *5678. Card activated",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P53_1",
+"text": "Your wages of SAR 12,000.00 have arrived in account *5678. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P54_0",
+"text": "راتب شهر نوفمبر 12,000 ريال أضيف لحسابك *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P54_6",
+"text": "راتب شهر نوفمبر 12,000 ريال أضيف لحسابك *5678\nكشف حسابك متاح في التطبيق",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P54_2",
+"text": "راتب شهر نوفمبر 12,000 ريال أضيف لحسابك *5678\nتاريخ كشف الحساب 25/11/2026",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P55_0",
+"text": "تم إيداع الراتب 12000 ريال في حسابك *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P55_7",
+"text": "تم إيداع الراتب 12000 ريال في حسابك *5678. حد البطاقة 20,000 ريال",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P55_3",
+"text": "تم إيداع الراتب 12000 ريال في حسابك *5678. تم تجديد البطاقة",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P56_0",
+"text": "Incoming transfer SAR 750.00 from Ali to account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P56_1",
+"text": "Incoming transfer SAR 750.00 from Ali to account *5678. Available credit limit SAR 9,000.00",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P56_4",
+"text": "Incoming transfer SAR 750.00 from Ali to account *5678\nPIN-verified",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P57_0",
+"text": "You got SAR 750.00 from Ali via Test Pay",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P57_2",
+"text": "You got SAR 750.00 from Ali via Test Pay\nStatement date 25/11/2026",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P57_5",
+"text": "You got SAR 750.00 from Ali via Test Pay. Card activated",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P58_0",
+"text": "SAR 750.00 sent to you by Ali, account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P58_3",
+"text": "SAR 750.00 sent to you by Ali, account *5678. Your card renewal is due 01/2027",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P58_6",
+"text": "SAR 750.00 sent to you by Ali, account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P59_0",
+"text": "Instant transfer in: SAR 750.00 from Ali",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P59_4",
+"text": "Instant transfer in: SAR 750.00 from Ali\nPIN-verified",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P59_7",
+"text": "Instant transfer in: SAR 750.00 from Ali. Credit limit: SAR 20,000",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P60_0",
+"text": "تحويل وارد 750 ريال من علي إلى حسابك *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P60_5",
+"text": "تحويل وارد 750 ريال من علي إلى حسابك *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P60_1",
+"text": "تحويل وارد 750 ريال من علي إلى حسابك *5678. الحد الائتماني المتاح 9,000.00 ريال",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P61_0",
+"text": "وصلك مبلغ 750 ريال من علي",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P61_6",
+"text": "وصلك مبلغ 750 ريال من علي\nكشف حسابك متاح في التطبيق",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "P61_2",
+"text": "وصلك مبلغ 750 ريال من علي\nتاريخ كشف الحساب 25/11/2026",
+"truth": {
+"kind": "c"
+}
+}
+]

@@ -1,0 +1,98 @@
+[
+{
+"id": "T00",
+"text": "Purchase of SAR 250.00 at SHOPX completed. Approval code 4829 for the purchase",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T01",
+"text": "Purchase SAR 250.00 at SHOPX. Auth code: 482913 for the transaction",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T02",
+"text": "Payment SAR 250.00 to SHOPX successful. Reference code 482913 for your payment",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T03",
+"text": "Purchase SAR 250.00 at SHOPX. 482913 is your reference code for the purchase",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T04",
+"text": "Purchase SAR 250.00 at SHOPX. Use code 4829 to pay less on your next order",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T05",
+"text": "Purchase SAR 250.00 at SHOPX approved. Code: 4829, confirm the transaction in app if not you call 8001",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T06",
+"text": "شراء 250 ريال لدى SHOPX. الرمز 4829 للاستفسار",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T07",
+"text": "شراء 250 ريال لدى SHOPX. رمز 482913 لعملية الشراء",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T08",
+"text": "Purchase SAR 250.00 at SHOPX. Receipt code 482913 valid for returns",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T09",
+"text": "Purchase SAR 250.00 at SHOPX. Pickup code 4829. Valid until 18:00",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T10",
+"text": "Purchase SAR 250.00 at SHOPX. Code 4829 expires in 30 days for your next visit",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "T11",
+"text": "Transfer SAR 500 to Ali done. Code 4829 for the transfer receipt",
+"truth": {
+"kind": "d",
+"amt": 500
+}
+}
+]

@@ -21,6 +21,7 @@ import {
   NOTICE_KEYWORDS,
   OTP_CODE,
 } from '../_shared/ai_candidate_validator.ts';
+import { isRewardFlow } from '../_shared/money_text.ts';
 
 export type MessageKind =
   | 'completed_movement'
@@ -30,7 +31,9 @@ export type MessageKind =
   | 'cash_deposit'
   | 'multiple_events'
   | 'otp'
-  | 'undetermined';
+  | 'undetermined'
+  /** Follow-up 3: the text does not settle whether the movement completed. */
+  | 'uncertain';
 
 export type MessageDisposition = 'record' | 'review' | 'no_movement' | 'ignore';
 
@@ -74,6 +77,22 @@ export const CREDIT_FLOW = M.creditFlow;
 export const ABBREVIATIONS = M.abbreviations;
 export const FUTURE_TENSE = M.futureTense;
 export const REWARD_MARKERS = M.rewardMarkers;
+export const OTHER_EVENT_NOUNS = M.otherEventNouns;
+export const NOTICE_OPENERS = M.noticeOpeners;
+export const MOVEMENT_LEADS = M.movementLeads;
+
+/**
+ * Follow-up 3 (SM-09): the longest text the parser reads (ten concatenated
+ * SMS parts are about 1,600 characters). Of a longer text the parser reads
+ * its first and last MAX_TEXT_LENGTH / 2 characters as separate lines, so a
+ * status at either end still decides it. Mirrors ParserEngine.bounded.
+ */
+export const MAX_TEXT_LENGTH = 2000;
+export function bounded(text: string): string {
+  if (text.length <= MAX_TEXT_LENGTH) return text;
+  const half = MAX_TEXT_LENGTH / 2;
+  return `${text.slice(0, half)}\n${text.slice(text.length - half)}`;
+}
 
 const esc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const wordPatterns = new Map<string, RegExp>();
@@ -103,13 +122,15 @@ export const hasCreditFlow = (text: string) => firstMoneyFlow(CREDIT_FLOW_RE, te
  * position). "Payment … received" with no payer acknowledges the user's own
  * payment: not decisive. Mirrors DirectionSignal.flowOf.
  */
-const POINTS_AFTER = /^\s*(?:(?:reward|loyalty|bonus)\s+)?(?:points|miles)(?![a-z])|^\s*(?:ال)?نقاط(?!\s*البيع)|^\s*نقطة/;
-
-/** The first flow phrase that moves money ("credited points 45" moves points). Mirrors DirectionSignal._firstMoneyFlow. */
+/**
+ * The first flow phrase that moves money: "credited points 45" and "…, 45
+ * points credited to your account" move points (isRewardFlow). Mirrors
+ * DirectionSignal._firstMoneyFlow.
+ */
 function firstMoneyFlow(re: RegExp, lower: string): RegExpExecArray | null {
   const all = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
   for (const m of lower.matchAll(all)) {
-    if (!POINTS_AFTER.test(lower.slice(m.index! + m[0].length))) return m as RegExpExecArray;
+    if (!isRewardFlow(lower, m.index!, m.index! + m[0].length)) return m as RegExpExecArray;
   }
   return null;
 }
@@ -176,8 +197,11 @@ type Role = 'event' | 'figure' | 'text';
 const LABEL_OPENING =
   /^(?:your |ur )?(?:available |avl\.? |current |remaining |new |daily |monthly )*(?:credit |card |purchase |withdrawal )?(?:balance|bal\b|limit)|^(?:و)?(?:رصيدك|الرصيد|رصيد|الحد|حد |المتاح|المتبقي)/i;
 
+// A percentage ("خصم 50%", "5% cashback") is never an amount that moved.
+const PERCENTAGE = /[0-9][0-9.,]*\s?[%٪]/g;
+
 function roleOf(sentence: string): Role {
-  const s = sentence.trim();
+  const s = sentence.trim().replace(PERCENTAGE, ' ');
   if (!s) return 'text';
   if (LABEL_OPENING.test(s)) return CURRENCY_FIGURE.test(s) ? 'figure' : 'text';
   const masked = maskAccountFigures(s).replace(OTHER_FIGURE, ' ');
@@ -192,7 +216,8 @@ function sentences(text: string): Array<{ start: number; end: number; next: numb
   let from = 0;
   for (const m of text.matchAll(/[\n!?؟;؛]|\.(?![0-9])/g)) {
     if (m[0] === '.') {
-      const word = /([a-z/]+)$/.exec(text.slice(from, m.index!).toLowerCase())?.[1];
+      // Only the few characters before the dot can hold an abbreviation.
+      const word = /([a-z/]+)$/.exec(text.slice(Math.max(from, m.index! - 12), m.index!).toLowerCase())?.[1];
       if (word && ABBREVIATIONS.includes(word)) continue;
     }
     out.push({ start: from, end: m.index!, next: m.index! + m[0].length });
@@ -204,24 +229,45 @@ function sentences(text: string): Array<{ start: number; end: number; next: numb
 
 const IGNORE_WORDS = [...(rules.ignoreKeywords as string[]), ...NON_TRANSACTION_KEYWORDS];
 
-function footerCue(s: string, hasDeclinedCue: (s: string) => boolean): boolean {
-  const cue = hasDeclinedCue(s);
+/** A footer cue in a sentence with no amount (a sentence with a status cue is never a footer: clauseScope). */
+function footerCue(s: string): boolean {
   return IGNORE_WORDS.some((w) => containsIgnoreWord(s, w)) ||
     hasAnyWord(s, REWARD_MARKERS) ||
     NOTICE_KEYWORDS.some((w) => containsIgnoreWord(s, w)) ||
-    (cue && hasAnyWord(s, OTHER_EVENT_MARKERS)) ||
-    (!cue && (hasAnyWord(s, DUE_MARKERS) || hasAnyWord(s, OFFER_MARKERS) || hasAnyWord(s, SUMMARY_MARKERS)));
+    hasAnyWord(s, DUE_MARKERS) || hasAnyWord(s, OFFER_MARKERS) || hasAnyWord(s, SUMMARY_MARKERS);
 }
 
-export type ClauseScope = { text: string; core: string; eventSentences: string[]; footerCount: number };
+export type ClauseScope = {
+  text: string;
+  core: string;
+  eventSentences: string[];
+  footerCount: number;
+  /** The event sentences kept in core (a cashback credit or another operation's figure is set aside). */
+  coreEvents: string[];
+};
+
+/** Status-cue readers from parse.ts (TransactionStateCues). */
+export type CueDeps = {
+  /** A declined/not-completed cue or a reversal word (TransactionStateCues.hasStatusCue). */
+  hasStatusCue: (s: string) => boolean;
+  /** The sentence names another operation (TransactionStateCues.namesOtherEvent). */
+  namesOtherEvent: (s: string) => boolean;
+};
+
+/** A cashback or reward credit, or another operation's figure. Mirrors ParserEngine._isSideEvent. */
+function isSideEvent(lower: string, deps: CueDeps): boolean {
+  return hasAnyWord(lower, REWARD_MARKERS) || hasAnyWord(lower, ['cashback', 'cash back', 'استرداد نقدي', 'كاش باك']) ||
+    deps.namesOtherEvent(lower);
+}
 
 /** [text] is already normalized (parse.ts normalize). Mirrors ParserEngine.clauseScope. */
-export function clauseScope(text: string, hasDeclinedCue: (s: string) => boolean): ClauseScope {
+export function clauseScope(text: string, deps: CueDeps): ClauseScope {
+  text = bounded(text);
   const pieces = sentences(text);
   const roles = pieces.map((p) => roleOf(text.slice(p.start, p.end)));
   const eventSentences = pieces.filter((_, i) => roles[i] === 'event').map((p) => text.slice(p.start, p.end));
   if (eventSentences.length === 0 || OTP_CODE.test(text.toLowerCase())) {
-    return { text, core: text, eventSentences, footerCount: 0 };
+    return { text, core: text, eventSentences, footerCount: 0, coreEvents: eventSentences };
   }
   // An event sentence that names no movement (a due bill, a scheduled
   // payment) is a footer when another event sentence names one.
@@ -231,39 +277,49 @@ export function clauseScope(text: string, hasDeclinedCue: (s: string) => boolean
   // A bare field line ("مبلغ:SAR 100.00") details the line above it, whose
   // words keep deciding the message: that header line is never a footer.
   const field = pieces.map((p) => isFieldLine(text.slice(p.start, p.end)));
-  const anyMovement = roles.some((r, i) => r === 'event' && !notices[i] && !field[i]);
+  // Whether each piece sits on the line just above a field line.
+  const aboveField = pieces.map(() => false);
+  for (let k = pieces.length - 2; k >= 0; k--) {
+    aboveField[k] = text.slice(pieces[k].end, pieces[k].next) === '\n' ? field[k + 1] : aboveField[k + 1];
+  }
+  // Follow-up 3 (SM-01): a sentence with a status cue is never a footer.
+  const cue = pieces.map((p) => deps.hasStatusCue(text.slice(p.start, p.end)));
+  // Follow-up 3 (SM-06): a cashback/reward credit or another operation's
+  // figure is a side event: a footer next to the transaction's own sentence.
+  const side = pieces.map((p, i) =>
+    roles[i] === 'event' && !notices[i] && !field[i] && !cue[i] &&
+    isSideEvent(text.slice(p.start, p.end).toLowerCase(), deps)
+  );
+  const anyMovement = roles.some((r, i) => r === 'event' && !notices[i] && !field[i] && !side[i]);
   // An advert or OTP sentence is set aside only next to an event sentence that
   // names a movement in its own words (a money word, a done verb, a flow).
   const namedMovement = pieces.some((p, i) =>
-    roles[i] === 'event' && !notices[i] && !field[i] && namesMovement(text.slice(p.start, p.end).toLowerCase())
+    roles[i] === 'event' && !notices[i] && !field[i] && !side[i] &&
+    namesMovement(text.slice(p.start, p.end).toLowerCase())
   );
   let core = '';
+  const coreEvents: string[] = [];
   let footerCount = 0;
   pieces.forEach((p, i) => {
     const s = text.slice(p.start, p.end);
     const lower = s.toLowerCase();
-    const header = !field[i] && beforeFieldLine(text, pieces, field, i);
-    const footer = !header && (roles[i] === 'figure' || (anyMovement && notices[i]) ||
-      (roles[i] === 'text' && footerCue(lower, hasDeclinedCue) &&
+    const header = !field[i] && aboveField[i];
+    const footer = !header && !cue[i] && (roles[i] === 'figure' || (anyMovement && (notices[i] || side[i])) ||
+      (roles[i] === 'text' && footerCue(lower) &&
         (namedMovement || !IGNORE_WORDS.some((w) => containsIgnoreWord(lower, w)))));
     if (footer && s.trim()) footerCount++;
-    if (!footer) core += s;
+    if (!footer) {
+      core += s;
+      if (roles[i] === 'event') coreEvents.push(s);
+    }
     core += text.slice(p.end, p.next);
   });
-  return { text, core, eventSentences, footerCount };
+  return { text, core, eventSentences, footerCount, coreEvents };
 }
 
 /** [lower] names a money movement in its own words. Mirrors ParserEngine._namesMovement. */
 function namesMovement(lower: string): boolean {
   return hasMoneyWord(lower) || [...lower.matchAll(DONE_VERB)].length > 0 || hasDebitFlow(lower) || hasCreditFlow(lower);
-}
-
-/** Whether piece i sits on the line just above a field line. */
-function beforeFieldLine(text: string, pieces: { start: number; end: number; next: number }[], field: boolean[], i: number): boolean {
-  for (let k = i; k + 1 < pieces.length; k++) {
-    if (text.slice(pieces[k].end, pieces[k].next) === '\n') return field[k + 1];
-  }
-  return false;
 }
 
 /** [value] up to its first sentence end, unless the period ends an abbreviation. Mirrors ParserEngine.cutAtSentenceEnd. */
@@ -286,6 +342,8 @@ const DONE_VERB = new RegExp(`(?<![a-zء-ي])(?:${DONE_VERBS.map(esc).join('|')}
 
 /** Why an event sentence names an amount but no movement that happened, or null. Mirrors ParserEngine._noMovementReason. */
 export function noMovementReason(s: string): string | null {
+  // A courtesy opener ("Please note", يرجى العلم) is not a request.
+  for (const w of NOTICE_OPENERS) s = s.replaceAll(w, ' ');
   let reason: string | null = null;
   if (hasAnyWord(s, SUMMARY_MARKERS)) return 'summary';
   else if (hasAnyWord(s, DUE_MARKERS)) reason = 'bill_due';
@@ -298,11 +356,64 @@ export function noMovementReason(s: string): string | null {
       ? 'scheduled_or_expected'
       : null;
   }
+  // Follow-up 3 (SM-04): the clause that carries the figure states a
+  // completed movement with no notice word of its own: the tail does not undo it.
+  if (s.split(FIGURE_CLAUSE_CUT).some(statesMovement)) return null;
   for (const m of s.matchAll(DONE_VERB)) {
     const clause = s.slice(clauseCut(s, m.index!), m.index!);
     if (!hasAnyWord(clause, TENSE_MARKERS)) return null;
   }
   return reason;
+}
+
+const FIGURE_CLAUSE_CUT = /[,،:]| [-–—] /;
+const FIGURE_CLAUSE_CUTS = /[,،:]| [-–—] /g;
+// A currency next to a figure, any case (ParserEngine._amountWithCurrency).
+const ANY_FIGURE = new RegExp(
+  `(?<![a-z])(?:${CORE_CODES}|${EXTENDED_CODES}) ?[0-9]|[0-9] ?(?:${CORE_CODES}|${EXTENDED_CODES})(?![a-z])`,
+  'i',
+);
+
+const FIGURE_AMOUNTS = new RegExp(
+  `(?<![a-z])(?:${CORE_CODES}|${EXTENDED_CODES}) ?([0-9][0-9,]*(?:\\.[0-9]+)?)|([0-9][0-9,]*(?:\\.[0-9]+)?) ?(?:${CORE_CODES}|${EXTENDED_CODES})(?![a-z])`,
+  'gi',
+);
+
+function hasNoticeWord(lower: string): boolean {
+  return hasAnyWord(lower, SUMMARY_MARKERS) || hasAnyWord(lower, DUE_MARKERS) ||
+    hasAnyWord(lower, FUTURE_MARKERS) || hasAnyWord(lower, OFFER_MARKERS);
+}
+
+/** A clause with a figure that states a completed movement and no notice or tense word. Mirrors ParserEngine._statesMovement. */
+function statesMovement(clause: string): boolean {
+  return ANY_FIGURE.test(clause) && !hasNoticeWord(clause) && !hasAnyWord(clause, TENSE_MARKERS) &&
+    (hasAnyWord(clause, MOVEMENT_LEADS) || new RegExp(DONE_VERB.source).test(clause));
+}
+
+/**
+ * Follow-up 3 (SM-04): [core] without the notice tails (an offer, due, future
+ * or summary clause with no figure) of a sentence whose figure clause states a
+ * completed movement. Mirrors ParserEngine.withoutNoticeTails.
+ */
+export function withoutNoticeTails(core: string): string {
+  let out = '';
+  for (const p of sentences(core)) {
+    const s = core.slice(p.start, p.end);
+    const clauses = s.split(FIGURE_CLAUSE_CUT);
+    const lower = clauses.map((c) => c.toLowerCase());
+    if (lower.some(statesMovement)) {
+      const cuts = [...s.matchAll(FIGURE_CLAUSE_CUTS)];
+      clauses.forEach((c, k) => {
+        const tail = !ANY_FIGURE.test(lower[k]) && hasNoticeWord(lower[k]);
+        out += tail ? ' '.repeat(c.length) : c;
+        if (k < cuts.length) out += cuts[k][0];
+      });
+    } else {
+      out += s;
+    }
+    out += core.slice(p.end, p.next);
+  }
+  return out;
 }
 
 function clauseCut(s: string, end: number): number {
@@ -339,13 +450,21 @@ export function distinctMovementAmounts(events: string[], namesDirection: (s: st
     const masked = maskAccountFigures(s).replace(OTHER_FIGURE, ' ');
     const { amount } = captureAmount(masked);
     if (amount != null) amounts.add(amount.toFixed(3));
+    // Follow-up 3: one sentence that both takes money out and puts money in,
+    // with two different figures, states two movements.
+    if (hasDebitFlow(s) && hasCreditFlow(s)) {
+      for (const m of masked.matchAll(FIGURE_AMOUNTS)) {
+        const v = Number((m[1] ?? m[2]).replaceAll(',', ''));
+        if (v > 0) amounts.add(v.toFixed(3));
+      }
+    }
   }
   return amounts.size;
 }
 
-export type MeaningDeps = {
-  /** Status cue present in a sentence (TransactionStateCues.hasCue). */
-  hasDeclinedCue: (s: string) => boolean;
+export type MeaningDeps = CueDeps & {
+  /** Every status cue of a sentence belongs to another operation (TransactionStateCues.isOtherEventStatus). */
+  isOtherEventStatus: (s: string) => boolean;
   /** The not-completed rule over the clause core (isDeclinedText). */
   isNotCompletedCore: (core: string) => boolean;
   /** Word-family direction of a sentence (DirectionSignal.detectWords). */
@@ -354,9 +473,13 @@ export type MeaningDeps = {
   hasChargedPair: (text: string) => boolean;
 };
 
+const TRUNCATED_STATUS =
+  /(?:was|is|been|status:?|transaction|txn)\s+(?:decli?n?e?|reje?c?t?e?|fail?e?|pend?i?n?|canc?e?l?l?e?|reve?r?s?e?|unsu?c?c?e?s?s?f?u?)$/;
+
 /** The message's meaning, decided before any amount is trusted. Mirrors ParserEngine.meaningOf. */
 export function meaningOf(text: string, deps: MeaningDeps): MessageMeaning {
-  const scope = clauseScope(text, deps.hasDeclinedCue);
+  text = bounded(text);
+  const scope = clauseScope(text, deps);
   const all = text.toLowerCase();
   const currencyAbsent = currencyIn(text) === undefined;
   const make = (kind: MessageKind, reason: string, direction: MessageMeaning['direction'] = 'unknown',
@@ -377,8 +500,20 @@ export function meaningOf(text: string, deps: MeaningDeps): MessageMeaning {
   }
   const core = scope.core.toLowerCase();
   if (deps.isNotCompletedCore(scope.core)) {
+    // Follow-up 3 (SM-01): a status that an "other operation" phrase ties to
+    // another transaction, next to a completed one: review, not record.
+    const own = sentences(scope.core).filter((p) => !deps.isOtherEventStatus(scope.core.slice(p.start, p.end)))
+      .map((p) => scope.core.slice(p.start, p.next)).join('');
+    if (!deps.isNotCompletedCore(own) &&
+      scope.coreEvents.some((s) => !deps.isOtherEventStatus(s) && namesMovement(s.toLowerCase()))) {
+      return make('uncertain', 'other_event_status');
+    }
     return make('not_completed', hasAnyWord(core, PENDING_WORDS) ? 'pending' : 'declined_or_failed');
   }
+  // The whole message reads as not completed but its clause core does not.
+  if (deps.isNotCompletedCore(scope.text)) return make('uncertain', 'status_disputed');
+  // A status cut off mid-word after the transaction ("… was decl").
+  if (TRUNCATED_STATUS.test(scope.text.trimEnd().toLowerCase())) return make('uncertain', 'truncated_status');
   // Field lines detail a header; the header's sentences say what happened.
   const stated = scope.eventSentences.filter((s) => !isFieldLine(s));
   const notices = (stated.length ? stated : scope.eventSentences).map((s) => noMovementReason(s.toLowerCase()));
@@ -387,7 +522,7 @@ export function meaningOf(text: string, deps: MeaningDeps): MessageMeaning {
     return make('own_account_transfer', 'own_accounts');
   }
   if (isCashDeposit(core)) return make('cash_deposit', 'cash_deposit', 'credit');
-  if (distinctMovementAmounts(scope.eventSentences, deps.namesDirection) > 1 && !deps.hasChargedPair(text)) {
+  if (distinctMovementAmounts(scope.coreEvents, deps.namesDirection) > 1 && !deps.hasChargedPair(text)) {
     return make('multiple_events', 'multiple_amounts');
   }
   return make('completed_movement', scope.footerCount > 0 ? 'footer_set_aside' : 'single_event', flowOf(scope.core));

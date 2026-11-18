@@ -349,8 +349,14 @@ const NAME_STOPWORDS = [
   'دفع',
 ];
 
+// SM-07: a period that ends a sentence (followed by a space or the end) is
+// never part of a name, so redaction cannot merge two sentences ("to Ali
+// completed. Previous transfer declined." keeps its second sentence). An
+// initial or title keeps its period ("A. Ali", "Mr. Ali") so the name after
+// it is still masked.
+const SENTENCE_END = `(?:(?<!(?<![\\p{L}\\p{M}])(?:\\p{L}|mrs|mr|ms|dr))\\.(?=\\s|$)|[\\n!?؟;؛])`;
 const NAME_TOKEN = `(?!(?:${NAME_STOPWORDS.join('|')})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]))` +
-  `[\\p{L}\\p{M}*][\\p{L}\\p{M}*.'’\\-]*`;
+  `[\\p{L}\\p{M}*](?:[\\p{L}\\p{M}*'’\\-]|(?!${SENTENCE_END})\\.)*`;
 const NAME = `${NAME_TOKEN}(?:[ \\t]+${NAME_TOKEN}){0,5}`;
 const CUE_SEP = `(?:[ \\t]*:[ \\t]*|[ \\t]+)`;
 
@@ -415,8 +421,9 @@ export function redactPersonNames(text: string): string {
 /// `parse-sms` has always made — over-redact rather than leak a person.
 export function redactThirdPartyNames(text: string): string {
   return redactPersonNames(text)
-    .replace(/(إلى|الى)\s*:?\s*.+/gi, '$1: [REDACTED]')
-    .replace(/\bTo\s*:\s*.+/gi, 'To: [REDACTED]')
+    // Up to the end of the sentence, not of the line (SM-07).
+    .replace(new RegExp(`(إلى|الى)\\s*:?\\s*(?:(?!${SENTENCE_END}).)+`, 'giu'), '$1: [REDACTED]')
+    .replace(new RegExp(`\\bTo\\s*:\\s*(?:(?!${SENTENCE_END}).)+`, 'giu'), 'To: [REDACTED]')
     .replace(/(عزيزي|عزيزتي)\s+\S+/gi, '[REDACTED]');
 }
 

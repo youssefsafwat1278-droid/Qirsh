@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/large_text.dart';
 import 'app_button.dart';
 
 /// حالة فارغة قياسية — أيقونة + عنوان + وصف + أزرار اختيارية.
@@ -66,7 +67,7 @@ class AppEmptyState extends StatelessWidget {
             child: Text(
               subtitle,
               textAlign: TextAlign.center,
-              maxLines: 3,
+              maxLines: linesUnlessLargeText(context, 3),
               overflow: TextOverflow.ellipsis,
               style: AppTypography.callout(c.textMuted),
             ),

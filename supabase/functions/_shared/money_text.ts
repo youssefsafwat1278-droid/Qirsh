@@ -105,3 +105,24 @@ export function withValidatedExactMoneyText(parsed: Record<string, unknown>): Re
   }
   return next;
 }
+
+// Parser follow-up 3 (SM-03): reward points or miles are not money. A flow
+// phrase ("credited", "added to your account", `تمت إضافة`) moves rewards when
+// a reward unit follows it (a count may come first: "credited 45 points",
+// `إضافة 30 نقطة`) or sits in its own clause before it ("…, 45 points
+// credited to your account"); `نقاط البيع` (point of sale) is not one.
+// Shared by process-ios-sms/message_meaning.ts (firstMoneyFlow) and the AI
+// candidate validator; mirrors DirectionSignal.isRewardFlow.
+const REWARD_UNITS =
+  '(?:(?:reward|loyalty|bonus|cashback)\\s+)?(?:points|miles)(?![a-z])|(?:ال)?نقاط(?!\\s*البيع)|نقطة|نقطه|أميال|اميال';
+const REWARD_AFTER = new RegExp(`^\\s*(?:[0-9][0-9,.]*\\s*)?(?:${REWARD_UNITS})`);
+const REWARD_UNIT = new RegExp(`(?<![a-z])(?:${REWARD_UNITS})`);
+const REWARD_CLAUSE_CUT = /[\n,،:;!?؟؛]|\.(?![0-9])| [-–—] /g;
+
+/** Whether the flow phrase at [start, end) of [lower] moves reward points or miles. */
+export function isRewardFlow(lower: string, start: number, end: number): boolean {
+  if (REWARD_AFTER.test(lower.slice(end))) return true;
+  let from = 0;
+  for (const c of lower.slice(0, start).matchAll(REWARD_CLAUSE_CUT)) from = c.index! + c[0].length;
+  return REWARD_UNIT.test(lower.slice(from, start));
+}

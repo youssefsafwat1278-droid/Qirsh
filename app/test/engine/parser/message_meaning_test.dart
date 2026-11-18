@@ -18,8 +18,6 @@ void main() {
   group('a cue applies to its own clause (footers never exclude an event)', () {
     for (final (text, amount, currency) in [
       ('Purchase completed for EGP 250; card payment due EGP 900', 250.0, 'EGP'),
-      ('Purchase of SAR 100.00 at CAFE ONE approved. Previous attempt declined.',
-          100.0, 'SAR'),
       ('عملية شراء بمبلغ 120 ريال لدى متجر تجريبي. تذكير: موعد سداد بطاقتك 25/11',
           120.0, 'SAR'),
     ]) {
@@ -110,7 +108,12 @@ void main() {
       'خصم 200 ريال من حسابك *5678 وإضافتها لحساب *9012',
       'Transfer of SAR 2,000.00 from your account *1234 to your account *5678',
       // Two movements with different amounts: never book one silently.
-      'SAR 45.00 paid at Test Mart; cashback SAR 2 credited',
+      // (Follow-up 3, SM-06: a cashback line is a side event of a purchase,
+      // so the two-movement case is two purchases.)
+      'SAR 45.00 paid at Test Mart; SAR 20.00 paid at Test Cafe',
+      // Follow-up 3 (SM-01): another event's status sentence next to a
+      // purchase (read not completed at 5dae2e2d) is review, never recorded.
+      'Purchase of SAR 100.00 at CAFE ONE approved. Previous attempt declined.',
     ]) {
       test(text, () {
         final r = parse(text);
@@ -168,9 +171,15 @@ void main() {
       ('SAR 1,000 debited from *1111 and deposited to *2222',
           MessageKind.ownAccountTransfer, 'own_accounts',
           MessageDisposition.review),
-      ('SAR 45.00 paid at Test Mart; cashback SAR 2 credited',
+      ('SAR 45.00 paid at Test Mart; SAR 20.00 paid at Test Cafe',
           MessageKind.multipleEvents, 'multiple_amounts',
           MessageDisposition.review),
+      ('Purchase of SAR 100.00 at CAFE ONE approved. Previous attempt declined.',
+          MessageKind.uncertain, 'other_event_status',
+          MessageDisposition.review),
+      ('SAR 45.00 paid at Test Mart; cashback SAR 2 credited',
+          MessageKind.completedMovement, 'footer_set_aside',
+          MessageDisposition.record),
     ]) {
       test(text, () {
         final m = ParserEngine.meaningOf(text);

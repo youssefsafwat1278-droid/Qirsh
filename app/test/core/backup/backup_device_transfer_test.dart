@@ -37,7 +37,8 @@ void main() {
       executor: NativeDatabase.memory(),
       keyStore: _MemoryKeyStore(),
     );
-    await seedTestAccount(targetDevice);
+    // A new device has no account yet (A-7), so the restore applies the whole
+    // backup (SP-02: a device holding any user record merges instead).
   });
 
   tearDown(() async {

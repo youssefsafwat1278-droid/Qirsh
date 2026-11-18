@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/large_text.dart';
+import '../../core/theme/widgets/stacked_choices.dart';
 
 /// شريط تبويب حبة الدواء — سيطرة قطعية قابلة لإعادة الاستخدام.
 ///
@@ -32,6 +34,18 @@ class AppPillTabBar extends StatelessWidget {
     final lensFill = c.cta;
     final selectedFg = c.onCta;
     final idleFg = onPhoto ? Colors.white : c.textSecondary;
+    // UX-09 / SP-10: at large text the tabs stack one per line.
+    if (isLargeText(context)) {
+      return StackedChoices(
+        labels: tabs,
+        selectedIndex: selectedIndex,
+        onSelected: onSelected,
+        trackColor: onPhoto ? Colors.white.withValues(alpha: .12) : c.surfaceMuted,
+        selectedColor: lensFill,
+        selectedForeground: selectedFg,
+        idleForeground: idleFg,
+      );
+    }
     final scaledHeight = MediaQuery.textScalerOf(context).scale(12) * 2.4 + 8;
     final count = tabs.length;
     final x = count < 2 ? 0.0 : -1 + 2 * selectedIndex / (count - 1);

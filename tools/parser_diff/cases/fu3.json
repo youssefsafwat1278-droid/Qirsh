@@ -1,0 +1,471 @@
+[
+{
+"id": "A01",
+"text": "Purchase of SAR 75.00 at Panda card *4521. Transaction failed, please contact us or try another card.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "A02",
+"text": "Payment of AED 200.00 to DEWA from card *4521. Rejected: insufficient credit limit.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "A03",
+"text": "شراء بمبلغ 120 ريال لدى جرير بطاقة 4521. العملية مرفوضة، يرجى استخدام بطاقة أخرى.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "A04",
+"text": "عملية شراء 300 ريال لدى نون بطاقة 4521. معلقة - العملية السابقة قيد المعالجة.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "A05",
+"text": "Transfer of SAR 500.00 to account *7788. Transaction reversed, click here for details.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "A06",
+"text": "Purchase of SAR 99.00 at STC with card *4521. Pending authorisation, card activation required.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "A07",
+"text": "Withdrawal SAR 400.00 ATM card *4521. Failed - exceeds daily card limit.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "A08",
+"text": "Purchase of SAR 60.00 at Kudu card *4521. Declined. Your previous purchase was approved.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "A09",
+"text": "POS SAR 45.00 at Kudu card *4521 declined: credit limit exceeded, earlier transactions unaffected.",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "A10",
+"text": "Purchase of SAR 120.00 at Jarir with card *4521. Previous transaction declined.",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "A11",
+"text": "Purchase SAR 60.00 at Kudu card *4521 approved. Your earlier attempt was declined.",
+"truth": {
+"kind": "d",
+"amt": 60,
+"cur": "SAR"
+}
+},
+{
+"id": "P01",
+"text": "Purchase SAR 200.00 at Panda card *4521, 20 reward points added to your account",
+"truth": {
+"kind": "d",
+"amt": 200,
+"cur": "SAR"
+}
+},
+{
+"id": "P02",
+"text": "Spent SAR 75.00 at Starbucks card *4521. 7 points credited to your account",
+"truth": {
+"kind": "d",
+"amt": 75,
+"cur": "SAR"
+}
+},
+{
+"id": "P03",
+"text": "تم شراء بمبلغ 150 ريال لدى نون بطاقة 4521، تمت إضافة 15 نقطة إلى رصيدك",
+"truth": {
+"kind": "d",
+"amt": 150,
+"cur": "SAR"
+}
+},
+{
+"id": "P04",
+"text": "POS AED 60.00 at Carrefour card *4521, 60 miles credited to your account",
+"truth": {
+"kind": "d",
+"amt": 60,
+"cur": "AED"
+}
+},
+{
+"id": "P05",
+"text": "SAR 500.00 credited to your account *4521 from Ali",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "X01",
+"text": "Amount charged: SAR 12.50, card *4521, Uber",
+"truth": {
+"kind": "d",
+"amt": 12.5,
+"cur": "SAR"
+}
+},
+{
+"id": "X02",
+"text": "Billed AED 99.00 to card 4521, Netflix, 01/11/2026,",
+"truth": {
+"kind": "d",
+"amt": 99,
+"cur": "AED"
+}
+},
+{
+"id": "X03",
+"text": "المبلغ المخصوم 75.00 ريال, بطاقة 4521,",
+"truth": {
+"kind": "d",
+"amt": 75,
+"cur": "SAR"
+}
+},
+{
+"id": "X04",
+"text": "SAR 1,250.00 deducted from your card *4521, Extra, 17/11/2026",
+"truth": {
+"kind": "d",
+"amt": 1250,
+"cur": "SAR"
+}
+},
+{
+"id": "X05",
+"text": "Card ٤٥٢١ charged SAR ٣٥٫٠٠ at Kudu on ١٧/١١/٢٠٢٦, ٢١:٤٠",
+"truth": {
+"kind": "d",
+"amt": 35,
+"cur": "SAR"
+}
+},
+{
+"id": "S01",
+"text": "Purchase SAR 89.00 at Noon card *4521, earn 5 points",
+"truth": {
+"kind": "d",
+"amt": 89,
+"cur": "SAR"
+}
+},
+{
+"id": "S02",
+"text": "Purchase SAR 150.00 at Extra card *4521, convert to 0% instalments",
+"truth": {
+"kind": "d",
+"amt": 150,
+"cur": "SAR"
+}
+},
+{
+"id": "S03",
+"text": "Purchase SAR 60.00 at Kudu card *4521, will be posted within 2 days",
+"truth": {
+"kind": "d",
+"amt": 60,
+"cur": "SAR"
+}
+},
+{
+"id": "S04",
+"text": "POS SAR 45.00 at Danube card *4521, reminder: statement due 25 Nov",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "S05",
+"text": "شراء 200 ريال لدى جرير بطاقة 4521، احصل على 5% استرداد",
+"truth": {
+"kind": "d",
+"amt": 200,
+"cur": "SAR"
+}
+},
+{
+"id": "S06",
+"text": "تم شراء بمبلغ 120 ريال لدى نون بطاقة 4521، سيتم إضافة النقاط خلال يومين",
+"truth": {
+"kind": "d",
+"amt": 120,
+"cur": "SAR"
+}
+},
+{
+"id": "S07",
+"text": "تم خصم 80 ريال من بطاقتك 4521 لدى كودو، سيظهر المبلغ في كشف الحساب",
+"truth": {
+"kind": "d",
+"amt": 80,
+"cur": "SAR"
+}
+},
+{
+"id": "S08",
+"text": "تم شراء 300 ريال لدى اكسترا بطاقة 4521، تذكير: موعد سداد البطاقة 25 نوفمبر",
+"truth": {
+"kind": "d",
+"amt": 300,
+"cur": "SAR"
+}
+},
+{
+"id": "S09",
+"text": "Your card bill of SAR 1,200.00 is due on 25 Nov",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "S10",
+"text": "Salary of SAR 9,000.00 is expected on 27 Nov",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "S11",
+"text": "Annual fee of SAR 250.00 will be charged on 1 Dec",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "S12",
+"text": "Earn 5 points on every SAR 10 spent with your card",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "S13",
+"text": "سيتم خصم 250 ريال رسوم سنوية بتاريخ 1 ديسمبر",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "S14",
+"text": "Get SAR 50 cashback when you spend SAR 500 or more at Extra",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "M01",
+"text": "Purchase SAR 80.00 at Danube card *4521. Purchase SAR 45.00 at Kudu card *4521",
+"truth": {
+"kind": "r"
+}
+},
+{
+"id": "M02",
+"text": "Purchases: SAR 30.00 at Kudu and SAR 55.00 at Panda, card *4521",
+"truth": {
+"kind": "r"
+}
+},
+{
+"id": "M03",
+"text": "Purchase SAR 80.00 at Danube card *4521. Cashback of SAR 4.00 credited to your account",
+"truth": {
+"kind": "d",
+"amt": 80,
+"cur": "SAR"
+}
+},
+{
+"id": "H01",
+"text": "تم إيداع راتب 8,000 ريال في حسابك 4521. تم خصم 1,200 ريال قسط تمويل",
+"truth": {
+"kind": "r"
+}
+},
+{
+"id": "H02",
+"text": "Salary SAR 8,000.00 credited to account *4521. SAR 1,200.00 debited for loan instalment.",
+"truth": {
+"kind": "r"
+}
+},
+{
+"id": "H03",
+"text": "تم خصم 300 ريال من حسابك 4521 وإيداع راتب 9,000 ريال",
+"truth": {
+"kind": "r"
+}
+},
+{
+"id": "H04",
+"text": "تم تحويل 500 ريال إليك من أحمد",
+"truth": {
+"kind": "c",
+"amt": 500,
+"cur": "SAR"
+}
+},
+{
+"id": "H05",
+"text": "تم تحويل مبلغ 1,200 ريال إليك من محمد إلى حسابك 4521",
+"truth": {
+"kind": "c",
+"amt": 1200,
+"cur": "SAR"
+}
+},
+{
+"id": "H06",
+"text": "تم تحويل 250.00 ريال إليك من سارة عبر سريع",
+"truth": {
+"kind": "c",
+"amt": 250,
+"cur": "SAR"
+}
+},
+{
+"id": "H07",
+"text": "Your refund of SAR 150.00 from Noon is pending",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "H08",
+"text": "Refund of AED 75.00 is being processed and will be credited in 5-7 days",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "H09",
+"text": "استرداد بمبلغ 200 ريال قيد المعالجة",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "H10",
+"text": "Refund SAR 99.00 pending from Amazon",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "H11",
+"text": "Earn 10 points on every SAR 100 spent with your card. T&C apply",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "H12",
+"text": "Get 5% cashback on every SAR 50 at Jarir with your card",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "H13",
+"text": "اربح نقطة على كل 10 ريال تنفقها ببطاقتك",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "H14",
+"text": "Cashback up to SAR 200 on purchases at Extra this weekend",
+"truth": {
+"kind": "n"
+}
+},
+{
+"id": "H15",
+"text": "Purchase of SAR 250.00 at Extra on card *4521 was decl",
+"truth": {
+"kind": "r"
+}
+},
+{
+"id": "H16",
+"text": "Purchase of AED 45.75 at Carrefour card *4521 was rej",
+"truth": {
+"kind": "r"
+}
+},
+{
+"id": "H17",
+"text": "Your purchase of SAR 300.00 at Noon is pen",
+"truth": {
+"kind": "r"
+}
+},
+{
+"id": "H18",
+"text": "Purchase of USD 20.00 at Steam card *4521, charged as SAR 75.10",
+"truth": {
+"kind": "d",
+"amt": 75.1,
+"cur": "SAR"
+}
+},
+{
+"id": "H19",
+"text": "USD 15.00 at Apple.com card *4521 charged as SAR 56.33",
+"truth": {
+"kind": "d",
+"amt": 56.33,
+"cur": "SAR"
+}
+},
+{
+"id": "H20",
+"text": "Online purchase EUR 30.00 at Zalando card *4521 (charged as AED 121.50)",
+"truth": {
+"kind": "d",
+"amt": 121.5,
+"cur": "AED"
+}
+},
+{
+"id": "H21",
+"text": "تم تحويل 400 ريال منك إلى أحمد",
+"truth": {
+"kind": "d",
+"amt": 400,
+"cur": "SAR"
+}
+}
+]

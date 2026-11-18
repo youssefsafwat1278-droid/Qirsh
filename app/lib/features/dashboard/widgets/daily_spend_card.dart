@@ -5,6 +5,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/large_text.dart';
 import '../../../core/theme/mali_tokens.dart';
 import '../../../core/theme/widgets/mali_card.dart';
 import '../../../domain/entities/report_models.dart';
@@ -290,7 +291,7 @@ class DailySpendCard extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
                 label,
-                maxLines: 1,
+                maxLines: linesUnlessLargeText(context, 2),
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
                 style: AppTypography.caption(t.textOnCanvasMuted),
@@ -357,13 +358,13 @@ class DailySpendCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        maxLines: 1,
+                        maxLines: linesUnlessLargeText(context, 1),
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.subhead(t.textOnCanvasPrimary),
                       ),
                       Text(
                         category?.name ?? context.l10n.homeUncategorised,
-                        maxLines: 1,
+                        maxLines: linesUnlessLargeText(context, 1),
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.caption(t.textOnCanvasMuted),
                       ),

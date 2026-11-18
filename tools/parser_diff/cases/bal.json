@@ -1,0 +1,178 @@
+[
+{
+"id": "B00",
+"text": "تم شحن رصيد 100 ريال لرقم الجوال من بطاقة *4521",
+"truth": {
+"kind": "d",
+"amt": 100
+}
+},
+{
+"id": "B01",
+"text": "شراء رصيد سوا 50 ريال من بطاقة مدى *4521",
+"truth": {
+"kind": "d",
+"amt": 50
+}
+},
+{
+"id": "B02",
+"text": "Recharge balance SAR 100 for mobile via card *4521 successful",
+"truth": {
+"kind": "d",
+"amt": 100
+}
+},
+{
+"id": "B03",
+"text": "Balance recharge of SAR 100.00 completed using card *4521",
+"truth": {
+"kind": "d",
+"amt": 100
+}
+},
+{
+"id": "B04",
+"text": "Wallet balance top-up SAR 200 successful from card *4521",
+"truth": {
+"kind": "d",
+"amt": 200
+}
+},
+{
+"id": "B05",
+"text": "خصم 250 ريال من رصيد حسابك *5678 لدى متجر تجريبي",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "B06",
+"text": "تم خصم مبلغ من رصيدك 250 ريال لدى متجر تجريبي",
+"truth": {
+"kind": "d",
+"amt": 250
+}
+},
+{
+"id": "B07",
+"text": "خصم من الرصيد 75 ريال شراء من مقهى تجريبي",
+"truth": {
+"kind": "d",
+"amt": 75
+}
+},
+{
+"id": "B08",
+"text": "Debited from your balance SAR 75.00 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 75
+}
+},
+{
+"id": "B09",
+"text": "Your available balance was debited by SAR 75.00 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 75
+}
+},
+{
+"id": "B10",
+"text": "Outstanding payment of SAR 400 received for card *4521",
+"truth": {
+"kind": "d",
+"amt": 400
+}
+},
+{
+"id": "B11",
+"text": "Remaining amount of SAR 150.00 paid for order at Test Store",
+"truth": {
+"kind": "d",
+"amt": 150
+}
+},
+{
+"id": "B12",
+"text": "Minimum payment SAR 115.00 has been paid from account *5678",
+"truth": {
+"kind": "d",
+"amt": 115
+}
+},
+{
+"id": "B13",
+"text": "Due amount SAR 230 for Test Telecom paid successfully",
+"truth": {
+"kind": "d",
+"amt": 230
+}
+},
+{
+"id": "B14",
+"text": "Payment of the amount due SAR 230 to Test Telecom completed",
+"truth": {
+"kind": "d",
+"amt": 230
+}
+},
+{
+"id": "B15",
+"text": "سداد المبلغ المستحق 230 ريال لشركة الاتصالات التجريبية",
+"truth": {
+"kind": "d",
+"amt": 230
+}
+},
+{
+"id": "B16",
+"text": "تم سداد الحد الأدنى 115 ريال لبطاقة *4521",
+"truth": {
+"kind": "d",
+"amt": 115
+}
+},
+{
+"id": "B17",
+"text": "Limit SAR 500 top-up purchase at Test Store successful amount SAR 500",
+"truth": {
+"kind": "d",
+"amt": 500
+}
+},
+{
+"id": "B18",
+"text": "Card limit increase fee SAR 50 charged",
+"truth": {
+"kind": "d",
+"amt": 50
+}
+},
+{
+"id": "B19",
+"text": "رصيدك الجديد بعد إيداع 1,000 ريال هو 3,000 ريال",
+"truth": {
+"kind": "c",
+"amt": 1000
+}
+},
+{
+"id": "B20",
+"text": "Balance transfer SAR 3,000 to card *4521 completed",
+"truth": {
+"kind": "d",
+"amt": 3000
+}
+},
+{
+"id": "B21",
+"text": "Available balance transfer of SAR 3,000 to account *5678",
+"truth": {
+"kind": "d",
+"amt": 3000
+}
+}
+]

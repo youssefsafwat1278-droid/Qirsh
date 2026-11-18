@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 
 import '../security/lock_prompt_language.dart';
 import '../../data/db/app_database.dart';
+import '../../data/db/database_seed.dart';
 import '../../data/db/merchant_identity.dart';
 import '../../data/db/planning_cutover.dart';
 import '../../data/db/money_v30_backfill.dart';
@@ -154,11 +155,11 @@ class RestoreBackupUseCase {
     try {
       await _db.transaction(() async {
         // Decision 3.3: restore MERGES into a device that already holds
-        // financial records (see [_mergeSnapshot] for the per-row rule). A
-        // device with none yet (a new install, at most an empty account made
-        // during setup) has nothing newer to keep, so the backup is applied in
-        // full, settings and catalog included, as before.
-        final merge = await _deviceHoldsFinancialData();
+        // records of its own (see [_mergeSnapshot] for the per-row rule). A
+        // device with none yet (a new install, before any account is made)
+        // has nothing newer to keep, so the backup is applied in full,
+        // settings and catalog included, as before.
+        final merge = await _deviceHoldsUserData();
         if (merge) {
           await _mergeSnapshot(tables, schemaVersion, fault);
         } else {
@@ -561,7 +562,14 @@ class RestoreBackupUseCase {
   //    row is kept untouched — its values, deletion (a deleted transaction is
   //    `ignored` with a newer `updated_at`; planning rows keep `deleted_at`),
   //    category and category provenance, server identity and queued intents;
-  //  * a device row absent from the backup is never touched (kept).
+  //  * a device row absent from the backup is never touched (kept);
+  //  * a device row the user deleted (`deleted_at` set; a transaction
+  //    `ignored`) stays deleted even when the backup copy carries a later
+  //    timestamp (another device's clock);
+  //  * saved merchant rules (merchant_category_map) are taken from the device
+  //    only: "Forget rule" and category deletion remove a rule without a
+  //    trace, so a backup-only rule cannot be told from one the user removed.
+  //    A full apply (a device with no records yet) still restores them.
   //
   // A row the backup wins keeps the device's server identity, is marked
   // `pending` when server-backed (PendingSyncReconciler records the update
@@ -570,19 +578,30 @@ class RestoreBackupUseCase {
   // backfill on its own id (never duplicated). Pull cursors are kept: nothing
   // the device already pulled was removed.
 
-  /// True when this device already holds financial records of its own:
-  /// transactions, budgets, goals, bills/subscriptions or plans. Accounts alone
-  /// (an empty account made during setup) and the seeded catalog and settings
-  /// are not records a backup could be newer or older than.
-  Future<bool> _deviceHoldsFinancialData() async => (await _db
-          .customSelect('SELECT (EXISTS(SELECT 1 FROM transactions) '
-              'OR EXISTS(SELECT 1 FROM budgets) '
-              'OR EXISTS(SELECT 1 FROM goals) '
-              'OR EXISTS(SELECT 1 FROM subscriptions) '
-              'OR EXISTS(SELECT 1 FROM plans)) AS has_data;')
-          .getSingle())
-      .read<int>('has_data') ==
-      1;
+  /// True when this device already holds any record the user made (SP-02): an
+  /// account (A-7: never created without the user), a card, a transaction, a
+  /// planning record, a saved merchant rule, a custom category or a sender
+  /// mapping. Only the seeded catalog, learned/seeded merchant data,
+  /// achievement progress and settings are not counted.
+  Future<bool> _deviceHoldsUserData() async {
+    final seedKeys = [for (final c in DatabaseSeed.categories) c.key];
+    final row = await _db.customSelect(
+      'SELECT (${[
+        for (final t in const [
+          'accounts', 'cards', 'transactions', 'budgets', 'goals',
+          'goal_contributions', 'subscriptions', 'bill_payments', 'plans',
+          'plan_transaction_links', 'sender_bank_mappings',
+          'local_offer_savings',
+        ])
+          'EXISTS(SELECT 1 FROM $t)',
+        'EXISTS(SELECT 1 FROM merchant_category_map WHERE is_user_confirmed = 1)',
+        'EXISTS(SELECT 1 FROM categories WHERE key NOT IN '
+            '(${List.filled(seedKeys.length, '?').join(', ')}))',
+      ].join(' OR ')}) AS has_data;',
+      variables: [for (final k in seedKeys) Variable.withString(k)],
+    ).getSingle();
+    return row.read<int>('has_data') == 1;
+  }
 
   Future<String?> _goalCurrency(String goalId) async => (await _db
           .customSelect('SELECT currency FROM goals WHERE id = ?;',
@@ -630,7 +649,10 @@ class RestoreBackupUseCase {
           "INSERT INTO restore_merge_counts SELECT '$table', COUNT(*) "
           'FROM $table;');
       final cols = await _columnsOf(table);
-      final rows = (tables[table] as List<dynamic>?) ?? const [];
+      // SP-01: the device's saved rules are authoritative (see above).
+      final rows = table == 'merchant_category_map'
+          ? const []
+          : (tables[table] as List<dynamic>?) ?? const [];
       var rowIndex = 0;
       for (final row in rows.cast<Map<String, dynamic>>()) {
         await _mergeRow(table, row, schemaVersion, cols, remap);
@@ -679,6 +701,7 @@ class RestoreBackupUseCase {
     final ref = _remappedReferences[table];
     if (ref != null && deviceKey != backupKey) remap[ref]![backupKey] = deviceKey;
     final backupWins = cols.contains('updated_at') &&
+        !await _deviceRowDeleted(table, deviceKey, cols) &&
         await _backupIsNewer(table, deviceKey, data['updated_at']);
     if (backupWins) {
       await _updateFromBackup(table, deviceKey, data, schemaVersion, cols);
@@ -727,6 +750,20 @@ class RestoreBackupUseCase {
       where += ' AND deleted_at IS NULL';
     }
     return first(where, [for (final c in natural) data[c]]);
+  }
+
+  /// A deletion the user made on this device is final for the restore.
+  Future<bool> _deviceRowDeleted(
+      String table, String deviceId, Set<String> cols) async {
+    final where = [
+      if (cols.contains('deleted_at')) 'deleted_at IS NOT NULL',
+      if (table == 'transactions') "status = 'ignored'",
+    ];
+    if (where.isEmpty) return false;
+    return await _db.customSelect(
+            'SELECT 1 AS x FROM $table WHERE id = ? AND (${where.join(' OR ')});',
+            variables: [Variable.withString(deviceId)]).getSingleOrNull() !=
+        null;
   }
 
   Future<bool> _backupIsNewer(

@@ -1,0 +1,1458 @@
+[
+{
+"id": "N00_0",
+"text": "Paid 45.00 at Test Cafe",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N00_1",
+"text": "Paid 45.00 at Test Cafe. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N00_2",
+"text": "Paid 45.00 at Test Cafe\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N00_3",
+"text": "Paid 45.00 at Test Cafe. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N00_4",
+"text": "Paid 45.00 at Test Cafe. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N00_5",
+"text": "Paid 45.00 at Test Cafe\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N00_6",
+"text": "Paid 45.00 at Test Cafe. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N01_0",
+"text": "POS 4521 Test Mart 89.50",
+"truth": {
+"kind": "d",
+"amt": 89.5
+}
+},
+{
+"id": "N01_1",
+"text": "POS 4521 Test Mart 89.50. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 89.5
+}
+},
+{
+"id": "N01_2",
+"text": "POS 4521 Test Mart 89.50\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 89.5
+}
+},
+{
+"id": "N01_3",
+"text": "POS 4521 Test Mart 89.50. Card activated",
+"truth": {
+"kind": "d",
+"amt": 89.5
+}
+},
+{
+"id": "N01_4",
+"text": "POS 4521 Test Mart 89.50. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 89.5
+}
+},
+{
+"id": "N01_5",
+"text": "POS 4521 Test Mart 89.50\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 89.5
+}
+},
+{
+"id": "N01_6",
+"text": "POS 4521 Test Mart 89.50. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 89.5
+}
+},
+{
+"id": "N02_0",
+"text": "Purchase 45.00 Test Cafe card *1234",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N02_1",
+"text": "Purchase 45.00 Test Cafe card *1234. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N02_2",
+"text": "Purchase 45.00 Test Cafe card *1234\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N02_3",
+"text": "Purchase 45.00 Test Cafe card *1234. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N02_4",
+"text": "Purchase 45.00 Test Cafe card *1234. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N02_5",
+"text": "Purchase 45.00 Test Cafe card *1234\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N02_6",
+"text": "Purchase 45.00 Test Cafe card *1234. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N03_0",
+"text": "Card *4521 authorised 45.00 at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N03_1",
+"text": "Card *4521 authorised 45.00 at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N03_2",
+"text": "Card *4521 authorised 45.00 at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N03_3",
+"text": "Card *4521 authorised 45.00 at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N03_4",
+"text": "Card *4521 authorised 45.00 at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N03_5",
+"text": "Card *4521 authorised 45.00 at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N03_6",
+"text": "Card *4521 authorised 45.00 at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N04_0",
+"text": "Fee 15.00 deducted from account *5678",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N04_1",
+"text": "Fee 15.00 deducted from account *5678. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N04_2",
+"text": "Fee 15.00 deducted from account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N04_3",
+"text": "Fee 15.00 deducted from account *5678. Card activated",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N04_4",
+"text": "Fee 15.00 deducted from account *5678. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N04_5",
+"text": "Fee 15.00 deducted from account *5678\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N04_6",
+"text": "Fee 15.00 deducted from account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N05_0",
+"text": "Card *4521 authorised SAR45.00 at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N05_1",
+"text": "Card *4521 authorised SAR45.00 at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N05_2",
+"text": "Card *4521 authorised SAR45.00 at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N05_3",
+"text": "Card *4521 authorised SAR45.00 at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N05_4",
+"text": "Card *4521 authorised SAR45.00 at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N05_5",
+"text": "Card *4521 authorised SAR45.00 at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N05_6",
+"text": "Card *4521 authorised SAR45.00 at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N06_0",
+"text": "Card *4521 authorised 45SR at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N06_1",
+"text": "Card *4521 authorised 45SR at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N06_2",
+"text": "Card *4521 authorised 45SR at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N06_3",
+"text": "Card *4521 authorised 45SR at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N06_4",
+"text": "Card *4521 authorised 45SR at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N06_5",
+"text": "Card *4521 authorised 45SR at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N06_6",
+"text": "Card *4521 authorised 45SR at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N07_0",
+"text": "Card *4521 authorised ٤٥ ر.س at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N07_1",
+"text": "Card *4521 authorised ٤٥ ر.س at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N07_2",
+"text": "Card *4521 authorised ٤٥ ر.س at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N07_3",
+"text": "Card *4521 authorised ٤٥ ر.س at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N07_4",
+"text": "Card *4521 authorised ٤٥ ر.س at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N07_5",
+"text": "Card *4521 authorised ٤٥ ر.س at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N07_6",
+"text": "Card *4521 authorised ٤٥ ر.س at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N08_0",
+"text": "Card *4521 authorised SR 45.00 at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N08_1",
+"text": "Card *4521 authorised SR 45.00 at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N08_2",
+"text": "Card *4521 authorised SR 45.00 at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N08_3",
+"text": "Card *4521 authorised SR 45.00 at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N08_4",
+"text": "Card *4521 authorised SR 45.00 at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N08_5",
+"text": "Card *4521 authorised SR 45.00 at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N08_6",
+"text": "Card *4521 authorised SR 45.00 at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N09_0",
+"text": "Card *4521 authorised 45.00 S.R at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N09_1",
+"text": "Card *4521 authorised 45.00 S.R at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N09_2",
+"text": "Card *4521 authorised 45.00 S.R at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N09_3",
+"text": "Card *4521 authorised 45.00 S.R at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N09_4",
+"text": "Card *4521 authorised 45.00 S.R at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N09_5",
+"text": "Card *4521 authorised 45.00 S.R at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N09_6",
+"text": "Card *4521 authorised 45.00 S.R at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N10_0",
+"text": "Card *4521 used for 45 ريال سعودي at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N10_1",
+"text": "Card *4521 used for 45 ريال سعودي at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N10_2",
+"text": "Card *4521 used for 45 ريال سعودي at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N10_3",
+"text": "Card *4521 used for 45 ريال سعودي at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N10_4",
+"text": "Card *4521 used for 45 ريال سعودي at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N10_5",
+"text": "Card *4521 used for 45 ريال سعودي at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N10_6",
+"text": "Card *4521 used for 45 ريال سعودي at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N11_0",
+"text": "Card *4521 used for 45 رس at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N11_1",
+"text": "Card *4521 used for 45 رس at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N11_2",
+"text": "Card *4521 used for 45 رس at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N11_3",
+"text": "Card *4521 used for 45 رس at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N11_4",
+"text": "Card *4521 used for 45 رس at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N11_5",
+"text": "Card *4521 used for 45 رس at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N11_6",
+"text": "Card *4521 used for 45 رس at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N12_0",
+"text": "Card *4521 used for ٤٥ ﷼ at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N12_1",
+"text": "Card *4521 used for ٤٥ ﷼ at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N12_2",
+"text": "Card *4521 used for ٤٥ ﷼ at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N12_3",
+"text": "Card *4521 used for ٤٥ ﷼ at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N12_4",
+"text": "Card *4521 used for ٤٥ ﷼ at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N12_5",
+"text": "Card *4521 used for ٤٥ ﷼ at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N12_6",
+"text": "Card *4521 used for ٤٥ ﷼ at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N13_0",
+"text": "Card *4521 used for 45 Saudi Riyals at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N13_1",
+"text": "Card *4521 used for 45 Saudi Riyals at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N13_2",
+"text": "Card *4521 used for 45 Saudi Riyals at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N13_3",
+"text": "Card *4521 used for 45 Saudi Riyals at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N13_4",
+"text": "Card *4521 used for 45 Saudi Riyals at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N13_5",
+"text": "Card *4521 used for 45 Saudi Riyals at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N13_6",
+"text": "Card *4521 used for 45 Saudi Riyals at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N14_0",
+"text": "Card *4521 used for 45 riyals at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N14_1",
+"text": "Card *4521 used for 45 riyals at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N14_2",
+"text": "Card *4521 used for 45 riyals at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N14_3",
+"text": "Card *4521 used for 45 riyals at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N14_4",
+"text": "Card *4521 used for 45 riyals at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N14_5",
+"text": "Card *4521 used for 45 riyals at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N14_6",
+"text": "Card *4521 used for 45 riyals at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N15_0",
+"text": "Card *4521 used for SAR 45 at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N15_1",
+"text": "Card *4521 used for SAR 45 at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N15_2",
+"text": "Card *4521 used for SAR 45 at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N15_3",
+"text": "Card *4521 used for SAR 45 at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N15_4",
+"text": "Card *4521 used for SAR 45 at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N15_5",
+"text": "Card *4521 used for SAR 45 at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N15_6",
+"text": "Card *4521 used for SAR 45 at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N16_0",
+"text": "بطاقة *4521 استخدمت بمبلغ 45 ر.س لدى مطعم تجريبي",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N16_1",
+"text": "بطاقة *4521 استخدمت بمبلغ 45 ر.س لدى مطعم تجريبي. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N16_2",
+"text": "بطاقة *4521 استخدمت بمبلغ 45 ر.س لدى مطعم تجريبي\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N16_3",
+"text": "بطاقة *4521 استخدمت بمبلغ 45 ر.س لدى مطعم تجريبي. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N16_4",
+"text": "بطاقة *4521 استخدمت بمبلغ 45 ر.س لدى مطعم تجريبي. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N16_5",
+"text": "بطاقة *4521 استخدمت بمبلغ 45 ر.س لدى مطعم تجريبي\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N16_6",
+"text": "بطاقة *4521 استخدمت بمبلغ 45 ر.س لدى مطعم تجريبي. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N17_0",
+"text": "بطاقة *4521 استخدمت بمبلغ ٤٥ ريال لدى مطعم تجريبي",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N17_1",
+"text": "بطاقة *4521 استخدمت بمبلغ ٤٥ ريال لدى مطعم تجريبي. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N17_2",
+"text": "بطاقة *4521 استخدمت بمبلغ ٤٥ ريال لدى مطعم تجريبي\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N17_3",
+"text": "بطاقة *4521 استخدمت بمبلغ ٤٥ ريال لدى مطعم تجريبي. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N17_4",
+"text": "بطاقة *4521 استخدمت بمبلغ ٤٥ ريال لدى مطعم تجريبي. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N17_5",
+"text": "بطاقة *4521 استخدمت بمبلغ ٤٥ ريال لدى مطعم تجريبي\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N17_6",
+"text": "بطاقة *4521 استخدمت بمبلغ ٤٥ ريال لدى مطعم تجريبي. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N18_0",
+"text": "Monthly maintenance fee 15.00 for account *5678",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N18_1",
+"text": "Monthly maintenance fee 15.00 for account *5678. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N18_2",
+"text": "Monthly maintenance fee 15.00 for account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N18_3",
+"text": "Monthly maintenance fee 15.00 for account *5678. Card activated",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N18_4",
+"text": "Monthly maintenance fee 15.00 for account *5678. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N18_5",
+"text": "Monthly maintenance fee 15.00 for account *5678\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N18_6",
+"text": "Monthly maintenance fee 15.00 for account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N19_0",
+"text": "Monthly maintenance fee SR15 for account *5678",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N19_1",
+"text": "Monthly maintenance fee SR15 for account *5678. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N19_2",
+"text": "Monthly maintenance fee SR15 for account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N19_3",
+"text": "Monthly maintenance fee SR15 for account *5678. Card activated",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N19_4",
+"text": "Monthly maintenance fee SR15 for account *5678. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N19_5",
+"text": "Monthly maintenance fee SR15 for account *5678\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N19_6",
+"text": "Monthly maintenance fee SR15 for account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 15
+}
+},
+{
+"id": "N20_0",
+"text": "SMS service fee: 5.75, account *5678",
+"truth": {
+"kind": "d",
+"amt": 5.75
+}
+},
+{
+"id": "N20_1",
+"text": "SMS service fee: 5.75, account *5678. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 5.75
+}
+},
+{
+"id": "N20_2",
+"text": "SMS service fee: 5.75, account *5678\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 5.75
+}
+},
+{
+"id": "N20_3",
+"text": "SMS service fee: 5.75, account *5678. Card activated",
+"truth": {
+"kind": "d",
+"amt": 5.75
+}
+},
+{
+"id": "N20_4",
+"text": "SMS service fee: 5.75, account *5678. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 5.75
+}
+},
+{
+"id": "N20_5",
+"text": "SMS service fee: 5.75, account *5678\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 5.75
+}
+},
+{
+"id": "N20_6",
+"text": "SMS service fee: 5.75, account *5678. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 5.75
+}
+},
+{
+"id": "N21_0",
+"text": "Card *4521 authorised EGP45.00 at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N21_1",
+"text": "Card *4521 authorised EGP45.00 at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N21_2",
+"text": "Card *4521 authorised EGP45.00 at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N21_3",
+"text": "Card *4521 authorised EGP45.00 at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N21_4",
+"text": "Card *4521 authorised EGP45.00 at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N21_5",
+"text": "Card *4521 authorised EGP45.00 at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N21_6",
+"text": "Card *4521 authorised EGP45.00 at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N22_0",
+"text": "Card *4521 authorised 45.00EGP at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N22_1",
+"text": "Card *4521 authorised 45.00EGP at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N22_2",
+"text": "Card *4521 authorised 45.00EGP at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N22_3",
+"text": "Card *4521 authorised 45.00EGP at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N22_4",
+"text": "Card *4521 authorised 45.00EGP at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N22_5",
+"text": "Card *4521 authorised 45.00EGP at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N22_6",
+"text": "Card *4521 authorised 45.00EGP at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N23_0",
+"text": "Card *4521 authorised 45 جنيه at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N23_1",
+"text": "Card *4521 authorised 45 جنيه at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N23_2",
+"text": "Card *4521 authorised 45 جنيه at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N23_3",
+"text": "Card *4521 authorised 45 جنيه at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N23_4",
+"text": "Card *4521 authorised 45 جنيه at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N23_5",
+"text": "Card *4521 authorised 45 جنيه at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N23_6",
+"text": "Card *4521 authorised 45 جنيه at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N24_0",
+"text": "Card *4521 authorised 45 درهم at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N24_1",
+"text": "Card *4521 authorised 45 درهم at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N24_2",
+"text": "Card *4521 authorised 45 درهم at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N24_3",
+"text": "Card *4521 authorised 45 درهم at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N24_4",
+"text": "Card *4521 authorised 45 درهم at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N24_5",
+"text": "Card *4521 authorised 45 درهم at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N24_6",
+"text": "Card *4521 authorised 45 درهم at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N25_0",
+"text": "Card *4521 authorised USD45 at Test Diner",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N25_1",
+"text": "Card *4521 authorised USD45 at Test Diner. Your card renewal is due 01/2027",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N25_2",
+"text": "Card *4521 authorised USD45 at Test Diner\nYour e-statement is available in the app",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N25_3",
+"text": "Card *4521 authorised USD45 at Test Diner. Card activated",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N25_4",
+"text": "Card *4521 authorised USD45 at Test Diner. Credit limit 20,000",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N25_5",
+"text": "Card *4521 authorised USD45 at Test Diner\nPIN-verified",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+},
+{
+"id": "N25_6",
+"text": "Card *4521 authorised USD45 at Test Diner. تم تفعيل البطاقة",
+"truth": {
+"kind": "d",
+"amt": 45
+}
+}
+]

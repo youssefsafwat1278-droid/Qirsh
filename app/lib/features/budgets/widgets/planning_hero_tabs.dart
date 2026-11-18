@@ -5,6 +5,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_motion.dart';
 import '../../../core/theme/app_spacing.dart';
 import '../../../core/theme/app_typography.dart';
+import '../../../core/theme/large_text.dart';
+import '../../../core/theme/widgets/stacked_choices.dart';
 import '../../../core/utils/l10n_ext.dart';
 
 /// «الميزانيات | الأهداف | سجل الميزانيات» — the v2 `QSegmented` in its
@@ -32,6 +34,18 @@ class PlanningHeroTabs extends StatelessWidget {
     final count = tabs.length;
     final x = count < 2 ? 0.0 : -1 + 2 * selectedIndex / (count - 1);
     final reduce = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    // UX-09 / SP-10: at large text the tabs stack one per line.
+    if (isLargeText(context)) {
+      return StackedChoices(
+        labels: tabs,
+        selectedIndex: selectedIndex,
+        onSelected: _select,
+        trackColor: Colors.white.withValues(alpha: .12),
+        selectedColor: Colors.white,
+        selectedForeground: AppBrandBlue.brand,
+        idleForeground: Colors.white,
+      );
+    }
     // Two caption lines (18 pt line height each) plus the 4 pt track
     // padding, and never under 52 so each tab is a 44 pt target.
     final scaledHeight = MediaQuery.textScalerOf(context).scale(18) * 2 + 8;

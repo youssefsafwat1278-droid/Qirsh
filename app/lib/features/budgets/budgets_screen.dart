@@ -13,6 +13,7 @@ import '../../core/theme/widgets/merchant_bar.dart' show ChartBar;
 import '../common/motion.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/large_text.dart';
 import '../../domain/entities/budget_entity.dart';
 import '../../domain/entities/goal_entity.dart';
 import '../../domain/entities/engagement_entities.dart';
@@ -1020,12 +1021,12 @@ class _BudgetCard extends StatelessWidget {
                         isGeneral
                             ? context.l10n.bdgAllExpenses
                             : category?.name ?? context.l10n.bdgCategory,
-                        maxLines: 1,
+                        maxLines: linesUnlessLargeText(context, 1),
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.cardTitle(c.textPrimary)),
                     const SizedBox(height: 2),
                     Text(meta,
-                        maxLines: 1,
+                        maxLines: linesUnlessLargeText(context, 1),
                         overflow: TextOverflow.ellipsis,
                         style: AppTypography.caption(c.textMuted)),
                   ],

@@ -104,3 +104,46 @@ RELEASE-PLAN updated for the `ai` integration: M1 is **included**. `bank-discove
   - the shared-learning transition prompt
   - the comment in `settings_providers.dart` still says "on by default" (behaviour is correct)
 - **Owner:** the Gemini paid tier (§7), and publication only after the V1 app is live (`tools/deploy_site.sh`).
+
+## 8. Follow-up 2 (2026-11-18): review T (platform and records) and review S (SM-03/SM-04), HEAD `98e8e56d`
+
+Nothing committed.
+
+**SP-03, deploy set derived instead of hand-listed.**
+- New `tools/deploy_set.sh <base-ref> [<target-ref>]`. For every function it compares the import closure (including JSON) at both refs.
+- `bash tools/deploy_set.sh b6fc0dad HEAD` reports these as CHANGED: `bank-discovery`, `enrich-merchant`, `parse-sms`, `process-ios-sms`, `process-notification-retries`, `send-push-broadcast`.
+- `send-push-broadcast` is excluded: it imports only the unchanged dead-token helpers from `_shared/capture_push.ts`.
+- `process-notification-retries` is added to RELEASE-PLAN. It is deployed **first in P3**, before `process-ios-sms`. The new copy handles old `notification` rows (no `captureOutcome` → the old wording).
+  - Smoke test: retry cron succeeds, backlog is 0, and a declined sample's push reads as declined.
+  - Its v12 rollback source must be identified in P0.
+  - Undo order: `process-ios-sms` first, then this function.
+- Expected `prod_compare` result at the final commit: 18 IDENTICAL, 10 DIFFERS.
+
+**SP-05, comments corrected.**
+- Corrected: the migration header `20261117120000_ai_global_spend_guard.sql` (not applied anywhere), the rollback file header, and the `ai_spend_guard.ts` comment. They now state the fail-open exception for a missing function (PGRST202/42883).
+- RELEASE-PLAN (b) Undo and (h): rolling back M1 while the new functions are deployed removes the ceiling silently. To limit or stop AI, use `ai_global_budget` instead.
+- Correct undo order: functions → rollback file → ledger row.
+- Checks: migration lint passes; `deno test` for the guard and gate: 8/8.
+
+**SP-04, currencies, read in `b6fc0dad`.**
+- `currencyScale()` throws for a code outside build 147's 50.
+- Ledger: `_applyRowOrQuarantine` parks the row in `parked_child_rows` (`quarantine`), advances the cursor, retries 5 times, then marks it `terminal`. The row stays hidden and nothing is shown to the user.
+- Planning: `_quarantineUnresolved` parks the row as `unresolved_currency`. Build 147 has a repair flow where the user picks one of its 50 currencies. I did not trace whether that repair rewrites the server row.
+- Added to RELEASE-PLAN (c) with four options. Recommended: document it, and tell testers to update every device before choosing one of the new currencies.
+
+**SM-03/SM-04.**
+- The 147 × new-backend parser cell is now "must be re-measured on the final commit before P3".
+- Measurement: run the final server-only reading through build 147's own import, against 147 with today's server.
+- Accept only if no total-changing class is worse.
+- If `tools/message_eval` has no mixed old-device/new-server mode, the evaluation owner has to add it.
+
+**SP-07.**
+- Fixed in RELEASE-PLAN: "Turn off (P5)" → P4.
+- Also updated: the sign-in compatibility paragraph. `ios-signed-release` now sets the three sign-in `vars` to `"true"`.
+- Code comments that present an open item as decided (not edited):
+  - `app/lib/features/settings/sign_out_sheet.dart:53`: "(V1-067, decision B26 (a))"
+  - `app/test/features/settings/sign_out_sheet_test.dart:148`: "V1-067 / decision B26 (a)"
+  - `app/ios/Runner/SceneDelegate.swift:74`: "// B24: cover as soon as the scene stops being active …"
+  - B24 and B26 are open in `DECISIONS-NEEDED.md` and are not in owner brief §3 / D-20.
+
+**Tests:** the legal-text Flutter tests pass, 89/89. The legal text was not changed in this follow-up.

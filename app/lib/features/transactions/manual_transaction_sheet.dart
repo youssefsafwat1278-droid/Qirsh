@@ -11,6 +11,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/utils/category_glyph.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/large_text.dart';
 import '../../core/theme/widgets/navy_sheet_theme.dart';
 import '../../core/theme/widgets/segmented_control.dart';
 import '../../core/utils/currency.dart';
@@ -333,6 +334,31 @@ class _ManualTransactionSheetState
     );
   }
 
+  /// UX-09 / SP-10: at large text, or on an SE-width phone, a field's label
+  /// sits above it and wraps, instead of the one-line floating label that was
+  /// cut off («Merchant or source (optional)» at 320 pt). The field keeps the
+  /// label as its semantics label.
+  Widget _labelled(BuildContext context, String label,
+      Widget Function(String? labelText) field) {
+    if (!isLargeText(context) && MediaQuery.sizeOf(context).width >= 360) {
+      return field(label);
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ExcludeSemantics(
+          child: Padding(
+            padding: const EdgeInsetsDirectional.only(start: 4, bottom: 4),
+            child: Text(label,
+                style: AppTypography.subhead(context.colors.textSecondary)),
+          ),
+        ),
+        Semantics(label: label, child: field(null)),
+      ],
+    );
+  }
+
   Widget _buildForm(BuildContext context, CategoryCatalog catalog) {
     final c = context.colors;
     // The budget-scope sentinel is not a transaction category (same filter
@@ -406,11 +432,12 @@ class _ManualTransactionSheetState
                 final value = accounts.any((a) => a.id == _accountId)
                     ? _accountId
                     : accounts.first.id;
-                return GlassDropdownField<String>(
+                return _labelled(context, context.l10n.commonAccountDefinite,
+                    (labelText) => GlassDropdownField<String>(
                   value: value,
                   isExpanded: true,
                   decoration: InputDecoration(
-                    labelText: context.l10n.commonAccountDefinite,
+                    labelText: labelText,
                     prefixIcon: const Icon(AppLucideIcons.wallet),
                   ),
                   items: [
@@ -451,15 +478,16 @@ class _ManualTransactionSheetState
                       _currency.text = account.currency;
                     });
                   },
-                );
+                ));
               },
               orElse: () => const SizedBox.shrink(),
             ),
         const SizedBox(height: AppSpacing.s3),
-        GlassDropdownField<String>(
+        _labelled(context, context.l10n.txnCategory,
+            (labelText) => GlassDropdownField<String>(
           value: _categoryKey ?? catalog.byId(_categoryId)?.key,
           decoration: InputDecoration(
-            labelText: context.l10n.txnCategory,
+            labelText: labelText,
             prefixIcon: const Icon(AppLucideIcons.shapes),
           ),
           items: categories
@@ -483,15 +511,16 @@ class _ManualTransactionSheetState
             _categoryKey = value;
             _categoryId = catalog.byKey(value)?.id;
           }),
-        ),
+        )),
         const SizedBox(height: AppSpacing.s3),
-        TextField(
+        _labelled(context, context.l10n.mtMerchantOptional,
+            (labelText) => TextField(
           controller: _merchant,
           decoration: InputDecoration(
-            labelText: context.l10n.mtMerchantOptional,
+            labelText: labelText,
             prefixIcon: const Icon(AppLucideIcons.store),
           ),
-        ),
+        )),
         const SizedBox(height: AppSpacing.s3),
         OutlinedButton.icon(
           onPressed: _pickDateTime,
@@ -501,15 +530,16 @@ class _ManualTransactionSheetState
           ),
         ),
         const SizedBox(height: AppSpacing.s3),
-        TextField(
+        _labelled(context, context.l10n.mtNoteOptional,
+            (labelText) => TextField(
           controller: _note,
           minLines: 2,
           maxLines: 4,
           decoration: InputDecoration(
-            labelText: context.l10n.mtNoteOptional,
+            labelText: labelText,
             prefixIcon: const Icon(AppLucideIcons.fileText),
           ),
-        ),
+        )),
         const SizedBox(height: AppSpacing.s4),
         FilledButton.icon(
           onPressed: _busy ? null : () => _save(catalog),

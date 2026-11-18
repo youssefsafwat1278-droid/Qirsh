@@ -1,0 +1,98 @@
+[
+{
+"id": "G00",
+"text": "Purchase SAR 45.00 at Offer Mart card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "G01",
+"text": "Purchase SAR 45.00 at Click Pharmacy card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "G02",
+"text": "Purchase SAR 45.00 at Promo Burger card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "G03",
+"text": "Purchase SAR 45.00 at Won Kitchen card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "G04",
+"text": "Purchase SAR 45.00 at Promotion Plaza card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "G05",
+"text": "Purchase SAR 45.00 at Winner Sports card *4521",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "G06",
+"text": "شراء 45 ريال لدى مقهى عرض خاص",
+"truth": {
+"kind": "d",
+"amt": 45,
+"cur": "SAR"
+}
+},
+{
+"id": "G07",
+"text": "Purchase of SAR 100.00 at SHOPX was not successful, merchant declined",
+"truth": {
+"kind": "n",
+"cur": "SAR"
+}
+},
+{
+"id": "G08",
+"text": "Merchant declined: SAR 100.00 at SHOPX card *1234",
+"truth": {
+"kind": "n",
+"cur": "SAR"
+}
+},
+{
+"id": "G09",
+"text": "Transaction declined by merchant SAR 100 at SHOPX",
+"truth": {
+"kind": "n",
+"cur": "SAR"
+}
+},
+{
+"id": "G10",
+"text": "Purchase SAR 100 at Merchant Declined Store card *1234",
+"truth": {
+"kind": "d",
+"amt": 100,
+"cur": "SAR"
+}
+}
+]

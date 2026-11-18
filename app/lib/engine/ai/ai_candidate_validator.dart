@@ -309,10 +309,15 @@ class AiCandidateValidator {
     r'بقشيش|إكرامية|اكرامية|ضريبة|رسوم|عمولة',
     caseSensitive: false,
   );
+  // SM-05: the optional currency slot is a detection currency code (never
+  // any three letters: "Total bal 12,345.00" is a balance, not a total), and
+  // «الرصيد الإجمالي» (total balance) is not a charged total.
   static final RegExp _chargedTotal = RegExp(
     r'(?:(?<![a-z])(?:grand total|total(?: amount)?(?: charged| paid| debited| deducted)?)'
-    r'|الإجمالي|الاجمالي|إجمالي المبلغ|اجمالي المبلغ|المبلغ الإجمالي|المبلغ الاجمالي|المجموع)'
-    r'\s*(?:of|is|:|=)?\s*(?:[a-z]{3}\s?)?([0-9][0-9,]*(?:\.[0-9]+)?)',
+    r'|(?<!الرصيد\s)(?:الإجمالي|الاجمالي)|إجمالي المبلغ|اجمالي المبلغ|المبلغ الإجمالي|المبلغ الاجمالي|المجموع)'
+    r'\s*(?:of|is|:|=)?\s*'
+    '(?:(?:${currencyCodes.join('|')})(?![a-z])\\s?)?'
+    r'([0-9][0-9,]*(?:\.[0-9]+)?)',
     caseSensitive: false,
   );
 

@@ -266,3 +266,149 @@ Results after the change:
 - Deno (`_shared/ process-ios-sms/ parse-sms/ sync-captures/`): **823 passed**. Lint clean. `deno.lock` unchanged.
 - Both declined tables: no pin changes (698 deviations, ceiling 700).
 - **Harness v8** (development, tuned-on, synthetic): the same as v7 on every leg (wrong dB 5, dN 5, s 12, eB 10, eN 10). No message became newly wrong or newly silent.
+
+## Follow-up 3 (independent review S of `7577f347`: REJECT), 2026-11-18
+
+Nothing committed. Model: Opus 5.5 (`claude-opus-5-5`). Every number below is synthetic and tuned-on development data, not real-world accuracy.
+
+### Differential harness (`tools/parser_diff/`), built before the code changes
+
+Re-run: `PARSER_DIFF_SCRATCH=<empty dir> PUB_CACHE=$HOME/.pub-cache tools/parser_diff/run.sh [BASE=5dae2e2d] [WORK=working-tree|<commit>]` (needs `flutter pub get` done in `app/`).
+
+- It extracts BASE with `git archive` and runs the same messages through both versions, on five paths: dB (device, bank sender), dN (device, no sender), s (server `parseSms` with the `index.ts` meaning downgrade, on the redacted text), eB and eN (effective iOS import: server row, then the device's import decision).
+- Inputs: every case file in `tools/parser_diff/cases/` (2,345 distinct texts, including the reviewer's 29 reproductions in `review_s.json` and my 59 class probes in `fu3.json`, each hand-labelled) plus the live shared table `declined_cases.json`.
+- `report.txt` lists every message whose outcome moved, with direction and amount, grouped by class. The exit status is 1 on any regression (labelled right at BASE → wrong or silent), any throw, or any text BASE read as not completed that is now recorded.
+- `diff.py freeze` wrote `process-ios-sms/pre_round_not_completed.json`: the 265 texts `5dae2e2d` read as not completed. That file is the fixture for the SM-01 invariant tests on both sides.
+
+### Result: `5dae2e2d` → working tree (run pd5)
+
+**0 regressions, 0 throws, 0 base-not-completed texts now recorded.** For comparison, HEAD (`98e8e56d`) had 140 regressed path-moves on 38 messages, plus 8 throws.
+
+| Path | wrong | silent | review | right | throw |
+|---|---|---|---|---|---|
+| dB | 82 → 7 | 1 → 0 | 482 → 395 | 998 → 1,161 | 0 → 0 |
+| dN | 61 → 6 | 4 → 2 | 702 → 712 | 796 → 843 | 0 → 0 |
+| s | 77 → 15 | 23 → 9 | 566 → 518 | 897 → 1,021 | 0 → 0 |
+| eB | 90 → 13 | 0 → 0 | 441 → 336 | 1,032 → 1,214 | 0 → 0 |
+| eN | 80 → 13 | 0 → 0 | 552 → 503 | 931 → 1,047 | 0 → 0 |
+
+Every remaining wrong or silent outcome is wrong or silent at `5dae2e2d` too. They are listed under "Not fixed" below.
+
+### Moved messages by class (path-moves / messages)
+
+| Class | Move | Path-moves | Messages | Note |
+|---|---|---|---|---|
+| right → review | record IN → review | 72 | 15 | Cash deposits (owner §5) and a fixed deposit |
+| right → review | record OUT → review | 4 | 2 | Q057, Q134 (no currency in the text) |
+| wrong/silent → review | record IN / OUT → review, ignored → review | 60 | 22 | Safer outcomes |
+| fixed (wrong → right) | record → no-movement | 147 | 42 | Bill due, expected, scheduled, adverts ("earn points on every SAR x") |
+| fixed | record IN ↔ OUT, wrong amount → right | 110 | 33 | «إليك»/«منك إلى», points or miles, "charged as SAR" |
+| fixed | other → right | 36 | 16 | Includes ignored → recorded completed purchases |
+| review → right | review → record OUT / IN | 415 | 200 | "charged"/"deducted" formats, notice tails, side events |
+| unlabelled | server ignored → not-completed | 154 | 154 | Same rejection; the reason is now named |
+| unlabelled | record IN → review | 70 | 14 | ATM deposit golden layouts G014/K014 (owner §5, decided) |
+| unlabelled | review → record OUT / IN | 67 | 62 | Correct transfers and payments (e.g. K_N23, K097 on the server, K098 IN 750 EGP) |
+| unlabelled | other | 5 | 5 | K250/K_N05 server ignored → review (SM-01 invariant); A117/A146 eN record → review (tip totals, the validator's call) |
+| same grade | review → no-movement, ignored → not-completed, dropped → review, … | 392 | 180 | Same grade, more exact outcome |
+
+### Fixes by finding (device AND server, each with shared cases)
+
+- **SM-01: a status sentence is never a footer.**
+  - Rule: a sentence with a status cue (declined, failed, pending, reversed, …) is never set aside as a footer.
+  - When the whole message reads as not completed but the core does not, or when the only completed core is next to another event's status sentence ("Previous attempt declined"), the meaning is the new kind `uncertain`. The reasons are `status_disputed` and `other_event_status`, the disposition is review, and the message is never recorded.
+  - On the server, a declined text is still rejected before any AI request, as before.
+  - The invariant is tested on both sides over the 265 frozen texts: never recorded on device (with and without a sender), never recorded on the server, and never accepted from an AI answer (the AI is not reached, or the meaning is not "record").
+- **SM-03: points and miles.**
+  - `DirectionSignal.isRewardFlow` (Dart) and `isRewardFlow` (TS, `_shared/money_text.ts`) skip a credit-flow phrase that moves a reward unit: points, miles, نقاط, نقطة, أميال. A count before the unit is allowed ("45 points credited"), and so is a unit in the flow's own clause.
+  - `detect` falls back to word families with reward flows removed.
+  - The server now records the correct debit (SM03a–e, P01–P04).
+- **SM-02: no entry point throws.**
+  - `_decimalOrNull` guards `_extractChargedPair` and the international-parens parse.
+  - A fuzz test covers 8 leads × 10 tails (commas after numbers, dates, card suffixes, Arabic-Indic digits, `٫`/`٬`), each truncated every 7 characters. It calls the following entry points:
+    - `parse` (with and without a sender), `isIgnoredMessage`, `isNoticeMessage`, `meaningOf`, `clauseScope`
+    - `DirectionSignal.detect`/`flowOf`, `TransactionStateCues.isNotCompleted`
+    - `meaningHoldReason`, `localParseContradictsServer`
+    - `AiCandidateValidator.bookedDirection`/`chargedTotal`
+    - on the server, `parseSms`, `messageMeaning`, `isDeclinedText`, `deterministicParse`, `flowOf` and `clauseScope`
+  - The reviewer's concern about lists: `transactionIsDebit` calls `DirectionSignal.detect(rawMessage)` for stored transfer rows. `detect` reaches `_extractChargedPair` only through the parser's amount extraction, which is now guarded, and the fuzz test runs `detect` itself on every shape.
+- **SM-04: a completed movement with a notice tail is never `no_movement`.**
+  - `_noMovementReason` returns null when any figure clause states a movement. It also strips notice openers first ("Please note", «يرجى العلم»).
+  - `withoutNoticeTails` removes offer, due, future and summary clauses that carry no figure, before ignore-word and type checks.
+  - The server no longer drops these (SM04a/c/d, S01–S08).
+- **SM-05/06: side figures.**
+  - A cashback or reward line, or a line about another operation ("Previous purchase SAR 80.00 at …"), is a side event: a footer next to the transaction's own sentence.
+  - Distinct amounts are counted over the core events only.
+  - Two real purchases stay `multiple_events` (review).
+  - Percentages are masked in role reading. This also fixes the «عرض خاص! خصم 50%» advert that was recorded at `5dae2e2d`.
+  - "Total bal": not a parser issue on device or server meaning. The remaining eB/eN review on SM05a comes from the `chargedTotal` currency slot `[a-z]{3}` matching "bal" in `ai_candidate_validator`/`validated_capture`. Those files are not mine; see below.
+- **Held-out classes.**
+  - Arabic or English debit plus salary in one message → review (H01, H02).
+  - «تم تحويل … إليك من» → incoming, «منك إلى» → outgoing (H04–H06, H21).
+  - Pending-refund notices → not booked (H07–H10).
+  - "earn points on every SAR x", "على كل" and "cashback up to" adverts → no movement (S12, S14, H11–H14).
+  - A truncated status ("… was decl", "was rej", "is pen") → `uncertain/truncated_status`, review (H15–H17).
+  - "USD x … charged as SAR y" → the SAR amount (H18–H20).
+- **SM-09: bounded input, no super-linear time.**
+  - `ParserEngine.bounded` and TS `bounded` keep a text of 2,000 characters or less unchanged. A longer text is read as its first and last 1,000 characters on separate lines, so a status at either end still decides it. K_N55, whose status comes after 4,000 characters of filler, is still not completed.
+  - Every entry point bounds its input.
+  - The sentence splitter looks back only 12 characters for an abbreviation, and the quadratic `_beforeFieldLine` was replaced by a linear `aboveField` pass.
+  - Timing test on both sides: five adversarial inputs of 10,000–20,000 characters must each finish in under 1.5 s. At HEAD, the device took 24,465 ms on 20,000 characters of "Avl. Bal." and the server took 4,756 ms.
+- **SM-07: device/server parity.**
+  - Over 2,345 texts, **meaning disposition differs in 1 text**: T79 "Transaction unauthorised: SAR 100.00 at CAFE ONE". The device says undetermined, the server not_completed, and both end with nothing recorded.
+  - Kind or reason differs in 158 texts, all with the same disposition. The cause is systematic: the two sides read a sentence's role (event or figure) with different amount extractors. The device needs a "strong transaction" amount; the server takes any captured amount. Each misses some events the other finds, for example «تم خصم 45 ريال رسوم خدمة» (device) and "Paid 45.00 at Test Cafe" (server, no currency).
+  - **I did not unify the extractors in this round.** The change touches every message, and no money outcome depends on it today (the dispositions agree). It is a recommended next step, with the harness as the guard.
+  - The server-redaction sentence merge (SM07a/K015) is outside my files.
+- **SM-08: allowlist.**
+  - The ceiling now equals the count: **703** (Dart `_maxDeviations`, TS `MAX_DEVIATIONS`).
+  - Five completed rows moved to review on both sides, because `5dae2e2d` read them not completed:
+    - "Previous attempt declined" ×2
+    - "Previous attempt did not go through"
+    - "Your earlier payment did not go through"
+    - "Your dispute … is under review"
+  - "Daily limit SAR 5,000; pending SAR 0.00" moved to review on both sides as well.
+  - K_N55 is back to not completed through the head-and-tail bound.
+  - Three rows improved: A114 and "SAR 45.00 paid at Test Mart; cashback SAR 2 credited" are now recorded debits, and the server no longer accepts a grounded AI answer for one advert.
+
+### Tests: "fails before, passes after"
+
+- New tests:
+  - `app/test/engine/parser/follow_up3_money_correctness_test.dart` and `supabase/functions/process-ios-sms/follow_up3_money_correctness_test.ts`.
+  - The shared fixture `process-ios-sms/follow_up3_cases.json`: 88 labelled rows. Pins state why each one deviates: decided, safe deviation as at `5dae2e2d`, or OPEN defect, labelled characterization.
+  - The invariant fixture `pre_round_not_completed.json`.
+- How "before" was confirmed: the test files and fixtures were copied into a `git archive` of HEAD `98e8e56d`.
+  - Dart: run as `flutter test` in that copy, **59 failures**, including the fuzz test (`MoneyInputException` on "SAR 50.00 deducted from your card *4521, Jarir, …") and timing (24,465 ms).
+  - TS: **52 failures**, including timing (4,756 ms) and the invariant test. The TS fuzz test passes at HEAD; the server did not throw, as the reviewer found.
+  - Both pass on the working tree.
+
+### Changed expectations (decided, listed)
+
+- `message_meaning_test.dart`/`.ts`:
+  - "Purchase … approved. Previous attempt declined." is now review (`uncertain/other_event_status`), not a recorded purchase. This is the SM-01 invariant: `5dae2e2d` read it not completed.
+  - "SAR 45.00 paid at Test Mart; cashback SAR 2 credited" is now a recorded debit (SM-06). The two-movement review example is now two purchases.
+- `ai_meaning_gate_test.ts` and `parse-sms/ai_meaning_gate_contract_test.ts`: the `multiple_amounts` fixture is now a true two-purchase message. The cashback message is now asserted as a record (SM-06). The assertions themselves are unchanged.
+- `direction_signal_test.dart`: "both families → unknown" now uses «شراء واسترداد مبلغ». A new case asserts that «شراء …، تم إيداع نقاط المكافآت» is a debit (SM-03).
+- `transaction_state_cues_drift_test.dart`: covers the three new lists (`otherEventNouns`, `noticeOpeners`, `movementLeads`).
+- `declined_cases.json` and the deviations file are re-pinned as described under SM-08.
+
+### Not fixed (each wrong or silent at `5dae2e2d` too)
+
+- M02: two purchases in one sentence are recorded as the first.
+- H03: the server records the debit of a «خصم … وإيداع راتب» sentence.
+- MA29, MA31, Q072, Q078, MD12: direction from a deposit noun.
+- Server FX amounts A006–A008 and A060.
+- Q035, Q060, Q196, Q13, Q17, Q30, Q38, Q142, Q207, R09.
+- Server silents CU_W*, R10–R14, A10, A11, G10, LX_M14.
+- Device review where the reviewer expects a record: X01, X05, SM02b, SM04b, SM05a, P02. These are safe, not recorded.
+
+### Out of my files (for the coordinator / AI owner)
+
+1. `_shared/ai_candidate_validator.ts` keeps its own `POINTS_AFTER` copy. It should call `isRewardFlow` from `_shared/money_text.ts` so the AI validator and the parser agree on points and miles.
+2. `chargedTotal` (Dart `ai_candidate_validator.dart`, TS `ai_candidate_validator.ts`) has the currency slot `[a-z]{3}`, which matches "bal" in "Total bal 12,345.00" (SM-05). It needs the currency table.
+3. `_shared/sms_redaction.ts` `redactThirdPartyNames` consumes text through a period, which merges sentences (SM-07, K015/SM07a).
+
+### Commands and results (final state)
+
+- Harness pd5 (`run.sh 5dae2e2d`): exit 0. Regressions, throws and base-not-completed-now-recorded are all 0.
+- Deno, whole `supabase/functions`: **1,160 passed, 0 failed** (6 ignored). Lint is clean on `process-ios-sms/`, `parse-sms/`, `_shared/money_text.ts` and `tools/parser_diff/server.ts`. `deno check` is clean. `deno.lock` is unchanged.
+- `flutter analyze --no-pub lib/engine/parser` plus the touched tests: no issues.
+- Flutter: `flutter test --no-pub -j 2 test/engine/` plus 138 more files: every test outside `test/engine` that imports `engine/parser`, `test/domain/capture`, `test/features/capture`, `capture_commit*` and every test importing the capture import/sync services or `validated_capture`. Result: **6,253 passed, 0 failed.**

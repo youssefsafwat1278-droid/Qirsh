@@ -146,19 +146,26 @@ void main() {
     });
   }
 
+  // SP-02: a device holding an account or card is not a new device (it
+  // merges, covered above); a new device's synced rows are only the seeded
+  // catalog and settings, which the full apply replaces.
   test('new device (no records yet): the full apply rebinds the identity of '
       'every synced row it replaces and leaves an update intent', () async {
     await _account(db, 'n-acc');
     await db.customStatement(
         "INSERT INTO cards(id,account_id,last4,network,created_at,updated_at) "
         "VALUES('n-card','n-acc','4242','visa','$_t','$_t');");
-    for (final t in ['accounts', 'cards', 'categories', 'user_settings']) {
+    final snapshot = await backup();
+    await db.customStatement('DELETE FROM cards;');
+    await db.customStatement('DELETE FROM accounts;');
+    for (final t in ['categories', 'user_settings']) {
       await db.customStatement(
           "UPDATE $t SET server_id = 'srv:' || id, "
           "server_updated_at = '$_base', sync_status = 'synced';");
     }
-    await RestoreBackupUseCase(db)(await backup());
-    for (final t in ['accounts', 'cards', 'categories', 'user_settings']) {
+    await RestoreBackupUseCase(db)(snapshot);
+    expect(await _q(db, 'SELECT id FROM cards;'), hasLength(1));
+    for (final t in ['categories', 'user_settings']) {
       final rows = await _q(
           db, 'SELECT id, server_id, server_updated_at, sync_status FROM $t;');
       expect(rows, isNotEmpty, reason: t);

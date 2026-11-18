@@ -497,7 +497,7 @@ class _BillRow extends StatelessWidget {
                       Text(
                         bill.name,
                         style: AppTypography.bodyStrong(c.textPrimary),
-                        maxLines: 1,
+                        maxLines: largeText ? 50 : 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),

@@ -3,10 +3,14 @@
 -- Per-identity caps (parse-sms 500/day, process-ios-sms 300, bank-discovery 50,
 -- enrich-merchant 200) can be multiplied with new device identities. This adds
 -- ONE counter per provider bucket per UTC day, checked server-side before the
--- provider is called. When the ceiling is reached, or the bucket is switched
--- off, or this function cannot be reached, the caller does NOT call the
--- provider and sends the item to review (fail closed; see
--- supabase/functions/_shared/ai_spend_guard.ts).
+-- provider is called. When the ceiling is reached, the bucket is switched off,
+-- or the RPC errors or replies malformed, the caller does NOT call the provider
+-- and sends the item to review / returns its retryable error (fail closed; see
+-- supabase/functions/_shared/ai_spend_guard.ts). ONE deliberate exception
+-- (supabase/functions/_shared/ai_budget_gate.ts): when this function does NOT
+-- EXIST (PostgREST PGRST202 / Postgres 42883 — not yet applied, or rolled
+-- back) the call proceeds as before the guard (fail OPEN, no ceiling), so
+-- deploy order can never cause an outage.
 --
 -- Buckets: 'gemini' (every Gemini call: process-ios-sms, parse-sms,
 -- bank-discovery) and 'places' (enrich-merchant). The ceilings below are

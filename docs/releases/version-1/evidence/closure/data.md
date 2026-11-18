@@ -404,7 +404,7 @@ source "$S/stack.env"
     --dart-define=SUPABASE_ANON_KEY=$LOCAL_SUPABASE_ANON_KEY \
     test/integration_local/restore_then_sync_local_supabase_test.dart )
 
-# Optional: the sync e2e suite (10 pass / 6 known failures, see Follow-up 1)
+# Optional: the sync e2e suite (since Follow-up 3: "+14 ~2: All tests passed!"; S9/S9b NOT RUN)
 ( cd app && PUB_CACHE=$HOME/.pub-cache flutter test --no-pub --timeout 300s \
     --dart-define=SUPABASE_URL=$LOCAL_SUPABASE_URL \
     --dart-define=SUPABASE_ANON_KEY=$LOCAL_SUPABASE_ANON_KEY \
@@ -414,3 +414,143 @@ supabase stop --workdir "$S" --no-backup   # removes the stack and its volumes
 ```
 
 **If those commands run inside `ci_gates.sh` with the stack env sourced:** the `localSupabaseStack` group is present, so the skip checker requires D1–D4 to run. The Flutter suite asserts `SupabaseConfig.isConfigured`, so a run without the dart-defines fails instead of silently skipping the backfill.
+
+---
+
+## Follow-up 3: independent review findings SP-01, SP-02, SP-06, SP-08 (HEAD `98e8e56d`)
+
+Source: `docs/releases/version-1/evidence/audits/T-review-platform-and-records.md`. The reviewer's two reproduction tests (`scratchpad/review-platform/keep/restore_merge_attack_test.dart`) are included as the first two new tests below. Nothing committed.
+
+### How each restorable table records an intentional deletion
+
+| Table | How a deletion is known on the device | Merge rule now |
+|---|---|---|
+| transactions | soft: `status='ignored'`, newer `updated_at` | device row deleted → stays deleted, even against a backup copy with a later timestamp (new guard) |
+| accounts | soft: `deleted_at` | same guard |
+| cards | soft: `deleted_at` (+ outbox delete) | same guard |
+| sender_bank_mappings | soft: `deleted_at` + `updated_at` | same guard |
+| budgets, goals, subscriptions, plans | soft: `deleted_at` (+ status) | device row always kept (no `updated_at` in the backup) |
+| goal_contributions, bill_payments, plan_transaction_links | soft: `deleted_at` | device row always kept |
+| categories | soft: `deleted_at`; no `updated_at` | device row always kept; matched by `key` |
+| local_offer_savings | soft: `state='reversed'` | device row always kept |
+| merchants | never deleted | device row kept; matched by `normalized_name` |
+| achievements, streaks, user_settings | no user deletion | device row kept unless the backup is newer (settings, streak) |
+| **merchant_category_map (saved rules)** | **nothing.** "Forget rule" and category deletion hard-delete the row; the only trace is a transient outbox intent and the cloud tombstone | **device is authoritative: backup rules are neither added nor applied on merge.** A merge cannot tell "removed after the backup" from "never here", so it does not guess. Full apply (a device with no records) still restores all rules. Rules saved in the cloud come back through rule sync when Cloud is on. |
+
+Design choice: no migration. Recording rule deletions going forward would need a tombstone column (schema v44) and changes to the repository, which I do not own. The device-authoritative rule fixes every reported symptom without that:
+- a resurrected rule can no longer outrank AI categorisation;
+- a rule can no longer arrive un-queued to the cloud;
+- a rule can no longer point at a category deleted on the device.
+
+The trade-off: on a merge, a rule that exists only in the backup is not restored. The copy now says so.
+
+### SP-02: choosing full apply
+
+`_deviceHoldsFinancialData` (transactions, budgets, goals, subscriptions, plans) is replaced by `_deviceHoldsUserData`. It returns true if the device has any of the following:
+- accounts, cards, transactions, budgets, goals, goal contributions, subscriptions, bill payments, plans, plan links, sender mappings or offer savings;
+- a user-confirmed rule;
+- a category whose `key` is not a `DatabaseSeed` key (a custom category).
+
+Seeded catalog rows, learned merchants and automatic mappings, achievements, streak and settings do not count. A-7 makes a fresh install have zero accounts, and the onboarding restore check (`/onboarding/check`) runs before account setup, so a new phone still gets the full apply.
+
+New behaviour: a device where the user already made an account (even an empty one) now merges. Its settings are kept when they are newer, and the backup's accounts join it.
+
+### Updated merge-rule table (replaces the first two rows and the "Deleted on the device" row in section 1)
+
+| Situation | Result |
+|---|---|
+| Device has no user record (no account, card, transaction, planning record, sender mapping, saved rule or custom category) | Full apply, exactly as before, settings and rules included. |
+| Device holds any user record | Merge, per the section 1 table. |
+| Deleted on the device (`deleted_at` set; a transaction `ignored`) | Stays deleted, **whatever the backup's timestamp**. |
+| Saved merchant rule (merchant_category_map) on merge | The device's rules are kept exactly. Backup rules are not added and do not overwrite. |
+
+**Copy (`rpConfirmBody`).** Two sentences changed in EN and AR (MSA, Western digits); `gen-l10n` was re-run.
+
+EN now reads: "…the more recently edited copy is kept. Saved category rules for merchants stay as they are on this device; rules that are only in the backup are not added. On a device with no records yet (no accounts, transactions, plans, rules or custom categories), the whole backup is restored, settings and rules included. Cloud…"
+
+AR: «وتبقى قواعد تصنيف التجار المحفوظة على هذا الجهاز كما هي، ولا تُضاف القواعد الموجودة في النسخة فقط. وعلى جهاز لا يحتوي على سجلات بعد (لا حسابات ولا عمليات ولا خطط ولا قواعد ولا فئات مخصصة) تُستعاد النسخة كاملة بما فيها الإعدادات والقواعد.»
+
+### Tests: fail before, pass after
+
+These are in `app/test/core/backup/restore_merge_rule_test.dart`. The "before" run used HEAD's `restore_backup_usecase.dart` (swapped in temporarily, then restored byte for byte) with the new tests. Logs: `data/fu3_before2.txt` and `data/fu3_after.txt`.
+
+| Test | Before | After |
+|---|---|---|
+| SP-01: a saved rule removed after the backup stays removed (reviewer) | FAIL (`restaurants` came back) | pass |
+| SP-01: rules of a category deleted after the backup do not come back, and no rule points at a deleted category | FAIL (the custom category's rule came back) | pass |
+| SP-01: a rule changed after the backup keeps the newer choice | pass (guard) | pass |
+| A device deletion is kept against a backup copy with a later timestamp (another clock) | FAIL (`confirmed`) | pass |
+| SP-02: an account created after the backup on a device with no transactions is kept (reviewer) | FAIL (`['acc']`) | pass |
+| SP-02: a custom category and a saved rule made after the backup on a device with no account or transaction are kept | FAIL (full apply wiped them) | pass |
+| A device with no records of its own still takes the whole backup, settings included | pass (guard) | pass |
+| The confirmation copy states the rule and the "no records" definition (EN and AR) | FAIL (text absent) | pass |
+
+The file result is `+16: All tests passed!`.
+
+### SP-08: delete-phase rollback coverage (`restore_recovery_test.dart`)
+
+- **Full-apply destination.** It now opens with no account (A-7). `seedNewDevice` populates it with:
+  - settings country `PRESERVE-ME`;
+  - seeded categories marked server-backed (synced);
+  - a learned merchant with an automatic mapping;
+  - an unlocked achievement;
+  - a streak.
+
+  All 9 fault points are run, including `afterFirstDelete` and `afterSeveralDeletes`. Each must roll back to the identical full-database digest.
+- **Non-vacuity.** Every fault case now asserts that the fault point was actually reached on that path (`reached`).
+- **Merge path.** Unchanged: `seedRich` with 7 fault points. A new test proves a committed merge never reaches the delete phase: the callback sees `afterFirstInsert` but neither delete point, and every device transaction survives.
+- **Results.** With SP-02 in place and the old destination (which had a seeded account), the two delete-phase cases failed, because the merge was taken and nothing was deleted. Now: `+20: All tests passed!`.
+
+### SP-02 knock-on: existing tests updated to the decided behaviour (no assertion removed or loosened)
+
+Each of these restored onto a destination that had a seeded test account and expected the full apply (settings country taken from the backup). Under SP-02 such a device merges. The destination is now a new device with no account, which is what the scenarios describe.
+
+- `backup_device_transfer_test.dart`: the target device no longer gets `seedTestAccount`.
+- `db_key_isolation_test.dart`: `openNew` (no account) for the destination in "restore makes ZERO key-store calls".
+- `db_key_hygiene_test.dart`: `openNew` for the destinations in "legacy backup carrying db_encryption_key_ref…" and "user A's legacy key field…".
+- `backup_key_state_atomicity_test.dart`: `openNewDevice` for the destinations in RB4 H-23 and H-20.
+- `restore_sync_identity_entities_test.dart`, "new device (no records yet)".
+  - **Before:** the device held an account and a card, which made it not a new device.
+  - **Now:** the backup is taken with them, they are removed, and the full apply must rebind the identity of the synced seeded categories and settings.
+  - Accounts and cards are no longer in that loop, because a full apply can no longer replace one (a device that has one merges, and the merge keeps identity; covered by the per-entity merge tests in the same file). New assertion: the card is restored.
+
+Backup suites (`test/core/backup`, `test/features/backup`): `+316: All tests passed!` (`data/fu3_backup2.txt`).
+
+### SP-06: sync e2e scenarios (`test/integration_local/sync_e2e_local_supabase_test.dart`)
+
+Before (HEAD, local stack with dart-defines): `+10 -6` (S8, S9, S11, S12, S9b, S14), in `data/fu3_e2e_before.txt`.
+
+| Scenario | Change | Why it is not a weakening |
+|---|---|---|
+| S8 stale owner | Under B, the accounts, ledger and planning pushes must each throw an `AccountFenceDeliveryCancellation` ending `:stale`. This replaces "returns pushed 0 and parks rows `owner_mismatch`". The ledger and planning outboxes must be **byte-identical** before and after. All the "nothing sent as B / B has nothing / A unchanged / A drains after returning" assertions are kept. | The fence (`2f414b15`) stops delivery as a whole before any request; per-row parking is no longer the mechanism. The same guarantees are asserted, and the outbox check is stricter (exact rows instead of a status). |
+| S9, S9b two-device conflict | `skip: _twoDevicesNotRun` ("NOT RUN: two devices side by side need two processes…"), plus a manifest entry (count 2, `removeWhen` a two-process harness). | They cannot run in one process: the fence admits one database per process, so device 1 is closed when device 2 opens. They are reported as skipped/not run, never as passing. The conflict rules are covered in-process against the fake backend only (`conflict_resolver_test`, `planning_entities_sync_service_test`, `d_sync_fixes_*`): **not end-to-end.** |
+| S11 awaiting-FX | Asserts the current server: `chk_user_transactions_amount_or_awaiting_fx` exists and `qirsh_server_capabilities` exists. The capability is verified on the first probe; both rows push (one POST each); the FX row is exact (amount 0, 50 USD). | 0102 is applied. The old apply/rollback dance cannot be reproduced: the 0102 rollback drops `qirsh_server_capabilities()`, which later migrations extended, and re-applying 0102 would not restore those keys. "Parked while the server lacks 0102" remains covered in-process (`ledger_outbox_correctness_test`), not end-to-end. |
+| S12 sender mapping | The column `accepted_by` must exist (0100 applied). A user-confirmed mapping pushes and its remote `accepted_by` is NULL. | Same push, `synced` and row assertions. The column-absent check becomes a value check against the current schema. |
+| S14 capabilities | Before saving the budget, the settings row that the admission sign-in queues is delivered (`parked 0`, outbox empty). Every budget assertion is unchanged. | It removes a harness side effect; it does not filter what is counted. |
+
+After: `+14 ~2: All tests passed!`. The ~2 are S9 and S9b, NOT RUN. CLEANUP: 15 users removed, 0 rows left. Log: `data/fu3_e2e_after.txt`.
+
+Restore suite R1–R9b on the same stack: `+10: All tests passed!` (`data/fu3_restore_local.txt`). Stack: `qirsh_v1_closure`, ports 57321–57330, analytics off, dart-defines present; `df -h /` showed 19 GiB free. It was then stopped with `--no-backup`: 0 containers and 0 volumes left, and the stack directory was deleted. `frasaaaaa` and `qirsh_proof` were not touched.
+
+### Skip manifest
+
+`tools/test_skip_manifest.json` has one new Flutter entry (S9/S9b, described above). Run as `ci_gates.sh` runs it (`--node <tap> --deno <out> --flutter app/test`, using my earlier node and deno outputs; neither side changed in this follow-up): `✓ skip/ignore manifest satisfied`. Before the entry was added, it reported 2 × "UNEXPECTED flutter skip". `node --test supabase/tests/skip_manifest_node_test.mjs`: 19/19 pass.
+
+### Changes needed in files I do not own
+
+- ~~`DriftMerchantCategoryRepository.userConfirmedCategoryFor` should require `categories.deleted_at IS NULL`.~~ Done (orchestrator granted the file), see below.
+- Optional, owner decision: a rule tombstone (v44 `deleted_at` on `merchant_category_map`, with "Forget rule" and category deletion setting it instead of hard-deleting). That would let a merge restore backup-only rules safely.
+
+### Suites run (working tree, shared with other specialists' uncommitted edits)
+
+| Suite | Result |
+|---|---|
+| `test/core/backup` + `test/features/backup` | `+316: All tests passed!` |
+| `test/architecture`, `test/core/sync`, `test/features/planning_sync`, `test/data`, `test/features/capture`, `test/l10n`, `test/features/settings`, `restore_confirmation_cancel_surface_test` | `+4333 ~2 -1` (`data/fu3_suites.txt`) |
+
+- **The one failure is not in my area.** It is `capture_sync_service_test.dart` "V1-001 residuals: every not_completed case… changes no total" (a long declined message is kept as a transaction). It comes from the parser files changed in the working tree by another specialist (`app/lib/engine/parser/*`, uncommitted). I did not touch it.
+- **`destructive_path_inventory_test`:** all 5 tests pass. The statement count for `restore_backup_usecase.dart` is unchanged at 18. My change adds no DELETE, DROP or wipe; the new `_deviceHoldsUserData` and `_deviceRowDeleted` are SELECTs.
+- **`flutter analyze --no-pub`:** clean on `restore_backup_usecase.dart`, `lib/l10n`, `test/core/backup` and `test/integration_local`.
+
+**Deleted-category rules (orchestrator extension).** `DriftMerchantCategoryRepository`: `userConfirmedCategoryFor`, `getUserConfirmedRules` (rules list, cloud backfill) and `getLearnedCategoryMap` (learned-map seed) now require `categories.deleted_at IS NULL`. Categorisation then falls through to shared learning, then to the AI category, without an error.
+Test `app/test/data/merchant_rule_deleted_category_test.dart`: 2 tests, failing before (`'restaurants'` returned, rule outranked the AI) and passing after. Related rule/capture/categorisation suites plus `test/architecture`: `+675 ~1: All tests passed!`; analyze clean.

@@ -1,0 +1,2312 @@
+[
+{
+"id": "G003_orig",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_lim",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_clim",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_stmt",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_stmt2",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nكشف حسابك متاح في التطبيق",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_ren",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_pin",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nتم التحقق بالرقم السري",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_act",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nتم تفعيل البطاقة",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_act2",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nتم تفعيل بطاقتك الجديدة",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_pinch",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_bal",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_limTot",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nحد الائتمان: 20,000 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_xlim",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G003_xact",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n13/6/26 16:03\nCard activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_orig",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_lim",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_clim",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nAvailable card limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_stmt",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nStatement date: 25/11/2026",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_stmt2",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nYour e-statement is available in the app",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_ren",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nYour card renewal is due 01/2027",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_pin",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nPIN-verified",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_act",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nCard activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_act2",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nYour new card has been activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_pinch",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nIf you did not request a PIN change call 8001001234",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_bal",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nAvailable balance: SAR 1,234.56",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_limTot",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nCredit limit: SAR 20,000",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_xlim",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G004_xact",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nCountry: United States\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nتم تفعيل البطاقة",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_orig",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_lim",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_clim",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_stmt",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_stmt2",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nكشف حسابك متاح في التطبيق",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_ren",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_pin",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nتم التحقق بالرقم السري",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_act",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nتم تفعيل البطاقة",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_act2",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nتم تفعيل بطاقتك الجديدة",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_pinch",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_bal",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_limTot",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nحد الائتمان: 20,000 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_xlim",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G005_xact",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:9940*\nمن:barq\nفي:2026-05-21 14:06\nCard activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_orig",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_lim",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_clim",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_stmt",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_stmt2",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nكشف حسابك متاح في التطبيق",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_ren",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_pin",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nتم التحقق بالرقم السري",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_act",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nتم تفعيل البطاقة",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_act2",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nتم تفعيل بطاقتك الجديدة",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_pinch",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_bal",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_limTot",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nحد الائتمان: 20,000 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_xlim",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G006_xact",
+"text": "شراء إنترنت\nبطاقة:7640; urpay بطاقة; ; Apple Pay\nمبلغ:300 SAR\nالرسوم/الضريبة:SAR 0.00\nمن:barq\n10-6-2026 14:32\nCard activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_orig",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_lim",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_clim",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nAvailable card limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_stmt",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nStatement date: 25/11/2026",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_stmt2",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nYour e-statement is available in the app",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_ren",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nYour card renewal is due 01/2027",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_pin",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nPIN-verified",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_act",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nCard activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_act2",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nYour new card has been activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_pinch",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nIf you did not request a PIN change call 8001001234",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_bal",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nAvailable balance: SAR 1,234.56",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_limTot",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nCredit limit: SAR 20,000",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_xlim",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G007_xact",
+"text": "Online Purchase\nAmount 8 SAR\nAccount *1202\nAt barq\nMada-Apple pay *5172\non 21/05/26 at 19:11\nتم تفعيل البطاقة",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_orig",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_lim",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_clim",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_stmt",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_stmt2",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nكشف حسابك متاح في التطبيق",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_ren",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_pin",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nتم التحقق بالرقم السري",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_act",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nتم تفعيل البطاقة",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_act2",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nتم تفعيل بطاقتك الجديدة",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_pinch",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_bal",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_limTot",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nحد الائتمان: 20,000 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_xlim",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G008_xact",
+"text": "شراء عبر نقاط البيع\nبطاقة: ***1046;ائتمانية\nاسم التاجر: EAST BUFFET FOR SECRET ME\nمبلغ العملية: 14.00 SAR\nالرصيد المتاح: 5.88 SAR\nتاريخ العملية : 2026-05-28 09:09:19\nCard activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_orig",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_lim",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_clim",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nAvailable card limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_stmt",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nStatement date: 25/11/2026",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_stmt2",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nYour e-statement is available in the app",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_ren",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nYour card renewal is due 01/2027",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_pin",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nPIN-verified",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_act",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nCard activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_act2",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nYour new card has been activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_pinch",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nIf you did not request a PIN change call 8001001234",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_bal",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nAvailable balance: SAR 1,234.56",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_limTot",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nCredit limit: SAR 20,000",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_xlim",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G009_xact",
+"text": "POS International Purchase\nVisa card: **1056 (Apple Pay)\nAmount: 0.1 KWD (1.22 SAR) FX 12.2000\nWallet balance: 201.04\nAt: CAESARS\nCountry: Kuwait\n2026-06-12 22:16\nتم تفعيل البطاقة",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_orig",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_lim",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_clim",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nAvailable card limit: SAR 9,000.00",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_stmt",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nStatement date: 25/11/2026",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_stmt2",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nYour e-statement is available in the app",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_ren",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nYour card renewal is due 01/2027",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_pin",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nPIN-verified",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_act",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nCard activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_act2",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nYour new card has been activated",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_pinch",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nIf you did not request a PIN change call 8001001234",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_bal",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nAvailable balance: SAR 1,234.56",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_limTot",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nCredit limit: SAR 20,000",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_xlim",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BANK-SA"
+},
+{
+"id": "G010_xact",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:SAMPLE RECIPIENT\nAcc:3583*\nAt:19/04/26 11:07\nتم تفعيل البطاقة",
+"sender": "BANK-SA"
+},
+{
+"id": "G011_orig",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03",
+"sender": "الراجحي"
+},
+{
+"id": "G011_lim",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "الراجحي"
+},
+{
+"id": "G011_clim",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "الراجحي"
+},
+{
+"id": "G011_stmt",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "الراجحي"
+},
+{
+"id": "G011_stmt2",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nكشف حسابك متاح في التطبيق",
+"sender": "الراجحي"
+},
+{
+"id": "G011_ren",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "الراجحي"
+},
+{
+"id": "G011_pin",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nتم التحقق بالرقم السري",
+"sender": "الراجحي"
+},
+{
+"id": "G011_act",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nتم تفعيل البطاقة",
+"sender": "الراجحي"
+},
+{
+"id": "G011_act2",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nتم تفعيل بطاقتك الجديدة",
+"sender": "الراجحي"
+},
+{
+"id": "G011_pinch",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "الراجحي"
+},
+{
+"id": "G011_bal",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "الراجحي"
+},
+{
+"id": "G011_limTot",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nحد الائتمان: 20,000 SAR",
+"sender": "الراجحي"
+},
+{
+"id": "G011_xlim",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "الراجحي"
+},
+{
+"id": "G011_xact",
+"text": "شراء PoS\nعبر:6826;مدى-ابل باي\nبـSAR 24\nلـSTARBUCKS\n؜13/6/26 16:03\nCard activated",
+"sender": "الراجحي"
+},
+{
+"id": "G012_orig",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06",
+"sender": "riyad"
+},
+{
+"id": "G012_lim",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "riyad"
+},
+{
+"id": "G012_clim",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "riyad"
+},
+{
+"id": "G012_stmt",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "riyad"
+},
+{
+"id": "G012_stmt2",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nكشف حسابك متاح في التطبيق",
+"sender": "riyad"
+},
+{
+"id": "G012_ren",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "riyad"
+},
+{
+"id": "G012_pin",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nتم التحقق بالرقم السري",
+"sender": "riyad"
+},
+{
+"id": "G012_act",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nتم تفعيل البطاقة",
+"sender": "riyad"
+},
+{
+"id": "G012_act2",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nتم تفعيل بطاقتك الجديدة",
+"sender": "riyad"
+},
+{
+"id": "G012_pinch",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "riyad"
+},
+{
+"id": "G012_bal",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "riyad"
+},
+{
+"id": "G012_limTot",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nحد الائتمان: 20,000 SAR",
+"sender": "riyad"
+},
+{
+"id": "G012_xlim",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "riyad"
+},
+{
+"id": "G012_xact",
+"text": "شراء إنترنت\nبطاقة:6089*;مدى Apple Pay\nمبلغ:700.00 SAR\nحساب:369940*\nمن:barq\nفي:2026-05-21 14:06\nCard activated",
+"sender": "riyad"
+},
+{
+"id": "G013_orig",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07",
+"sender": "stcbank"
+},
+{
+"id": "G013_lim",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "stcbank"
+},
+{
+"id": "G013_clim",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nAvailable card limit: SAR 9,000.00",
+"sender": "stcbank"
+},
+{
+"id": "G013_stmt",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nStatement date: 25/11/2026",
+"sender": "stcbank"
+},
+{
+"id": "G013_stmt2",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nYour e-statement is available in the app",
+"sender": "stcbank"
+},
+{
+"id": "G013_ren",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nYour card renewal is due 01/2027",
+"sender": "stcbank"
+},
+{
+"id": "G013_pin",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nPIN-verified",
+"sender": "stcbank"
+},
+{
+"id": "G013_act",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nCard activated",
+"sender": "stcbank"
+},
+{
+"id": "G013_act2",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nYour new card has been activated",
+"sender": "stcbank"
+},
+{
+"id": "G013_pinch",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nIf you did not request a PIN change call 8001001234",
+"sender": "stcbank"
+},
+{
+"id": "G013_bal",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nAvailable balance: SAR 1,234.56",
+"sender": "stcbank"
+},
+{
+"id": "G013_limTot",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nCredit limit: SAR 20,000",
+"sender": "stcbank"
+},
+{
+"id": "G013_xlim",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G013_xact",
+"text": "Internal outward transfer\nAmount:21.00SAR\nTo:ABDELRAHMAN ABDALLA\nAcc:3583*\nAt:19/04/26 11:07\nتم تفعيل البطاقة",
+"sender": "stcbank"
+},
+{
+"id": "G014_orig",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47",
+"sender": "anb"
+},
+{
+"id": "G014_lim",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "anb"
+},
+{
+"id": "G014_clim",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "anb"
+},
+{
+"id": "G014_stmt",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "anb"
+},
+{
+"id": "G014_stmt2",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nكشف حسابك متاح في التطبيق",
+"sender": "anb"
+},
+{
+"id": "G014_ren",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "anb"
+},
+{
+"id": "G014_pin",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nتم التحقق بالرقم السري",
+"sender": "anb"
+},
+{
+"id": "G014_act",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nتم تفعيل البطاقة",
+"sender": "anb"
+},
+{
+"id": "G014_act2",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nتم تفعيل بطاقتك الجديدة",
+"sender": "anb"
+},
+{
+"id": "G014_pinch",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "anb"
+},
+{
+"id": "G014_bal",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "anb"
+},
+{
+"id": "G014_limTot",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nحد الائتمان: 20,000 SAR",
+"sender": "anb"
+},
+{
+"id": "G014_xlim",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "anb"
+},
+{
+"id": "G014_xact",
+"text": "إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47\nCard activated",
+"sender": "anb"
+},
+{
+"id": "G015_orig",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49",
+"sender": "anb"
+},
+{
+"id": "G015_lim",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "anb"
+},
+{
+"id": "G015_clim",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "anb"
+},
+{
+"id": "G015_stmt",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "anb"
+},
+{
+"id": "G015_stmt2",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nكشف حسابك متاح في التطبيق",
+"sender": "anb"
+},
+{
+"id": "G015_ren",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "anb"
+},
+{
+"id": "G015_pin",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nتم التحقق بالرقم السري",
+"sender": "anb"
+},
+{
+"id": "G015_act",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nتم تفعيل البطاقة",
+"sender": "anb"
+},
+{
+"id": "G015_act2",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nتم تفعيل بطاقتك الجديدة",
+"sender": "anb"
+},
+{
+"id": "G015_pinch",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "anb"
+},
+{
+"id": "G015_bal",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "anb"
+},
+{
+"id": "G015_limTot",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nحد الائتمان: 20,000 SAR",
+"sender": "anb"
+},
+{
+"id": "G015_xlim",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "anb"
+},
+{
+"id": "G015_xact",
+"text": "مدفوعات وزارة الداخلية\nمن:0017\nبـ:SAR 113\nالجهة:المخالفات المرورية\nالخدمة:سداد مخالفات مرورية-رقم المخالفة\nرقم مرجعي:6824106852\nفي:26-06-15 10:49\nCard activated",
+"sender": "anb"
+},
+{
+"id": "G016_orig",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12",
+"sender": "BSF"
+},
+{
+"id": "G016_lim",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "BSF"
+},
+{
+"id": "G016_clim",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "BSF"
+},
+{
+"id": "G016_stmt",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "BSF"
+},
+{
+"id": "G016_stmt2",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nكشف حسابك متاح في التطبيق",
+"sender": "BSF"
+},
+{
+"id": "G016_ren",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "BSF"
+},
+{
+"id": "G016_pin",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nتم التحقق بالرقم السري",
+"sender": "BSF"
+},
+{
+"id": "G016_act",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nتم تفعيل البطاقة",
+"sender": "BSF"
+},
+{
+"id": "G016_act2",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nتم تفعيل بطاقتك الجديدة",
+"sender": "BSF"
+},
+{
+"id": "G016_pinch",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "BSF"
+},
+{
+"id": "G016_bal",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "BSF"
+},
+{
+"id": "G016_limTot",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nحد الائتمان: 20,000 SAR",
+"sender": "BSF"
+},
+{
+"id": "G016_xlim",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "BSF"
+},
+{
+"id": "G016_xact",
+"text": "شراء عبر نقاط البيع بـ SAR 150.00\nرسوم العملية:0.00\nمن Al-Rajul Al-Amthal for Me\nبطاقة ائتمانية 9221* من خلال Apple Pay\nالمبلغ الإجمالي المستحق SAR 5620.87\nالرصيد المتوفر: SAR 14379.13\nفي 26-06-14 20:12\nCard activated",
+"sender": "BSF"
+},
+{
+"id": "G017_orig",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM",
+"sender": "stcbank"
+},
+{
+"id": "G017_lim",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G017_clim",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G017_stmt",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "stcbank"
+},
+{
+"id": "G017_stmt2",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nكشف حسابك متاح في التطبيق",
+"sender": "stcbank"
+},
+{
+"id": "G017_ren",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "stcbank"
+},
+{
+"id": "G017_pin",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nتم التحقق بالرقم السري",
+"sender": "stcbank"
+},
+{
+"id": "G017_act",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nتم تفعيل البطاقة",
+"sender": "stcbank"
+},
+{
+"id": "G017_act2",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nتم تفعيل بطاقتك الجديدة",
+"sender": "stcbank"
+},
+{
+"id": "G017_pinch",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "stcbank"
+},
+{
+"id": "G017_bal",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G017_limTot",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nحد الائتمان: 20,000 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G017_xlim",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "stcbank"
+},
+{
+"id": "G017_xact",
+"text": "إضافة أموال لحسابك\nبـ:300.56 ر.س\nعبر:*XXXX\nفي:3/9/2026 11:17 PM\nCard activated",
+"sender": "stcbank"
+},
+{
+"id": "G018_orig",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30",
+"sender": "stcbank"
+},
+{
+"id": "G018_lim",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G018_clim",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G018_stmt",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "stcbank"
+},
+{
+"id": "G018_stmt2",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nكشف حسابك متاح في التطبيق",
+"sender": "stcbank"
+},
+{
+"id": "G018_ren",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "stcbank"
+},
+{
+"id": "G018_pin",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nتم التحقق بالرقم السري",
+"sender": "stcbank"
+},
+{
+"id": "G018_act",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nتم تفعيل البطاقة",
+"sender": "stcbank"
+},
+{
+"id": "G018_act2",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nتم تفعيل بطاقتك الجديدة",
+"sender": "stcbank"
+},
+{
+"id": "G018_pinch",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "stcbank"
+},
+{
+"id": "G018_bal",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G018_limTot",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nحد الائتمان: 20,000 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G018_xlim",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "stcbank"
+},
+{
+"id": "G018_xact",
+"text": "عملية انترنت\nبـ:USD 19.99\nمن:NETFLIX\nبطاقة:*7238\nفي:4/16/2026 09:30\nCard activated",
+"sender": "stcbank"
+},
+{
+"id": "G019_orig",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00",
+"sender": "stcbank"
+},
+{
+"id": "G019_lim",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G019_clim",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G019_stmt",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "stcbank"
+},
+{
+"id": "G019_stmt2",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nكشف حسابك متاح في التطبيق",
+"sender": "stcbank"
+},
+{
+"id": "G019_ren",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "stcbank"
+},
+{
+"id": "G019_pin",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nتم التحقق بالرقم السري",
+"sender": "stcbank"
+},
+{
+"id": "G019_act",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nتم تفعيل البطاقة",
+"sender": "stcbank"
+},
+{
+"id": "G019_act2",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nتم تفعيل بطاقتك الجديدة",
+"sender": "stcbank"
+},
+{
+"id": "G019_pinch",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "stcbank"
+},
+{
+"id": "G019_bal",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G019_limTot",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nحد الائتمان: 20,000 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G019_xlim",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "stcbank"
+},
+{
+"id": "G019_xact",
+"text": "شراء PoS\nبـ:SAR 45.00\nمن:STARBUCKS\nبطاقة:*7238\nفي:16/04/26 14:00\nCard activated",
+"sender": "stcbank"
+},
+{
+"id": "G020_orig",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23",
+"sender": "stcbank"
+},
+{
+"id": "G020_lim",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G020_clim",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G020_stmt",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "stcbank"
+},
+{
+"id": "G020_stmt2",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nكشف حسابك متاح في التطبيق",
+"sender": "stcbank"
+},
+{
+"id": "G020_ren",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "stcbank"
+},
+{
+"id": "G020_pin",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nتم التحقق بالرقم السري",
+"sender": "stcbank"
+},
+{
+"id": "G020_act",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nتم تفعيل البطاقة",
+"sender": "stcbank"
+},
+{
+"id": "G020_act2",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nتم تفعيل بطاقتك الجديدة",
+"sender": "stcbank"
+},
+{
+"id": "G020_pinch",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "stcbank"
+},
+{
+"id": "G020_bal",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G020_limTot",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nحد الائتمان: 20,000 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G020_xlim",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "stcbank"
+},
+{
+"id": "G020_xact",
+"text": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى:SARRAA ALASMARI\nحساب:5438*\nفي:09/03/26 23:23\nCard activated",
+"sender": "stcbank"
+},
+{
+"id": "G021_orig",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48",
+"sender": "stcbank"
+},
+{
+"id": "G021_lim",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G021_clim",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G021_stmt",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "stcbank"
+},
+{
+"id": "G021_stmt2",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nكشف حسابك متاح في التطبيق",
+"sender": "stcbank"
+},
+{
+"id": "G021_ren",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "stcbank"
+},
+{
+"id": "G021_pin",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nتم التحقق بالرقم السري",
+"sender": "stcbank"
+},
+{
+"id": "G021_act",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nتم تفعيل البطاقة",
+"sender": "stcbank"
+},
+{
+"id": "G021_act2",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nتم تفعيل بطاقتك الجديدة",
+"sender": "stcbank"
+},
+{
+"id": "G021_pinch",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "stcbank"
+},
+{
+"id": "G021_bal",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G021_limTot",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nحد الائتمان: 20,000 SAR",
+"sender": "stcbank"
+},
+{
+"id": "G021_xlim",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "stcbank"
+},
+{
+"id": "G021_xact",
+"text": "عملية انترنت\nبـ:USD 248.95\nمن:ALIEXP\nبطاقة:*7238\nفي:16/04/26 10:48\nCard activated",
+"sender": "stcbank"
+},
+{
+"id": "G022_orig",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24",
+"sender": "البلاد"
+},
+{
+"id": "G022_lim",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "البلاد"
+},
+{
+"id": "G022_clim",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "البلاد"
+},
+{
+"id": "G022_stmt",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "البلاد"
+},
+{
+"id": "G022_stmt2",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nكشف حسابك متاح في التطبيق",
+"sender": "البلاد"
+},
+{
+"id": "G022_ren",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "البلاد"
+},
+{
+"id": "G022_pin",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nتم التحقق بالرقم السري",
+"sender": "البلاد"
+},
+{
+"id": "G022_act",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nتم تفعيل البطاقة",
+"sender": "البلاد"
+},
+{
+"id": "G022_act2",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nتم تفعيل بطاقتك الجديدة",
+"sender": "البلاد"
+},
+{
+"id": "G022_pinch",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "البلاد"
+},
+{
+"id": "G022_bal",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "البلاد"
+},
+{
+"id": "G022_limTot",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nحد الائتمان: 20,000 SAR",
+"sender": "البلاد"
+},
+{
+"id": "G022_xlim",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "البلاد"
+},
+{
+"id": "G022_xact",
+"text": "مشتريات نقاط البيع\nبطاقة: **1519; مدى, Apple PAY\nمبلغ: 7.00 SAR\nلدى: BOOFAYAH NJOOD\nفي: 2023-10-22 07:24\nCard activated",
+"sender": "البلاد"
+},
+{
+"id": "G023_orig",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_lim",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_clim",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nAvailable card limit: SAR 9,000.00",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_stmt",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nStatement date: 25/11/2026",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_stmt2",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nYour e-statement is available in the app",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_ren",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nYour card renewal is due 01/2027",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_pin",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nPIN-verified",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_act",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nCard activated",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_act2",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nYour new card has been activated",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_pinch",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nIf you did not request a PIN change call 8001001234",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_bal",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nAvailable balance: SAR 1,234.56",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_limTot",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nCredit limit: SAR 20,000",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_xlim",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G023_xact",
+"text": "معاملة التجارة الإلكترونية عبر مدى - الشراء عبر الإنترنت (Apple Pay)\nبقيمة 143.80 SAR\nمن:6001\nلدى Ninja\nبطاقة مدى 8277\nفي 2026-06-13 19:19\nتم تفعيل البطاقة",
+"sender": "هذا الجزيرة"
+},
+{
+"id": "G024_orig",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_lim",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_clim",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_stmt",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_stmt2",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nكشف حسابك متاح في التطبيق",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_ren",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_pin",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nتم التحقق بالرقم السري",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_act",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nتم تفعيل البطاقة",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_act2",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nتم تفعيل بطاقتك الجديدة",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_pinch",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_bal",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_limTot",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nحد الائتمان: 20,000 SAR",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_xlim",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "بنك دبي"
+},
+{
+"id": "G024_xact",
+"text": "بطاقة إئتمانية: تأكيد السداد\nبطاقة: XX2678;إئتمانية\nمبلغ: 250.93  SAR\nرصيد: 18,000.00 SAR\nفي: 24-01-2025\nCard activated",
+"sender": "بنك دبي"
+},
+{
+"id": "G025_orig",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50",
+"sender": "SNB"
+},
+{
+"id": "G025_lim",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "SNB"
+},
+{
+"id": "G025_clim",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "SNB"
+},
+{
+"id": "G025_stmt",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "SNB"
+},
+{
+"id": "G025_stmt2",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nكشف حسابك متاح في التطبيق",
+"sender": "SNB"
+},
+{
+"id": "G025_ren",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "SNB"
+},
+{
+"id": "G025_pin",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nتم التحقق بالرقم السري",
+"sender": "SNB"
+},
+{
+"id": "G025_act",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nتم تفعيل البطاقة",
+"sender": "SNB"
+},
+{
+"id": "G025_act2",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nتم تفعيل بطاقتك الجديدة",
+"sender": "SNB"
+},
+{
+"id": "G025_pinch",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "SNB"
+},
+{
+"id": "G025_bal",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "SNB"
+},
+{
+"id": "G025_limTot",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nحد الائتمان: 20,000 SAR",
+"sender": "SNB"
+},
+{
+"id": "G025_xlim",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "SNB"
+},
+{
+"id": "G025_xact",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:NETFLIX\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nCard activated",
+"sender": "SNB"
+},
+{
+"id": "G026_orig",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30",
+"sender": "SNB"
+},
+{
+"id": "G026_lim",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "SNB"
+},
+{
+"id": "G026_clim",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "SNB"
+},
+{
+"id": "G026_stmt",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "SNB"
+},
+{
+"id": "G026_stmt2",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nكشف حسابك متاح في التطبيق",
+"sender": "SNB"
+},
+{
+"id": "G026_ren",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "SNB"
+},
+{
+"id": "G026_pin",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nتم التحقق بالرقم السري",
+"sender": "SNB"
+},
+{
+"id": "G026_act",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nتم تفعيل البطاقة",
+"sender": "SNB"
+},
+{
+"id": "G026_act2",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nتم تفعيل بطاقتك الجديدة",
+"sender": "SNB"
+},
+{
+"id": "G026_pinch",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "SNB"
+},
+{
+"id": "G026_bal",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "SNB"
+},
+{
+"id": "G026_limTot",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nحد الائتمان: 20,000 SAR",
+"sender": "SNB"
+},
+{
+"id": "G026_xlim",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "SNB"
+},
+{
+"id": "G026_xact",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 82.00\nلدى:LOCAL ROASTER\nفي:2026-04-08 18:30\nCard activated",
+"sender": "SNB"
+},
+{
+"id": "G028_orig",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80",
+"sender": "D360"
+},
+{
+"id": "G028_lim",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "D360"
+},
+{
+"id": "G028_clim",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nAvailable card limit: SAR 9,000.00",
+"sender": "D360"
+},
+{
+"id": "G028_stmt",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nStatement date: 25/11/2026",
+"sender": "D360"
+},
+{
+"id": "G028_stmt2",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nYour e-statement is available in the app",
+"sender": "D360"
+},
+{
+"id": "G028_ren",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nYour card renewal is due 01/2027",
+"sender": "D360"
+},
+{
+"id": "G028_pin",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nPIN-verified",
+"sender": "D360"
+},
+{
+"id": "G028_act",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nCard activated",
+"sender": "D360"
+},
+{
+"id": "G028_act2",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nYour new card has been activated",
+"sender": "D360"
+},
+{
+"id": "G028_pinch",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nIf you did not request a PIN change call 8001001234",
+"sender": "D360"
+},
+{
+"id": "G028_bal",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nAvailable balance: SAR 1,234.56",
+"sender": "D360"
+},
+{
+"id": "G028_limTot",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nCredit limit: SAR 20,000",
+"sender": "D360"
+},
+{
+"id": "G028_xlim",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "D360"
+},
+{
+"id": "G028_xact",
+"text": "International Online Purchase\nAmount: USD 4.91 (SAR 18.44)\nCard: *2948 - VISA (Ecommerce)\nFee: SAR 0.59\nAt: SNAP INC SNAP SNAP ADS\nOn: 2026-06-13 12:16\nAvailable Balance: SAR 225.80\nتم تفعيل البطاقة",
+"sender": "D360"
+},
+{
+"id": "G033_orig",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50",
+"sender": "x"
+},
+{
+"id": "G033_lim",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G033_clim",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G033_stmt",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "x"
+},
+{
+"id": "G033_stmt2",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nكشف حسابك متاح في التطبيق",
+"sender": "x"
+},
+{
+"id": "G033_ren",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "x"
+},
+{
+"id": "G033_pin",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nتم التحقق بالرقم السري",
+"sender": "x"
+},
+{
+"id": "G033_act",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nتم تفعيل البطاقة",
+"sender": "x"
+},
+{
+"id": "G033_act2",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nتم تفعيل بطاقتك الجديدة",
+"sender": "x"
+},
+{
+"id": "G033_pinch",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "x"
+},
+{
+"id": "G033_bal",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "x"
+},
+{
+"id": "G033_limTot",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nحد الائتمان: 20,000 SAR",
+"sender": "x"
+},
+{
+"id": "G033_xlim",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G033_xact",
+"text": "عملية شراء\nبطاقة:مدى;****4521\nمبلغ:SAR 45.00\nلدى:BURGER BOUTIQUE\nفي:2026-04-08 12:45\nالرصيد:SAR 2,310.50\nCard activated",
+"sender": "x"
+},
+{
+"id": "G034_orig",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45",
+"sender": "x"
+},
+{
+"id": "G034_lim",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G034_clim",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nAvailable card limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G034_stmt",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nStatement date: 25/11/2026",
+"sender": "x"
+},
+{
+"id": "G034_stmt2",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nYour e-statement is available in the app",
+"sender": "x"
+},
+{
+"id": "G034_ren",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nYour card renewal is due 01/2027",
+"sender": "x"
+},
+{
+"id": "G034_pin",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nPIN-verified",
+"sender": "x"
+},
+{
+"id": "G034_act",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nCard activated",
+"sender": "x"
+},
+{
+"id": "G034_act2",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nYour new card has been activated",
+"sender": "x"
+},
+{
+"id": "G034_pinch",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nIf you did not request a PIN change call 8001001234",
+"sender": "x"
+},
+{
+"id": "G034_bal",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nAvailable balance: SAR 1,234.56",
+"sender": "x"
+},
+{
+"id": "G034_limTot",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nCredit limit: SAR 20,000",
+"sender": "x"
+},
+{
+"id": "G034_xlim",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G034_xact",
+"text": "Purchase\nCard ending 4521\nAmount SAR 45.00\nAt BURGER BOUTIQUE\n2026-04-08 12:45\nتم تفعيل البطاقة",
+"sender": "x"
+},
+{
+"id": "G035_orig",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50",
+"sender": "x"
+},
+{
+"id": "G035_lim",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G035_clim",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G035_stmt",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "x"
+},
+{
+"id": "G035_stmt2",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nكشف حسابك متاح في التطبيق",
+"sender": "x"
+},
+{
+"id": "G035_ren",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "x"
+},
+{
+"id": "G035_pin",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nتم التحقق بالرقم السري",
+"sender": "x"
+},
+{
+"id": "G035_act",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nتم تفعيل البطاقة",
+"sender": "x"
+},
+{
+"id": "G035_act2",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nتم تفعيل بطاقتك الجديدة",
+"sender": "x"
+},
+{
+"id": "G035_pinch",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "x"
+},
+{
+"id": "G035_bal",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "x"
+},
+{
+"id": "G035_limTot",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nحد الائتمان: 20,000 SAR",
+"sender": "x"
+},
+{
+"id": "G035_xlim",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G035_xact",
+"text": "سحب نقدي\nمبلغ:SAR 500.00\nمن جهاز الصراف\nبطاقة:****4521\nالرصيد:SAR 1,810.50\nCard activated",
+"sender": "x"
+},
+{
+"id": "G036_orig",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A",
+"sender": "x"
+},
+{
+"id": "G036_lim",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G036_clim",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G036_stmt",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "x"
+},
+{
+"id": "G036_stmt2",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nكشف حسابك متاح في التطبيق",
+"sender": "x"
+},
+{
+"id": "G036_ren",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "x"
+},
+{
+"id": "G036_pin",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nتم التحقق بالرقم السري",
+"sender": "x"
+},
+{
+"id": "G036_act",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nتم تفعيل البطاقة",
+"sender": "x"
+},
+{
+"id": "G036_act2",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nتم تفعيل بطاقتك الجديدة",
+"sender": "x"
+},
+{
+"id": "G036_pinch",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "x"
+},
+{
+"id": "G036_bal",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "x"
+},
+{
+"id": "G036_limTot",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nحد الائتمان: 20,000 SAR",
+"sender": "x"
+},
+{
+"id": "G036_xlim",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G036_xact",
+"text": "تحويل صادر\nمبلغ:SAR 300.00\nإلى:MOHAMMED A\nCard activated",
+"sender": "x"
+},
+{
+"id": "G037_orig",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50",
+"sender": "x"
+},
+{
+"id": "G037_lim",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G037_clim",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G037_stmt",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "x"
+},
+{
+"id": "G037_stmt2",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nكشف حسابك متاح في التطبيق",
+"sender": "x"
+},
+{
+"id": "G037_ren",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "x"
+},
+{
+"id": "G037_pin",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nتم التحقق بالرقم السري",
+"sender": "x"
+},
+{
+"id": "G037_act",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nتم تفعيل البطاقة",
+"sender": "x"
+},
+{
+"id": "G037_act2",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nتم تفعيل بطاقتك الجديدة",
+"sender": "x"
+},
+{
+"id": "G037_pinch",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "x"
+},
+{
+"id": "G037_bal",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "x"
+},
+{
+"id": "G037_limTot",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nحد الائتمان: 20,000 SAR",
+"sender": "x"
+},
+{
+"id": "G037_xlim",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G037_xact",
+"text": "إيداع راتب\nمبلغ:SAR 9,500.00\nالرصيد:SAR 11,310.50\nCard activated",
+"sender": "x"
+},
+{
+"id": "G038_orig",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE",
+"sender": "x"
+},
+{
+"id": "G038_lim",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G038_clim",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G038_stmt",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "x"
+},
+{
+"id": "G038_stmt2",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nكشف حسابك متاح في التطبيق",
+"sender": "x"
+},
+{
+"id": "G038_ren",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "x"
+},
+{
+"id": "G038_pin",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nتم التحقق بالرقم السري",
+"sender": "x"
+},
+{
+"id": "G038_act",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nتم تفعيل البطاقة",
+"sender": "x"
+},
+{
+"id": "G038_act2",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nتم تفعيل بطاقتك الجديدة",
+"sender": "x"
+},
+{
+"id": "G038_pinch",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "x"
+},
+{
+"id": "G038_bal",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "x"
+},
+{
+"id": "G038_limTot",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nحد الائتمان: 20,000 SAR",
+"sender": "x"
+},
+{
+"id": "G038_xlim",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G038_xact",
+"text": "استرداد مبلغ\nمبلغ:SAR 45.00\nمن:BURGER BOUTIQUE\nCard activated",
+"sender": "x"
+},
+{
+"id": "G039_orig",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456",
+"sender": "x"
+},
+{
+"id": "G039_lim",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G039_clim",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G039_stmt",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "x"
+},
+{
+"id": "G039_stmt2",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nكشف حسابك متاح في التطبيق",
+"sender": "x"
+},
+{
+"id": "G039_ren",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "x"
+},
+{
+"id": "G039_pin",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nتم التحقق بالرقم السري",
+"sender": "x"
+},
+{
+"id": "G039_act",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nتم تفعيل البطاقة",
+"sender": "x"
+},
+{
+"id": "G039_act2",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nتم تفعيل بطاقتك الجديدة",
+"sender": "x"
+},
+{
+"id": "G039_pinch",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "x"
+},
+{
+"id": "G039_bal",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "x"
+},
+{
+"id": "G039_limTot",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nحد الائتمان: 20,000 SAR",
+"sender": "x"
+},
+{
+"id": "G039_xlim",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G039_xact",
+"text": "تم الدفع بنجاح\nالمبلغ: 30.00 ريال\nلدى: JARIR\nرقم العملية: 123456\nCard activated",
+"sender": "x"
+},
+{
+"id": "G040_orig",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠",
+"sender": "x"
+},
+{
+"id": "G040_lim",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nالحد الائتماني المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G040_clim",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nحد البطاقة المتاح: 9,000.00 SAR",
+"sender": "x"
+},
+{
+"id": "G040_stmt",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nتاريخ كشف الحساب: 25/11/2026",
+"sender": "x"
+},
+{
+"id": "G040_stmt2",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nكشف حسابك متاح في التطبيق",
+"sender": "x"
+},
+{
+"id": "G040_ren",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nتم تجديد بطاقتك وستصلك قريباً",
+"sender": "x"
+},
+{
+"id": "G040_pin",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nتم التحقق بالرقم السري",
+"sender": "x"
+},
+{
+"id": "G040_act",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nتم تفعيل البطاقة",
+"sender": "x"
+},
+{
+"id": "G040_act2",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nتم تفعيل بطاقتك الجديدة",
+"sender": "x"
+},
+{
+"id": "G040_pinch",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nلتغيير الرقم السري اتصل 8001001234",
+"sender": "x"
+},
+{
+"id": "G040_bal",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nالرصيد المتاح: 1,234.56 SAR",
+"sender": "x"
+},
+{
+"id": "G040_limTot",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nحد الائتمان: 20,000 SAR",
+"sender": "x"
+},
+{
+"id": "G040_xlim",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nAvailable Credit Limit: SAR 9,000.00",
+"sender": "x"
+},
+{
+"id": "G040_xact",
+"text": "عملية شراء\nمبلغ:SAR ٢٥٠.٧٥\nلدى:بنده\nفي:٢٠٢٦-٠٤-٠٨ ١٤:٣٠\nCard activated",
+"sender": "x"
+}
+]

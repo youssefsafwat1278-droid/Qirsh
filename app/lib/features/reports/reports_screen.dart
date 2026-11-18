@@ -16,6 +16,7 @@ import '../../core/theme/app_spacing.dart';
 import '../ads/ad_placement.dart';
 import '../ads/qirsh_ad_banner.dart';
 import '../../core/theme/app_typography.dart';
+import '../../core/theme/large_text.dart';
 import '../../core/theme/widgets/calm_page_header.dart';
 import '../../core/theme/widgets/glass_sheet.dart';
 import '../../core/theme/widgets/navy_sheet_theme.dart';
@@ -1319,7 +1320,7 @@ class _AmountText extends StatelessWidget {
         ),
       ]),
       textAlign: TextAlign.end,
-      maxLines: 1,
+      maxLines: linesUnlessLargeText(context, 1),
     );
   }
 }

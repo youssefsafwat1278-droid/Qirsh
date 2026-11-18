@@ -7,6 +7,8 @@ import '../app_motion.dart';
 import '../app_shadows.dart';
 import '../app_spacing.dart';
 import '../app_typography.dart';
+import '../large_text.dart';
+import 'stacked_choices.dart';
 
 /// One option in a [SegmentedControl].
 class SegmentOption<T> {
@@ -48,11 +50,23 @@ class SegmentedControl<T> extends StatelessWidget {
       return c.textSecondary;
     }
 
+    // UX-09 / SP-10: at large text the options stack one per line, so each
+    // label is read whole instead of cut inside a narrow segment.
+    if (isLargeText(context)) {
+      return StackedChoices(
+        labels: [for (final o in options) o.label],
+        icons: [for (final o in options) o.icon],
+        selectedIndex: selected,
+        onSelected: (i) => onChanged(options[i].value),
+        trackColor: c.surfaceMuted,
+        selectedColor: accent ? c.cta : c.surfaceTop,
+        selectedForeground: accent ? c.onCta : c.textPrimary,
+        idleForeground: c.textSecondary,
+      );
+    }
+
     // UX-05: the 4pt inset applies to the thumb only, so each segment's tap
     // target is the full 44pt track height (the visible thumb is unchanged).
-    // UX-09: a minimum (not fixed) 44pt height, so the labels can take two
-    // lines at large text instead of being clipped by the track.
-    final large = MediaQuery.textScalerOf(context).scale(16) > 20;
     return Container(
       constraints: const BoxConstraints(minHeight: 44),
       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -103,8 +117,7 @@ class SegmentedControl<T> extends StatelessWidget {
                                 onChanged(o.value);
                               },
                               child: Padding(
-                                padding: EdgeInsets.symmetric(
-                                    vertical: large ? 10 : 0),
+                                padding: EdgeInsets.zero,
                                 child: Center(
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
@@ -126,7 +139,7 @@ class SegmentedControl<T> extends StatelessWidget {
                                           ),
                                           child: Text(
                                             o.label,
-                                            maxLines: large ? 2 : 1,
+                                            maxLines: 1,
                                             textAlign: TextAlign.center,
                                             overflow: TextOverflow.ellipsis,
                                           ),

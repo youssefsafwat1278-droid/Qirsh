@@ -1,0 +1,856 @@
+[
+{
+"id": "Z000",
+"text": "Purchase of SAR 45.00 at Limit Cafe card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z001",
+"text": "Purchase of SAR 120.00 at Balance Gym card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z002",
+"text": "Purchase of SAR 89.00 at Statement Books card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z003",
+"text": "Purchase of SAR 150.00 at Activation Mobile card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z004",
+"text": "Purchase of SAR 60.00 at PIN Bar card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z005",
+"text": "Purchase of SAR 150.00 at Card Renewal Services card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z006",
+"text": "POS purchase SAR 33.00 at CREDIT LIMIT MOTORS card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z007",
+"text": "Purchase SAR 75.00 at Winner Sports, card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z008",
+"text": "Purchase of SAR 210.00 at The Coupon Store card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z009",
+"text": "Purchase of SAR 40.00 at Marketing Hub Cafe card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z010",
+"text": "Payment of SAR 99.00 to Profile Updated Salon card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z011",
+"text": "Purchase of SAR 18.00 at E-Statement Print card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z012",
+"text": "Purchase of SAR 300.00 at Activated Fitness card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z013",
+"text": "شراء بمبلغ 45.00 ريال لدى مقهى عرض خاص بطاقة *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z014",
+"text": "Purchase of SAR 25.00 at Limit Cafe. Available balance SAR 1,200.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z015",
+"text": "Card payment SAR 59.00 at PRIZE PIZZA card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z016",
+"text": "Purchase of SAR 15.00 at Click & Collect card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z017",
+"text": "Card renewal fee SAR 150.00 deducted from your account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z018",
+"text": "Annual fee of SAR 250.00 charged to card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z019",
+"text": "ATM fee SAR 5.00 debited from account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z020",
+"text": "Card renewal fee of SAR 150.00 has been debited from card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z021",
+"text": "Your credit card annual fee SAR 300.00 has been charged",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z022",
+"text": "Statement fee of SAR 10.00 debited from account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z023",
+"text": "PIN reissue fee SAR 25.00 debited from account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z024",
+"text": "Activation fee SAR 50.00 debited from card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z025",
+"text": "تم خصم رسوم تجديد البطاقة بمبلغ ١٥٠٫٠٠ ريال من حسابك *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z026",
+"text": "تم خصم رسوم سنوية بمبلغ 250 ريال من بطاقتك *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z027",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Available balance SAR 1,200.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z028",
+"text": "POS Purchase SAR 85.00 SHOPX card *1234 Avl Bal SAR 1,200.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z029",
+"text": "Purchase SAR 230.00 at JARIR card *1234. Balance SAR 4,770.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z030",
+"text": "Purchase of SAR 100.00 at SHOPX. Your balance is SAR 1,200.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z031",
+"text": "Purchase of SAR 100.00 at SHOPX. Balance inquiry free in the app.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z032",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Remaining limit SAR 5,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z033",
+"text": "Credit card purchase SAR 450.00 at EXTRA card *1234. Available credit limit SAR 9,550.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z034",
+"text": "Purchase of SAR 100.00 at SHOPX with credit card *1234. Card limit SAR 10,000; available SAR 9,900",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z035",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Your statement is ready next week.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z036",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. View your e-statement in the app.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z037",
+"text": "Purchase of SAR 100.00 at SHOPX on your newly activated card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z038",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Enjoy our latest promotion in the app.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z039",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Your PIN change request is not required.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z040",
+"text": "عملية شراء بمبلغ ١٠٠٫٠٠ ريال لدى SHOPX بطاقة *1234. الرصيد المتاح ١٬٢٠٠٫٠٠ ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z041",
+"text": "شراء بمبلغ ٢٣٠ ريال لدى جرير بطاقة ائتمانية *1234. الحد الائتماني المتاح ٩٬٧٧٠ ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z042",
+"text": "شراء بمبلغ 100 ريال لدى SHOPX بطاقة *1234. حد البطاقة المتبقي 5000 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z043",
+"text": "شراء عبر الإنترنت بمبلغ ٥٩٫٩٩ ريال لدى NETFLIX بطاقة *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z044",
+"text": "عملية شراء بمبلغ 75.00 ريال لدى مطعم الفوز بطاقة مدى *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z045",
+"text": "Apple Pay purchase SAR 12.50 at STARBUCKS card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z046",
+"text": "Online purchase of USD 20.00 at SPOTIFY card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z047",
+"text": "Mada purchase SAR 66.00 at PANDA card *1234 on 17/11 10:22",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z048",
+"text": "Purchase of AED 120.00 at CARREFOUR card *1234. Avl bal AED 2,000.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z049",
+"text": "Your Debit Card **5398 had a Successful transaction of EGP 33.00 @Orange",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z050",
+"text": "Bill payment of SAR 230.00 to STC successful. Ref 778812",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z051",
+"text": "SADAD payment of SAR 412.00 to SEC completed from account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z052",
+"text": "Payment of SAR 99.00 to Mobily for bill 12345 completed",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z053",
+"text": "تم سداد فاتورة الكهرباء بمبلغ ٤١٢ ريال من حسابك *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z054",
+"text": "Standing order SAR 2,000.00 to Landlord executed from account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z055",
+"text": "Your standing order of SAR 1,500.00 to Ali has been executed",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z056",
+"text": "تم تنفيذ التحويل الدوري بمبلغ 1500 ريال إلى علي",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z057",
+"text": "Outgoing transfer of SAR 500.00 to Ali from account *5678 completed",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z058",
+"text": "Transfer of SAR 300.00 to Sara sent successfully from account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z059",
+"text": "تم تحويل مبلغ ٣٠٠ ريال إلى سارة من حسابك *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z060",
+"text": "ATM withdrawal SAR 500.00 card *1234. Available balance SAR 1,200.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z061",
+"text": "Cash withdrawal of SAR 1,000.00 from ATM 456 card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z062",
+"text": "سحب نقدي بمبلغ ٥٠٠ ريال من الصراف الآلي بطاقة *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z063",
+"text": "ATM withdrawal SAR 200.00 card *1234. Daily limit remaining SAR 4,800.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z064",
+"text": "ATM cash withdrawal AED 300.00 card *1234. ATM fee AED 2.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z065",
+"text": "Salary of SAR 12,000.00 credited to account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z066",
+"text": "Your salary SAR 9,500.00 has been deposited. Available balance SAR 10,700.00",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z067",
+"text": "تم إيداع راتب بمبلغ ١٢٬٠٠٠ ريال في حسابك *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z068",
+"text": "Deposit of SAR 2,000.00 received in account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z069",
+"text": "Cash deposit SAR 1,500.00 to account *5678 via ATM",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z070",
+"text": "Incoming transfer of SAR 750.00 from Mohammed credited to account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z071",
+"text": "You received SAR 200.00 from Sara via STC Pay",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z072",
+"text": "تم استلام حوالة بمبلغ ٧٥٠ ريال من محمد",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z073",
+"text": "Salary SAR 12,000.00 credited to account *5678. Your credit limit is unchanged.",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z074",
+"text": "Dividend of SAR 340.00 credited to account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z075",
+"text": "Cashback of SAR 25.00 credited to card *1234",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z076",
+"text": "Refund of SAR 99.00 from NOON credited to card *1234",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z077",
+"text": "Refund SAR 45.00 from AMAZON credited to your card *1234. Available balance SAR 1,245.00",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z078",
+"text": "تم استرداد مبلغ ٩٩ ريال من نون إلى بطاقتك *1234",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z079",
+"text": "Merchant refund of SAR 150.00 from Card Renewal Services credited to card *1234",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z080",
+"text": "Refund of SAR 60.00 from Limit Cafe credited to card *1234",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z081",
+"text": "Refund of annual fee SAR 250.00 credited to card *1234",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z082",
+"text": "Card renewal fee refund SAR 150.00 credited to account *5678",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Z083",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Ref 483920",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z084",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Auth code 123456",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z085",
+"text": "Purchase of SAR 100.00 at SHOPX. Approval code 482913",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z086",
+"text": "POS purchase SAR 100.00 SHOPX card *1234 approval code: 551204",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z087",
+"text": "Purchase SAR 100.00 at SHOPX. Authorization code 771234. Never share your OTP",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z088",
+"text": "Payment of SAR 230.00 to STC. Reference code 908172",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z089",
+"text": "Purchase of SAR 100.00 at SHOPX. Use code 482913 for your next order discount",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z090",
+"text": "Purchase of SAR 100.00 at SHOPX. Transaction code 4821",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z091",
+"text": "Purchase of SAR 100.00 at SHOPX. Auth: 482913",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z092",
+"text": "Purchase of SAR 100.00 at SHOPX. Confirmation number 482913",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z093",
+"text": "Purchase of SAR 100.00 at SHOPX. Order 482913 is your code for pickup",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z094",
+"text": "Purchase of SAR 100.00 at SHOPX. 482913 is the auth code",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z095",
+"text": "عملية شراء بمبلغ 100 ريال لدى SHOPX رقم المرجع 483920",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z096",
+"text": "عملية شراء بمبلغ 100 ريال لدى SHOPX رمز الموافقة 123456",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z097",
+"text": "Bill payment SAR 230.00 to STC. Code 48213 is your receipt number",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z098",
+"text": "Purchase of SAR 100.00 at SHOPX. Enter code 482913 at the counter to collect your order",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Z099",
+"text": "Purchase of SAR 100.00 at SHOPX card *1234. Ref: 483920. Verification code not required.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y000",
+"text": "Credit Card Purchase\nCard: *1234\nAmount: SAR 250.00\nAt: JARIR\nAvailable Credit Limit: SAR 9,750.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y001",
+"text": "Purchase SAR 250.00 at JARIR with Credit Card *1234. Avl Cr Limit SAR 9,750.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y002",
+"text": "Purchase of SAR 250.00 at JARIR on Credit Card ending 1234. Credit Limit: SAR 10,000.00 Available: SAR 9,750.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y003",
+"text": "شراء عبر نقاط البيع\nبطاقة ائتمانية: *1234\nمبلغ: 250.00 ريال\nلدى: جرير\nالحد الائتماني المتاح: 9750.00 ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y004",
+"text": "شراء بطاقة ائتمانية *1234 بمبلغ ٢٥٠ ريال لدى جرير. حد الائتمان المتاح ٩٧٥٠ ريال",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y005",
+"text": "Purchase SAR 250.00 at JARIR card *1234. Card limit available SAR 4,750.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y006",
+"text": "Online purchase AED 99.00 at AMAZON with card *1234. Available card limit AED 5,901.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y007",
+"text": "Purchase of SAR 250.00 at JARIR. Credit limit utilised 25%",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y008",
+"text": "Purchase of SAR 250.00 at JARIR. Your available credit limit is SAR 9,750.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y009",
+"text": "Purchase of SAR 250.00 at JARIR card *1234 (card activated for international use)",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y010",
+"text": "First purchase on your activated card: SAR 250.00 at JARIR",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y011",
+"text": "Purchase of SAR 250.00 at JARIR card *1234. Statement balance SAR 1,250.00",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y012",
+"text": "Purchase of SAR 250.00 at JARIR card *1234. Get 5% cashback with our latest offer",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y013",
+"text": "Purchase of SAR 250.00 at JARIR card *1234. Coupon applied.",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y014",
+"text": "Purchase of SAR 250.00 at JARIR card *1234. Click here to view details",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y015",
+"text": "Card renewal fee SAR 150.00 charged to card *1234",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y016",
+"text": "Your card renewal fee of SAR 150.00 has been deducted",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y017",
+"text": "Debit card issuance fee SAR 30.00 deducted from account *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y018",
+"text": "رسوم تجديد البطاقة 150 ريال تم خصمها من حسابك *5678",
+"truth": {
+"kind": "d"
+}
+},
+{
+"id": "Y019",
+"text": "Salary SAR 12,000.00 credited to account *5678. Promotion: get 2% bonus on savings",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Y020",
+"text": "Refund of SAR 99.00 from NOON credited to credit card *1234. Available credit limit SAR 9,849.00",
+"truth": {
+"kind": "c"
+}
+},
+{
+"id": "Y021",
+"text": "Transfer of SAR 500.00 to Ali (beneficiary added today) completed from account *5678",
+"truth": {
+"kind": "d"
+}
+}
+]

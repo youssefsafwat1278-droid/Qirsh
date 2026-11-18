@@ -9,8 +9,11 @@ import 'package:money_companion/data/repositories/drift_dedup_store.dart';
 import 'package:money_companion/data/repositories/drift_merchant_category_repository.dart';
 import 'package:money_companion/data/repositories/drift_suspected_duplicate_repository.dart';
 import 'package:money_companion/data/repositories/drift_transaction_repository.dart';
+import 'package:money_companion/domain/capture/validated_capture.dart';
 import 'package:money_companion/domain/usecases/add_transaction_usecase.dart';
 import 'package:money_companion/engine/ai/ai_parser_client.dart';
+import 'package:money_companion/engine/parser/message_meaning.dart';
+import 'package:money_companion/engine/parser/parser_engine.dart';
 
 import '../local_v2_support.dart';
 
@@ -94,7 +97,9 @@ void main() {
   final held = <(String, String, AiParseResponse)>[
     ('Cash deposit SAR 1,500.00 to account *5678 via ATM', 'cash_deposit',
         _answer(1500, 'income', 'credit')),
-    ('Purchase SAR 120.00 at SHOP. Cashback SAR 12.00 credited to your card',
+    // Parser follow-up 3 sets a cashback line aside as a reward footer, so
+    // two purchases (as on the server, ai_meaning_gate_test.ts) are the case.
+    ('Purchase SAR 120.00 at SHOP. Purchase SAR 45.00 at CAFE',
         'multiple_amounts', _answer(120, 'payment', 'debit')),
     ('Your bill of SAR 230.00 is due on 25/06. Pay now to avoid late fees.',
         'bill_due', _answer(230, 'payment', 'debit')),
@@ -113,6 +118,34 @@ void main() {
       expect(result.outcome, AddTransactionOutcome.notTransaction);
       expect(result.droppedByParser, isTrue, reason: 'never silent');
       expect(result.reviewReason, reason);
+      expect(await DriftTransactionRepository(db).getAll(), isEmpty);
+    });
+  }
+
+  // Parser follow-up 3 (SM-01): the `uncertain` kind is review on every
+  // path: no AI request, nothing recorded, and the import paths hold it.
+  final uncertain = <(String, String, AiParseResponse)>[
+    ('SAR 1,000.00 sent to Ali completed. Previous transfer declined.',
+        'other_event_status', _answer(1000, 'transfer', 'debit')),
+    ('Purchase of SAR 80.00 at SHOP with card *1234 was decl',
+        'truncated_status', _answer(80, 'payment', 'debit')),
+  ];
+  for (final (text, reason, answer) in uncertain) {
+    test('uncertain ($reason): no AI request, nothing recorded, held',
+        () async {
+      final meaning = ParserEngine.meaningOf(text);
+      expect(meaning.kind, MessageKind.uncertain);
+      expect(meaning.reason, reason);
+      expect(meaning.disposition, MessageDisposition.review);
+      expect(meaningHoldReason(text), reason, reason: 'import paths hold it');
+      final ai = _Ai(answer);
+      final result = await useCase(ai).call(
+          rawMessage: text,
+          senderId: 'SNB',
+          smsReceivedAt: DateTime.utc(2026, 6, 16, 12));
+      expect(ai.calls, 0);
+      expect(result.outcome, isNot(AddTransactionOutcome.added));
+      expect(result.droppedByParser, isTrue, reason: 'never silent');
       expect(await DriftTransactionRepository(db).getAll(), isEmpty);
     });
   }
