@@ -1,0 +1,25 @@
+== strict gate, round 3, run 3 ==
+══ truthful summary ══
+  mandatory gates passed : 15
+  mandatory gates failed : 0
+  tools unavailable      : 0  (strict: FATAL)
+  caller-skipped tests   : 0  (strict: FATAL) — a bypassed mandatory test is NOT evidence
+  artifact-dependent     : 1  (deferred to a mandatory POST-BUILD check; never a pass, never strict-fatal)
+  node tests skipped     : 89  (credentials absent — see manifest)
+  deno tests ignored     : 6  (live-Postgres — see manifest)
+  flutter skip sites     : 41  (static skip:/@Skip/markTestSkipped in app/test — see manifest; NOT counted as passed)
+  skip/ignore manifest   : satisfied
+  backend behaviour      : not-run  (opt-in; not-run is NOT a pass)
+  external verification  : pending (device / live Supabase / native timing — see PHASE_6 checklist)
+  retained lint exceptions: 7 deno-lint-ignore (no-explicit-any; loosely-typed Supabase Edge client — see PHASE_7 doc)
+CI_GATES_JSON {"passed":15,"failed":0,"tool_missing":0,"caller_skipped":0,"artifact_pending":1,"strict":1,"node_skipped":"89","deno_ignored":"6","flutter_skip_sites":"41","manifest":"satisfied","backend_behaviour":"not-run","lint_exceptions":7}
+
+ALL RUN GATES PASSED (0 tool-missing, 0 caller-skipped, 1 artifact-pending — see notes)
+exit=0
+f4dcabd3
+       0
+29:31 +14933 ~52: All tests passed!
+00:18 +24: All tests passed!
+00:53 +79: All tests passed!
+01:34 +140: All tests passed!
+00:26 +10: All tests passed!

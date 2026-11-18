@@ -664,3 +664,34 @@ These 92 rows were written for, and shown to, the tuners. The numbers below meas
 The `f4dcabd3` development run fails A7 on every path and A8b on the oracle path. This is because of the review-acceptable own-account and two-purchase rows, and the remaining tip/total and reversal reviews.
 
 The real-model run is still BLOCKED, for the same reason as §5.
+
+## 13. Candidate `a157e68e` (2026-11-18)
+
+Same set, labels, criteria and runner as §12. No change was needed:
+- At `a157e68e`, `index.ts` decides "processed" with `meaningRejectionOf(text, amount, meaning) != null`, applied after `gatedMeaning`.
+- `gatedMeaning` now returns a non-record meaning only when `meaningRejectionOf` is non-null, and the over-length meaning is always rejected.
+- So, after the gate, that test is equivalent to the runner's `meaning.disposition !== 'record'`. The runner calls the checkout's own `gatedMeaning`.
+
+`df -h /`: 21 GB free before, 20 GB after. All runs exit 0 and every `flutter test` passed. My scratch worktrees are removed.
+
+**Every number equals the `f4dcabd3` run.**
+- **Held-out set, three paths:** 0 of 753 messages changed grade on any path, and `metrics.json` is identical (A1–A8, review counts, server reading).
+- **Mixed run** (build 147 × `a157e68e`): 0 grade changes and identical metrics.
+- **Development siblings:** 0 grade changes and identical metrics.
+
+The server output differs only in fields no grade reads:
+- run-time timestamps;
+- 56 sanitized texts and 164 `rawMessage` values, from the redaction cue additions;
+- 6 `merchant` values.
+
+No status, state, amount, currency, type or direction changed.
+
+**Pass/fail at `a157e68e`:** same as §12.
+- `local_only` fails A7 only (123, 27.2 %).
+- `cloud_det` passes every criterion (A7 8.8 %).
+- `cloud_primary_oracle` passes every criterion (A7 3.1 %, A8b 3.1 %).
+- A8a: server 1.3 % PASS; device 7.5 % FAIL by the letter (8, 1.8 %, on rows that must be saved; see §12).
+
+**Build 147 after the server deploy (`a157e68e` server):** **0** messages worse in any class that changes totals. **The deploy condition is met.** All per-class counts are as in §12.
+
+The real-model run is still BLOCKED (§5).

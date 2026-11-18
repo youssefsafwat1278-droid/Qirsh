@@ -1,0 +1,30 @@
+== strict gate, round 3, run 1 ==
+99424:  ✗ flutter test (bulk)
+105654:  ✗ flutter test (synthetic-define serialized)
+106079:  ✗ UNEXPECTED deno ignored test: "D1 inline deletion completes: account data, cloud backups and profile photo are gone" — add a manifest entry or fix the ignore
+106080:  ✗ UNEXPECTED deno ignored test: "D2 an accepted deletion whose inline run never happened is finished by the worker alone" — add a manifest entry or fix the ignore
+106081:  ✗ UNEXPECTED deno ignored test: "D3 a storage failure schedules a retry; the worker resumes and finishes, claim clock-skew retried" — add a manifest entry or fix the ignore
+106082:  ✗ UNEXPECTED deno ignored test: "D4 a later sign-up with the same email is a new, empty account" — add a manifest entry or fix the ignore
+106083:  ✗ skip/ignore manifest
+══ truthful summary ══
+  mandatory gates passed : 12
+  mandatory gates failed : 3
+  tools unavailable      : 0  (strict: FATAL)
+  caller-skipped tests   : 0  (strict: FATAL) — a bypassed mandatory test is NOT evidence
+  artifact-dependent     : 1  (deferred to a mandatory POST-BUILD check; never a pass, never strict-fatal)
+  node tests skipped     : 89  (credentials absent — see manifest)
+  deno tests ignored     : 6  (live-Postgres — see manifest)
+  flutter skip sites     : 39  (static skip:/@Skip/markTestSkipped in app/test — see manifest; NOT counted as passed)
+  skip/ignore manifest   : VIOLATED
+  backend behaviour      : not-run  (opt-in; not-run is NOT a pass)
+  external verification  : pending (device / live Supabase / native timing — see PHASE_6 checklist)
+  retained lint exceptions: 7 deno-lint-ignore (no-explicit-any; loosely-typed Supabase Edge client — see PHASE_7 doc)
+CI_GATES_JSON {"passed":12,"failed":3,"tool_missing":0,"caller_skipped":0,"artifact_pending":1,"strict":1,"node_skipped":"89","deno_ignored":"6","flutter_skip_sites":"39","manifest":"VIOLATED","backend_behaviour":"not-run","lint_exceptions":7}
+
+SOME GATES FAILED (3) — see ✗ above
+exit=1
+29:49 +14435 ~52 -5: Some tests failed.
+00:18 +24: All tests passed!
+00:52 +79: All tests passed!
+01:34 +129 -11: Some tests failed.
+00:26 +10: All tests passed!

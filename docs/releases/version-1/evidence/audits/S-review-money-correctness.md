@@ -733,3 +733,97 @@ Two sets:
 - The consent wording (UI).
 - Any deployed server.
 - The held-out set.
+
+## Confirmation at a157e68e
+
+A confirmation check of `a157e68e` against `f4dcabd3`. Reviewer `review-money`, model `claude-opus-5-5`, synthetic data only. Both commits ran from scratch worktrees; the repo was read-only. The server leg mirrors the new `index.ts` gate: `meaningRejectionOf(sanitizedText, amount, gatedMeaning(...)) != null` sends the message to review.
+
+### Verdict: ACCEPT WITH FOLLOW-UP
+
+VAL-1 is closed. The diff changes no outcome on my 708 messages. PRIV-1 is narrowed further, with one new over-masking class (S3). No S1 is open; the one S2 left is a residual PRIV-1 leak.
+
+### (1) VAL-1
+
+104 cases:
+- my 16 earlier reproductions
+- 88 fresh variants: English and Arabic × tip, VAT, service fee and FX fee × declined, pending, failed, reversed and on hold × status before or after the total, plus completed controls
+
+The model answer was "completed" at the stated total. I checked:
+- the `process-ios-sms` gate, which is the last step of both the primary and the legacy path
+- `parse-sms`
+- the device import, with the server row forged as processed
+
+**Not-completed messages that become a processed server row:** 68 → **7** (of 96).
+- **All the declined, pending, failed, reversed and on-hold forms are closed**, apart from the two Arabic «عملية معكوسة» cases below, in both languages and both orders, on every path.
+- **The 7 left are cue-word gaps, not the gate.** They were already recorded by `parse-sms` and the device import at `f4dcabd3`, and are recorded identically now:
+  - "Awaiting merchant confirmation"
+  - "Attempted purchase"
+  - "You will receive … cashback on 01/12"
+  - a total "… will be charged tomorrow"
+  - a tip "… awaiting authorization"
+  - the Arabic prefix «عملية معكوسة:» ("reversed transaction") before a VAT total and before a service-fee total
+
+**Completed totals:** 7 of 8 are recorded at the stated total on the server and the iOS import. The exception is the FX-fee form "USD 100.00 (SAR 375.00) + FX fee SAR 8.25, total SAR 383.25", which goes to review as `multiple_amounts`. That is review, not a wrong amount.
+
+### (2) Regression check, f4dcabd3 → a157e68e
+
+All 708 messages (original 350 + 358 probes), on every path (dB, dN, server, eB, eN):
+- **0 outcome changes**, so no right→wrong, no right→silent and no new throw.
+- Totals are unchanged from the f4dcabd3 check: server wrong/silent/review 9/26/77; iOS import 11/3/62.
+
+### (3) PRIV-1
+
+Two sets:
+- the earlier 378 privacy messages
+- 246 fresh cases:
+  - the earlier 117
+  - 2 names × 12 English cues, with and without a transfer word
+  - 7 Arabic cues with an account number
+  - 7 "acc no."-style labels
+  - 60 purchases from 10 merchants after "paid to", "To", "To:" and «إلى»
+
+**Closed:**
+- all 14 "To <Name>: …" leaks
+- 56 of 70 name leaks under the `payment` type hint
+- every account-number leak under the `payment` type hint
+- the "Payee" and "Benef." cues
+- "acc no. / acc. / a/c no / acct no / ac" followed by 5–9 digits
+- cues with no transfer word: "Sender", "Recipient", "Remitter", "Paid to", "From:"
+
+**New leaks:** 0.
+
+**Still reach the server and the model:**
+- "From <Name>: …" (a heading with "From", the twin of the "To" heading)
+- "Attn", "Name:" and "Customer" before a name, even in transfer context
+- «إلى حساب <name>» with no colon, under the `payment` hint only (14)
+
+**Over-masking:**
+- **NEW at a157e68e:** "Card *4521: SAR 85.00 paid to <Merchant>" (no purchase word) masks the merchant as `[NAME]` (10 of 10 merchants). The model loses the merchant and its category.
+- **Pre-existing:** "Purchase To: <Merchant> SAR 85.00 card *4521" and «شراء 85 ريال إلى <Merchant> بطاقة 4521» mask the merchant as `[REDACTED]` and also the user's own card suffix 4521.
+- **No change to the server's rule-based parse:** amount, acceptance and date are the same on raw and redacted text for all 246. The merchant changes only on 7 transfers, where a person's name was the merchant.
+
+**Device == server:** on all 246 fresh texts. Reading the code, the Swift Shortcut diff adds the same person-cue, "From:"/"paid to", "To <Name>:" and "acc" rules, with the same purchase-context guard. XCTest was not run.
+
+### Open defects at a157e68e
+
+| ID | Sev | Class | Description |
+|---|---|---|---|
+| VAL-1 | — | CLOSED | Nothing not-completed is released by the tip or total rule on the server gate. |
+| PRIV-1r | S2 | Residual, pre-existing | Names after "From <Name>:", "Attn", "Name:" and "Customer"; «إلى حساب <name>» under the `payment` hint. |
+| MASK-1 | S3 | NEW | "SAR … paid to <Merchant>" with no purchase word: the merchant is masked as a person. |
+| MASK-0 | S3 | Pre-existing | "Purchase To: <Merchant>" and «شراء … إلى <Merchant> بطاقة NNNN» mask the merchant and the user's own card suffix. |
+| CUE-1 | S3 | Pre-existing | Recorded although no money moved: "Awaiting merchant confirmation", "Attempted purchase", "will receive … cashback on <date>", "… will be charged tomorrow", "awaiting authorization", and the Arabic prefix «عملية معكوسة:» before a total. |
+| HOLD-1 | S3 | Open since f4dcabd3 | Completed messages held for review: an "expected/pending refund … credited" message, a purchase with a refund footer, a third-party transfer naming two account types, "Bill + VAT = total paid", and the FX-fee total. |
+| FT-1 | S3 | Open | A purchase with a "Standing orders will be executed…" footer is silent on the server; the device sends it to review. |
+| NEW-2r | S3 | Open | 6 completed shapes are no-movement on the server. |
+| PRE-* | S3 | Pre-existing | An own-account transfer booked as spend (AT008), an Arabic refund booked in the wrong direction (RF009), and B147-1 / PAR-1 (not re-measured). |
+| HAR-1 | S4 | Partly fixed | The `.pyc` is gone. The budget is still a message count set at exactly 38 of 38, and the fu5 cases do not cover HOLD-1. |
+
+### Not checked
+
+- Real AI calls.
+- The Swift XCTest.
+- Build 147.
+- Timing.
+- Any deployed server.
+- The held-out set.
