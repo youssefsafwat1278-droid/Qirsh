@@ -871,6 +871,66 @@ class RunnerTests: XCTestCase {
     }
   }
 
+  // Round 4 (D1): the ACTUAL request the Shortcut sends. `BackendCaptureClient
+  // .process` runs unchanged through `SharedCaptureStore.gatedUpload`; the
+  // DEBUG seam `uploadProtocolClasses` puts a capturing URL protocol on that
+  // session, so the body below is the bytes that would go on the wire. No
+  // tagged third-party name, number or one-time code may be in it.
+  func testShortcutActualRequestBodyCarriesNoTaggedThirdPartyToken() async throws {
+    guard #available(iOS 16.0, *) else { throw XCTSkip("App Intents need iOS 16") }
+    struct Row: Decodable {
+      let id: String
+      let raw: String
+      let expected: String
+      let secrets: [String]
+    }
+    resetCapSeams()
+    defer {
+      SharedCaptureStore.uploadProtocolClasses = nil
+      CapturingUploadProtocol.bodies = []
+      resetCapSeams()
+    }
+    let (payloadID, owner) = try stampedAllowedItem()
+    try SharedCaptureStore.setCloudEgressState(
+      state: "ON", ownerUid: ownerA, transitionGeneration: 1, reservedVersion: 2)
+    SharedCaptureStore.uploadProtocolClasses = [CapturingUploadProtocol.self]
+    CapturingUploadProtocol.bodies = []
+    let client = BackendCaptureClient(config: SharedCaptureStore.BackendConfig(
+      cloudProcessingEnabled: true, installID: "install-1", deviceSecret: "device-secret",
+      backendURL: "https://invalid.invalid", anonKey: "anon"))
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let rows = try JSONDecoder().decode([Row].self, from: Data(contentsOf: root.appendingPathComponent(
+      "../../supabase/functions/_shared/fixtures/sms_leak_labelled_cases.json")))
+    XCTAssertGreaterThanOrEqual(rows.count, 200)
+    for row in rows {
+      let before = CapturingUploadProtocol.bodies.count
+      _ = try await client.process(
+        BankSMSCaptureRequest(
+          smsText: row.raw, senderName: "Example Bank", senderID: "ExampleBank",
+          receivedAt: Date(timeIntervalSince1970: 1_794_000_000), receivedAtInferred: false,
+          localeIdentifier: "ar"),
+        payloadID: payloadID, ownerUid: ownerA, ownerGeneration: owner.generation, allowAi: true)
+      XCTAssertEqual(CapturingUploadProtocol.bodies.count, before + 1, "\(row.id): one request")
+      let data = try XCTUnwrap(CapturingUploadProtocol.bodies.last)
+      let body = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+      XCTAssertEqual(body["smsText"] as? String, row.expected, row.id)
+      XCTAssertEqual(body["sanitizedText"] as? String, row.expected, row.id)
+      XCTAssertEqual(body["textLength"] as? Int, BackendCaptureClient.textLength(row.raw), row.id)
+      for (field, value) in body {
+        guard let text = value as? String else { continue }
+        for secret in row.secrets {
+          XCTAssertFalse(text.contains(secret), "\(row.id): \"\(secret)\" in \(field)")
+        }
+      }
+      // The raw bytes too (JSON escapes non-ASCII only as UTF-8 here).
+      let wire = String(decoding: data, as: UTF8.self)
+      for secret in row.secrets {
+        XCTAssertFalse(wire.contains(secret), "\(row.id): \"\(secret)\" in the request bytes")
+      }
+    }
+    XCTAssertEqual(CapturingUploadProtocol.bodies.count, rows.count)
+  }
+
   func testShortcutUploadBodySendsTextLengthMeasuredBeforeRedaction() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
     let source = try String(
@@ -5834,6 +5894,118 @@ final class SmsRedactionParityTests: XCTestCase {
     }
   }
 
+  // Round 4 (F): the generated parity set written by
+  // supabase/functions/_shared/sms_redaction_parity_test.ts. `expected` is the
+  // server's output; the Shortcut must reproduce it byte for byte.
+  private struct ParityCase: Decodable {
+    let raw: String
+    let expected: String
+  }
+
+  func testShortcutSanitizerMatchesGeneratedParitySet() throws {
+    guard #available(iOS 16.0, *) else { throw XCTSkip("App Intents need iOS 16") }
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let url = root.appendingPathComponent(
+      "../../supabase/functions/_shared/fixtures/sms_redaction_parity_cases.json")
+    let cases = try JSONDecoder().decode([ParityCase].self, from: Data(contentsOf: url))
+    XCTAssertGreaterThanOrEqual(cases.count, 250)
+    for c in cases {
+      let out = try BackendCaptureClient.sanitize(c.raw)
+      XCTAssertEqual(out, c.expected, "Shortcut and server disagree on \(c.raw)")
+      XCTAssertEqual(try BackendCaptureClient.sanitize(out), out, "not idempotent: \(c.raw)")
+    }
+  }
+
+  // Round 4 (D1): the Shortcut's upload body for every labelled row. The body
+  // is built here field for field as `BackendCaptureClient.process` builds it
+  // (the request itself only leaves through the gated transport, which has no
+  // capture seam); the source pins below fail if `process` starts deriving
+  // any other field from the message text.
+  func testShortcutUploadBodyCarriesNoTaggedThirdPartyToken() throws {
+    guard #available(iOS 16.0, *) else { throw XCTSkip("App Intents need iOS 16") }
+    let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+    let source = try String(
+      contentsOf: root.appendingPathComponent("BankMessageShortcuts/BankMessageShortcuts.swift"))
+    XCTAssertTrue(source.contains("let sanitized = try Self.sanitize(request.smsText)"))
+    XCTAssertTrue(source.contains("\"smsText\": sanitized,"))
+    XCTAssertTrue(source.contains("\"sanitizedText\": sanitized,"))
+    let start = try XCTUnwrap(source.range(of: "func process("))
+    let end = try XCTUnwrap(source.range(of: "SharedCaptureStore.gatedUpload("))
+    let builder = String(source[start.lowerBound..<end.lowerBound])
+    // The raw text is read twice: once to redact it, once to measure it.
+    XCTAssertEqual(builder.components(separatedBy: "request.smsText").count - 1, 2)
+
+    let url = root.appendingPathComponent(
+      "../../supabase/functions/_shared/fixtures/sms_leak_labelled_cases.json")
+    let cases = try JSONDecoder().decode([LabelledLeakCase].self, from: Data(contentsOf: url))
+    XCTAssertGreaterThanOrEqual(cases.count, 200)
+    for c in cases {
+      let request = BankSMSCaptureRequest(
+        smsText: c.raw, senderName: "Example Bank", senderID: "ExampleBank",
+        receivedAt: Date(timeIntervalSince1970: 1_794_000_000), receivedAtInferred: false,
+        localeIdentifier: "ar")
+      let sanitized = try BackendCaptureClient.sanitize(request.smsText)
+      let body: [String: Any] = [
+        "payloadId": "payload",
+        "installId": "install",
+        "deviceSecret": "secret",
+        "smsText": sanitized,
+        "sanitizedText": sanitized,
+        "textLength": BackendCaptureClient.textLength(request.smsText),
+        "sender": request.senderID ?? request.senderName ?? "",
+        "senderName": request.senderName ?? "",
+        "senderId": request.senderID ?? "",
+        "receivedAt": SharedCaptureStore.isoString(from: request.receivedAt ?? Date()),
+        "tzOffsetMinutes": 180,
+        "locale": "ar",
+        "source": "ios_shortcut",
+        "localNotification": true,
+        "notificationDetails": true,
+        "allowAi": true,
+        "owner_uid": "owner",
+        "owner_generation": 1,
+        "schema_version": 2,
+        "analysis_mode": "ai_primary_v1",
+        "backgroundAnalysis": true,
+      ]
+      XCTAssertEqual(sanitized, c.expected, c.id)
+      let wire = String(
+        data: try JSONSerialization.data(withJSONObject: body, options: [.withoutEscapingSlashes]),
+        encoding: .utf8) ?? ""
+      for (field, value) in body {
+        guard let text = value as? String else { continue }
+        for secret in c.secrets {
+          XCTAssertFalse(text.contains(secret), "\(c.id): \"\(secret)\" in \(field)")
+        }
+      }
+      for secret in c.secrets where secret.unicodeScalars.allSatisfy({ $0.isASCII }) {
+        XCTAssertFalse(wire.contains(secret), "\(c.id): \"\(secret)\" in the request body")
+      }
+    }
+  }
+
+  // Round 4 (real-model run): a one-time code never leaves the Shortcut,
+  // whichever side of the code the cue sits on; an amount of the same length
+  // stays; "to confirm" is not a name.
+  func testShortcutRemovesOneTimeCodesAndKeepsAmountsAndOrdinaryWords() throws {
+    guard #available(iOS 16.0, *) else { throw XCTSkip("App Intents need iOS 16") }
+    XCTAssertEqual(
+      try BackendCaptureClient.sanitize("Your verification code is 482913. Do not share it."),
+      "Your verification code is [OTP]. Do not share it.")
+    XCTAssertEqual(
+      try BackendCaptureClient.sanitize("Your purchase amount is 482913 SAR. Do not share your card details."),
+      "Your purchase amount is 482913 SAR. Do not share your card details.")
+    XCTAssertEqual(
+      try BackendCaptureClient.sanitize("Use 482913 to confirm your Example Bank transfer of SAR 500.00"),
+      "Use [OTP] to confirm your Example Bank transfer of SAR 500.00")
+    XCTAssertEqual(
+      try BackendCaptureClient.sanitize("رمز التحقق الخاص بك هو 482913"),
+      "رمز التحقق الخاص بك هو [OTP]")
+    XCTAssertEqual(
+      try BackendCaptureClient.sanitize("المبلغ المستحق هو 482913 ريال"),
+      "المبلغ المستحق هو 482913 ريال")
+  }
+
   func testShortcutKeepsMerchantInPurchaseAndMasksPersonInTransfer() throws {
     guard #available(iOS 16.0, *) else { throw XCTSkip("App Intents need iOS 16") }
     XCTAssertEqual(
@@ -5849,4 +6021,39 @@ final class SmsRedactionParityTests: XCTestCase {
       "Purchase at FROM SCRATCH CAFE SAR 45.00 card *4321"
     )
   }
+}
+
+/// Captures the body of every request on a session it is installed on and
+/// answers 200 with a minimal capture reply. Used through the DEBUG seam
+/// `SharedCaptureStore.uploadProtocolClasses` only.
+final class CapturingUploadProtocol: URLProtocol {
+  static var bodies: [Data] = []
+
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    var data = request.httpBody ?? Data()
+    if data.isEmpty, let stream = request.httpBodyStream {
+      stream.open()
+      defer { stream.close() }
+      var buffer = [UInt8](repeating: 0, count: 4096)
+      while stream.hasBytesAvailable {
+        let read = stream.read(&buffer, maxLength: buffer.count)
+        if read <= 0 { break }
+        data.append(buffer, count: read)
+      }
+    }
+    Self.bodies.append(data)
+    let response = HTTPURLResponse(
+      url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1",
+      headerFields: ["Content-Type": "application/json"])!
+    client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+    client?.urlProtocol(
+      self,
+      didLoad: Data(#"{"capture":{"notification":{"title":"t","body":"b","type":"received"}}}"#.utf8))
+    client?.urlProtocolDidFinishLoading(self)
+  }
+
+  override func stopLoading() {}
 }

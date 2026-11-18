@@ -12,6 +12,7 @@ import '../../domain/finance/financial_semantics.dart';
 import '../../features/planning_sync/services/planning_outbox_queue.dart';
 import 'backup_service.dart';
 import 'backup_snapshot_builder.dart';
+import 'merchant_rule_restore.dart';
 import 'planning_restore_preflight.dart';
 import 'restore_journal.dart';
 import 'restore_plan.dart';
@@ -31,9 +32,10 @@ class RestoreBackupUseCase {
   final AppDatabase _db;
   final PlanningCutoverCoordinator _coordinator;
   // MALI-026 (B8-3 §1/§3): v4 business snapshots carry exact minor units +
-  // currency; v3 and older are the legacy REAL-only shape. Both restore (version
-  // dispatch below); a version ABOVE this is rejected before any mutation.
-  static const currentSchemaVersion = 4;
+  // currency; v3 and older are the legacy REAL-only shape. v5 adds the deletion
+  // history of saved category rules. All restore (version dispatch below); a
+  // version ABOVE this is rejected before any mutation.
+  static const currentSchemaVersion = 5;
 
   // accounts must come before tables that FK into it; categories before the
   // rows that reference category_id (merchant_category_map, transactions,
@@ -59,6 +61,11 @@ class RestoreBackupUseCase {
     // No declared FK, so ordering is free; last keeps it out of the way of the
     // parent-before-child chain above.
     'local_offer_savings',
+    // Deletion history of saved rules (v5+). No FK; after merchant_category_map
+    // because saving a rule clears that merchant's history rows.
+    'merchant_rule_history',
+    'merchant_rule_tombstones',
+    'merchant_rule_restore_choices',
   ];
 
   // Delete in reverse FK order — children before parents.
@@ -74,6 +81,9 @@ class RestoreBackupUseCase {
     'budgets',
     'transactions',
     'merchant_category_map',
+    'merchant_rule_history',
+    'merchant_rule_tombstones',
+    'merchant_rule_restore_choices',
     'cards',
     'merchants',
     'achievements',
@@ -194,6 +204,10 @@ class RestoreBackupUseCase {
             if (insertedTables == 2) fault('afterPartialInsert');
           }
         }
+        // Saved category rules: merged by merchant and category key against
+        // the deletion history (see MerchantRuleRestore).
+        await MerchantRuleRestore(_db)
+            .apply(tables, schemaVersion, merge: merge);
         fault('duringRelationshipReconstruction');
         // Idempotent no-op for a self-consistent v3 snapshot; heals legacy /
         // cross-catalog dangling references so the committed DB is FK-clean.
@@ -566,10 +580,11 @@ class RestoreBackupUseCase {
   //  * a device row the user deleted (`deleted_at` set; a transaction
   //    `ignored`) stays deleted even when the backup copy carries a later
   //    timestamp (another device's clock);
-  //  * saved merchant rules (merchant_category_map) are taken from the device
-  //    only: "Forget rule" and category deletion remove a rule without a
-  //    trace, so a backup-only rule cannot be told from one the user removed.
-  //    A full apply (a device with no records yet) still restores them.
+  //  * saved merchant rules (merchant_category_map) and their deletion
+  //    history are not merged row by row here but by MerchantRuleRestore: a
+  //    missing rule is restored, a rule removed on this device stays removed,
+  //    the more recently changed rule wins, and a rule whose removal cannot be
+  //    ruled out waits for the user's choice.
   //
   // A row the backup wins keeps the device's server identity, is marked
   // `pending` when server-backed (PendingSyncReconciler records the update
@@ -600,6 +615,8 @@ class RestoreBackupUseCase {
         ])
           'EXISTS(SELECT 1 FROM $t)',
         'EXISTS(SELECT 1 FROM merchant_category_map WHERE is_user_confirmed = 1)',
+        'EXISTS(SELECT 1 FROM merchant_rule_tombstones)',
+        'EXISTS(SELECT 1 FROM merchant_rule_restore_choices)',
         'EXISTS(SELECT 1 FROM categories WHERE key NOT IN '
             '(${List.filled(seedKeys.length, '?').join(', ')}))',
       ].join(' OR ')}) AS has_data;',
@@ -650,14 +667,17 @@ class RestoreBackupUseCase {
     };
     var tableIndex = 0;
     for (final table in _restoreOrder) {
-      await _db.customStatement(
-          "INSERT INTO restore_merge_counts SELECT '$table', COUNT(*) "
-          'FROM $table;');
+      // Saved rules and their history are merged by MerchantRuleRestore.
+      final ruleTable = table == 'merchant_category_map' ||
+          MerchantRuleRestore.historyTables.contains(table);
+      if (!MerchantRuleRestore.historyTables.contains(table)) {
+        await _db.customStatement(
+            "INSERT INTO restore_merge_counts SELECT '$table', COUNT(*) "
+            'FROM $table;');
+      }
       final cols = await _columnsOf(table);
-      // SP-01: the device's saved rules are authoritative (see above).
-      final rows = table == 'merchant_category_map'
-          ? const []
-          : (tables[table] as List<dynamic>?) ?? const [];
+      final rows =
+          ruleTable ? const [] : (tables[table] as List<dynamic>?) ?? const [];
       var rowIndex = 0;
       for (final row in rows.cast<Map<String, dynamic>>()) {
         await _mergeRow(table, row, schemaVersion, cols, remap);
@@ -1177,6 +1197,11 @@ class RestoreBackupUseCase {
     // reinterpreted as complete.
     if (schemaVersion >= 4) {
       for (final table in BackupSnapshotBuilder.backedUpTables) {
+        // Deletion history of saved rules exists from v5 on.
+        if (schemaVersion < MerchantRuleRestore.historySnapshotVersion &&
+            MerchantRuleRestore.historyTables.contains(table)) {
+          continue;
+        }
         if (rawTables[table] is! List) {
           throw BackupException(
             'النسخة الاحتياطية غير مكتملة (جدول "$table" مفقود). '

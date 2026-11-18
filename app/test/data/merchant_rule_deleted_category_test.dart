@@ -42,6 +42,23 @@ void main() {
     expect(await rules.userConfirmedCategoryFor(shop), isNull);
     expect(await rules.getUserConfirmedRules(), isEmpty);
     expect(await rules.getLearnedCategoryMap(), isNot(contains(shop)));
+    // SP-17: the merchant has no usable category, so it is treated as new
+    // (the user is asked to categorise it).
+    expect(await rules.hasCategoryForMerchant(shop), isFalse);
+    expect(await rules.hasCategoryForMerchant('متجر اصطناعي'), isFalse);
+  });
+
+  test('a rule on a live category still counts (English and Arabic)', () async {
+    await rules.confirmMerchantCategory(
+        rawMerchant: 'Synthetic Other Shop',
+        categoryKey: 'shopping',
+        isUserConfirmed: true);
+    await rules.confirmMerchantCategory(
+        rawMerchant: 'متجر اصطناعي',
+        categoryKey: 'shopping',
+        isUserConfirmed: true);
+    expect(await rules.hasCategoryForMerchant('Synthetic Other Shop'), isTrue);
+    expect(await rules.hasCategoryForMerchant('متجر اصطناعي'), isTrue);
   });
 
   test('categorisation falls through to the next precedence level', () async {

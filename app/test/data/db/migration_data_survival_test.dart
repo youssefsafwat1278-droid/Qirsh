@@ -20,11 +20,12 @@ import 'package:money_companion/data/db/money_v30_backfill.dart';
 /// ## The real supported range
 ///
 /// `_versionedMigrations` declares versioned steps from 31, 32, 33, 34, 35, 36, 37, 38 and
-/// 39 (target 43, v41->42 = consent watermark, v42->43 = category provenance). Anything BELOW 31 is not unsupported — it reaches 41 through
+/// 39 (target 44, v41->42 = consent watermark, v42->43 = category provenance,
+/// v43->44 = saved-rule deletion history). Anything BELOW 31 is not unsupported — it reaches 41 through
 /// `_createSchema()` (CREATE TABLE IF NOT EXISTS) plus the idempotent
 /// `_runCompatibilityMigrations()` repairs, which is why the v0/v1/v5/v26
 /// fixtures in the pipeline test upgrade cleanly. So the supported range is
-/// "any user_version <= 43", and both halves of it are covered: shape by those
+/// "any user_version <= 44", and both halves of it are covered: shape by those
 /// fixtures, data by the cases below.
 ///
 /// Every upgrade — schema, versioned migrations, compatibility repairs, seed,
@@ -71,9 +72,11 @@ void main() {
 
   /// Versions the app carries an explicit migration FROM, plus representative
   /// pre-31 values that reach 40 through the compatibility path.
-  const versionedFrom = [31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42];
+  const versionedFrom = [
+    31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, //
+  ];
   const preVersioned = [0, 1, 5, 26, 30];
-  const target = 43;
+  const target = 44;
 
   Future<AppDatabase> open() => AppDatabase.open(
         executor: NativeDatabase.memory(),
@@ -206,7 +209,7 @@ void main() {
   });
 
   group('the pre-31 compatibility path preserves it too', () {
-    // These do not have versioned migrations; they reach 43 via _createSchema
+    // These do not have versioned migrations; they reach 44 via _createSchema
     // (IF NOT EXISTS) + the idempotent repairs. Data must still survive.
     for (final from in preVersioned) {
       test('user_version $from -> $target keeps every row and every total',
@@ -236,7 +239,7 @@ void main() {
 
   test('no versioned migration in the supported range is destructive', () {
     // The shape guarantee this file's data cases rest on, pinned so it cannot
-    // regress unnoticed. All steps 31..43 are additive; if a future step
+    // regress unnoticed. All steps 31..44 are additive; if a future step
     // needs to DROP, DELETE or rewrite a business table, this test must fail and
     // force a real captured fixture for that version — the wind-back approach
     // used above cannot detect a shape conversion.
@@ -252,8 +255,8 @@ void main() {
         .allMatches(list)
         .map((m) => m.group(1)!)
         .toList();
-    expect(applies.length, 12,
-        reason: 'the supported versioned range is 31..43 — if this changed, '
+    expect(applies.length, 13,
+        reason: 'the supported versioned range is 31..44 — if this changed, '
             'extend versionedFrom above to match');
 
     for (final name in applies) {

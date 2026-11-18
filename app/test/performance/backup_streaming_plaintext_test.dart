@@ -71,7 +71,7 @@ void main() {
         reason: 'the streaming serializer must be wire-identical to jsonEncode');
     // And it is valid JSON decoding back to the same structure.
     final decoded = jsonDecode(utf8.decode(streamed)) as Map<String, dynamic>;
-    expect(decoded['schemaVersion'], 4);
+    expect(decoded['schemaVersion'], 5);
     expect((decoded['tables'] as Map)['transactions'], hasLength(4500));
   });
 

@@ -13,7 +13,9 @@ import {
   EXPLICIT_OWN_TRANSFER,
   isOwnAccountMove,
   MAX_TEXT_LENGTH,
+  paidTotal,
   partsTotal,
+  refundCredited,
   meaningOf,
   type MessageMeaning,
   withoutNoticeTails,
@@ -248,7 +250,9 @@ function tokenPattern(cues: string[], lam: boolean, flags = ''): RegExp {
 }
 const latin = (words: string[]) => words.filter((w) => /[a-z]/i.test(w));
 const arabic = (words: string[]) => words.filter((w) => !/[a-z]/i.test(w));
-const DECLINED_CUES = rules.declinedKeywords as string[];
+// Follow-up 6 (CUE-1): awaited or only attempted operations are read with
+// the declined cues by every rule below (TransactionStateCues.awaited).
+const DECLINED_CUES = [...(rules.declinedKeywords as string[]), ...(rules.stateCueAwaitedWords as string[])];
 const HYPOTHETICAL_CUES = rules.stateCueHypotheticalMarkers as string[];
 const FUTURE_CUES = rules.stateCueFutureMarkers as string[];
 const NEGATION_CUES = rules.stateCueNegationMarkers as string[];
@@ -264,6 +268,7 @@ const HEADER = /^ ?(?::|\(?[0-9٠-٩]|(?:sar|aed|egp|qar|omr|kwd|bhd|jod|usd|eur
 const HYPOTHETICAL = tokenPattern(HYPOTHETICAL_CUES, true);
 const NEGATION = tokenPattern(NEGATION_CUES, false);
 const FUTURE = tokenPattern(FUTURE_CUES, true);
+const FUTURE_LED = new RegExp(`^(?:وال|بال|فال|ال|و|ف|ب)?(?:${alternation(FUTURE_CUES)}) `);
 const NOT_FUTURE = tokenPattern(HYPOTHETICAL_CUES.filter((c) => !FUTURE_CUES.includes(c)), true);
 const NEGATED_BEFORE = new RegExp(`${NO_LETTER_BEFORE}(?:${alternation(NEGATION_CUES)})(?: يتم| تتم| been)? \\(?$`);
 const AFTER_INTRODUCER = new RegExp(
@@ -314,9 +319,14 @@ function notStatus(text: string, m: Cue): 'name' | 'hypothetical' | null {
   }
   const after = text.slice(m.end);
   const genericAfter = GENERIC_NEXT.exec(after);
-  const generic = genericAfter
+  // Follow-up 6: a promise ("will be processed", `سيتم تنفيذ`) whose clause
+  // names a plural generic subject ("Refund requests will be processed
+  // within 7 days") is advice about them, not this transaction's status.
+  const promised = FUTURE_LED.test(text.slice(m.start, m.end)) &&
+    GENERIC_ANY.test(text.slice(lastBoundary(text, m.start, CLAUSE_BOUNDARY), m.start));
+  const generic = promised || (genericAfter
     ? !HEADER.test(after.slice(genericAfter[0].length))
-    : GENERIC_BEFORE.test(sentence) && !HEADER.test(after);
+    : GENERIC_BEFORE.test(sentence) && !HEADER.test(after));
   if (generic) return 'name';
   const end = sentenceEnd(text, m.end);
   if (/[?؟]/.test(end.mark) && !new RegExp(CLAUSE_BOUNDARY.source).test(text.slice(m.end, end.at))) return 'name';
@@ -327,10 +337,10 @@ const cues = (re: RegExp, text: string): Cue[] =>
   [...text.matchAll(re)].map((m) => ({ start: m.index!, end: m.index! + m[0].length }));
 
 /** A declined status later in [credit]'s sentence that is not attributive ("failed transaction"). */
-function failsLater(text: string, credit: Cue): boolean {
+function failsLater(text: string, credit: Cue, credited: boolean): boolean {
   const end = sentenceEnd(text, credit.end).at;
   return cues(DECLINED, text).some((d) =>
-    d.start >= credit.end && d.start < end && isDeclinedStatus(text, d) &&
+    d.start >= credit.end && d.start < end && !(credited && qualifiesRefund(text, d)) && isDeclinedStatus(text, d) &&
     !NOUN_NEXT.test(text.slice(d.end)) && !NOUN_BEFORE.test(text.slice(0, d.start))
   );
 }
@@ -346,7 +356,7 @@ export function isDeclinedText(raw: string): boolean {
 }
 
 /** A declined cue or a reversal word anywhere in [s] (TransactionStateCues.hasStatusCue). */
-function hasStatusCue(s: string): boolean {
+export function hasStatusCue(s: string): boolean {
   const text = foldForCues(s);
   return new RegExp(DECLINED.source).test(text) || new RegExp(REVERSAL.source).test(text);
 }
@@ -385,12 +395,37 @@ function isOtherEventStatus(s: string): boolean {
 
 const CUE_DEPS: CueDeps = { hasStatusCue, namesOtherEvent };
 
+const PENDING_WORD = new RegExp(`^(?:ال)?(?:${alternation(MEANING_WORDS.pendingWords)})$`);
+const COMPLETED_ORIGINAL = new RegExp(
+  '(?<![a-z])(?:completed|successful|settled) (?:purchase|payment|transaction|pos)(?![a-z])' +
+    '|(?:شراء|عمليه|معامله) (?:ال)?(?:مكتمله|ناجحه|منفذه)',
+);
+/** The cue [m] is a pending word directly qualifying a refund noun (TransactionStateCues._qualifiesRefund). */
+// Round 4 (real-model run): or a cancelled word about the original operation,
+// not the refund ("Refund … for the cancelled transaction has been credited").
+function qualifiesRefund(text: string, m: Cue): boolean {
+  const cue = text.slice(m.start, m.end);
+  const before = text.slice(0, m.start);
+  const after = text.slice(m.end);
+  if (PENDING_WORD.test(cue)) {
+    return /^ (?:refund|reversal)(?![a-z])/.test(after) || /(?:استرداد|استرجاع|المسترد) $/.test(before);
+  }
+  if (!/(?:cancelled|canceled|ملغاه|ملغيه|الغاء)/.test(cue)) return false;
+  return /^ (?:transaction|purchase|payment|order|booking|operation|txn|transfer)(?![a-z])/.test(after) ||
+    /(?:عمليه|معامله|شراء|طلب|حجز|طلبك|حجزك) $/.test(before) || /عمليه/.test(cue) ||
+    !new RegExp(CREDIT_ACTION.source).test(before.slice(lastBoundary(before, before.length, BOUNDARY)));
+}
+
 function isDeclinedCore(raw: string): boolean {
   const text = foldForCues(raw);
+  // Follow-up 6 (HOLD-1): "Your pending refund … has been credited" — a
+  // pending word that qualifies the refund itself describes what it was; the
+  // clause that states the credit happened decides.
+  const credited = refundCredited(raw.toLowerCase());
   let creditAt: number | null = null;
   let undone = false;
   for (const m of cues(CREDIT_ACTION, text)) {
-    const done = creditDone(text, m);
+    const done = creditDone(text, m, credited);
     if (done === null) continue;
     if (!done) {
       undone = true;
@@ -399,9 +434,13 @@ function isDeclinedCore(raw: string): boolean {
     creditAt = m.start;
     break;
   }
-  if (cues(DECLINED, text).some((d) => isDeclinedStatus(text, d))) return true;
+  if (cues(DECLINED, text).some((d) => !(credited && qualifiesRefund(text, d)) && isDeclinedStatus(text, d))) {
+    return true;
+  }
   const anyDeclined = new RegExp(DECLINED.source).test(text);
-  if (!anyDeclined && PURCHASE.test(text) &&
+  // Follow-up 6: a reversal the message says returns a completed purchase is
+  // a refund of money that was counted.
+  if (!anyDeclined && !(credited && COMPLETED_ORIGINAL.test(text)) && PURCHASE.test(text) &&
     cues(REVERSAL, text).some((m) => creditDone(text, m) === true)) {
     return true;
   }
@@ -424,12 +463,12 @@ function isDeclinedStatus(text: string, d: Cue): boolean {
 }
 
 /** Whether the credit word [m] reports money returned: null = not a status, false = promised/negated/failed. */
-function creditDone(text: string, m: Cue): boolean | null {
+function creditDone(text: string, m: Cue, credited = false): boolean | null {
   const why = notStatus(text, m);
   if (why === 'name') return null;
   const clause = text.slice(lastBoundary(text, m.start, CLAUSE_BOUNDARY), m.start);
   return !(why === 'hypothetical' || NEGATION.test(clause) || UNDONE_NEXT.test(text.slice(m.end)) ||
-    failsLater(text, m));
+    failsLater(text, m, credited));
 }
 
 /**
@@ -567,8 +606,13 @@ export function deterministicParse(
   const charged = chargedPair(normalized);
   const currency = charged?.currency ?? extractCurrency(normalized);
   const masked = maskAccountFigures(normalized.replace(UP_TO_AMOUNT, ' '));
+  // Follow-up 6 (HOLD-1): a labelled total that a clause says was paid is the
+  // amount, whichever figure comes first.
+  const paid = paidTotal(lower, hasStatusCue);
   const amountFields = charged
     ? { amount: charged.amount, amount_text: charged.amount_text }
+    : paid
+    ? captureAmount(normalized.slice(paid.start, paid.end), currency)
     : captureAmount(masked, currency);
   const amount = amountFields.amount;
   const meaning = messageMeaning(text);
@@ -929,7 +973,12 @@ function detectDirection(lower: string): 'credit' | 'debit' | 'unknown' {
 
 // The device types these as `refund` (ParserEngine._detectType), which nets
 // against spend; the server agrees instead of reading them as income.
-const REFUND_KEYWORDS = ['استرداد', 'رد مبلغ', 'refund', 'reversal', 'تم استرجاع', 'استرجاع مبلغ'];
+// Follow-up 6 (PRE-RF009): with the credit direction decided by the clause,
+// the bare refund nouns («استرجاع عملية شراء», «مرتجع مشتريات») count too.
+const REFUND_KEYWORDS = [
+  'استرداد', 'رد مبلغ', 'refund', 'reversal', 'تم استرجاع', 'استرجاع مبلغ', 'استرجاع', 'مرتجع', 'إرجاع', 'ارجاع',
+  'إعادة مبلغ', 'اعادة مبلغ',
+];
 function isRefundText(lower: string): boolean {
   return REFUND_KEYWORDS.some((keyword) => lower.includes(keyword));
 }

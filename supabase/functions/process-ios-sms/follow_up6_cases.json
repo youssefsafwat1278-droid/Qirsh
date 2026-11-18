@@ -1,0 +1,935 @@
+{
+ "_readme": "Follow-up 6 (round 4): the independent reviewer's open reproductions at a157e68e (CUE-1, HOLD-1, FT-1, NEW-2r, PRE-AT008, PRE-RF009, the VAL-1 leftovers) and the three classes of the real-model run (a bare operation, a late-payment fee, a refund of a cancelled operation), in English and Arabic, with hand truth. Synthetic messages only. kind: d = a completed debit of amount/currency; c = a completed credit; t = an explicitly named move between the user's own accounts (neutral on the device, unresolved on the server); n = no completed movement (never recorded); r = must be a review row (never recorded, never silent). answer = the amount a model or an older server would give: for n and r rows no gate accepts it; for d and c rows every gate does. device / server = that side's rule-parse outcome where it knowingly differs from kind (review = not recorded); pin says why. The same rows are in tools/parser_diff/cases/fu6.json. Read by app/test/engine/parser/follow_up6_money_correctness_test.dart, app/test/domain/usecases/follow_up6_final_effect_test.dart and process-ios-sms/follow_up6_money_correctness_test.ts.",
+ "cases": [
+  {
+   "id": "CUE1a",
+   "kind": "n",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. Awaiting merchant confirmation",
+   "answer": 45.0
+  },
+  {
+   "id": "CUE1b",
+   "kind": "n",
+   "text": "Purchase of SAR 45.00 at Jarir with card *4521 is awaiting merchant confirmation",
+   "answer": 45.0
+  },
+  {
+   "id": "CUE1c",
+   "kind": "n",
+   "text": "Attempted purchase SAR 45.00 at Jarir card *4521",
+   "answer": 45.0
+  },
+  {
+   "id": "CUE1d",
+   "kind": "n",
+   "text": "Purchase SAR 115.00 at Cafe Lumen incl. tip SAR 15.00 card *4521, awaiting authorization",
+   "answer": 115.0
+  },
+  {
+   "id": "CUE1e",
+   "kind": "n",
+   "text": "Payment of AED 300.00 to Etisalat is awaiting authorisation",
+   "answer": 300.0
+  },
+  {
+   "id": "CUE1f",
+   "kind": "n",
+   "text": "Purchase attempt of SAR 45.00 at Jarir with card *4521",
+   "answer": 45.0
+  },
+  {
+   "id": "CUE1g",
+   "kind": "n",
+   "text": "Card *4521: SAR 45.00 at Jarir. Status: awaiting merchant confirmation",
+   "answer": 45.0
+  },
+  {
+   "id": "CUE1h",
+   "kind": "n",
+   "text": "شراء 45 ريال لدى جرير بطاقة 4521. بانتظار تأكيد التاجر",
+   "answer": 45.0
+  },
+  {
+   "id": "CUE1i",
+   "kind": "n",
+   "text": "شراء 45 ريال لدى جرير بطاقة 4521 في انتظار تأكيد التاجر",
+   "answer": 45.0
+  },
+  {
+   "id": "CUE1j",
+   "kind": "n",
+   "text": "محاولة شراء 45 ريال لدى جرير بطاقة 4521",
+   "answer": 45.0
+  },
+  {
+   "id": "CUE1k",
+   "kind": "n",
+   "text": "عملية شراء بمبلغ 45 ريال لدى جرير بطاقة 4521 بانتظار التفويض",
+   "answer": 45.0
+  },
+  {
+   "id": "CUE1l",
+   "kind": "n",
+   "text": "دفع 300 ريال إلى الاتصالات بانتظار التأكيد",
+   "answer": 300.0
+  },
+  {
+   "id": "CUE1m",
+   "kind": "d",
+   "text": "Purchase SAR 45.00 at Attempt Cafe card *4521",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "CUE1n",
+   "kind": "d",
+   "text": "Purchase SAR 45.00 at Jarir card *4521 confirmed by the merchant",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "CUE1o",
+   "kind": "d",
+   "text": "شراء 45 ريال لدى جرير بطاقة 4521. تم تأكيد العملية من التاجر",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "FUT2a",
+   "kind": "n",
+   "text": "You will receive SAR 500.00 cashback on 01/12",
+   "answer": 500.0
+  },
+  {
+   "id": "FUT2b",
+   "kind": "n",
+   "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 will be charged tomorrow",
+   "answer": 230.0
+  },
+  {
+   "id": "FUT2c",
+   "kind": "n",
+   "text": "SAR 45.00 will be debited from your account *4521 on 01/12/2026",
+   "answer": 45.0
+  },
+  {
+   "id": "FUT2d",
+   "kind": "n",
+   "text": "Your card *4521 will be charged SAR 99.00 for Shahid on 01/12",
+   "answer": 99.0
+  },
+  {
+   "id": "FUT2e",
+   "kind": "n",
+   "text": "You are going to receive SAR 500.00 cashback next week",
+   "answer": 500.0
+  },
+  {
+   "id": "FUT2f",
+   "kind": "n",
+   "text": "A debit of SAR 300.00 dated 05/12/2026 is scheduled on your account *4521",
+   "answer": 300.0
+  },
+  {
+   "id": "FUT2g",
+   "kind": "n",
+   "text": "سوف تستلم 500 ريال استرداد نقدي بتاريخ 01/12",
+   "answer": 500.0
+  },
+  {
+   "id": "FUT2h",
+   "kind": "n",
+   "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال سيتم خصمه غدا",
+   "answer": 230.0
+  },
+  {
+   "id": "FUT2i",
+   "kind": "n",
+   "text": "سيتم خصم 45 ريال من حسابك 4521 بتاريخ 01/12",
+   "answer": 45.0
+  },
+  {
+   "id": "FUT2j",
+   "kind": "n",
+   "text": "ستحصل على 500 ريال استرداد نقدي في 01/12",
+   "answer": 500.0
+  },
+  {
+   "id": "FUT2k",
+   "kind": "n",
+   "text": "Service fee SAR 30.00 + bill SAR 200.00, total SAR 230.00 will be charged tomorrow",
+   "answer": 230.0
+  },
+  {
+   "id": "FUT2l",
+   "kind": "d",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. Your statement will be issued tomorrow",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "FUT2m",
+   "kind": "d",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. Your new card will be delivered within 5 days",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "FUT2n",
+   "kind": "d",
+   "text": "شراء 45 ريال لدى جرير بطاقة 4521. سيتم إصدار كشف الحساب غدا",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "FUT2o",
+   "kind": "d",
+   "text": "تم خصم 45 ريال من حسابك 4521 لدى جرير. سوف تصلك بطاقتك الجديدة خلال 5 أيام",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "NEW2a",
+   "kind": "d",
+   "text": "دفع فاتورة 300 ريال من حسابك 4521، تذكير: موعد السداد القادم 1/12",
+   "amount": 300,
+   "currency": "SAR",
+   "answer": 300
+  },
+  {
+   "id": "NEW2b",
+   "kind": "d",
+   "text": "استخدمت بطاقتك *4521 بمبلغ 120 ريال لدى بنده، مجموع مصروفاتك هذا الشهر 3,200 ريال",
+   "amount": 120,
+   "currency": "SAR",
+   "answer": 120
+  },
+  {
+   "id": "NEW2c",
+   "kind": "d",
+   "text": "Your scheduled transfer of SAR 1,000.00 to Ali has been executed as per your request",
+   "amount": 1000,
+   "currency": "SAR",
+   "answer": 1000,
+   "server": "review",
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+  },
+  {
+   "id": "NEW2d",
+   "kind": "d",
+   "text": "As per your request SAR 750.00 has been transferred to Sara as scheduled",
+   "amount": 750,
+   "currency": "SAR",
+   "answer": 750
+  },
+  {
+   "id": "NEW2e",
+   "kind": "d",
+   "text": "خصم 99 ريال اشتراك شاهد من بطاقتك 4521، تذكير بالتجديد الشهر القادم",
+   "amount": 99,
+   "currency": "SAR",
+   "answer": 99
+  },
+  {
+   "id": "NEW2f",
+   "kind": "d",
+   "text": "شراء 150 ريال لدى نون بطاقة 4521 سيتم إضافة النقاط لحسابك",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "NEW2g",
+   "kind": "d",
+   "text": "Bill payment SAR 300.00 from account *4521 done, reminder: next bill due 1/12",
+   "amount": 300,
+   "currency": "SAR",
+   "answer": 300
+  },
+  {
+   "id": "NEW2h",
+   "kind": "d",
+   "text": "Purchase SAR 120.00 at Panda card *4521, total spent this month SAR 3,200.00",
+   "amount": 120,
+   "currency": "SAR",
+   "answer": 120
+  },
+  {
+   "id": "NEW2i",
+   "kind": "d",
+   "text": "تم تنفيذ تحويلك المجدول بمبلغ 1,000 ريال إلى المستفيد بناء على طلبك",
+   "amount": 1000,
+   "currency": "SAR",
+   "answer": 1000,
+   "server": "review",
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+  },
+  {
+   "id": "NEW2j",
+   "kind": "d",
+   "text": "بناء على طلبك تم تحويل 750 ريال إلى المستفيد حسب الجدول",
+   "amount": 750,
+   "currency": "SAR",
+   "answer": 750,
+   "server": "review",
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+  },
+  {
+   "id": "FT1a",
+   "kind": "d",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. Standing orders will be executed on the due date",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "FT1b",
+   "kind": "d",
+   "text": "شراء 45 ريال لدى جرير بطاقة 4521. سيتم تنفيذ الأوامر المستديمة في تاريخ الاستحقاق",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "FT1c",
+   "kind": "d",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. Standing instructions are executed on their due dates",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "FT1d",
+   "kind": "d",
+   "text": "تم خصم 45 ريال من بطاقتك 4521 لدى جرير. الأوامر الدائمة تنفذ في موعدها",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "HOLD1b1",
+   "kind": "d",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. Refund requests are processed within 7 days",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "HOLD1b2",
+   "kind": "d",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. For refund requests contact the merchant",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "HOLD1b3",
+   "kind": "d",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. Refunds take 7-14 working days",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "HOLD1b4",
+   "kind": "d",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. Refund requests will be processed within 7 days",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "HOLD1b5",
+   "kind": "d",
+   "text": "شراء 45 ريال لدى جرير بطاقة 4521. طلبات الاسترداد تعالج خلال 7 أيام",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "HOLD1b6",
+   "kind": "d",
+   "text": "شراء 45 ريال لدى جرير بطاقة 4521. لطلب الاسترداد تواصل مع التاجر",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "HOLD1b7",
+   "kind": "d",
+   "text": "شراء 45 ريال لدى جرير بطاقة 4521. يستغرق الاسترداد من 7 إلى 14 يوم عمل",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "HOLD1b8",
+   "kind": "d",
+   "text": "شراء 45 ريال لدى جرير بطاقة 4521. سيتم معالجة طلبات الاسترداد خلال 7 أيام",
+   "amount": 45,
+   "currency": "SAR",
+   "answer": 45
+  },
+  {
+   "id": "FT1e",
+   "kind": "n",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. Transaction pending",
+   "answer": 45.0
+  },
+  {
+   "id": "FT1f",
+   "kind": "n",
+   "text": "Purchase SAR 45.00 at Jarir card *4521. A refund has been initiated and will be credited within 5 days",
+   "answer": 45.0
+  },
+  {
+   "id": "FT1g",
+   "kind": "n",
+   "text": "شراء 45 ريال لدى جرير بطاقة 4521. العملية قيد المعالجة",
+   "answer": 45.0
+  },
+  {
+   "id": "FT1h",
+   "kind": "n",
+   "text": "Standing order of SAR 500.00 to Ali will be executed on the due date",
+   "answer": 500.0
+  },
+  {
+   "id": "FT1i",
+   "kind": "n",
+   "text": "أمر مستديم بمبلغ 500 ريال إلى المستفيد سيتم تنفيذه في تاريخ الاستحقاق",
+   "answer": 500.0
+  },
+  {
+   "id": "HOLD1a1",
+   "kind": "c",
+   "text": "Your expected refund of SAR 150.00 from Noon has been credited to your card *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "HOLD1a2",
+   "kind": "c",
+   "text": "Your pending refund of SAR 150.00 has been credited to your account *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "HOLD1a3",
+   "kind": "c",
+   "text": "تم إضافة مبلغ الاسترداد المتوقع 150 ريال إلى بطاقتك *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "HOLD1a4",
+   "kind": "c",
+   "text": "تم إيداع مبلغ الاسترداد المعلق 150 ريال في حسابك *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF009a",
+   "kind": "c",
+   "text": "تم عكس العملية بمبلغ 150 ريال وتم إضافة المبلغ إلى حسابك *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF009b",
+   "kind": "c",
+   "text": "تم استرداد مبلغ 150 ريال من نون إلى بطاقتك *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF009c",
+   "kind": "c",
+   "text": "استرجاع عملية شراء بمبلغ 150 ريال من نون بطاقة *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF009d",
+   "kind": "c",
+   "text": "مرتجع مشتريات 150 ريال لدى نون بطاقة *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF009e",
+   "kind": "c",
+   "text": "تم رد مبلغ 150 ريال إلى بطاقتك *4521 عن عملية شراء لدى نون",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF009f",
+   "kind": "c",
+   "text": "تم استرجاع مبلغ 150 ريال لعملية الشراء لدى نون بطاقة *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF009g",
+   "kind": "c",
+   "text": "تمت إعادة مبلغ 150 ريال إلى حسابك *4521 من نون",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF009h",
+   "kind": "c",
+   "text": "Refund for your purchase at Noon: SAR 150.00 returned to card *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF009i",
+   "kind": "d",
+   "text": "شراء 150 ريال لدى نون بطاقة *4521. لا يمكن الاسترجاع بعد 7 أيام",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF009j",
+   "kind": "d",
+   "text": "Purchase SAR 150.00 at Noon card *4521. No refund after 7 days",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF4a",
+   "kind": "c",
+   "text": "Refund of SAR 150.00 from Noon has been credited to your card *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF4b",
+   "kind": "c",
+   "text": "Reversal of your completed purchase of SAR 150.00 at Noon has been credited to your card *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "RF4c",
+   "kind": "n",
+   "text": "Your refund request of SAR 150.00 from Noon is pending",
+   "answer": 150.0
+  },
+  {
+   "id": "RF4d",
+   "kind": "n",
+   "text": "Your expected refund of SAR 150.00 from Noon will be credited within 5 days",
+   "answer": 150.0
+  },
+  {
+   "id": "RF4e",
+   "kind": "n",
+   "text": "طلب استرداد مبلغ 150 ريال من نون قيد المراجعة",
+   "answer": 150.0
+  },
+  {
+   "id": "RF4f",
+   "kind": "n",
+   "text": "الاسترداد المتوقع 150 ريال من نون سيتم إضافته خلال 5 أيام",
+   "answer": 150.0
+  },
+  {
+   "id": "RF4g",
+   "kind": "n",
+   "text": "Reversal of SAR 150.00 for your purchase at Noon credited to your card *4521",
+   "answer": 150.0
+  },
+  {
+   "id": "VAL1a",
+   "kind": "n",
+   "text": "عملية معكوسة: فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال",
+   "answer": 230.0
+  },
+  {
+   "id": "VAL1b",
+   "kind": "n",
+   "text": "عملية معكوسة: فاتورة 200 ريال، رسوم خدمة 30 ريال، الإجمالي 230 ريال",
+   "answer": 230.0
+  },
+  {
+   "id": "VAL1c",
+   "kind": "n",
+   "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال. تم عكس العملية",
+   "answer": 230.0
+  },
+  {
+   "id": "VAL1d",
+   "kind": "n",
+   "text": "فاتورة 200 ريال، رسوم خدمة 30 ريال، الإجمالي 230 ريال. تم عكس العملية",
+   "answer": 230.0
+  },
+  {
+   "id": "VAL1e",
+   "kind": "n",
+   "text": "Reversed transaction: bill SAR 200.00, VAT SAR 30.00, total SAR 230.00",
+   "answer": 230.0
+  },
+  {
+   "id": "VAL1f",
+   "kind": "n",
+   "text": "Bill SAR 200.00, service fee SAR 30.00, total SAR 230.00. Transaction reversed",
+   "answer": 230.0
+  },
+  {
+   "id": "AT008a",
+   "kind": "t",
+   "text": "Transfer of SAR 2,000.00 from your account *4521 to your own account *7788 completed",
+   "answer": 2000.0,
+   "server": "review",
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+  },
+  {
+   "id": "AT008b",
+   "kind": "r",
+   "text": "SAR 500.00 transferred from your current account to your savings account",
+   "answer": 500.0
+  },
+  {
+   "id": "AT008c",
+   "kind": "r",
+   "text": "You moved SAR 500.00 from Current account *4521 to Savings account *7788",
+   "answer": 500.0
+  },
+  {
+   "id": "AT008d",
+   "kind": "r",
+   "text": "Transfer SAR 2,000.00 from account *4521 to credit card *7788",
+   "answer": 2000.0
+  },
+  {
+   "id": "AT008e",
+   "kind": "r",
+   "text": "تم تحويل 500 ريال من حسابك الجاري إلى حسابك الادخاري",
+   "answer": 500.0
+  },
+  {
+   "id": "AT008f",
+   "kind": "r",
+   "text": "تم تحويل 2,000 ريال من حسابك 4521 إلى حسابك 7788",
+   "answer": 2000.0
+  },
+  {
+   "id": "AT008g",
+   "kind": "r",
+   "text": "InstaPay: EGP 500.00 transferred from your account *4521 to your account *7788",
+   "answer": 500.0
+  },
+  {
+   "id": "AT008h",
+   "kind": "t",
+   "text": "تحويل بين حساباتك بمبلغ 500 ريال تم بنجاح",
+   "answer": 500.0,
+   "server": "review",
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+  },
+  {
+   "id": "AT004a",
+   "kind": "d",
+   "text": "SAR 500.00 transferred from your current account to savings account of Ali",
+   "amount": 500,
+   "currency": "SAR",
+   "answer": 500,
+   "server": "review",
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+  },
+  {
+   "id": "AT004b",
+   "kind": "d",
+   "text": "SAR 500.00 transferred from your current account *4521 to the savings account of Sara Ahmed",
+   "amount": 500,
+   "currency": "SAR",
+   "answer": 500,
+   "server": "review",
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+  },
+  {
+   "id": "AT004c",
+   "kind": "d",
+   "text": "Transfer of SAR 500.00 from your savings account to Ali's current account completed",
+   "amount": 500,
+   "currency": "SAR",
+   "answer": 500,
+   "server": "review",
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+  },
+  {
+   "id": "AT004d",
+   "kind": "d",
+   "text": "تم تحويل 500 ريال من حسابك الجاري إلى حساب التوفير الخاص بالمستفيد علي",
+   "amount": 500,
+   "currency": "SAR",
+   "answer": 500
+  },
+  {
+   "id": "AT004e",
+   "kind": "d",
+   "text": "تم تحويل 500 ريال من حسابك الجاري إلى الحساب الجاري للمستفيد سارة",
+   "amount": 500,
+   "currency": "SAR",
+   "answer": 500
+  },
+  {
+   "id": "TO001a",
+   "kind": "d",
+   "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 paid",
+   "amount": 230,
+   "currency": "SAR",
+   "answer": 230
+  },
+  {
+   "id": "TO001b",
+   "kind": "d",
+   "text": "Bill SAR 200.00, service fee SAR 30.00, total SAR 230.00 paid from account *4521",
+   "amount": 230,
+   "currency": "SAR",
+   "answer": 230
+  },
+  {
+   "id": "TO001c",
+   "kind": "d",
+   "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال تم دفعه",
+   "amount": 230,
+   "currency": "SAR",
+   "answer": 230
+  },
+  {
+   "id": "TO001d",
+   "kind": "d",
+   "text": "فاتورة 200 ريال، رسوم خدمة 30 ريال، تم سداد الإجمالي 230 ريال من حسابك 4521",
+   "amount": 230,
+   "currency": "SAR",
+   "answer": 230
+  },
+  {
+   "id": "TO001e",
+   "kind": "n",
+   "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 paid. Transaction declined",
+   "answer": 230.0
+  },
+  {
+   "id": "TO001f",
+   "kind": "n",
+   "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 payment pending",
+   "answer": 230.0
+  },
+  {
+   "id": "TO001g",
+   "kind": "n",
+   "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال. العملية مرفوضة",
+   "answer": 230.0
+  },
+  {
+   "id": "AMB7a",
+   "kind": "r",
+   "text": "Purchase SAR 45.00 at Jarir card *4521 completed. Previous transaction declined.",
+   "answer": 45.0
+  },
+  {
+   "id": "AMB7b",
+   "kind": "r",
+   "text": "تم شراء 45 ريال لدى جرير بطاقة 4521. العملية السابقة مرفوضة",
+   "answer": 45.0
+  },
+  {
+   "id": "AMB7c",
+   "kind": "r",
+   "text": "Purchase SAR 45.00 at Jarir; purchase SAR 80.00 at Panda card *4521",
+   "answer": 45.0
+  },
+  {
+   "id": "AMB7d",
+   "kind": "r",
+   "text": "شراء 45 ريال لدى جرير وشراء 80 ريال لدى بنده بطاقة 4521",
+   "answer": 45.0
+  },
+  {
+   "id": "AMB7e",
+   "kind": "r",
+   "text": "Purchase SAR 45.00 at Jarir card *4521 was decl",
+   "answer": 45.0
+  },
+  {
+   "id": "AMB8a",
+   "kind": "r",
+   "text": "عملية بمبلغ 500 جنيه على بطاقتك *4521",
+   "answer": 500.0
+  },
+  {
+   "id": "AMB8b",
+   "kind": "r",
+   "text": "A transaction of EGP 500.00 on your card *4521",
+   "answer": 500.0
+  },
+  {
+   "id": "AMB8c",
+   "kind": "r",
+   "text": "حركة على بطاقتك *4521 بمبلغ 500 جنيه",
+   "answer": 500.0
+  },
+  {
+   "id": "AMB8d",
+   "kind": "r",
+   "text": "Transaction: EGP 500.00, card *4521",
+   "answer": 500.0
+  },
+  {
+   "id": "AMB8e",
+   "kind": "d",
+   "text": "عملية شراء بمبلغ 500 جنيه على بطاقتك *4521 لدى كارفور",
+   "amount": 500,
+   "currency": "EGP",
+   "answer": 500
+  },
+  {
+   "id": "AMB8f",
+   "kind": "d",
+   "text": "Transaction of EGP 500.00 at Carrefour on your card *4521",
+   "amount": 500,
+   "currency": "EGP",
+   "answer": 500,
+   "server": "review",
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+  },
+  {
+   "id": "FEE9a",
+   "kind": "d",
+   "text": "Late payment fee of SAR 100.00 charged to your credit card *4521",
+   "amount": 100,
+   "currency": "SAR",
+   "answer": 100,
+   "device": "review",
+   "pin": "safe: the device alone sets a fee figure aside (review); with a server or model answer it is recorded (the meaning gate accepts it)"
+  },
+  {
+   "id": "FEE9b",
+   "kind": "d",
+   "text": "A late payment charge of SAR 100.00 has been debited for your credit card *4521",
+   "amount": 100,
+   "currency": "SAR",
+   "answer": 100,
+   "device": "review",
+   "pin": "safe: the device alone sets a fee figure aside (review); with a server or model answer it is recorded (the meaning gate accepts it)"
+  },
+  {
+   "id": "FEE9c",
+   "kind": "d",
+   "text": "تم خصم رسوم تأخير سداد بطاقتك الائتمانية *4521 بمبلغ 100 ريال",
+   "amount": 100,
+   "currency": "SAR",
+   "answer": 100
+  },
+  {
+   "id": "FEE9d",
+   "kind": "d",
+   "text": "غرامة تأخر سداد البطاقة الائتمانية 100 ريال تم خصمها من حسابك *4521",
+   "amount": 100,
+   "currency": "SAR",
+   "answer": 100
+  },
+  {
+   "id": "FEE9e",
+   "kind": "r",
+   "text": "Payment of SAR 2,000.00 received for your credit card *4521",
+   "answer": 2000.0
+  },
+  {
+   "id": "FEE9f",
+   "kind": "r",
+   "text": "تم سداد بطاقتك الائتمانية *4521 بمبلغ 2,000 ريال",
+   "answer": 2000.0
+  },
+  {
+   "id": "CAN10a",
+   "kind": "c",
+   "text": "Refund of SAR 150.00 for the cancelled transaction has been credited to your card *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "CAN10b",
+   "kind": "c",
+   "text": "Your order was cancelled. Refund of SAR 150.00 has been credited to your card *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "CAN10c",
+   "kind": "c",
+   "text": "تم إيداع مبلغ الاسترداد 150 ريال للعملية الملغاة في بطاقتك *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "CAN10d",
+   "kind": "c",
+   "text": "تم إلغاء العملية وتم إضافة مبلغ الاسترداد 150 ريال إلى بطاقتك *4521",
+   "amount": 150,
+   "currency": "SAR",
+   "answer": 150
+  },
+  {
+   "id": "CAN10e",
+   "kind": "n",
+   "text": "Refund of SAR 150.00 was cancelled",
+   "answer": 150.0
+  },
+  {
+   "id": "CAN10f",
+   "kind": "n",
+   "text": "Refund of SAR 150.00 for the cancelled transaction will be credited within 5 days",
+   "answer": 150.0
+  },
+  {
+   "id": "CAN10g",
+   "kind": "n",
+   "text": "تم إلغاء عملية الشراء بمبلغ 150 ريال لدى نون بطاقة *4521",
+   "answer": 150.0
+  },
+  {
+   "id": "CAN10h",
+   "kind": "n",
+   "text": "Refund of SAR 150.00 for the declined transaction has been credited to your card *4521",
+   "answer": 150.0
+  },
+  {
+   "id": "CAN10i",
+   "kind": "n",
+   "text": "استرداد مبلغ 150 ريال للعملية الملغاة سيتم إضافته خلال 5 أيام",
+   "answer": 150.0
+  }
+ ]
+}

@@ -181,7 +181,11 @@ enum SharedCaptureStore {
   /// A fault injected into the durable write of one queue file (main or
   /// overflow segment), keyed by its final file name.
   static var durableWriteFault: ((_ fileName: String) -> DurableWriteFault)?
+  /// URL protocol classes installed on the gated upload's own session, so a
+  /// test can capture the real request (and answer it) without the network.
+  static var uploadProtocolClasses: [AnyClass]?
   #else
+  static let uploadProtocolClasses: [AnyClass]? = nil
   static let queueKeyReadOverride: (() -> (status: OSStatus, data: Data?))? = nil
   static let lockUnavailableOverride = false
   static let ownerRecordReadOverride: (() -> (status: OSStatus, data: Data?))? = nil
@@ -4240,6 +4244,8 @@ enum SharedCaptureStore {
     configuration.waitsForConnectivity = false
     configuration.timeoutIntervalForRequest = nativeUploadTimeout
     configuration.timeoutIntervalForResource = nativeUploadTimeout
+    // DEBUG test seam only; nil (a constant) in a release build.
+    if let protocolClasses = uploadProtocolClasses { configuration.protocolClasses = protocolClasses }
     let session = URLSession(configuration: configuration, delegate: RedirectRefusingDelegate(), delegateQueue: nil)
     defer { session.finishTasksAndInvalidate() }
 

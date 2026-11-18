@@ -159,7 +159,7 @@ void main() {
     final bigRow = txRows.firstWhere((r) => r['id'] == 'tx-big');
     expect(bigRow['amount_minor'], '9223372036854775807');
     expect(bigRow['amount_minor'], isA<String>());
-    expect(wire['schemaVersion'], 4);
+    expect(wire['schemaVersion'], 5);
 
     final dst = await open();
     addTearDown(dst.close);

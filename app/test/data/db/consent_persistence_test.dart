@@ -66,7 +66,7 @@ void main() {
       expect(
           (await db.customSelect('PRAGMA user_version;').getSingle())
               .read<int>('user_version'),
-          43); // v39 -> v40 (WP-6) -> v41 (WP-5, unrelated to consent)
+          44); // v39 -> v40 (WP-6) -> v41 (WP-5, unrelated to consent)
       final s = await DriftUserSettingsRepository(db).getSettings();
       expect(s.cloudConsentState, ConsentState.accepted,
           reason: 'the migration never changes a consent value');

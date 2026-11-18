@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/domain/entities/transaction_entity.dart';
 import 'package:money_companion/domain/finance/money.dart';
@@ -132,6 +135,72 @@ AddTransactionUseCase _makeUseCase({
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 void main() {
+  // Round 4: a row typed as a payment whose "merchant" is a person ("paid to
+  // <Name>", "Payment … to <Name>", "to account of <Name>"). Neither the
+  // enrich-merchant request (`merchant_name`) nor the merchant-feedback queue
+  // (`keywords`) may carry the name; the merchant twin of each pair still
+  // goes out. Rows: the shared labelled set's person/merchant pairs.
+  group('person or merchant — enrich-merchant and merchant-feedback', () {
+    final rows = (jsonDecode(File(
+                '../supabase/functions/_shared/fixtures/sms_leak_labelled_cases.json')
+            .readAsStringSync()) as List)
+        .cast<Map<String, dynamic>>()
+        .where((r) => (r['id'] as String).startsWith('r4_pair_'))
+        .toList();
+
+    Future<List<String>> sentFor(String message, String merchant) async {
+      final sent = <String>[];
+      final useCase = AddTransactionUseCase(
+        transactionRepository: _StubTransactionRepo(),
+        merchantCategoryRepository: _StubMerchantRepo(),
+        parserIsolate: _FakeParserIsolate(ParseResult.success(ParsedTransaction(
+          amountText: '85',
+          amount: 85.0,
+          currency: 'SAR',
+          type: TransactionType.payment,
+          source: TransactionSource.bank,
+          rawMerchant: merchant,
+          occurredAt: _now,
+          parseConfidence: 0.75,
+        ))),
+        dedupStore: _NoDedupStore(),
+        mayEnrichMerchant: () async => true,
+        resolveMerchantCategory: (name) async {
+          sent.add('enrich-merchant:$name');
+          return null;
+        },
+        noteMerchantFeedback: (keyword) async =>
+            sent.add('merchant-feedback:$keyword'),
+      );
+      await useCase(rawMessage: message);
+      return sent;
+    }
+
+    test('a person is never sent; the merchant twin is', () async {
+      final leaks = <String>[];
+      var people = 0, merchantsSent = 0;
+      for (final row in rows) {
+        final raw = row['raw'] as String;
+        final secrets = (row['secrets'] as List)
+            .cast<String>()
+            .where((s) => RegExp(r'\p{L}', unicode: true).hasMatch(s))
+            .toList();
+        if (secrets.isNotEmpty) {
+          people++;
+          final sent = await sentFor(raw, secrets.join(' '));
+          if (sent.isNotEmpty) leaks.add('${row['id']}: $sent');
+        } else {
+          final sent = await sentFor(raw, row['merchant'] as String);
+          if (sent.isNotEmpty) merchantsSent++;
+        }
+      }
+      expect(people, greaterThan(15));
+      expect(leaks, isEmpty);
+      expect(merchantsSent, greaterThan(5),
+          reason: 'the path is live for real merchants');
+    });
+  });
+
   group('merchant feedback privacy — type gating', () {
     // ── REQUIRED TEST 1: transfer beneficiary NOT recorded ────────────────
     test(

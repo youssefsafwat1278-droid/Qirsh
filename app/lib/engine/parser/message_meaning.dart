@@ -227,6 +227,11 @@ class MessageMeaning {
     'please note', 'kindly note', 'please be informed', 'please be advised',
     'kindly be informed', 'يرجى العلم', 'نود إعلامكم', 'نود اعلامكم',
     'نحيطكم علما',
+    // Follow-up 6 (NEW-2r): "as per your request" attributes a completed
+    // operation to the user's earlier instruction; it is not a new request.
+    'as per your request', 'as per your instruction',
+    'as per your instructions', 'per your request', 'upon your request',
+    'at your request', 'as requested', 'بناء على طلبك', 'حسب طلبك',
   ];
 
   /// Follow-up 3 (SM-04): words that lead a completed card or cash movement.
@@ -242,6 +247,8 @@ class MessageMeaning {
   /// will be charged on 1 Dec", `سيتم خصم 250 ريال`).
   static const List<String> futureTense = [
     'will', 'shall', 'to be', 'سيتم', 'سوف',
+    // Follow-up 6 (CUE-1): "You are going to receive …", «ستحصل على …».
+    'going to', 'ستحصل', 'ستستلم', 'ستتلقى', 'سيصلك',
   ];
 
   /// Follow-up: loyalty points are not money; a sentence about them is a

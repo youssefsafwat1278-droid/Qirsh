@@ -1326,6 +1326,40 @@ class AppL10nEn extends AppL10n {
   String get lrActionFailed => 'Couldn’t update the rule. Try again.';
 
   @override
+  String lrRestoreCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count rules from your backup need your choice',
+      one: '1 rule from your backup needs your choice',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get lrRestoreExplanation =>
+      'These rules were in the backup you restored but are not on this device. Qirsh cannot tell whether they were deleted here on purpose, so it did not add them and did not discard them. They are not used to categorise anything until you choose. Add puts the rule back. Leave out keeps it off this device, and later restores will not ask again.';
+
+  @override
+  String get lrRestoreAdd => 'Add';
+
+  @override
+  String get lrRestoreLeave => 'Leave out';
+
+  @override
+  String get lrRestoreAddAll => 'Add all';
+
+  @override
+  String get lrRestoreLeaveAll => 'Leave all out';
+
+  @override
+  String get lrRestoreMissingCategory =>
+      'Its category was deleted on this device, so it cannot be added.';
+
+  @override
+  String get lrRestoreReview => 'Review rules';
+
+  @override
   String get setAchievements => 'Achievements and level';
 
   @override
@@ -5909,7 +5943,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get rpConfirmBodyMerge =>
-      'This device already has your records, so the backup will be merged into them. Records missing here are added. Everything you added, changed or deleted on this device stays as it is now: a transaction you deleted is not brought back, and when a record exists in both, the more recently edited copy is kept. Saved category rules on this device are kept; rules that are only in the backup are not added. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?';
+      'This device already has your records, so the backup will be merged into them. Records missing here are added. Everything you added, changed or deleted on this device stays as it is now: a transaction you deleted is not brought back, and when a record exists in both, the more recently edited copy is kept. Saved category rules work the same way: a rule missing here is added, a rule you deleted here stays deleted, and when a merchant has a rule in both, the more recently changed one is kept. If Qirsh cannot tell whether a rule in the backup was deleted here on purpose, it neither adds nor discards it: you choose afterwards in Settings, under Learned rules. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?';
 
   @override
   String get rpConfirmBodyFull =>
@@ -5917,7 +5951,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get rpConfirmBody =>
-      'The restore merges this backup into the data on this device. Records missing here are brought back. Anything you added, changed or deleted after the backup was made stays as it is now; when a record exists in both, the more recently edited copy is kept. Saved category rules for merchants stay as they are on this device; rules that are only in the backup are not added. On a device with no records yet (no accounts, transactions, plans, rules or custom categories), the whole backup is restored, settings and rules included. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?';
+      'The restore merges this backup into the data on this device. Records missing here are brought back. Anything you added, changed or deleted after the backup was made stays as it is now; when a record exists in both, the more recently edited copy is kept. Saved category rules for merchants work the same way: a missing rule is added, a rule you deleted stays deleted, and the more recently changed one is kept; a rule that may have been deleted here on purpose is neither added nor discarded until you choose in Settings, under Learned rules. On a device with no records yet (no accounts, transactions, plans, rules or custom categories), the whole backup is restored, settings and rules included. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?';
 
   @override
   String get rpCancel => 'Cancel';

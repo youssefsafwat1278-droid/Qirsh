@@ -142,14 +142,10 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
   final redactions = <Redaction>[];
   var current = rawSms;
 
-  /// Apply one pass and fold its edits into `pos`.
-  void pass(RegExp re, String Function(Match) replace, String label,
-      [bool Function(Match)? applies]) {
-    final matches = [
-      for (final m in re.allMatches(current))
-        if (applies == null || applies(m)) m
-    ];
-    if (matches.isEmpty) return;
+  /// Replace each `(start, end, replacement)` span of `current` (ascending,
+  /// non-overlapping) and fold the edits into `pos`.
+  void apply(List<(int, int, String)> edits, String label) {
+    if (edits.isEmpty) return;
     // Snapshot liveness so "destroyed by THIS pass" is unambiguous.
     final alive = [for (final p in pos) p != null];
 
@@ -157,13 +153,13 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
     // oldIndex -> newIndex for surviving characters of `current`.
     final moved = List<int?>.filled(current.length, null);
     var cursor = 0;
-    for (final m in matches) {
-      for (var i = cursor; i < m.start; i++) {
+    for (final (start, end, replacement) in edits) {
+      for (var i = cursor; i < start; i++) {
         moved[i] = buf.length;
         buf.writeCharCode(current.codeUnitAt(i));
       }
-      buf.write(replace(m)); // replacement chars belong to no original index
-      cursor = m.end;
+      buf.write(replacement); // replacement chars belong to no original index
+      cursor = end;
     }
     for (var i = cursor; i < current.length; i++) {
       moved[i] = buf.length;
@@ -192,6 +188,20 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
     current = buf.toString();
   }
 
+  /// Apply one pass and fold its edits into `pos`.
+  void pass(RegExp re, String Function(Match) replace, String label,
+      [bool Function(Match)? applies]) {
+    apply([
+      for (final m in re.allMatches(current))
+        if (applies == null || applies(m)) (m.start, m.end, replace(m))
+    ], label);
+  }
+
+  /// A name pass: a match the replacement leaves unchanged (a business) is
+  /// not an edit.
+  void names(RegExp re, String Function(Match) replace) =>
+      pass(re, replace, '[NAME]', (m) => replace(m) != m.group(0));
+
   pass(SmsSanitizer.emailPattern, (_) => '[EMAIL]', '[EMAIL]');
   pass(SmsSanitizer.spacedIbanPattern, (_) => '[IBAN]', '[IBAN]');
   pass(SmsSanitizer.cardNumberPattern, (_) => '[CARD]', '[CARD]');
@@ -200,35 +210,54 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
   pass(SmsSanitizer.intlPhonePattern, (_) => '[PHONE]', '[PHONE]');
   pass(SmsSanitizer.ibanPattern, (_) => '[IBAN]', '[IBAN]');
   pass(SmsSanitizer.otpPattern, (m) => '${m.group(1)!}[OTP]', '[OTP]');
+  for (final (pattern, mode) in SmsSanitizer.otpRules) {
+    final text = current;
+    pass(pattern, (m) => SmsSanitizer.codeReplacement(text, m, mode), '[OTP]');
+  }
   pass(SmsSanitizer.accountNumberPattern, (_) => '[ACCOUNT]', '[ACCOUNT]');
   pass(SmsSanitizer.labelledAccountPattern, (m) => '${m.group(1)!}[ACCOUNT]',
       '[ACCOUNT]');
   pass(SmsSanitizer.referencePattern, (m) => '${m.group(1)!}[REF]', '[REF]');
   pass(SmsSanitizer.salutationPattern, (m) => '${m.group(1)!}[NAME]',
       '[NAME]');
-  pass(SmsSanitizer.personCuePattern, (m) => '${m.group(1)!}[NAME]', '[NAME]');
-  if (SmsSanitizer.isCounterpartyContext(current)) {
-    pass(SmsSanitizer.counterpartyPattern, (m) => '${m.group(1)!}[NAME]',
-        '[NAME]');
-  } else if (!SmsSanitizer.isPurchaseContext(current)) {
-    pass(SmsSanitizer.labelCuePattern, (m) => '${m.group(1)!}[NAME]', '[NAME]');
-    pass(SmsSanitizer.toHeadingPattern, (m) => '${m.group(1)!}[NAME]',
-        '[NAME]');
+  names(SmsSanitizer.personCuePattern, SmsSanitizer.maskName);
+  names(SmsSanitizer.personalLabelPattern, SmsSanitizer.maskName);
+  names(SmsSanitizer.accountOfPattern, SmsSanitizer.maskName);
+  if (!SmsSanitizer.isMerchantContext(current)) {
+    if (SmsSanitizer.hasTransferWord(current)) {
+      names(SmsSanitizer.counterpartyPattern, SmsSanitizer.maskName);
+    } else {
+      names(SmsSanitizer.labelCuePattern, SmsSanitizer.maskName);
+      names(SmsSanitizer.toHeadingPattern, SmsSanitizer.maskName);
+      names(SmsSanitizer.paymentToPattern, SmsSanitizer.maskCapitalisedName);
+    }
+    names(SmsSanitizer.parenNamePattern, SmsSanitizer.maskName);
+    names(SmsSanitizer.nameBeforeVerbPattern, SmsSanitizer.maskCapitalisedName);
+    names(SmsSanitizer.nameAfterVerbArPattern, SmsSanitizer.maskName);
+    names(
+        SmsSanitizer.nameAfterTransferPattern, SmsSanitizer.maskCapitalisedName);
   }
 
-  final stripBeneficiary = detectedType == null ||
-      detectedType == TransactionType.transfer ||
-      detectedType == TransactionType.income;
-  bool strips(Match m) =>
-      stripBeneficiary || SmsSanitizer.carriesAccountId(m.group(0)!);
+  final merchantContext = SmsSanitizer.isMerchantContext(current);
+  bool strips(Match m) => !SmsSanitizer.keepsBeneficiary(m.group(0)!,
+      merchantContext: merchantContext);
   pass(SmsSanitizer.beneficiaryArPattern, (m) => '${m.group(1)!}: [REDACTED]',
       '[REDACTED]', strips);
   pass(SmsSanitizer.beneficiaryEnPattern, (_) => 'To: [REDACTED]',
       '[REDACTED]', strips);
   pass(SmsSanitizer.ownDestinationNumberPattern,
       (m) => '${m.group(1)!}[ACCOUNT]', '[ACCOUNT]');
+  final purchase = SmsSanitizer.isPurchaseContext(current);
+  apply([
+    for (final s in SmsSanitizer.scanSuffixes(current, purchase: purchase))
+      if (!s.own) (s.start, s.end, '[ACCOUNT]')
+  ], '[ACCOUNT]');
+  final own = {
+    for (final s in SmsSanitizer.scanSuffixes(current, purchase: purchase))
+      if (s.own) s.start
+  };
   pass(SmsSanitizer.numberInBeneficiarySentencePattern, (_) => '[ACCOUNT]',
-      '[ACCOUNT]');
+      '[ACCOUNT]', (m) => !own.contains(m.start));
   pass(SmsSanitizer.greetingPattern, (_) => '[REDACTED]', '[REDACTED]');
 
   // `sanitize` finishes with .trim(); trimmed characters are dropped, and the

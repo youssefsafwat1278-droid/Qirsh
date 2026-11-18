@@ -27,12 +27,17 @@ const _merge = {
   'en': [
     'already has your records',
     'a transaction you deleted is not brought back',
-    'rules that are only in the backup are not added',
+    // Round 4: rules are merged too (missing added, deleted stays deleted).
+    'a rule missing here is added',
+    'a rule you deleted here stays deleted',
+    'neither adds nor discards it',
   ],
   'ar': [
     'يحتوي هذا الجهاز على سجلاتك',
     'لا تُستعاد عملية حذفتها',
-    'ولا تُضاف القواعد الموجودة في النسخة فقط',
+    'تُضاف القاعدة غير الموجودة هنا',
+    'وتبقى القاعدة التي حذفتها هنا محذوفة',
+    'فلن يضيفها ولن يتجاهلها',
   ],
 };
 const _full = {

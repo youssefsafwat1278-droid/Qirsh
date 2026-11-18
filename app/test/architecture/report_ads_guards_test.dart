@@ -85,12 +85,12 @@ void main() {
     // another track legitimately bumped the version.
     //
     // v34 is owned by COUPONS Phase 1 (the merchant catalog cache); v32/v33 by
-    // PHASE 8/9A; v36/v37 by PHASE 11 (proof shadow store + its attribution key); v39 by WP-3a (replica_meta); v40 by WP-6 (consent versions); v41 by WP-5 (sync_conflicts + outbox CAS columns). Each is an
+    // PHASE 8/9A; v36/v37 by PHASE 11 (proof shadow store + its attribution key); v39 by WP-3a (replica_meta); v40 by WP-6 (consent versions); v41 by WP-5 (sync_conflicts + outbox CAS columns); v44 by the V1 round-4 saved-rule deletion history. Each is an
     // approved and separately gated change. So the version pin now tracks the
     // current approved value, and the R4-specific claim is asserted directly
     // below, where it belongs.
     final db = _read('lib/data/db/app_database.dart');
-    expect(RegExp(r'_targetSchemaVersion\s*=\s*43').hasMatch(db), isTrue,
+    expect(RegExp(r'_targetSchemaVersion\s*=\s*44').hasMatch(db), isTrue,
         reason: 'unexpected schema version — a bump must be an approved, '
             'separately gated change');
   });

@@ -10,6 +10,7 @@ import '../../../core/session/app_session.dart';
 import '../../../core/sync/outbox_failure.dart';
 import '../../../core/sync/sync_health.dart';
 import '../../../data/db/app_database.dart';
+import '../../../data/db/merchant_rule_history.dart';
 import '../../../data/db/sql_value_codec.dart';
 import '../../../data/repositories/drift_merchant_category_repository.dart';
 import '../../../data/sync/sync_cursor.dart';
@@ -336,6 +337,10 @@ class MerchantRuleSyncService {
     final current = await _rules.userConfirmedCategoryFor(key);
     if (row['deleted_at'] != null) {
       await _unpark(serverId);
+      // Remembered even when this device never held the rule, so a backup
+      // restored here later cannot bring it back.
+      await recordMerchantRuleTombstone(
+          _db, key, category, '${row['deleted_at']}');
       if (current == null) return _Outcome.skipped;
       await _rules.forgetUserConfirmedRule(key);
       _onRuleRemoved?.call(key);
@@ -349,6 +354,15 @@ class MerchantRuleSyncService {
     if (current == category) return _Outcome.skipped;
     await _rules.confirmMerchantCategory(
         rawMerchant: key, categoryKey: category, isUserConfirmed: true);
+    // The rule's change time is the cloud's, not the moment of this pull: a
+    // restore compares it with the backup's copy to keep the newer change.
+    final changedAt = DateTime.tryParse('${row['updated_at']}');
+    if (changedAt != null) {
+      await _db.customStatement(
+          'UPDATE merchant_category_map SET updated_at = ? WHERE merchant_id = '
+          '(SELECT id FROM merchants WHERE normalized_name = ?);',
+          [dateTimeToSql(changedAt), key]);
+    }
     _onRuleApplied?.call(key, category);
     return _Outcome.applied;
   }

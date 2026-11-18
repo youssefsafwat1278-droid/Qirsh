@@ -1298,5 +1298,1593 @@
    "*1234",
    "completed"
   ]
+ },
+ {
+  "id": "r4_from_heading",
+  "raw": "From Nadir Zaki: SAR 85.00 received",
+  "expected": "From [NAME]: SAR 85.00 received",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "85.00",
+   "received"
+  ]
+ },
+ {
+  "id": "r4_from_heading_ar",
+  "raw": "من نادر زكي: 85.00 ريال",
+  "expected": "من [NAME]: 85.00 ريال",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "85.00",
+   "ريال"
+  ]
+ },
+ {
+  "id": "r4_attn",
+  "raw": "Attn Nadir Zaki; SAR 85.00 paid",
+  "expected": "Attn [NAME]; SAR 85.00 paid",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "85.00",
+   "paid"
+  ]
+ },
+ {
+  "id": "r4_attn_ar",
+  "raw": "عناية: نادر زكي؛ تم دفع 85.00 ريال",
+  "expected": "عناية: [NAME]؛ تم دفع 85.00 ريال",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "85.00",
+   "تم دفع"
+  ]
+ },
+ {
+  "id": "r4_name_label",
+  "raw": "Name: Nadir Zaki; SAR 85.00 paid",
+  "expected": "Name: [NAME]; SAR 85.00 paid",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "85.00",
+   "paid"
+  ]
+ },
+ {
+  "id": "r4_name_label_ar",
+  "raw": "الاسم: نادر زكي؛ تم دفع 85.00 ريال",
+  "expected": "الاسم: [NAME]؛ تم دفع 85.00 ريال",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "85.00",
+   "تم دفع"
+  ]
+ },
+ {
+  "id": "r4_customer",
+  "raw": "Customer Nadir Zaki; SAR 85.00 paid",
+  "expected": "Customer [NAME]; SAR 85.00 paid",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "85.00",
+   "paid"
+  ]
+ },
+ {
+  "id": "r4_customer_ar",
+  "raw": "العميل نادر زكي؛ تم دفع 85.00 ريال",
+  "expected": "العميل [NAME]؛ تم دفع 85.00 ريال",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "85.00",
+   "تم دفع"
+  ]
+ },
+ {
+  "id": "r4_cardholder",
+  "raw": "Cardholder: Nadir Zaki. SAR 85.00 withdrawn on 05/11",
+  "expected": "Cardholder: [NAME]. SAR 85.00 withdrawn on 05/11",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "85.00",
+   "withdrawn",
+   "05/11"
+  ]
+ },
+ {
+  "id": "r4_cardholder_ar",
+  "raw": "حامل البطاقة: نادر زكي. تم سحب 85.00 ريال",
+  "expected": "حامل البطاقة: [NAME]. تم سحب 85.00 ريال",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "85.00",
+   "تم سحب"
+  ]
+ },
+ {
+  "id": "r4_account_of",
+  "raw": "Bill payment SAR 150.00 to account of Nadir Zaki",
+  "expected": "Bill payment SAR 150.00 to account of [NAME]",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "150.00",
+   "Bill payment"
+  ]
+ },
+ {
+  "id": "r4_account_of_ar",
+  "raw": "سداد 150.00 ريال إلى حساب باسم نادر زكي",
+  "expected": "سداد 150.00 ريال إلى: [REDACTED] [NAME]",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "150.00",
+   "سداد"
+  ]
+ },
+ {
+  "id": "r4_paren_name",
+  "raw": "SAR 300.00 transferred to account ****9876 (Nadir)",
+  "expected": "SAR 300.00 transferred to account [ACCOUNT] ([NAME])",
+  "secrets": [
+   "Nadir",
+   "9876"
+  ],
+  "mustKeep": [
+   "300.00",
+   "transferred"
+  ]
+ },
+ {
+  "id": "r4_paren_name_ar",
+  "raw": "تم تحويل 300.00 ريال إلى حساب 9876 (نادر)",
+  "expected": "تم تحويل 300.00 ريال إلى: [REDACTED] ([NAME])",
+  "secrets": [
+   "نادر",
+   "9876"
+  ],
+  "mustKeep": [
+   "300.00",
+   "تم تحويل"
+  ]
+ },
+ {
+  "id": "r4_ar_account_name_payment_hint",
+  "raw": "دفع 85.00 ريال إلى حساب نادر زكي",
+  "expected": "دفع 85.00 ريال إلى: [REDACTED]",
+  "type": "payment",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "85.00",
+   "دفع"
+  ]
+ },
+ {
+  "id": "r4_en_account_name_payment_hint",
+  "raw": "Paid SAR 85.00 To: account Nadir Zaki 5512",
+  "expected": "Paid SAR 85.00 To: [REDACTED]",
+  "type": "payment",
+  "secrets": [
+   "Nadir",
+   "Zaki",
+   "5512"
+  ],
+  "mustKeep": [
+   "85.00",
+   "Paid"
+  ]
+ },
+ {
+  "id": "r4_uncued_before_verb",
+  "raw": "Nadir Zaki sent you SAR 500.00",
+  "expected": "[NAME] sent you SAR 500.00",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "500.00",
+   "sent you"
+  ]
+ },
+ {
+  "id": "r4_uncued_before_verb_to_your",
+  "raw": "Nadir Zaki has transferred SAR 500.00 to your account *1234",
+  "expected": "[NAME] has transferred SAR 500.00 to your account *1234",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "500.00",
+   "has transferred",
+   "*1234"
+  ]
+ },
+ {
+  "id": "r4_uncued_verb_ar",
+  "raw": "أرسل لك نادر زكي 500 ريال",
+  "expected": "أرسل لك [NAME] 500 ريال",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "500",
+   "ريال",
+   "أرسل لك"
+  ]
+ },
+ {
+  "id": "r4_uncued_qam_ar",
+  "raw": "قام نادر زكي بتحويل 500 ريال إلى حسابك *1234",
+  "expected": "قام [NAME] بتحويل 500 ريال إلى حسابك *1234",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "500",
+   "بتحويل",
+   "*1234"
+  ]
+ },
+ {
+  "id": "r4_uncued_after_transfer",
+  "raw": "Transfer Nadir Zaki SAR 500.00 completed",
+  "expected": "Transfer [NAME] SAR 500.00 completed",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "500.00",
+   "completed",
+   "Transfer"
+  ]
+ },
+ {
+  "id": "r4_uncued_after_transfer_ar",
+  "raw": "حوالة نادر زكي 500 ريال تمت بنجاح",
+  "expected": "حوالة [NAME] 500 ريال تمت بنجاح",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "500",
+   "تمت بنجاح",
+   "حوالة"
+  ]
+ },
+ {
+  "id": "r4_suffix_beneficiary",
+  "raw": "SAR 85.00 transferred to beneficiary account ****9876",
+  "expected": "SAR 85.00 transferred to beneficiary account [ACCOUNT]",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85.00",
+   "transferred"
+  ]
+ },
+ {
+  "id": "r4_suffix_beneficiary_ar",
+  "raw": "تم تحويل 85.00 ريال إلى حساب المستفيد *9876",
+  "expected": "تم تحويل 85.00 ريال إلى: [REDACTED]",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85.00",
+   "تم تحويل"
+  ]
+ },
+ {
+  "id": "r4_suffix_to_account",
+  "raw": "SAR 85.00 sent to account 9876 from your account *1234",
+  "expected": "SAR 85.00 sent to account [ACCOUNT] from your account *1234",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85.00",
+   "sent",
+   "*1234"
+  ]
+ },
+ {
+  "id": "r4_suffix_to_account_ar",
+  "raw": "تم تحويل 85 ريال لحساب 9876 من حسابك *1234",
+  "expected": "تم تحويل 85 ريال لحساب [ACCOUNT] من حسابك *1234",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85",
+   "تم تحويل",
+   "*1234"
+  ]
+ },
+ {
+  "id": "r4_suffix_to_account_arabic_indic",
+  "raw": "تم تحويل ٨٥ ريال إلى حساب ٩٨٧٦ من حسابك *١٢٣٤",
+  "expected": "تم تحويل ٨٥ ريال إلى: [REDACTED] من حسابك *١٢٣٤",
+  "secrets": [
+   "٩٨٧٦"
+  ],
+  "mustKeep": [
+   "٨٥",
+   "تم تحويل",
+   "*١٢٣٤"
+  ]
+ },
+ {
+  "id": "r4_suffix_payee_card",
+  "raw": "SAR 85.00 paid to payee card *9876",
+  "expected": "SAR 85.00 paid to payee card [ACCOUNT]",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85.00",
+   "paid"
+  ]
+ },
+ {
+  "id": "r4_suffix_to_card",
+  "raw": "SAR 85.00 transferred to card *9876 from card *4521",
+  "expected": "SAR 85.00 transferred to card [ACCOUNT] from card *4521",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85.00",
+   "transferred",
+   "*4521"
+  ]
+ },
+ {
+  "id": "r4_suffix_to_card_ar",
+  "raw": "تم تحويل 85 ريال إلى بطاقة 9876 من بطاقتك 4521",
+  "expected": "تم تحويل 85 ريال إلى: [REDACTED] من بطاقتك 4521",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85",
+   "تم تحويل",
+   "4521"
+  ]
+ },
+ {
+  "id": "r4_suffix_sender",
+  "raw": "SAR 85.00 received from account *9876 into your account *1234",
+  "expected": "SAR 85.00 received from account [ACCOUNT] into your account *1234",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85.00",
+   "received",
+   "*1234"
+  ]
+ },
+ {
+  "id": "r4_suffix_sender_ar",
+  "raw": "حوالة واردة 85 ريال من حساب 9876 إلى حسابك 1234",
+  "expected": "حوالة واردة 85 ريال من حساب [ACCOUNT] إلى حسابك 1234",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85",
+   "واردة",
+   "1234"
+  ]
+ },
+ {
+  "id": "r4_suffix_sender_label",
+  "raw": "SAR 85.00 received. Sender account: 9876",
+  "expected": "SAR 85.00 received. Sender account: [ACCOUNT]",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85.00",
+   "received"
+  ]
+ },
+ {
+  "id": "r4_suffix_sender_label_ar",
+  "raw": "تم استلام 85 ريال. حساب المرسل: 9876",
+  "expected": "تم استلام 85 ريال. حساب المرسل: [ACCOUNT]",
+  "secrets": [
+   "9876"
+  ],
+  "mustKeep": [
+   "85",
+   "تم استلام"
+  ]
+ },
+ {
+  "id": "r4_suffix_after_name",
+  "raw": "SAR 85.00 transferred to Nadir Zaki account *9876",
+  "expected": "SAR 85.00 transferred to [NAME] account [ACCOUNT]",
+  "secrets": [
+   "Nadir",
+   "Zaki",
+   "9876"
+  ],
+  "mustKeep": [
+   "85.00",
+   "transferred"
+  ]
+ },
+ {
+  "id": "r4_suffix_field_line_ar",
+  "raw": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى: نادر زكي\nحساب:9876*\nفي:09/03/26 23:23",
+  "expected": "حوالة داخلية صادرة\nبـ:300.56ر.س\nإلى: [REDACTED]\nحساب:[ACCOUNT]\nفي:09/03/26 23:23",
+  "secrets": [
+   "نادر",
+   "زكي",
+   "9876"
+  ],
+  "mustKeep": [
+   "300.56",
+   "صادرة",
+   "09/03/26",
+   "23:23"
+  ]
+ },
+ {
+  "id": "r4_suffix_field_line",
+  "raw": "Internal outward transfer\nAmount:21.00SAR\nTo: Nadir Zaki\nAcc:9876*\nAt:19/04/26 11:07",
+  "expected": "Internal outward transfer\nAmount:21.00SAR\nTo: [REDACTED]\nAcc:[ACCOUNT]\nAt:19/04/26 11:07",
+  "secrets": [
+   "Nadir",
+   "Zaki",
+   "9876"
+  ],
+  "mustKeep": [
+   "21.00",
+   "outward",
+   "19/04/26",
+   "11:07"
+  ]
+ },
+ {
+  "id": "r4_suffix_long_card_label",
+  "raw": "SAR 85.00 transferred from your card *4521 to card 98765",
+  "expected": "SAR 85.00 transferred from your card *4521 to card [ACCOUNT]",
+  "secrets": [
+   "98765"
+  ],
+  "mustKeep": [
+   "85.00",
+   "*4521"
+  ]
+ },
+ {
+  "id": "r4_own_possessive",
+  "raw": "SAR 85.00 debited from your account *1234 on 05/11",
+  "expected": "SAR 85.00 debited from your account *1234 on 05/11",
+  "secrets": [],
+  "mustKeep": [
+   "85.00",
+   "*1234",
+   "05/11",
+   "debited"
+  ]
+ },
+ {
+  "id": "r4_own_possessive_ar",
+  "raw": "تم خصم 85 ريال من حسابك *1234 بتاريخ 05/11",
+  "expected": "تم خصم 85 ريال من حسابك *1234 بتاريخ 05/11",
+  "secrets": [],
+  "mustKeep": [
+   "85",
+   "*1234",
+   "05/11",
+   "تم خصم"
+  ]
+ },
+ {
+  "id": "r4_own_card_ar",
+  "raw": "تم خصم 85 ريال من بطاقتك المنتهية بـ 4521",
+  "expected": "تم خصم 85 ريال من بطاقتك المنتهية بـ 4521",
+  "secrets": [],
+  "mustKeep": [
+   "85",
+   "4521",
+   "تم خصم"
+  ]
+ },
+ {
+  "id": "r4_own_card_ending",
+  "raw": "Your card ending 4521 was charged SAR 85.00 at Example Mart",
+  "expected": "Your card ending 4521 was charged SAR 85.00 at Example Mart",
+  "secrets": [],
+  "mustKeep": [
+   "85.00",
+   "4521",
+   "Example Mart"
+  ]
+ },
+ {
+  "id": "r4_own_from_account",
+  "raw": "SAR 85.00 transferred to Nadir Zaki from account ***1234",
+  "expected": "SAR 85.00 transferred to [NAME] from account ***1234",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "85.00",
+   "***1234",
+   "transferred"
+  ]
+ },
+ {
+  "id": "r4_own_credited_to",
+  "raw": "Salary SAR 9,000.00 credited to account *1234",
+  "expected": "Salary SAR 9,000.00 credited to account *1234",
+  "secrets": [],
+  "mustKeep": [
+   "9,000.00",
+   "*1234",
+   "credited"
+  ]
+ },
+ {
+  "id": "r4_own_credited_to_ar",
+  "raw": "تم إيداع 9000 ريال في حساب *1234",
+  "expected": "تم إيداع 9000 ريال في حساب *1234",
+  "secrets": [],
+  "mustKeep": [
+   "9000",
+   "*1234",
+   "تم إيداع"
+  ]
+ },
+ {
+  "id": "r4_own_card_field_ar",
+  "raw": "شراء إنترنت\nبطاقة:4521*;مدى\nمبلغ:85.00 SAR\nحساب:1234*\nمن:متجر المثال\nفي:2026-05-21 14:06",
+  "expected": "شراء إنترنت\nبطاقة:4521*;مدى\nمبلغ:85.00 SAR\nحساب:1234*\nمن:متجر المثال\nفي:2026-05-21 14:06",
+  "secrets": [],
+  "mustKeep": [
+   "4521*",
+   "1234*",
+   "85.00",
+   "متجر المثال",
+   "2026-05-21",
+   "14:06"
+  ],
+  "merchant": "متجر المثال"
+ },
+ {
+  "id": "r4_pair_paid_to_person",
+  "raw": "SAR 85.00 paid to Nadir Zaki",
+  "expected": "SAR 85.00 paid to [NAME]",
+  "pair": "r4_pair_paid_to_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "85.00",
+   "paid to"
+  ]
+ },
+ {
+  "id": "r4_pair_paid_to_merchant",
+  "raw": "SAR 85.00 paid to Example Bookstore",
+  "expected": "SAR 85.00 paid to Example Bookstore",
+  "pair": "r4_pair_paid_to_person",
+  "secrets": [],
+  "mustKeep": [
+   "85.00",
+   "paid to",
+   "Example Bookstore"
+  ],
+  "merchant": "Example Bookstore"
+ },
+ {
+  "id": "r4_pair_card_paid_to_merchant",
+  "raw": "Card *4521: SAR 85.00 paid to Example Diner",
+  "expected": "Card *4521: SAR 85.00 paid to Example Diner",
+  "pair": "r4_pair_paid_to_person",
+  "secrets": [],
+  "mustKeep": [
+   "85.00",
+   "*4521",
+   "Example Diner"
+  ],
+  "merchant": "Example Diner"
+ },
+ {
+  "id": "r4_pair_payment_to_person",
+  "raw": "Payment of SAR 99.00 to Nadir Zaki via Mada",
+  "expected": "Payment of SAR 99.00 to [NAME] via Mada",
+  "pair": "r4_pair_payment_to_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "99.00",
+   "via Mada",
+   "Payment"
+  ]
+ },
+ {
+  "id": "r4_pair_payment_to_merchant",
+  "raw": "Payment of SAR 99.00 to Example Supermarket via Mada",
+  "expected": "Payment of SAR 99.00 to Example Supermarket via Mada",
+  "pair": "r4_pair_payment_to_person",
+  "secrets": [],
+  "mustKeep": [
+   "99.00",
+   "via Mada",
+   "Example Supermarket"
+  ],
+  "merchant": "Example Supermarket"
+ },
+ {
+  "id": "r4_pair_payment_to_person_status",
+  "raw": "Payment of SAR 99.00 to Nadir Zaki did not go through",
+  "expected": "Payment of SAR 99.00 to [NAME] did not go through",
+  "pair": "r4_pair_payment_to_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "99.00",
+   "did not go through"
+  ]
+ },
+ {
+  "id": "r4_pair_to_colon_person",
+  "raw": "Transfer To: Nadir Zaki SAR 85.00 from your card *4521",
+  "expected": "Transfer To: [REDACTED] SAR 85.00 from your card *4521",
+  "pair": "r4_pair_to_colon_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "85.00",
+   "*4521",
+   "Transfer"
+  ]
+ },
+ {
+  "id": "r4_pair_to_colon_merchant",
+  "raw": "Purchase To: Example Bookstore SAR 85.00 card *4521",
+  "expected": "Purchase To: Example Bookstore SAR 85.00 card *4521",
+  "pair": "r4_pair_to_colon_person",
+  "secrets": [],
+  "mustKeep": [
+   "85.00",
+   "*4521",
+   "Example Bookstore",
+   "Purchase"
+  ],
+  "merchant": "Example Bookstore"
+ },
+ {
+  "id": "r4_pair_ila_person",
+  "raw": "تحويل 85 ريال إلى نادر زكي من بطاقتك 4521",
+  "expected": "تحويل 85 ريال إلى: [REDACTED] من بطاقتك 4521",
+  "pair": "r4_pair_ila_merchant",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "85",
+   "ريال",
+   "4521",
+   "تحويل"
+  ]
+ },
+ {
+  "id": "r4_pair_ila_merchant",
+  "raw": "شراء 85 ريال إلى مكتبة المثال بطاقة 4521",
+  "expected": "شراء 85 ريال إلى مكتبة المثال بطاقة 4521",
+  "pair": "r4_pair_ila_person",
+  "secrets": [],
+  "mustKeep": [
+   "85",
+   "ريال",
+   "4521",
+   "مكتبة المثال",
+   "شراء"
+  ],
+  "merchant": "مكتبة المثال"
+ },
+ {
+  "id": "r4_pair_from_person",
+  "raw": "Transfer of SAR 99.00 from Nadir Zaki credited to your card *1111 on 07/11",
+  "expected": "Transfer of SAR 99.00 from [NAME] credited to your card *1111 on 07/11",
+  "pair": "r4_pair_from_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "99.00",
+   "*1111",
+   "07/11",
+   "credited"
+  ]
+ },
+ {
+  "id": "r4_pair_from_merchant",
+  "raw": "Refund of SAR 99.00 from Example Store credited to your card *1111 on 07/11",
+  "expected": "Refund of SAR 99.00 from Example Store credited to your card *1111 on 07/11",
+  "pair": "r4_pair_from_person",
+  "secrets": [],
+  "mustKeep": [
+   "99.00",
+   "*1111",
+   "07/11",
+   "credited",
+   "Example Store",
+   "Refund"
+  ],
+  "merchant": "Example Store"
+ },
+ {
+  "id": "r4_pair_min_person",
+  "raw": "حوالة واردة 99 ريال من نادر زكي إلى حسابك *1111",
+  "expected": "حوالة واردة 99 ريال من [NAME] إلى حسابك *1111",
+  "pair": "r4_pair_min_merchant",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "99",
+   "ريال",
+   "*1111",
+   "واردة"
+  ]
+ },
+ {
+  "id": "r4_pair_min_merchant",
+  "raw": "استرداد 99 ريال من متجر المثال إلى بطاقتك *1111",
+  "expected": "استرداد 99 ريال من متجر المثال إلى بطاقتك *1111",
+  "pair": "r4_pair_min_person",
+  "secrets": [],
+  "mustKeep": [
+   "99",
+   "ريال",
+   "*1111",
+   "استرداد",
+   "متجر المثال"
+  ],
+  "merchant": "متجر المثال"
+ },
+ {
+  "id": "r4_pair_bill_person",
+  "raw": "Bill payment SAR 150.00 to account of Nadir Zaki from your account *1234",
+  "expected": "Bill payment SAR 150.00 to account of [NAME] from your account *1234",
+  "pair": "r4_pair_bill_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "150.00",
+   "*1234",
+   "Bill payment"
+  ]
+ },
+ {
+  "id": "r4_pair_bill_merchant",
+  "raw": "Bill payment SAR 150.00 to Example Telecom from your account *1234",
+  "expected": "Bill payment SAR 150.00 to Example Telecom from your account *1234",
+  "pair": "r4_pair_bill_person",
+  "secrets": [],
+  "mustKeep": [
+   "150.00",
+   "*1234",
+   "Bill payment",
+   "Example Telecom"
+  ],
+  "merchant": "Example Telecom"
+ },
+ {
+  "id": "r4_pair_bill_person_ar",
+  "raw": "سداد 150 ريال إلى حساب نادر زكي من حسابك *1234",
+  "expected": "سداد 150 ريال إلى: [REDACTED] من حسابك *1234",
+  "pair": "r4_pair_bill_merchant_ar",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "150",
+   "ريال",
+   "*1234",
+   "سداد"
+  ]
+ },
+ {
+  "id": "r4_pair_bill_merchant_ar",
+  "raw": "سداد فاتورة 150 ريال إلى شركة المثال من حسابك *1234",
+  "expected": "سداد فاتورة 150 ريال إلى شركة المثال من حسابك *1234",
+  "pair": "r4_pair_bill_person_ar",
+  "secrets": [],
+  "mustKeep": [
+   "150",
+   "ريال",
+   "*1234",
+   "سداد فاتورة",
+   "شركة المثال"
+  ],
+  "merchant": "شركة المثال"
+ },
+ {
+  "id": "r4_pair_pos_person",
+  "raw": "POS purchase SAR 85.00 at Example Bookstore. Cardholder Nadir Zaki",
+  "expected": "POS purchase SAR 85.00 at Example Bookstore. Cardholder [NAME]",
+  "pair": "r4_pair_pos_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "85.00",
+   "POS purchase",
+   "Example Bookstore"
+  ],
+  "merchant": "Example Bookstore"
+ },
+ {
+  "id": "r4_pair_pos_merchant",
+  "raw": "POS purchase SAR 85.00 at Example Bookstore card *4521",
+  "expected": "POS purchase SAR 85.00 at Example Bookstore card *4521",
+  "pair": "r4_pair_pos_person",
+  "secrets": [],
+  "mustKeep": [
+   "85.00",
+   "POS purchase",
+   "Example Bookstore",
+   "*4521"
+  ],
+  "merchant": "Example Bookstore"
+ },
+ {
+  "id": "r4_pair_pos_person_ar",
+  "raw": "شراء عبر نقاط البيع 85 ريال لدى مكتبة المثال. حامل البطاقة نادر زكي",
+  "expected": "شراء عبر نقاط البيع 85 ريال لدى مكتبة المثال. حامل البطاقة [NAME]",
+  "pair": "r4_pair_pos_merchant_ar",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "85",
+   "ريال",
+   "مكتبة المثال",
+   "نقاط البيع"
+  ],
+  "merchant": "مكتبة المثال"
+ },
+ {
+  "id": "r4_pair_pos_merchant_ar",
+  "raw": "شراء عبر نقاط البيع 85 ريال لدى مكتبة المثال بطاقة *4521",
+  "expected": "شراء عبر نقاط البيع 85 ريال لدى مكتبة المثال بطاقة *4521",
+  "pair": "r4_pair_pos_person_ar",
+  "secrets": [],
+  "mustKeep": [
+   "85",
+   "ريال",
+   "مكتبة المثال",
+   "نقاط البيع",
+   "*4521"
+  ],
+  "merchant": "مكتبة المثال"
+ },
+ {
+  "id": "r4_pair_online_person",
+  "raw": "Online purchase SAR 85.00 at Example Store. Name: Nadir Zaki",
+  "expected": "Online purchase SAR 85.00 at Example Store. Name: [NAME]",
+  "pair": "r4_pair_online_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "85.00",
+   "Online purchase",
+   "Example Store"
+  ],
+  "merchant": "Example Store"
+ },
+ {
+  "id": "r4_pair_online_merchant",
+  "raw": "Online purchase SAR 85.00 at Example Store using card **4521",
+  "expected": "Online purchase SAR 85.00 at Example Store using card **4521",
+  "pair": "r4_pair_online_person",
+  "secrets": [],
+  "mustKeep": [
+   "85.00",
+   "Online purchase",
+   "Example Store",
+   "**4521"
+  ],
+  "merchant": "Example Store"
+ },
+ {
+  "id": "r4_pair_online_person_ar",
+  "raw": "شراء عبر الإنترنت 85 ريال من متجر المثال. الاسم: نادر زكي",
+  "expected": "شراء عبر الإنترنت 85 ريال من متجر المثال. الاسم: [NAME]",
+  "pair": "r4_pair_online_merchant_ar",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "85",
+   "ريال",
+   "متجر المثال",
+   "شراء"
+  ],
+  "merchant": "متجر المثال"
+ },
+ {
+  "id": "r4_pair_online_merchant_ar",
+  "raw": "شراء عبر الإنترنت 85 ريال من متجر المثال بطاقة *4521",
+  "expected": "شراء عبر الإنترنت 85 ريال من متجر المثال بطاقة *4521",
+  "pair": "r4_pair_online_person_ar",
+  "secrets": [],
+  "mustKeep": [
+   "85",
+   "ريال",
+   "متجر المثال",
+   "شراء",
+   "*4521"
+  ],
+  "merchant": "متجر المثال"
+ },
+ {
+  "id": "r4_pair_refund_person",
+  "raw": "Refund of SAR 40.00 from Example Store. Customer Nadir Zaki",
+  "expected": "Refund of SAR 40.00 from Example Store. Customer [NAME]",
+  "pair": "r4_pair_refund_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "40.00",
+   "Refund",
+   "Example Store"
+  ],
+  "merchant": "Example Store"
+ },
+ {
+  "id": "r4_pair_refund_merchant",
+  "raw": "Refund of SAR 40.00 from Example Store to card *4521",
+  "expected": "Refund of SAR 40.00 from Example Store to card *4521",
+  "pair": "r4_pair_refund_person",
+  "secrets": [],
+  "mustKeep": [
+   "40.00",
+   "Refund",
+   "Example Store",
+   "*4521"
+  ],
+  "merchant": "Example Store"
+ },
+ {
+  "id": "r4_pair_beneficiary_person",
+  "raw": "SAR 75.00 sent. Beneficiary: Nadir Zaki",
+  "expected": "SAR 75.00 sent. Beneficiary: [NAME]",
+  "pair": "r4_pair_beneficiary_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "75.00",
+   "sent",
+   "Beneficiary"
+  ]
+ },
+ {
+  "id": "r4_pair_beneficiary_merchant",
+  "raw": "SAR 75.00 sent. Beneficiary: Example Trading LLC",
+  "expected": "SAR 75.00 sent. Beneficiary: Example Trading LLC",
+  "pair": "r4_pair_beneficiary_person",
+  "secrets": [],
+  "mustKeep": [
+   "75.00",
+   "sent",
+   "Example Trading LLC"
+  ],
+  "merchant": "Example Trading LLC"
+ },
+ {
+  "id": "r4_pair_lisalih_person",
+  "raw": "تم خصم 75 ريال لصالح نادر زكي",
+  "expected": "تم خصم 75 ريال لصالح [NAME]",
+  "pair": "r4_pair_lisalih_merchant",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "75",
+   "ريال",
+   "تم خصم",
+   "لصالح"
+  ]
+ },
+ {
+  "id": "r4_pair_lisalih_merchant",
+  "raw": "تم خصم 75 ريال لصالح شركة المثال",
+  "expected": "تم خصم 75 ريال لصالح شركة المثال",
+  "pair": "r4_pair_lisalih_person",
+  "secrets": [],
+  "mustKeep": [
+   "75",
+   "ريال",
+   "تم خصم",
+   "شركة المثال"
+  ],
+  "merchant": "شركة المثال"
+ },
+ {
+  "id": "r4_pair_transfer_to_person",
+  "raw": "Transfer of SAR 75.00 to Nadir Zaki completed",
+  "expected": "Transfer of SAR 75.00 to [NAME] completed",
+  "pair": "r4_pair_transfer_to_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "75.00",
+   "completed",
+   "Transfer"
+  ]
+ },
+ {
+  "id": "r4_pair_transfer_to_merchant",
+  "raw": "Transfer of SAR 75.00 to Example Markets completed",
+  "expected": "Transfer of SAR 75.00 to Example Markets completed",
+  "pair": "r4_pair_transfer_to_person",
+  "secrets": [],
+  "mustKeep": [
+   "75.00",
+   "completed",
+   "Example Markets"
+  ],
+  "merchant": "Example Markets"
+ },
+ {
+  "id": "r4_pair_transfer_to_person_ar",
+  "raw": "تم تحويل 75 ريال إلى نادر زكي بنجاح",
+  "expected": "تم تحويل 75 ريال إلى: [REDACTED] بنجاح",
+  "pair": "r4_pair_transfer_to_merchant_ar",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "75",
+   "ريال",
+   "تم تحويل",
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "r4_pair_transfer_to_merchant_ar",
+  "raw": "تم تحويل 75 ريال إلى أسواق المثال بنجاح",
+  "expected": "تم تحويل 75 ريال إلى أسواق المثال بنجاح",
+  "pair": "r4_pair_transfer_to_person_ar",
+  "secrets": [],
+  "mustKeep": [
+   "75",
+   "ريال",
+   "تم تحويل",
+   "بنجاح",
+   "أسواق المثال"
+  ],
+  "merchant": "أسواق المثال"
+ },
+ {
+  "id": "r4_pair_salary_person",
+  "raw": "SAR 9,000.00 credited to your account from Nadir Zaki on 27/10",
+  "expected": "SAR 9,000.00 credited to your account from [NAME] on 27/10",
+  "pair": "r4_pair_salary_merchant",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "9,000.00",
+   "27/10",
+   "credited"
+  ]
+ },
+ {
+  "id": "r4_pair_salary_merchant",
+  "raw": "Salary SAR 9,000.00 credited to your account from Example Trading LLC on 27/10",
+  "expected": "Salary SAR 9,000.00 credited to your account from Example Trading LLC on 27/10",
+  "pair": "r4_pair_salary_person",
+  "secrets": [],
+  "mustKeep": [
+   "9,000.00",
+   "27/10",
+   "credited",
+   "Example Trading LLC",
+   "Salary"
+  ],
+  "merchant": "Example Trading LLC"
+ },
+ {
+  "id": "r4_otp_is",
+  "raw": "Your verification code is 482913. Do not share it.",
+  "expected": "Your verification code is [OTP]. Do not share it.",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "verification code",
+   "Do not share"
+  ],
+  "pair": "r4_otp_is_amount"
+ },
+ {
+  "id": "r4_otp_is_amount",
+  "raw": "Your purchase amount is 482913 SAR. Do not share your card details.",
+  "expected": "Your purchase amount is 482913 SAR. Do not share your card details.",
+  "secrets": [],
+  "mustKeep": [
+   "482913 SAR",
+   "purchase amount"
+  ],
+  "pair": "r4_otp_is"
+ },
+ {
+  "id": "r4_otp_use",
+  "raw": "Use 482913 to confirm your Example Bank transfer of SAR 500.00",
+  "expected": "Use [OTP] to confirm your Example Bank transfer of SAR 500.00",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "500.00",
+   "to confirm your",
+   "transfer"
+  ],
+  "pair": "r4_otp_use_amount"
+ },
+ {
+  "id": "r4_otp_use_amount",
+  "raw": "Use your card to confirm your transfer of SAR 482913",
+  "expected": "Use your card to confirm your transfer of SAR 482913",
+  "secrets": [],
+  "mustKeep": [
+   "SAR 482913",
+   "to confirm your"
+  ],
+  "pair": "r4_otp_use"
+ },
+ {
+  "id": "r4_otp_first",
+  "raw": "482913 is your Example Bank verification code",
+  "expected": "[OTP] is your Example Bank verification code",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "verification code"
+  ],
+  "pair": "r4_otp_first_amount"
+ },
+ {
+  "id": "r4_otp_first_amount",
+  "raw": "482913 SAR is your available balance",
+  "expected": "482913 SAR is your available balance",
+  "secrets": [],
+  "mustKeep": [
+   "482913 SAR",
+   "balance"
+  ],
+  "pair": "r4_otp_first"
+ },
+ {
+  "id": "r4_otp_with_purchase",
+  "raw": "Your one-time code for the purchase of SAR 2509.00 at Example Store is 482913. Do not share it.",
+  "expected": "Your one-time code for the purchase of SAR 2509.00 at Example Store is [OTP]. Do not share it.",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "SAR 2509.00",
+   "Example Store",
+   "one-time code"
+  ]
+ },
+ {
+  "id": "r4_otp_purchase_then_code",
+  "raw": "Purchase of SAR 4829.00 at Example Store with card *4521 on 05/11/2026 14:30. OTP 771204",
+  "expected": "Purchase of SAR 4829.00 at Example Store with card *4521 on 05/11/2026 14:30. OTP [OTP]",
+  "secrets": [
+   "771204"
+  ],
+  "mustKeep": [
+   "SAR 4829.00",
+   "Example Store",
+   "*4521",
+   "05/11/2026",
+   "14:30",
+   "OTP"
+  ]
+ },
+ {
+  "id": "r4_otp_passcode_4",
+  "raw": "Passcode 7712 for purchase of SAR 4829 at Example Store",
+  "expected": "Passcode [OTP] for purchase of SAR 4829 at Example Store",
+  "secrets": [
+   "7712"
+  ],
+  "mustKeep": [
+   "SAR 4829",
+   "Example Store",
+   "Passcode"
+  ]
+ },
+ {
+  "id": "r4_otp_no_cue",
+  "raw": "482913. Do not share this number with anyone.",
+  "expected": "[OTP]. Do not share this number with anyone.",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "Do not share"
+  ],
+  "pair": "r4_otp_no_cue_amount"
+ },
+ {
+  "id": "r4_otp_no_cue_amount",
+  "raw": "Total due 482913. Do not ignore this notice.",
+  "expected": "Total due 482913. Do not ignore this notice.",
+  "secrets": [],
+  "mustKeep": [
+   "482913",
+   "Total due"
+  ],
+  "pair": "r4_otp_no_cue"
+ },
+ {
+  "id": "r4_otp_security_code_8",
+  "raw": "Security code: 48291377 for your online payment of USD 120.00",
+  "expected": "Security code: [OTP] for your online payment of USD 120.00",
+  "secrets": [
+   "48291377"
+  ],
+  "mustKeep": [
+   "USD 120.00",
+   "Security code"
+  ]
+ },
+ {
+  "id": "r4_otp_ar_huwa",
+  "raw": "رمز التحقق الخاص بك هو 482913",
+  "expected": "رمز التحقق الخاص بك هو [OTP]",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "رمز التحقق"
+  ],
+  "pair": "r4_otp_ar_huwa_amount"
+ },
+ {
+  "id": "r4_otp_ar_huwa_amount",
+  "raw": "المبلغ المستحق هو 482913 ريال",
+  "expected": "المبلغ المستحق هو 482913 ريال",
+  "secrets": [],
+  "mustKeep": [
+   "482913 ريال",
+   "المبلغ"
+  ],
+  "pair": "r4_otp_ar_huwa"
+ },
+ {
+  "id": "r4_otp_ar_password",
+  "raw": "كلمة المرور لمرة واحدة: 482913",
+  "expected": "كلمة المرور لمرة واحدة: [OTP]",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "كلمة المرور لمرة واحدة"
+  ],
+  "pair": "r4_otp_ar_password_amount"
+ },
+ {
+  "id": "r4_otp_ar_password_amount",
+  "raw": "مبلغ العملية: 482913 ريال",
+  "expected": "مبلغ العملية: 482913 ريال",
+  "secrets": [],
+  "mustKeep": [
+   "482913 ريال",
+   "مبلغ العملية"
+  ],
+  "pair": "r4_otp_ar_password"
+ },
+ {
+  "id": "r4_otp_ar_first",
+  "raw": "482913 هو الرمز السري لعملية الشراء بمبلغ 4829 ريال",
+  "expected": "[OTP] هو الرمز السري لعملية الشراء بمبلغ 4829 ريال",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "4829 ريال",
+   "الرمز السري",
+   "الشراء"
+  ]
+ },
+ {
+  "id": "r4_otp_ar_use",
+  "raw": "استخدم الرمز 7712 لإتمام شراء بمبلغ 4829 ريال لدى متجر المثال",
+  "expected": "استخدم الرمز [OTP] لإتمام شراء بمبلغ 4829 ريال لدى متجر المثال",
+  "secrets": [
+   "7712"
+  ],
+  "mustKeep": [
+   "4829 ريال",
+   "متجر المثال",
+   "الرمز"
+  ]
+ },
+ {
+  "id": "r4_otp_ar_indic",
+  "raw": "رمز التحقق ٤٨٢٩١٣ لا تشاركه مع أحد",
+  "expected": "رمز التحقق [OTP] لا تشاركه مع أحد",
+  "secrets": [
+   "٤٨٢٩١٣"
+  ],
+  "mustKeep": [
+   "رمز التحقق",
+   "لا تشاركه"
+  ]
+ },
+ {
+  "id": "r4_otp_ar_secret_indic",
+  "raw": "الرمز السري: ٧٧١٢ لعملية شراء بمبلغ ٤٨٢٩ ريال",
+  "expected": "الرمز السري: [OTP] لعملية شراء بمبلغ ٤٨٢٩ ريال",
+  "secrets": [
+   "٧٧١٢"
+  ],
+  "mustKeep": [
+   "٤٨٢٩ ريال",
+   "الرمز السري"
+  ]
+ },
+ {
+  "id": "r4_otp_ar_no_cue",
+  "raw": "482913 لا تشارك هذا الرقم مع أحد",
+  "expected": "[OTP] لا تشارك هذا الرقم مع أحد",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "لا تشارك"
+  ]
+ },
+ {
+  "id": "r4_otp_card_suffix_kept",
+  "raw": "Your OTP for card 4521 is 482913",
+  "expected": "Your OTP for card 4521 is [OTP]",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "card 4521",
+   "OTP"
+  ]
+ },
+ {
+  "id": "r4_word_to_confirm",
+  "raw": "Use the app to confirm your transfer to Nadir Zaki",
+  "expected": "Use the app to confirm your transfer to [NAME]",
+  "secrets": [
+   "Nadir",
+   "Zaki"
+  ],
+  "mustKeep": [
+   "to confirm your transfer"
+  ]
+ },
+ {
+  "id": "r4_word_to_confirm_only",
+  "raw": "Click the link to confirm your transfer of SAR 200.00",
+  "expected": "Click the link to confirm your transfer of SAR 200.00",
+  "secrets": [],
+  "mustKeep": [
+   "to confirm your transfer",
+   "200.00"
+  ]
+ },
+ {
+  "id": "r4_word_by_clicking",
+  "raw": "Transfer of SAR 200.00 will be completed by clicking the link in the app",
+  "expected": "Transfer of SAR 200.00 will be completed by clicking the link in the app",
+  "secrets": [],
+  "mustKeep": [
+   "by clicking the link",
+   "200.00",
+   "completed"
+  ]
+ },
+ {
+  "id": "r4_word_to_avoid",
+  "raw": "Transfer SAR 200.00 before the due date to avoid a late fee",
+  "expected": "Transfer SAR 200.00 before the due date to avoid a late fee",
+  "secrets": [],
+  "mustKeep": [
+   "to avoid",
+   "200.00",
+   "due date"
+  ]
+ },
+ {
+  "id": "r4_word_two_lower_names",
+  "raw": "transfer of SAR 200.00 to nadir zaki completed",
+  "expected": "transfer of SAR 200.00 to [NAME] completed",
+  "secrets": [
+   "nadir",
+   "zaki"
+  ],
+  "mustKeep": [
+   "200.00",
+   "completed"
+  ]
+ },
+ {
+  "id": "r4_code_promo_after_purchase",
+  "raw": "Purchase SAR 250.00 at Example Store. Use code 7712 to pay less on your next order",
+  "expected": "Purchase SAR 250.00 at Example Store. Use code [REF] to pay less on your next order",
+  "secrets": [
+   "7712"
+  ],
+  "mustKeep": [
+   "SAR 250.00",
+   "Example Store",
+   "[REF]",
+   "Purchase"
+  ],
+  "pair": "r4_code_verification_after_purchase"
+ },
+ {
+  "id": "r4_code_verification_after_purchase",
+  "raw": "You are paying SAR 250.00 at Example Store. Your verification code is 771204",
+  "expected": "You are paying SAR 250.00 at Example Store. Your verification code is [OTP]",
+  "secrets": [
+   "771204"
+  ],
+  "mustKeep": [
+   "SAR 250.00",
+   "Example Store",
+   "[OTP]"
+  ],
+  "pair": "r4_code_promo_after_purchase"
+ },
+ {
+  "id": "r4_code_pickup_after_purchase",
+  "raw": "Purchase of SAR 100.00 at Example Store. Order 771204 is your code for pickup",
+  "expected": "Purchase of SAR 100.00 at Example Store. Order [REF] is your code for pickup",
+  "secrets": [
+   "771204"
+  ],
+  "mustKeep": [
+   "SAR 100.00",
+   "Example Store",
+   "[REF]"
+  ]
+ },
+ {
+  "id": "r4_code_bare_do_not_share_after_purchase",
+  "raw": "You are paying SAR 250.00 at Example Store. Your code is 771204. Do not share it.",
+  "expected": "You are paying SAR 250.00 at Example Store. Your code is [OTP]. Do not share it.",
+  "secrets": [
+   "771204"
+  ],
+  "mustKeep": [
+   "SAR 250.00",
+   "[OTP]",
+   "Do not share"
+  ]
+ },
+ {
+  "id": "r4_code_bare_first_sentence",
+  "raw": "Your code is 771204 for purchase SAR 250.00 at Example Store",
+  "expected": "Your code is [OTP] for purchase SAR 250.00 at Example Store",
+  "secrets": [
+   "771204"
+  ],
+  "mustKeep": [
+   "SAR 250.00",
+   "[OTP]"
+  ]
+ },
+ {
+  "id": "r4_code_promo_after_purchase_ar",
+  "raw": "شراء 250 ريال لدى متجر المثال. الرمز 7712 للاستفسار",
+  "expected": "شراء 250 ريال لدى متجر المثال. الرمز [REF] للاستفسار",
+  "secrets": [
+   "7712"
+  ],
+  "mustKeep": [
+   "250 ريال",
+   "متجر المثال",
+   "[REF]",
+   "شراء"
+  ],
+  "pair": "r4_code_verification_after_purchase_ar"
+ },
+ {
+  "id": "r4_code_verification_after_purchase_ar",
+  "raw": "عملية شراء بمبلغ 250 ريال لدى متجر المثال. رمز التحقق 771204",
+  "expected": "عملية شراء بمبلغ 250 ريال لدى متجر المثال. رمز التحقق [OTP]",
+  "secrets": [
+   "771204"
+  ],
+  "mustKeep": [
+   "250 ريال",
+   "متجر المثال",
+   "[OTP]"
+  ],
+  "pair": "r4_code_promo_after_purchase_ar"
  }
 ]

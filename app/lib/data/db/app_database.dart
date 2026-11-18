@@ -14,6 +14,7 @@ import 'database_lease.dart';
 import 'database_process_liveness.dart';
 import 'database_seed.dart';
 import 'merchant_identity.dart';
+import 'merchant_rule_history.dart';
 import 'money_v30_backfill.dart';
 import 'ownership_guard.dart';
 import 'replica_location.dart';
@@ -21,7 +22,7 @@ import 'sql_value_codec.dart';
 
 // v28 (MALI-014 Batch-5 closure): adds the durable `restore_operations` journal
 // (created idempotently by _createSchema on both fresh install and upgrade).
-const int _targetSchemaVersion = 43;
+const int _targetSchemaVersion = 44;
 
 /// The notification preferences of the seeded default settings row. Shared so a
 /// recovery can tell the pristine seed from a row the user has edited.
@@ -888,7 +889,39 @@ class AppDatabase extends GeneratedDatabase {
       apply: _applyV43CategoryProvenance,
       postcondition: _verifyV43CategoryProvenance,
     ),
+    // Deletion history for saved category rules (merchant_rule_history.dart).
+    // ADDITIVE: three new tables and triggers on merchant_category_map; no
+    // existing row is read or changed, and no removal is invented for the past.
+    _SchemaMigration(
+      from: 43,
+      to: 44,
+      apply: _applyV44RuleHistory,
+      postcondition: _verifyV44RuleHistory,
+    ),
   ];
+
+  static Future<void> _applyV44RuleHistory(AppDatabase db) async {
+    await createMerchantRuleHistory(db);
+    // The registry also runs on a brand-new database (from version 0), which
+    // has recorded every removal since it was created. Only a database that
+    // already existed (its settings row is seeded) has an unknown past.
+    final existed = await db
+        .customSelect('SELECT 1 AS x FROM user_settings LIMIT 1;')
+        .getSingleOrNull();
+    if (existed != null) {
+      await markMerchantRuleHistoryIncomplete(db, keepEarlier: true);
+    }
+  }
+
+  static Future<bool> _verifyV44RuleHistory(AppDatabase db) async =>
+      (await db
+              .customSelect("SELECT COUNT(*) AS n FROM sqlite_master "
+                  "WHERE type = 'table' AND name IN ('merchant_rule_history', "
+                  "'merchant_rule_tombstones', "
+                  "'merchant_rule_restore_choices');")
+              .getSingle())
+          .read<int>('n') ==
+      3;
 
   Future<void> _ensureCategoryProvenanceColumn() => _ensureColumn(
         'transactions',
@@ -2544,6 +2577,8 @@ class AppDatabase extends GeneratedDatabase {
     await _ensureCategoryProvenanceColumn();
     await _ensureImportedFromFileColumn();
     await _createMerchantAliasesTable();
+    // v44: deletion history for saved category rules. Unconditional likewise.
+    await createMerchantRuleHistory(this);
 
     // v34 (COUPONS PHASE 1): the merchant catalog cache. Unconditional for the
     // same reason as the two above — a version gate would skip these on a

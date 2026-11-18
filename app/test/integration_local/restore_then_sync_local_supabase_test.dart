@@ -16,14 +16,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:money_companion/core/backend/supabase_config.dart';
 import 'package:money_companion/core/backup/backup_snapshot_builder.dart';
+import 'package:money_companion/core/backup/merchant_rule_restore.dart';
 import 'package:money_companion/core/backup/restore_backup_usecase.dart';
 import 'package:money_companion/core/sync/outbox_failure.dart';
 import 'package:money_companion/core/sync/pending_sync_reconciler.dart';
+import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/planning_cutover.dart';
+import 'package:money_companion/data/repositories/drift_merchant_category_repository.dart';
 import 'package:money_companion/data/sync/exact_transport_capability.dart';
 import 'package:money_companion/domain/entities/account_entity.dart';
 import 'package:money_companion/domain/entities/transaction_entity.dart';
 import 'package:money_companion/domain/finance/money.dart';
+import 'package:money_companion/features/planning_sync/services/merchant_rule_sync_service.dart';
 import 'package:money_companion/features/planning_sync/services/startup_sync_reconcile_service.dart';
 // ignore: depend_on_referenced_packages
 import 'package:shared_preferences/shared_preferences.dart';
@@ -540,6 +544,182 @@ void main() {
       await pushAll(d);
       await expectNothingUnder(uidA);
       expect(await d.ledgerOutboxCount(), 1, reason: 'the intent is kept');
+    });
+
+    // ── Round 4: saved category rules ("Remember for this merchant") ───────
+    // The real rule repository, restore use case and MerchantRuleSyncService
+    // against the real `user_merchant_rules` table (PostgREST, RLS).
+    DriftMerchantCategoryRepository rulesOf(Device d) =>
+        DriftMerchantCategoryRepository(d.db, outboxQueue: d.planningQueue);
+
+    Future<void> ruleSync(Device d) => MerchantRuleSyncService(
+          db: d.db,
+          queue: d.planningQueue,
+          getAuthUserId: signedInUid,
+          mayEgress: () async => d.consent,
+          serverReady: () async => true,
+        ).sync();
+
+    Future<Map<String, String>> localRules(Device d) async => {
+          for (final r in await rulesOf(d).getUserConfirmedRules())
+            AppDatabase.normalizeMerchant(r.rawMerchant): r.categoryKey,
+        };
+
+    Future<Map<String, String>> serverRules(String uid,
+            {bool deleted = false}) async =>
+        {
+          for (final r in await remote.rows('user_merchant_rules', uid,
+              select: 'merchant_key,category_key,deleted_at'))
+            if ((r['deleted_at'] != null) == deleted)
+              r['merchant_key'] as String: r['category_key'] as String,
+        };
+
+    Future<void> remember(Device d, String merchant, String category) =>
+        rulesOf(d).confirmMerchantCategory(
+            rawMerchant: merchant, categoryKey: category, isUserConfirmed: true);
+
+    String k(String merchant) => AppDatabase.normalizeMerchant(merchant);
+
+    test('RR1 rules: backup, then forget one, change one, add one and sync; '
+        'restore; Cloud on: device and cloud agree, the removed rule stays '
+        'removed, and a second phone gets the same rules', () async {
+      final u = await remote.createUser('rr1');
+      final uid = u.uid;
+      await Supabase.instance.client.auth
+          .signInWithPassword(email: u.email, password: u.password);
+      final first = await LedgerAdmissionFixture.open(uid);
+      addTearDown(first.finish);
+      final d = Device.wrap(first.database);
+      await d.accounts.create(_account('acc-rr1'));
+      await remember(d, 'Synthetic Kept Shop', 'restaurants');
+      await remember(d, 'Synthetic Removed Shop', 'restaurants');
+      await remember(d, 'Synthetic Edited Shop', 'restaurants');
+      await remember(d, 'متجر اصطناعي', 'shopping');
+      await ruleSync(d);
+      expect(await serverRules(uid), hasLength(4));
+      final backup = await takeBackup(d);
+
+      await rulesOf(d).forgetUserConfirmedRule('Synthetic Removed Shop');
+      await remember(d, 'Synthetic Edited Shop', 'shopping');
+      await remember(d, 'Synthetic Later Shop', 'shopping');
+      await ruleSync(d);
+
+      await restoreBackup(d, backup);
+      final merged = {
+        k('Synthetic Kept Shop'): 'restaurants',
+        k('Synthetic Edited Shop'): 'shopping',
+        k('Synthetic Later Shop'): 'shopping',
+        k('متجر اصطناعي'): 'shopping',
+      };
+      expect(await localRules(d), merged);
+      expect(await MerchantRuleRestore(d.db).pending(), isEmpty);
+      d.consent = true;
+      await ruleSync(d);
+      await ruleSync(d);
+      expect(await localRules(d), merged);
+      expect(await serverRules(uid), merged);
+      expect(await serverRules(uid, deleted: true),
+          {k('Synthetic Removed Shop'): 'restaurants'});
+
+      // A second phone of the same user: the removed rule does not come back.
+      await first.finish();
+      final second = await LedgerAdmissionFixture.open(uid);
+      addTearDown(second.finish);
+      final d2 = Device.wrap(second.database);
+      await ruleSync(d2);
+      expect(await localRules(d2), merged);
+      await restoreBackup(d2, backup);
+      d2.consent = true;
+      await ruleSync(d2);
+      await ruleSync(d2);
+      expect(await localRules(d2), merged,
+          reason: 'the pulled removal is on record on the second phone');
+      expect(await serverRules(uid), merged);
+    });
+
+    test('RR2 rules, new phone (full apply) that has not synced yet: a rule '
+        'removed in the cloud after the backup is not pushed back', () async {
+      final u = await remote.createUser('rr2');
+      await Supabase.instance.client.auth
+          .signInWithPassword(email: u.email, password: u.password);
+      final first = await LedgerAdmissionFixture.open(u.uid);
+      addTearDown(first.finish);
+      final d1 = Device.wrap(first.database);
+      await d1.accounts.create(_account('acc-rr2'));
+      await remember(d1, 'Synthetic Kept Shop', 'restaurants');
+      await remember(d1, 'Synthetic Removed Shop', 'shopping');
+      await syncCycle(d1);
+      await ruleSync(d1);
+      final backup = await takeBackup(d1);
+      await rulesOf(d1).forgetUserConfirmedRule('Synthetic Removed Shop');
+      await ruleSync(d1);
+      await first.finish(); // the first phone is gone
+
+      final second = await LedgerAdmissionFixture.open(u.uid);
+      addTearDown(second.finish);
+      final d2 = Device.wrap(second.database);
+      await restoreBackup(d2, backup);
+      expect(await localRules(d2), hasLength(2),
+          reason: 'full apply restores the backup as it was');
+      d2.consent = true;
+      await ruleSync(d2);
+      await ruleSync(d2);
+      final merged = {k('Synthetic Kept Shop'): 'restaurants'};
+      expect(await localRules(d2), merged);
+      expect(await serverRules(u.uid), merged);
+      expect(await serverRules(u.uid, deleted: true),
+          {k('Synthetic Removed Shop'): 'shopping'});
+      // The same backup again (now a merge): still removed.
+      await restoreBackup(d2, backup);
+      d2.consent = true;
+      await ruleSync(d2);
+      expect(await localRules(d2), merged);
+      expect(await serverRules(u.uid), merged);
+    });
+
+    test('RR3 rules, a backup without deletion history: nothing is added or '
+        'dropped silently; "add" reaches the cloud, "leave out" does not',
+        () async {
+      final (d, uid) = await openSignedIn('rr3');
+      await d.accounts.create(_account('acc-rr3'));
+      await remember(d, 'Synthetic Wanted Shop', 'restaurants');
+      await remember(d, 'Synthetic Unwanted Shop', 'shopping');
+      final backup = await takeBackup(d);
+      // The backup as a build without deletion history wrote it (format 4).
+      backup['version'] = 4;
+      backup['schemaVersion'] = 4;
+      (backup['tables'] as Map)
+          .removeWhere((t, _) => MerchantRuleRestore.historyTables.contains(t));
+      // This phone does not hold the rules and has no record of removing them.
+      await d.db.customStatement(
+          'DELETE FROM merchant_category_map WHERE is_user_confirmed = 1;');
+      await d.db.customStatement('DELETE FROM merchant_rule_tombstones;');
+      await d.db.customStatement("DELETE FROM planning_sync_outbox "
+          "WHERE entity_type = 'merchant_rule';");
+
+      await restoreBackup(d, backup);
+      expect(await localRules(d), isEmpty);
+      expect(await MerchantRuleRestore(d.db).pending(), hasLength(2));
+      d.consent = true;
+      await ruleSync(d);
+      expect(await serverRules(uid), isEmpty);
+
+      final review = MerchantRuleRestore(d.db);
+      await review.decide(k('Synthetic Wanted Shop'),
+          add: true, save: (m, c) => remember(d, m, c));
+      await review.decide(k('Synthetic Unwanted Shop'), add: false);
+      await ruleSync(d);
+      final chosen = {k('Synthetic Wanted Shop'): 'restaurants'};
+      expect(await localRules(d), chosen);
+      expect(await serverRules(uid), chosen);
+
+      await restoreBackup(d, backup);
+      expect(await review.pending(), isEmpty,
+          reason: 'decided rules are not asked about again');
+      d.consent = true;
+      await ruleSync(d);
+      expect(await localRules(d), chosen);
+      expect(await serverRules(uid), chosen);
     });
   });
 }

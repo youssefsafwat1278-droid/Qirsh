@@ -196,15 +196,14 @@
   "id": "en_salary",
   "kind": "salary",
   "raw": "Salary of SAR 15,000.00 credited to your account from ACME TRADING LLC on 27/10",
-  "expected": "Salary of SAR 15,000.00 credited to your account from [NAME] on 27/10",
+  "expected": "Salary of SAR 15,000.00 credited to your account from ACME TRADING LLC on 27/10",
   "mustKeep": [
    "15,000.00",
    "SAR",
-   "27/10"
+   "27/10",
+   "ACME TRADING LLC"
   ],
-  "mustDrop": [
-   "ACME"
-  ]
+  "mustDrop": []
  },
  {
   "id": "en_dear_greeting",
@@ -484,13 +483,12 @@
   "id": "ar_salary",
   "kind": "salary",
   "raw": "تم إيداع راتب 12000 ريال في حسابك من شركة الأفق",
-  "expected": "تم إيداع راتب 12000 ريال في حسابك من [NAME]",
+  "expected": "تم إيداع راتب 12000 ريال في حسابك من شركة الأفق",
   "mustKeep": [
-   "12000 ريال"
+   "12000 ريال",
+   "شركة الأفق"
   ],
-  "mustDrop": [
-   "الأفق"
-  ]
+  "mustDrop": []
  },
  {
   "id": "ar_indic_digits",

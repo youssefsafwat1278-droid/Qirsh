@@ -1297,7 +1297,10 @@ class AddTransactionUseCase {
     if (!hasAiCategory &&
         effectiveCategory.source == CategorySource.fallback &&
         effectiveParsed.rawMerchant != null &&
-        isBusinessMerchant) {
+        isBusinessMerchant &&
+        // Round 4: a payment whose "merchant" redaction would mask ("paid to
+        // <Name>") is a person: no enrichment lookup, no feedback keyword.
+        !SmsSanitizer.masksPartOf(rawMessage, effectiveParsed.rawMerchant!)) {
       final normalized =
           TransactionDedup.normalizeMerchant(effectiveParsed.rawMerchant!);
       if (normalized.isNotEmpty) {

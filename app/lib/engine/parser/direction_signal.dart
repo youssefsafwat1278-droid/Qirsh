@@ -179,6 +179,9 @@ class DirectionSignal {
     'تم خصم', 'خصم مبلغ', 'تم سحب', 'مبلغ صادر', 'حوالة صادرة',
     'تحويل صادر', 'من حسابك', 'من بطاقتك', 'تم الدفع', 'تم دفع', 'تم سداد',
     'منك إلى', 'منك الى',
+    // Follow-up 6 (NEW-2r): «استخدمت بطاقتك … بمبلغ …», the Arabic twin of
+    // "was used for".
+    'استخدمت بطاقتك', 'تم استخدام بطاقتك',
   ];
 
   /// Incoming structure: a credit verb or "… into / to your account".
@@ -192,6 +195,11 @@ class DirectionSignal {
     'حوالة واردة', 'تحويل وارد', 'تم استلام', 'استلمت', 'مبلغ وارد',
     'إلى حسابك', 'الى حسابك', 'تمت إضافة', 'تم إضافة', 'إضافتها',
     'إليك', 'اليك',
+    // Follow-up 6 (PRE-RF009): money returned. The refund leads the clause
+    // and the purchase it names is what is refunded («استرجاع عملية شراء …»,
+    // «تم رد مبلغ … عن عملية شراء»): incoming, not a purchase.
+    'تم استرجاع', 'استرجاع مبلغ', 'استرجاع عملية', 'مرتجع مشتريات',
+    'رد مبلغ', 'تم إرجاع', 'تم ارجاع', 'تمت إعادة', 'إعادة مبلغ', 'اعادة مبلغ',
   ];
 
   static final RegExp _debitFlow = _flowPattern(debitFlow);

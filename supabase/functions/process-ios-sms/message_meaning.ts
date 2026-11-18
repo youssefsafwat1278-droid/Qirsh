@@ -21,7 +21,13 @@ import {
   NOTICE_KEYWORDS,
   OTP_CODE,
 } from '../_shared/ai_candidate_validator.ts';
-import { currencyFigures, isRewardFlow, namesReward, sideCreditClause } from '../_shared/money_text.ts';
+import {
+  type CurrencyFigure,
+  currencyFigures,
+  isRewardFlow,
+  namesReward,
+  sideCreditClause,
+} from '../_shared/money_text.ts';
 
 export type MessageKind =
   | 'completed_movement'
@@ -306,8 +312,12 @@ export function clauseScope(text: string, deps: CueDeps): ClauseScope {
   for (let k = pieces.length - 2; k >= 0; k--) {
     aboveField[k] = text.slice(pieces[k].end, pieces[k].next) === '\n' ? field[k + 1] : aboveField[k + 1];
   }
+  // Follow-up 6 (FT-1, HOLD-1): general advice about refunds or standing
+  // orders has its own plural or instructional subject: its words are not
+  // this event's status.
+  const advice = pieces.map((p) => isGeneralAdvice(text.slice(p.start, p.end)));
   // Follow-up 3 (SM-01): a sentence with a status cue is never a footer.
-  const cue = pieces.map((p) => deps.hasStatusCue(text.slice(p.start, p.end)));
+  const cue = pieces.map((p, i) => !advice[i] && deps.hasStatusCue(text.slice(p.start, p.end)));
   // Follow-up 3 (SM-06): a cashback/reward credit or another operation's
   // figure is a side event: a footer next to the transaction's own sentence.
   const side = pieces.map((p, i) =>
@@ -329,7 +339,7 @@ export function clauseScope(text: string, deps: CueDeps): ClauseScope {
     const lower = s.toLowerCase();
     const header = !field[i] && aboveField[i];
     const footer = !header && !cue[i] && (roles[i] === 'figure' || (anyMovement && (notices[i] || side[i])) ||
-      (roles[i] === 'text' && footerCue(lower) &&
+      (roles[i] === 'text' && (advice[i] || footerCue(lower)) &&
         (namedMovement || !IGNORE_WORDS.some((w) => containsIgnoreWord(lower, w)))));
     if (footer && s.trim()) footerCount++;
     if (!footer) {
@@ -381,9 +391,16 @@ export function noMovementReason(s: string): string | null {
   if (reason == null) {
     // Every done verb sits in a future clause ("will be charged").
     const done = [...s.matchAll(DONE_VERB)];
-    return done.length > 0 && done.every((m) => hasAnyWord(s.slice(clauseCut(s, m.index!), m.index!), FUTURE_TENSE))
-      ? 'scheduled_or_expected'
-      : null;
+    if (done.length > 0) {
+      return done.every((m) => hasAnyWord(s.slice(clauseCut(s, m.index!), m.index!), FUTURE_TENSE))
+        ? 'scheduled_or_expected'
+        : null;
+    }
+    // Follow-up 6 (CUE-1): no done verb at all and a future one ("You will
+    // receive SAR 500 cashback on 01/12") — unless the figure's own clause
+    // states a movement before it (below).
+    if (!hasAnyWord(s, FUTURE_TENSE)) return null;
+    reason = 'scheduled_or_expected';
   }
   // Follow-up 3 (SM-04): the clause that carries the figure states a
   // completed movement with no notice word of its own: the tail does not undo it.
@@ -408,7 +425,7 @@ const RECEIPT = /(?<![a-z])(?:has been |have been |was )?received(?![a-z])|تم 
 function isRequestOnly(s: string): boolean {
   if (!hasAnyWord(s, REQUEST_WORDS)) return false;
   const rest = s.replace(RECEIPT, ' ');
-  return flowOf(rest) === 'unknown' && !hasAnyWord(rest, ['refunded', 'credited', 'deposited', 'reversed']);
+  return !statedDone(rest, EXECUTION_VERB) && flowOf(rest) === 'unknown' && !hasAnyWord(rest, ['refunded', 'credited', 'deposited', 'reversed']);
 }
 const NOTICE_OR_TENSE = [SUMMARY_MARKERS, DUE_MARKERS, FUTURE_MARKERS, OFFER_MARKERS, TENSE_MARKERS];
 /** Where the first notice or tense word at or after [from] starts in [lower], or null. */
@@ -462,7 +479,7 @@ function statesMovement(clause: string): boolean {
   const cut = noticeAfter(clause, figure.index + figure[0].length);
   const head = cut === null ? clause : clause.slice(0, cut);
   if (cut !== null && tailMovesMoney(clause.slice(cut))) return false;
-  return !hasNoticeWord(head) && !hasAnyWord(head, TENSE_MARKERS) &&
+  return !hasNoticeWord(head) && !hasAnyWord(head, TENSE_MARKERS) && !hasAnyWord(head, FUTURE_TENSE) &&
     (hasAnyWord(head, MOVEMENT_LEADS) || new RegExp(DONE_VERB.source).test(head) || hasDebitFlow(head) ||
       hasCreditFlow(head));
 }
@@ -503,7 +520,7 @@ function clauseCut(s: string, end: number): number {
 export function isOwnAccountMove(core: string): boolean {
   if (hasAnyWord(core, OWN_ACCOUNT_STRONG)) return true;
   // Follow-up 5 (c): both ends are the user's named account types.
-  if (NAMED_ACCOUNTS.test(core)) return true;
+  if (NAMED_ACCOUNTS.test(core) || OWN_ENDS.test(core)) return true;
   // "from your account *1234 to your account *5678": out of and into the user's own accounts.
   const both = (hasDebitFlow(core) && hasCreditFlow(core)) ||
     (SOURCE_OF_FUNDS.some((w) => core.includes(w)) && OWN_DESTINATION.some((w) => core.includes(w)));
@@ -562,13 +579,35 @@ const TIP_FIGURE = new RegExp(
     '|[0-9][0-9,]*(?:\\.[0-9]+)?\\s*(?:tip|gratuity)(?![a-z])' +
     '|(?:بقشيش|إكرامية|اكرامية)[^\\n0-9]{0,20}[0-9][0-9,]*(?:\\.[0-9]+)?',
 );
+// Round 4 (real-model run): a fee or penalty for a late payment is a charge
+// on the card; the card is not what is being paid.
 const CARD_REPAYMENT = new RegExp(
-  '(?<![a-z])credit card (?:re)?payment(?![a-z])[^\\n]{0,60}?(?<![a-z])received(?![a-z])' +
-    '|(?<![a-z])(?:re)?payment(?![a-z])[^\\n]{0,60}?(?<![a-z])(?:for|to|towards) (?:your )?credit card(?![a-z])' +
+  '(?<![a-z])credit card (?:re)?payment(?! fees?| charges?| penalt)(?![a-z])[^\\n]{0,60}?(?<![a-z])received(?![a-z])' +
+    '|(?<![a-z])(?<!late )(?<!missed )(?<!overdue )(?:re)?payment(?! fees?| charges?| penalt)(?![a-z])[^\\n]{0,60}?(?<![a-z])(?:for|to|towards) (?:your )?credit card(?![a-z])' +
     '|(?<![a-z])(?:transfer(?:red)?|paid)(?![a-z])[^\\n]{0,60}?(?<![a-z])to (?:your )?credit card(?![a-z])' +
     // Follow-up 5: the card is what is repaid, not the instrument a bill is paid with.
-    '|(?:سداد|تسديد)\\s+(?:(?:مستحقات|رصيد|مبلغ)\\s+)?(?:بطاقت?ك|البطاقة)\\s*(?:ال)?ائتمانية',
+    '|(?<!(?:رسوم|غرامة|عمولة)[^\\n]{0,24})(?:سداد|تسديد)\\s+(?:(?:مستحقات|رصيد|مبلغ)\\s+)?(?:بطاقت?ك|البطاقة)\\s*(?:ال)?ائتمانية',
 );
+const OPERATION_NOUN = /(?<![a-z])(?:transaction|operation|txn|trx)(?![a-z])|عملية|معاملة|حركة/;
+const OPERATION_EVIDENCE = new RegExp(
+  '(?<![a-z])(?:purchase[sd]?|pos|payments?|paid|pay|spent|spend|withdrawal|withdrawn|withdrew|debit(?:ed)?|' +
+    'deducted|charged?|credit(?:ed)?(?! card| limit)|received|deposit(?:ed)?|refund(?:ed)?|reversal|reversed|' +
+    'transfer(?:red)?|salary|atm|fees?|bill|cashback|at|merchant|store|shop|online|internet|e-?commerce)(?![a-z])|@' +
+    '|شراء|مشتريات|دفع|سداد|خصم|سحب|إيداع|ايداع|استرداد|مسترد|استرجاع|مرتجع|تحويل|حوالة|راتب|رسوم|صراف|' +
+    'مدفوعات|فاتورة|لدى|عند|التاجر|المتجر|متجر|نقاط بيع|مدى|انترنت|إنترنت|اونلاين|أونلاين' +
+    // A merchant field of a field layout («من:NETFLIX», "From: SHOP").
+    '|(?:^|\\n)\\s*(?:من|في|from)\\s*:\\s*\\S',
+);
+/**
+ * Round 4 (real-model run): the only event wording is a bare operation noun
+ * («عملية بمبلغ 500 جنيه على بطاقتك») — no verb saying it was done, no word
+ * for what kind it was, no flow and no merchant: review, and no model answer
+ * upgrades it. Mirrors ParserEngine.isUnspecifiedOperation.
+ */
+export function isUnspecifiedOperation(core: string): boolean {
+  return OPERATION_NOUN.test(core) && !OPERATION_EVIDENCE.test(core) && !new RegExp(DONE_VERB.source).test(core) &&
+    !hasDebitFlow(core) && !hasCreditFlow(core);
+}
 
 // ---- Follow-up 5: clause-role rules (mirror ParserEngine) ----
 const REFUND_SUBJECT = /(?<![a-z])(?:refunds?|reversal|reversed)(?![a-z])|استرداد|استرجاع/;
@@ -579,7 +618,7 @@ const PENDING_OR_FUTURE = new RegExp(
 );
 const CREDIT_VERB = new RegExp(
   '(?<![a-z])(?:credited|refunded|posted|returned|deposited|added)(?![a-z])' +
-    '|(?<![\\u0621-\\u064a])تمت? (?:إيداع|ايداع|إضافة|اضافة|استرداد|استرجاع|إرجاع|ارجاع)|أضيف|اضيف|أعيد|اعيد',
+    '|(?<![\\u0621-\\u064a])[وف]?تمت? (?:إيداع|ايداع|إضافة|اضافة|استرداد|استرجاع|إرجاع|ارجاع)|أضيف|اضيف|أعيد|اعيد',
   'g',
 );
 const NOT_DONE_CLAUSE = new RegExp(
@@ -598,7 +637,52 @@ function statedDone(lower: string, verbs: RegExp): boolean {
 }
 /** Follow-up 5 (a). Mirrors ParserEngine.isRefundPending. */
 export function isRefundPending(lower: string): boolean {
-  return REFUND_SUBJECT.test(lower) && PENDING_OR_FUTURE.test(lower) && !statedDone(lower, CREDIT_VERB);
+  return REFUND_SUBJECT.test(lower) && PENDING_OR_FUTURE.test(lower) && !refundCredited(lower);
+}
+// "Expected" or "pending" right before the refund noun says what the refund
+// was, not the tense of its verb.
+const REFUND_ATTRIBUTE = new RegExp(
+  '(?<![a-z])(?:expected|pending|awaited|requested)(?= (?:refund|reversal)(?![a-z]))' +
+    '|(?<=(?:الاسترداد|الاسترجاع|المسترد) )(?:المتوقع|المعلق|المنتظر|المطلوب)',
+  'g',
+);
+/** Follow-up 6 (HOLD-1): a refund or reversal whose clause states the credit happened. Mirrors ParserEngine.refundCredited. */
+export function refundCredited(lower: string): boolean {
+  return REFUND_SUBJECT.test(lower) && statedDone(lower.replace(REFUND_ATTRIBUTE, ' '), CREDIT_VERB);
+}
+const GENERAL_ADVICE = new RegExp(
+  '^(?:all |any |your )?(?:refund requests|refunds|standing (?:orders|instructions)|' +
+    '(?:scheduled|recurring) (?:transfers|payments))(?![a-z])' +
+    '|^(?:for|to request|to claim|to submit|in case of)(?: a| any| your)? (?:refund requests?|refunds?)(?![a-z])' +
+    '|^(?:جميع |كافة )?(?:طلبات (?:ال)?استرداد|عمليات (?:ال)?استرداد|المبالغ المستردة|' +
+    'الأوامر (?:المستديمة|الدائمة)|التحويلات المجدولة)' +
+    '|^(?:سيتم|يتم|تتم|ستتم) (?:معالجة|تنفيذ|مراجعة) (?:طلبات (?:ال)?استرداد|' +
+    'الأوامر (?:المستديمة|الدائمة)|التحويلات المجدولة)' +
+    '|^(?:لطلب (?:ال)?استرداد|للاسترداد|لاسترداد|في حال (?:طلب )?الاسترداد)' +
+    '|^(?:قد )?يستغرق (?:ال)?استرداد' +
+    // A returns policy ("No refund after 7 days", «لا يمكن الاسترجاع …»).
+    '|^(?:no (?:refunds?|returns?)|non-refundable)(?![a-z])' +
+    '|^لا يمكن (?:ال)?(?:استرجاع|استرداد)|^غير قابلة? لل(?:استرجاع|استرداد)',
+);
+/**
+ * Follow-up 6 (FT-1, HOLD-1): a sentence with no amount whose subject is
+ * refunds or standing orders in general (a plural, or an instruction). It is
+ * advice printed next to the transaction: a footer, and never the reason a
+ * completed movement reads as a pending refund or a scheduled order. Mirrors
+ * ParserEngine.isGeneralAdvice.
+ */
+export function isGeneralAdvice(sentence: string): boolean {
+  const s = sentence.trim().toLowerCase();
+  return !ANY_FIGURE.test(s) && GENERAL_ADVICE.test(s);
+}
+/** [text] without its isGeneralAdvice sentences. */
+function withoutAdvice(text: string): string {
+  let out = '';
+  for (const p of sentences(text)) {
+    const s = text.slice(p.start, p.end);
+    out += (isGeneralAdvice(s) ? ' '.repeat(s.length) : s) + text.slice(p.end, p.next);
+  }
+  return out;
 }
 const STANDING_SUBJECT = new RegExp(
   '(?<![a-z])(?:standing (?:order|instruction)s?|(?:scheduled|recurring|future[- ]dated|upcoming) ' +
@@ -607,7 +691,7 @@ const STANDING_SUBJECT = new RegExp(
 );
 const EXECUTION_VERB = new RegExp(
   '(?<![a-z])(?:executed|completed|transferred|debited|paid|processed|deducted|sent|received|credited|done|made)(?![a-z])' +
-    '|(?<![\\u0621-\\u064a])تمت? (?:تنفيذ|تحويل|خصم|دفع|سداد|إيداع|ايداع|استلام)|(?<![\\u0621-\\u064a])ن[\\u064b-\\u0652]*ف[\\u064b-\\u0652]*ذ(?![\\u0621-\\u064a])',
+    '|(?<![\\u0621-\\u064a])[وف]?تمت? (?:تنفيذ|تحويل|خصم|دفع|سداد|إيداع|ايداع|استلام)|(?<![\\u0621-\\u064a])ن[\\u064b-\\u0652]*ف[\\u064b-\\u0652]*ذ(?![\\u0621-\\u064a])',
   'g',
 );
 // A future or scheduling cue for a standing order (it has not run yet).
@@ -616,10 +700,23 @@ const STANDING_FUTURE = new RegExp(
     '|سيتم|ليتم|سوف|جدولة|القادم|غدا|تذكير',
 );
 const ACCT_TYPE = '(?:savings|current|checking|salary)(?: plus)?';
+// Follow-up 6 (PRE-AT008, HOLD-1): an account reference may follow the
+// source; a destination that belongs to someone else ("to savings account of
+// Ali", «إلى حساب التوفير الخاص بالمستفيد») is a third-party transfer.
+const ACCT_REF = '(?: ?(?:\\*+ ?|x+|no\\.? ?|ending (?:in )?)?[0-9]{3,6})?';
+const OTHER_OWNER =
+  '(?!(?: account| acct| a/c)?(?: ?\\*+ ?[0-9]{3,6})? (?:of|belonging to|in the name of|held by)(?![a-z]))';
 const NAMED_ACCOUNTS = new RegExp(
-  `(?<![a-z])${ACCT_TYPE}(?: account| acct| a/c)? to (?:your |the |my )?${ACCT_TYPE}(?![a-z])` +
+  `(?<![a-z])${ACCT_TYPE}(?: account| acct| a/c)?${ACCT_REF} to (?:your |the |my )?${ACCT_TYPE}(?![a-z])${OTHER_OWNER}` +
     `|(?<![a-z])to (?:your |the |my )?${ACCT_TYPE}(?: account| acct| a/c)? from (?:your |the |my )?${ACCT_TYPE}(?![a-z])` +
-    '|من\\s+(?:(?:ال)?حسابك?\\s+)?(?:ال)?(?:توفير|ادخار|جاري)[^\\n]{0,30}?(?:إلى|الى):?\\s+(?:\\[(?:redacted|name)\\]\\s+)?(?:(?:ال)?حسابك?\\s+)?(?:ال)?(?:جاري|توفير|ادخار)',
+    '|من\\s+(?:(?:ال)?حسابك?\\s+)?(?:ال)?(?:توفير|ادخار|جاري)[^\\n]{0,30}?(?:إلى|الى):?\\s+(?:\\[(?:redacted|name)\\]\\s+)?(?:(?:ال)?حسابك?\\s+)?(?:ال)?(?:جاري|توفير|ادخار)' +
+    '(?!ي?\\s+(?:الخاص ب|باسم|للمستفيد|للسيد|العائد))',
+);
+// Follow-up 6 (PRE-AT008): both ends named as the user's own in one clause,
+// with only an account reference between them.
+const OWN_ENDS = new RegExp(
+  '(?<![a-z])from your (?:account|card|wallet)(?: ?(?:\\*+ ?|x+)?[0-9]{3,6}| \\[(?:account|card)\\])? to your (?:other |own )?(?:account|card|wallet)(?![a-z])' +
+    '|من حسابك(?:\\s*(?:رقم\\s*)?\\*{0,4}\\s?[0-9]{3,8}|\\s*\\[(?:account|card)\\])?\\s+(?:إلى|الى)\\s+حسابك',
 );
 const MERCHANT_AFTER = /^\s*(?:(?:at|@)\s+(?![0-9])|لدى\s|\((?![0-9]))/;
 const LIST_ITEM_BEFORE = /(?:^|\n)\s*[0-9]{1,2}[).]\s*$/;
@@ -664,6 +761,31 @@ export function partsTotal(lower: string): number | null {
   return Math.max(...values);
 }
 
+const TOTAL_LABEL =
+  /(?:(?<![a-z])total|الإجمالي|الاجمالي|إجمالي|اجمالي|المجموع)(?: (?:amount|المبلغ|مبلغ))?\s*:?\s*$/;
+/**
+ * Follow-up 6 (HOLD-1): the total figure of a bill stated with its parts when
+ * that figure carries its own label and a clause states the payment happened
+ * ("Bill SAR 200, VAT SAR 30, total SAR 230 paid"): the movement is that
+ * total — not when the message carries any status or reversal word. Mirrors
+ * ParserEngine.paidTotal.
+ */
+export function paidTotal(lower: string, hasStatusCue: (s: string) => boolean): CurrencyFigure | null {
+  const total = partsTotal(lower);
+  if (total === null || hasStatusCue(lower)) return null;
+  for (const f of currencyFigures(lower)) {
+    if (f.value !== total || !TOTAL_LABEL.test(lineBefore(lower, f.start, 24))) continue;
+    const p = sentences(lower).find((x) => x.start <= f.start && f.end <= x.end);
+    if (p) return statedDone(lower.slice(p.start, p.end), PAID_VERB) ? f : null;
+  }
+  return null;
+}
+const PAID_VERB = new RegExp(
+  '(?<![a-z])(?:paid|charged|debited|deducted|settled)(?![a-z])' +
+    '|(?<![\\u0621-\\u064a])[وف]?تمت? (?:ال)?(?:دفع|سداد|خصم)',
+  'g',
+);
+
 const TRUNCATED_STATUS =
   /(?:was|is|been|status:?|transaction|txn)\s+(?:decli?n?e?|reje?c?t?e?|fail?e?|pend?i?n?|canc?e?l?l?e?|reve?r?s?e?|unsu?c?c?e?s?s?f?u?)$/;
 
@@ -690,26 +812,34 @@ export function meaningOf(text: string, deps: MeaningDeps, overLength = text.len
   if (CHEQUE_RETURNED.test(all)) return make('not_completed', 'cheque_returned');
   // Follow-up 4 (SM-07, G000): a tip is a component of the bill; with a
   // second figure the movement amount is not the first figure read: review.
+  // Follow-up 5 (e): a total stated with its parts is recorded only as the
+  // total; when the first figure read is a part, review — unless the total
+  // carries its own label and a clause states it was paid (paidTotal).
+  // Follow-up 6 (CUE-1): both are read only after the status and notice
+  // readings below — a bill that is declined, awaited or still to be charged
+  // is that first, whatever its parts.
   const tip = TIP_FIGURE.exec(all);
-  if (tip && hasCurrencyFigure(all.slice(0, tip.index) + ' ' + all.slice(tip.index + tip[0].length))) {
-    return make('uncertain', 'tip_component');
-  }
+  const parts = partsTotal(all);
+  const billParts = tip && hasCurrencyFigure(all.slice(0, tip.index) + ' ' + all.slice(tip.index + tip[0].length))
+    ? 'tip_component'
+    : parts !== null && currencyFigures(all)[0].value !== parts && paidTotal(all, deps.hasStatusCue) === null
+    ? 'total_with_parts'
+    : null;
+  // Follow-up 6 (FT-1, HOLD-1): general advice about refunds or standing
+  // orders next to the event is not about this transaction.
+  const own = scope.eventSentences.length === 0 ? all : withoutAdvice(text).toLowerCase();
   // Follow-up 5 (a): a refund or reversal requested, initiated, under review
   // or still to come, with no clause stating the credit happened.
   const notCompletedText = deps.isNotCompletedCore(text);
-  if (!notCompletedText && isRefundPending(all)) return make('not_completed', 'pending');
+  if (!notCompletedText && isRefundPending(own)) return make('not_completed', 'pending');
   // Follow-up 5 (b): setting up or scheduling is not execution.
-  const standing = STANDING_SUBJECT.test(all);
-  const executed = standing && statedDone(all, EXECUTION_VERB);
+  const standing = STANDING_SUBJECT.test(own);
+  const executed = standing && statedDone(own, EXECUTION_VERB);
   // A standing order with no future or scheduling cue reads as before (its
   // verb may be redacted away).
-  if (standing && !executed && !notCompletedText && STANDING_FUTURE.test(all)) {
+  if (standing && !executed && !notCompletedText && STANDING_FUTURE.test(own)) {
     return make('no_movement_notice', 'scheduled_or_expected');
   }
-  // Follow-up 5 (e): a total stated with its parts is recorded only as the
-  // total; when the first figure read is a part, review.
-  const parts = partsTotal(all);
-  if (parts !== null && currencyFigures(all)[0].value !== parts) return make('uncertain', 'total_with_parts');
   if (scope.eventSentences.length === 0 && !executed) {
     // Labelled figures that a future clause acts on, or that are due, make a
     // notice when every sentence with a figure is one.
@@ -720,6 +850,7 @@ export function meaningOf(text: string, deps: MeaningDeps, overLength = text.len
     if (deps.isNotCompletedCore(scope.text)) {
       return make('not_completed', hasAnyWord(all, PENDING_WORDS) ? 'pending' : 'declined_or_failed');
     }
+    if (billParts) return make('uncertain', billParts);
     return make('undetermined', 'no_event_amount');
   }
   const core = scope.core.toLowerCase();
@@ -742,6 +873,7 @@ export function meaningOf(text: string, deps: MeaningDeps, overLength = text.len
   const stated = scope.eventSentences.filter((s) => !isFieldLine(s));
   const notices = (stated.length ? stated : scope.eventSentences).map((s) => noMovementReason(s.toLowerCase()));
   if (!executed && notices.every((r) => r !== null)) return make('no_movement_notice', notices[0]!);
+  if (billParts) return make('uncertain', billParts);
   // Follow-up 4: a payment into the user's own credit card: whether it counts
   // as spending is a policy choice — review.
   if (CARD_REPAYMENT.test(core)) return make('own_account_transfer', 'card_repayment');
@@ -749,6 +881,8 @@ export function meaningOf(text: string, deps: MeaningDeps, overLength = text.len
     return make('own_account_transfer', 'own_accounts');
   }
   if (isCashDeposit(core)) return make('cash_deposit', 'cash_deposit', 'credit');
+  // Round 4 (real-model run): an amount and nothing that happened to it.
+  if (isUnspecifiedOperation(core)) return make('uncertain', 'unspecified_operation');
   // Follow-up 5 (d): two figures each tied to its own merchant.
   if ((distinctMovementAmounts(scope.coreEvents, deps.namesDirection) > 1 || merchantFigureCount(core) > 1) &&
     !deps.hasChargedPair(text)) {

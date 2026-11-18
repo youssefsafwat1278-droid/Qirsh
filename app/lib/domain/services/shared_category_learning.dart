@@ -54,6 +54,11 @@ SharedCategoryContribution? sharedContributionFor(
       SmsSanitizer.isCounterpartyContext(message)) {
     return null;
   }
+  // Round 4: a payment row whose "merchant" is a person ("paid to <Name>",
+  // "to account of <Name>") has no transfer word. Redaction knows: when it
+  // masks any word of the merchant in the message, the merchant is not a
+  // business and is never shared.
+  if (SmsSanitizer.masksPartOf(message, raw)) return null;
 
   // Built-in spending categories only; a custom category's key is the user's.
   if (_neverShared.contains(categoryKey) ||

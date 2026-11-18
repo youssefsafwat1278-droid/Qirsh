@@ -357,7 +357,9 @@ class AiCandidateValidator {
     r'points?|rewards?|miles|refund(?:ed)?|reversal|reversed|instal?ments?|monthly|remaining|outstanding|due|'
     r'balance|bal|avl|available|limit)(?![a-z])|[+=]|'
     r'الإجمالي|الاجمالي|إجمالي|اجمالي|المجموع|شامل|بقشيش|إكرامية|اكرامية|ضريبة|رسوم|عمولة|خدمة|يعادل|'
-    r'استرداد|مسترد|نقاط|مكافأة|كاش باك|قسط|أقساط|اقساط|المتبقي|المستحق|رصيد|المتاح|متاح|الحد|حد ',
+    r'استرداد|مسترد|نقاط|مكافأة|كاش باك|قسط|أقساط|اقساط|المتبقي|المستحق|رصيد|المتاح|متاح|الحد|حد |'
+    // Follow-up 6 (NEW-2r): a month-to-date total is an account figure.
+    r'مجموع|مصروفاتك|مشترياتك|هذا الشهر|الشهر الحالي',
     caseSensitive: false,
   );
 
@@ -427,9 +429,13 @@ class AiCandidateValidator {
         TransactionStateCues.isNotCompleted(text)) {
       return 'transaction_not_completed';
     }
+    // Follow-up 6 (VAL-1 leftover): a bill that carries any status or
+    // reversal word («عملية معكوسة: …», "… Transaction reversed") is never
+    // released at its total.
     if ((meaning.reason == 'tip_component' ||
             meaning.reason == 'total_with_parts') &&
-        amount != null) {
+        amount != null &&
+        !TransactionStateCues.hasStatusCue(text)) {
       final total = statedTotal(text);
       if (total != null && (total - amount).abs() < 0.005) return null;
     }

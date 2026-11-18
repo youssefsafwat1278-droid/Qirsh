@@ -638,7 +638,9 @@ const PART_OF_ONE_MOVEMENT = new RegExp(
     'points?|rewards?|miles|refund(?:ed)?|reversal|reversed|instal?ments?|monthly|remaining|outstanding|due|' +
     'balance|bal|avl|available|limit)(?![a-z])|[+=]|' +
     'الإجمالي|الاجمالي|إجمالي|اجمالي|المجموع|شامل|بقشيش|إكرامية|اكرامية|ضريبة|رسوم|عمولة|خدمة|يعادل|' +
-    'استرداد|مسترد|نقاط|مكافأة|كاش باك|قسط|أقساط|اقساط|المتبقي|المستحق|رصيد|المتاح|متاح|الحد|حد ',
+    'استرداد|مسترد|نقاط|مكافأة|كاش باك|قسط|أقساط|اقساط|المتبقي|المستحق|رصيد|المتاح|متاح|الحد|حد |' +
+    // Follow-up 6 (NEW-2r): a month-to-date total is an account figure.
+    'مجموع|مصروفاتك|مشترياتك|هذا الشهر|الشهر الحالي',
   'i',
 );
 

@@ -18,7 +18,10 @@ class BackupSnapshotBuilder {
   // loses exactness by serializing only the REAL shadow. This is the BUSINESS
   // snapshot schema version and is INDEPENDENT of the crypto envelope version
   // (which stays v3 — see EncryptedBackupService).
-  static const currentSchemaVersion = 4;
+  // v5 adds the deletion history of saved category rules (three tables). An
+  // app that only knows v4 refuses a v5 backup before changing anything
+  // ("backup from a newer app"); v4 and older backups still restore here.
+  static const currentSchemaVersion = 5;
 
   /// Columns carrying exact minor units. They are read as int64 from Drift and
   /// emitted on the wire as decimal-integer STRINGS (§2 — never rely on a
@@ -340,6 +343,19 @@ class BackupSnapshotBuilder {
       'state',
       'occurred_at',
       'created_at',
+    ],
+    // v5 — the deletion history of saved category rules (see
+    // data/db/merchant_rule_history.dart): which merchants' rules the user
+    // removed and when, the rules still waiting for the user's choice after a
+    // restore, and how far back this history reaches. Without them a restore
+    // on another device could not tell a removed rule from a missing one.
+    'merchant_rule_history': ['id', 'history_since'],
+    'merchant_rule_tombstones': ['merchant_key', 'category_key', 'deleted_at'],
+    'merchant_rule_restore_choices': [
+      'merchant_key',
+      'raw_merchant',
+      'category_key',
+      'rule_updated_at',
     ],
   };
 

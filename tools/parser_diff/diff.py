@@ -13,7 +13,9 @@ row (a booking or silence is wrong). `amt`/`cur` (and `alt` = an accepted
 [amount, currency]) check the booked value.
 
 Exit status 1 on a regression (right at base -> wrong or silent, a throw, a
-base not-completed message now recorded) or when the messages that moved
+base not-completed message now recorded — unless the row is hand-labelled a
+completed movement with its amount and every recording path books it exactly
+as labelled: those are listed separately on every run) or when the messages that moved
 from right (labelled) or recorded (unlabelled) to a review row exceed the
 review budget: PARSER_DIFF_REVIEW_BUDGET (default 38 messages: the 35 justified at Follow-up 4
 plus the 3 ACCEPTED review moves below). Each such move is listed and must be
@@ -178,14 +180,28 @@ def compare(cases, base, work):
             for c in ch: print('    ' + c)
     # The invariant: a message the base read as not completed is never
     # recorded as a completed movement on any path.
-    nc_recorded = []
+    # Follow-up 6: a row hand-labelled as a completed movement (d / c / k)
+    # that every recording path now books exactly as labelled is a required
+    # fix of the base's reading, not a declined message recorded. It is still
+    # listed, on every run, and each one must be justified in the closure
+    # record; an unlabelled row, a row labelled n / r / t, or a wrong booking
+    # stays a regression.
+    nc_recorded, nc_required = [], []
     for r in uniq:
         if B[r['id']].get('nc') is not True: continue
         hits = [s for s in SIDES if W[r['id']][s]['c'] in ('IN', 'OUT', 'NEU')]
-        if hits: nc_recorded.append((r, hits))
+        if not hits: continue
+        t = r.get('truth')
+        labelled_right = (t is not None and t.get('kind') in ('d', 'c', 'k') and t.get('amt') is not None
+                          and all(grade(W[r['id']][s], t, r['text']) == 'OK' for s in hits))
+        (nc_required if labelled_right else nc_recorded).append((r, hits))
     print(f'\n== base not-completed, now recorded: {len(nc_recorded)}')
     for r, hits in nc_recorded:
         print(f'- {r["id"]} {hits} {r["text"][:160]!r}')
+    print(f'\n== base not-completed, hand-labelled completed and now booked as labelled '
+          f'(required fixes; justify each): {len(nc_required)}')
+    for r, hits in nc_required:
+        print(f'- {r["id"]} truth={r["truth"]} {hits} {r["text"][:160]!r}')
     bad += len(nc_recorded)
     print(f'\nREGRESSIONS (right at base -> wrong/silent, a throw, or base not-completed now recorded): {bad}')
     to_review = {i[1]['id'] for c in ('right -> review', 'unlabelled record -> review') for i in moved.get(c, [])}

@@ -30,7 +30,8 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
         SELECT merchant_category_map.id
         FROM merchant_category_map
         INNER JOIN merchants ON merchants.id = merchant_category_map.merchant_id
-        WHERE merchants.normalized_name = ?
+        INNER JOIN categories ON categories.id = merchant_category_map.category_id
+        WHERE merchants.normalized_name = ? AND categories.deleted_at IS NULL
         LIMIT 1;
       ''',
       variables: [Variable.withString(normalized)],

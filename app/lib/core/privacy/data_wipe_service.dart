@@ -29,6 +29,16 @@ class DataWipeService {
     'goals',
     'budgets',
     'merchant_category_map',
+    // Deletion history of saved category rules (schema v44): which merchants'
+    // rules the user removed, the backup rules still waiting for their choice,
+    // and how far back the history reaches. Personal (merchant names). Listed
+    // AFTER merchant_category_map on purpose: emptying that table is recorded
+    // as removals by its triggers, and those must not outlive the wipe. (The
+    // `rule_history_wipe` trigger on user_settings clears them again at the end
+    // whatever the order.)
+    'merchant_rule_tombstones',
+    'merchant_rule_restore_choices',
+    'merchant_rule_history',
     // Verified merchant aliases are the user's own confirmations.
     'merchant_aliases',
     'merchants',

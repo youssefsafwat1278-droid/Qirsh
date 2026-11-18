@@ -65,7 +65,7 @@ echo "══ MALI-034 architecture guard ══"
 # which is the failure mode that teaches people to ignore a gate. Raising the
 # number is the whole point of the check — an UNAPPROVED bump still fails here,
 # loudly, because whoever makes it has to come and edit this list.
-AUTHORIZED_SCHEMA=43
+AUTHORIZED_SCHEMA=44
 schema_line="$(grep -E 'const int _targetSchemaVersion = [0-9]+;' "$LIB/data/db/app_database.dart" 2>/dev/null)"
 if echo "$schema_line" | grep -qE "= ${AUTHORIZED_SCHEMA};"; then
   okc "schema pinned at ${AUTHORIZED_SCHEMA}"

@@ -26,6 +26,7 @@ import '../../../domain/services/learned_rule_precedence.dart';
 import '../../../domain/usecases/add_transaction_usecase.dart';
 import '../../../domain/usecases/user_settings_usecases.dart';
 import '../../../domain/usecases/ingest_captured_message_usecase.dart';
+import '../../../engine/categorization/category.dart';
 import '../../../engine/privacy/sms_sanitizer.dart';
 import '../../../engine/parser/capture_money.dart';
 import '../../../engine/parser/merchant_sanity.dart';
@@ -1085,8 +1086,14 @@ class CaptureSyncService {
     var type = _type(_string(parsed['type']));
     // نفس محاسبة التحويلات في AddTransactionUseCase: النقل بين حساباتك محايد،
     // أما الصادر لخارجها فمصروف والوارد دخل — وإلا تُستبعد من الإجماليات خطأً.
-    if (type == TransactionTypeEntity.transfer &&
-        !AddTransactionUseCase.looksLikeInternalTransfer(rawMessage)) {
+    // Follow-up 6 (PRE-AT008): a move the message itself names as between
+    // the user's own accounts is neutral whatever type the server (or its
+    // model) gave the row — never spending, never income.
+    final internalTransfer =
+        AddTransactionUseCase.looksLikeInternalTransfer(rawMessage);
+    if (internalTransfer) {
+      type = TransactionTypeEntity.transfer;
+    } else if (type == TransactionTypeEntity.transfer) {
       if (direction == TransactionDirectionEntity.debit) {
         type = TransactionTypeEntity.payment;
       } else if (direction == TransactionDirectionEntity.credit) {
@@ -1121,10 +1128,12 @@ class CaptureSyncService {
           : TransactionStatus.confirmed,
       createdAt: now,
       updatedAt: now,
-      rawMerchant: MerchantSanity.forMessage(
-        _string(parsed['merchant']),
-        rawMessage,
-      ),
+      rawMerchant: internalTransfer
+          ? null
+          : MerchantSanity.forMessage(
+              _string(parsed['merchant']),
+              rawMessage,
+            ),
       cardLast4: _string(parsed['last4']),
       direction: direction,
       transactionTimeFromSms:
@@ -1149,7 +1158,9 @@ class CaptureSyncService {
       transaction.rawMerchant,
       loadRemoteKeywords: _loadRemoteKeywords,
     );
-    final categoryKey = learned?.categoryKey ?? _string(parsed['category']);
+    final categoryKey = internalTransfer
+        ? Categories.transfers.key
+        : learned?.categoryKey ?? _string(parsed['category']);
     await requireCurrentAdmission();
     final saved = await _transactionRepository.saveTransaction(
       transaction: transaction.copyWith(

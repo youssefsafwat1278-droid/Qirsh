@@ -138,6 +138,34 @@ void main() {
   ///                                remains and re-ingestion can deduplicate.
   ///   capture_review_label_repo (3) regenerable review labels
   ///   affiliate_click_gateway (1)  EXPIRED click receipts (TTL sweep)
+  ///   merchant_rule_restore (3)    Round 4, merge restore of saved rules; none
+  ///                                deletes a rule or any financial row. (1) the
+  ///                                queued sync intent of ONE merchant whose
+  ///                                rule the restore just wrote (it described
+  ///                                the pre-restore rule), inside the restore
+  ///                                transaction; (2) the per-account
+  ///                                `merchant_rules_backfill:` markers in
+  ///                                sync_cursors, so the next rule sync pulls
+  ///                                first and then pushes the restored rules
+  ///                                (same transaction); (3) ONE row of
+  ///                                merchant_rule_restore_choices, by merchant
+  ///                                key, after the user chose Add or Leave out
+  ///                                for it (one transaction with the rule or
+  ///                                the recorded removal).
+  ///   merchant_rule_history (6)    Schema v44. SQL inside CREATE TRIGGER
+  ///                                bodies, never run by Dart directly, all on
+  ///                                the rule-history tables only: (2) saving a
+  ///                                rule for a merchant clears THAT merchant's
+  ///                                recorded removal and pending choice; (1)
+  ///                                retention keeps the newest 10000 removal
+  ///                                records and moves the history marker so
+  ///                                older backup rules go to the user's review
+  ///                                rather than being trusted; (3) when
+  ///                                DataWipeService deletes user_settings, the
+  ///                                three history tables are emptied with it
+  ///                                (they hold merchant names). Each runs
+  ///                                inside the statement that fired it and
+  ///                                rolls back with it.
   ///
   /// GROUP F — files, never the database.
   ///   database_lease (2)           .lease + intent files of ENDED instances
@@ -212,6 +240,8 @@ void main() {
     'lib/features/planning_sync/services/planning_pull_service.dart': 1,
     'lib/features/planning_sync/services/planning_server_currency_repair.dart': 1,
     'lib/core/backup/restore_journal.dart': 1,
+    'lib/core/backup/merchant_rule_restore.dart': 3,
+    'lib/data/db/merchant_rule_history.dart': 6,
     'lib/data/repositories/capture_work_item_repository.dart': 2,
     'lib/data/repositories/drift_smart_inbox_repository.dart': 1,
     'lib/data/repositories/capture_review_label_repository.dart': 3,

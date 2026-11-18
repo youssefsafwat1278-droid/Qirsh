@@ -180,6 +180,7 @@ class RemoteTruth {
     'user_plans',
     'user_subscriptions',
     'sender_bank_mappings',
+    'user_merchant_rules',
     'user_accounts',
   ];
 

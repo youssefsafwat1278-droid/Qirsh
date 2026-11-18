@@ -28,6 +28,8 @@ void main() {
     final server = read('../supabase/functions/process-ios-sms/parser_rules.json');
     final pairs = {
       'declinedKeywords': TransactionStateCues.declined,
+      // Follow-up 6 (CUE-1): awaited or only attempted operations.
+      'stateCueAwaitedWords': TransactionStateCues.awaited,
       'declinedExemptKeywords': TransactionStateCues.creditAction,
       'stateCueMerchantIntroducers': TransactionStateCues.merchantIntroducers,
       'stateCueHypotheticalMarkers': TransactionStateCues.hypotheticalMarkers,

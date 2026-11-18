@@ -4,7 +4,7 @@
 // in app/lib/domain/capture/validated_capture.dart.
 import { separateMovementAmounts, statedTotal } from '../_shared/ai_candidate_validator.ts';
 import { dispositionOf, type MessageMeaning } from './message_meaning.ts';
-import { isDeclinedText, messageMeaning } from './parse.ts';
+import { hasStatusCue, isDeclinedText, messageMeaning } from './parse.ts';
 
 /**
  * Follow-up 13 — why an answer [amount] for [text] is never accepted from the
@@ -22,7 +22,11 @@ export function meaningRejectionOf(
 ): string | null {
   if (meaning.disposition === 'record') return null;
   if (meaning.kind === 'not_completed' || isDeclinedText(text)) return 'transaction_not_completed';
-  if ((meaning.reason === 'tip_component' || meaning.reason === 'total_with_parts') && typeof amount === 'number') {
+  // Follow-up 6 (VAL-1 leftover): a bill that carries any status or reversal
+  // word («عملية معكوسة: …», "… Transaction reversed") is never released at
+  // its total.
+  if ((meaning.reason === 'tip_component' || meaning.reason === 'total_with_parts') && typeof amount === 'number' &&
+    !hasStatusCue(text)) {
     const total = statedTotal(text);
     if (total != null && Math.abs(total - amount) < 0.005) return null;
   }

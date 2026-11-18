@@ -1,0 +1,1040 @@
+[
+ {
+  "id": "CUE1a",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Awaiting merchant confirmation",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1b",
+  "text": "Purchase of SAR 45.00 at Jarir with card *4521 is awaiting merchant confirmation",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1c",
+  "text": "Attempted purchase SAR 45.00 at Jarir card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1d",
+  "text": "Purchase SAR 115.00 at Cafe Lumen incl. tip SAR 15.00 card *4521, awaiting authorization",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1e",
+  "text": "Payment of AED 300.00 to Etisalat is awaiting authorisation",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1f",
+  "text": "Purchase attempt of SAR 45.00 at Jarir with card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1g",
+  "text": "Card *4521: SAR 45.00 at Jarir. Status: awaiting merchant confirmation",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1h",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521. بانتظار تأكيد التاجر",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1i",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521 في انتظار تأكيد التاجر",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1j",
+  "text": "محاولة شراء 45 ريال لدى جرير بطاقة 4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1k",
+  "text": "عملية شراء بمبلغ 45 ريال لدى جرير بطاقة 4521 بانتظار التفويض",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1l",
+  "text": "دفع 300 ريال إلى الاتصالات بانتظار التأكيد",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CUE1m",
+  "text": "Purchase SAR 45.00 at Attempt Cafe card *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "CUE1n",
+  "text": "Purchase SAR 45.00 at Jarir card *4521 confirmed by the merchant",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "CUE1o",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521. تم تأكيد العملية من التاجر",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FUT2a",
+  "text": "You will receive SAR 500.00 cashback on 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2b",
+  "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 will be charged tomorrow",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2c",
+  "text": "SAR 45.00 will be debited from your account *4521 on 01/12/2026",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2d",
+  "text": "Your card *4521 will be charged SAR 99.00 for Shahid on 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2e",
+  "text": "You are going to receive SAR 500.00 cashback next week",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2f",
+  "text": "A debit of SAR 300.00 dated 05/12/2026 is scheduled on your account *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2g",
+  "text": "سوف تستلم 500 ريال استرداد نقدي بتاريخ 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2h",
+  "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال سيتم خصمه غدا",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2i",
+  "text": "سيتم خصم 45 ريال من حسابك 4521 بتاريخ 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2j",
+  "text": "ستحصل على 500 ريال استرداد نقدي في 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2k",
+  "text": "Service fee SAR 30.00 + bill SAR 200.00, total SAR 230.00 will be charged tomorrow",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FUT2l",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Your statement will be issued tomorrow",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FUT2m",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Your new card will be delivered within 5 days",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FUT2n",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521. سيتم إصدار كشف الحساب غدا",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FUT2o",
+  "text": "تم خصم 45 ريال من حسابك 4521 لدى جرير. سوف تصلك بطاقتك الجديدة خلال 5 أيام",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "NEW2a",
+  "text": "دفع فاتورة 300 ريال من حسابك 4521، تذكير: موعد السداد القادم 1/12",
+  "truth": {
+   "kind": "d",
+   "amt": 300,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "NEW2b",
+  "text": "استخدمت بطاقتك *4521 بمبلغ 120 ريال لدى بنده، مجموع مصروفاتك هذا الشهر 3,200 ريال",
+  "truth": {
+   "kind": "d",
+   "amt": 120,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "NEW2c",
+  "text": "Your scheduled transfer of SAR 1,000.00 to Ali has been executed as per your request",
+  "truth": {
+   "kind": "d",
+   "amt": 1000,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "NEW2d",
+  "text": "As per your request SAR 750.00 has been transferred to Sara as scheduled",
+  "truth": {
+   "kind": "d",
+   "amt": 750,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "NEW2e",
+  "text": "خصم 99 ريال اشتراك شاهد من بطاقتك 4521، تذكير بالتجديد الشهر القادم",
+  "truth": {
+   "kind": "d",
+   "amt": 99,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "NEW2f",
+  "text": "شراء 150 ريال لدى نون بطاقة 4521 سيتم إضافة النقاط لحسابك",
+  "truth": {
+   "kind": "d",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "NEW2g",
+  "text": "Bill payment SAR 300.00 from account *4521 done, reminder: next bill due 1/12",
+  "truth": {
+   "kind": "d",
+   "amt": 300,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "NEW2h",
+  "text": "Purchase SAR 120.00 at Panda card *4521, total spent this month SAR 3,200.00",
+  "truth": {
+   "kind": "d",
+   "amt": 120,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "NEW2i",
+  "text": "تم تنفيذ تحويلك المجدول بمبلغ 1,000 ريال إلى المستفيد بناء على طلبك",
+  "truth": {
+   "kind": "d",
+   "amt": 1000,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "NEW2j",
+  "text": "بناء على طلبك تم تحويل 750 ريال إلى المستفيد حسب الجدول",
+  "truth": {
+   "kind": "d",
+   "amt": 750,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FT1a",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Standing orders will be executed on the due date",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FT1b",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521. سيتم تنفيذ الأوامر المستديمة في تاريخ الاستحقاق",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FT1c",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Standing instructions are executed on their due dates",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FT1d",
+  "text": "تم خصم 45 ريال من بطاقتك 4521 لدى جرير. الأوامر الدائمة تنفذ في موعدها",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1b1",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Refund requests are processed within 7 days",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1b2",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. For refund requests contact the merchant",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1b3",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Refunds take 7-14 working days",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1b4",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Refund requests will be processed within 7 days",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1b5",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521. طلبات الاسترداد تعالج خلال 7 أيام",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1b6",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521. لطلب الاسترداد تواصل مع التاجر",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1b7",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521. يستغرق الاسترداد من 7 إلى 14 يوم عمل",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1b8",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521. سيتم معالجة طلبات الاسترداد خلال 7 أيام",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FT1e",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Transaction pending",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FT1f",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. A refund has been initiated and will be credited within 5 days",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FT1g",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521. العملية قيد المعالجة",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FT1h",
+  "text": "Standing order of SAR 500.00 to Ali will be executed on the due date",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FT1i",
+  "text": "أمر مستديم بمبلغ 500 ريال إلى المستفيد سيتم تنفيذه في تاريخ الاستحقاق",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "HOLD1a1",
+  "text": "Your expected refund of SAR 150.00 from Noon has been credited to your card *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1a2",
+  "text": "Your pending refund of SAR 150.00 has been credited to your account *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1a3",
+  "text": "تم إضافة مبلغ الاسترداد المتوقع 150 ريال إلى بطاقتك *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "HOLD1a4",
+  "text": "تم إيداع مبلغ الاسترداد المعلق 150 ريال في حسابك *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF009a",
+  "text": "تم عكس العملية بمبلغ 150 ريال وتم إضافة المبلغ إلى حسابك *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF009b",
+  "text": "تم استرداد مبلغ 150 ريال من نون إلى بطاقتك *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF009c",
+  "text": "استرجاع عملية شراء بمبلغ 150 ريال من نون بطاقة *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF009d",
+  "text": "مرتجع مشتريات 150 ريال لدى نون بطاقة *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF009e",
+  "text": "تم رد مبلغ 150 ريال إلى بطاقتك *4521 عن عملية شراء لدى نون",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF009f",
+  "text": "تم استرجاع مبلغ 150 ريال لعملية الشراء لدى نون بطاقة *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF009g",
+  "text": "تمت إعادة مبلغ 150 ريال إلى حسابك *4521 من نون",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF009h",
+  "text": "Refund for your purchase at Noon: SAR 150.00 returned to card *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF009i",
+  "text": "شراء 150 ريال لدى نون بطاقة *4521. لا يمكن الاسترجاع بعد 7 أيام",
+  "truth": {
+   "kind": "d",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF009j",
+  "text": "Purchase SAR 150.00 at Noon card *4521. No refund after 7 days",
+  "truth": {
+   "kind": "d",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF4a",
+  "text": "Refund of SAR 150.00 from Noon has been credited to your card *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF4b",
+  "text": "Reversal of your completed purchase of SAR 150.00 at Noon has been credited to your card *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "RF4c",
+  "text": "Your refund request of SAR 150.00 from Noon is pending",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "RF4d",
+  "text": "Your expected refund of SAR 150.00 from Noon will be credited within 5 days",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "RF4e",
+  "text": "طلب استرداد مبلغ 150 ريال من نون قيد المراجعة",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "RF4f",
+  "text": "الاسترداد المتوقع 150 ريال من نون سيتم إضافته خلال 5 أيام",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "RF4g",
+  "text": "Reversal of SAR 150.00 for your purchase at Noon credited to your card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "VAL1a",
+  "text": "عملية معكوسة: فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "VAL1b",
+  "text": "عملية معكوسة: فاتورة 200 ريال، رسوم خدمة 30 ريال، الإجمالي 230 ريال",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "VAL1c",
+  "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال. تم عكس العملية",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "VAL1d",
+  "text": "فاتورة 200 ريال، رسوم خدمة 30 ريال، الإجمالي 230 ريال. تم عكس العملية",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "VAL1e",
+  "text": "Reversed transaction: bill SAR 200.00, VAT SAR 30.00, total SAR 230.00",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "VAL1f",
+  "text": "Bill SAR 200.00, service fee SAR 30.00, total SAR 230.00. Transaction reversed",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AT008a",
+  "text": "Transfer of SAR 2,000.00 from your account *4521 to your own account *7788 completed",
+  "truth": {
+   "kind": "t"
+  }
+ },
+ {
+  "id": "AT008b",
+  "text": "SAR 500.00 transferred from your current account to your savings account",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AT008c",
+  "text": "You moved SAR 500.00 from Current account *4521 to Savings account *7788",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AT008d",
+  "text": "Transfer SAR 2,000.00 from account *4521 to credit card *7788",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AT008e",
+  "text": "تم تحويل 500 ريال من حسابك الجاري إلى حسابك الادخاري",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AT008f",
+  "text": "تم تحويل 2,000 ريال من حسابك 4521 إلى حسابك 7788",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AT008g",
+  "text": "InstaPay: EGP 500.00 transferred from your account *4521 to your account *7788",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AT008h",
+  "text": "تحويل بين حساباتك بمبلغ 500 ريال تم بنجاح",
+  "truth": {
+   "kind": "t"
+  }
+ },
+ {
+  "id": "AT004a",
+  "text": "SAR 500.00 transferred from your current account to savings account of Ali",
+  "truth": {
+   "kind": "d",
+   "amt": 500,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AT004b",
+  "text": "SAR 500.00 transferred from your current account *4521 to the savings account of Sara Ahmed",
+  "truth": {
+   "kind": "d",
+   "amt": 500,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AT004c",
+  "text": "Transfer of SAR 500.00 from your savings account to Ali's current account completed",
+  "truth": {
+   "kind": "d",
+   "amt": 500,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AT004d",
+  "text": "تم تحويل 500 ريال من حسابك الجاري إلى حساب التوفير الخاص بالمستفيد علي",
+  "truth": {
+   "kind": "d",
+   "amt": 500,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AT004e",
+  "text": "تم تحويل 500 ريال من حسابك الجاري إلى الحساب الجاري للمستفيد سارة",
+  "truth": {
+   "kind": "d",
+   "amt": 500,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "TO001a",
+  "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 paid",
+  "truth": {
+   "kind": "d",
+   "amt": 230,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "TO001b",
+  "text": "Bill SAR 200.00, service fee SAR 30.00, total SAR 230.00 paid from account *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 230,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "TO001c",
+  "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال تم دفعه",
+  "truth": {
+   "kind": "d",
+   "amt": 230,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "TO001d",
+  "text": "فاتورة 200 ريال، رسوم خدمة 30 ريال، تم سداد الإجمالي 230 ريال من حسابك 4521",
+  "truth": {
+   "kind": "d",
+   "amt": 230,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "TO001e",
+  "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 paid. Transaction declined",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "TO001f",
+  "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 payment pending",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "TO001g",
+  "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال. العملية مرفوضة",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AMB7a",
+  "text": "Purchase SAR 45.00 at Jarir card *4521 completed. Previous transaction declined.",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AMB7b",
+  "text": "تم شراء 45 ريال لدى جرير بطاقة 4521. العملية السابقة مرفوضة",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AMB7c",
+  "text": "Purchase SAR 45.00 at Jarir; purchase SAR 80.00 at Panda card *4521",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AMB7d",
+  "text": "شراء 45 ريال لدى جرير وشراء 80 ريال لدى بنده بطاقة 4521",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AMB7e",
+  "text": "Purchase SAR 45.00 at Jarir card *4521 was decl",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AMB8a",
+  "text": "عملية بمبلغ 500 جنيه على بطاقتك *4521",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AMB8b",
+  "text": "A transaction of EGP 500.00 on your card *4521",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AMB8c",
+  "text": "حركة على بطاقتك *4521 بمبلغ 500 جنيه",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AMB8d",
+  "text": "Transaction: EGP 500.00, card *4521",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "AMB8e",
+  "text": "عملية شراء بمبلغ 500 جنيه على بطاقتك *4521 لدى كارفور",
+  "truth": {
+   "kind": "d",
+   "amt": 500,
+   "cur": "EGP"
+  }
+ },
+ {
+  "id": "AMB8f",
+  "text": "Transaction of EGP 500.00 at Carrefour on your card *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 500,
+   "cur": "EGP"
+  }
+ },
+ {
+  "id": "FEE9a",
+  "text": "Late payment fee of SAR 100.00 charged to your credit card *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 100,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FEE9b",
+  "text": "A late payment charge of SAR 100.00 has been debited for your credit card *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 100,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FEE9c",
+  "text": "تم خصم رسوم تأخير سداد بطاقتك الائتمانية *4521 بمبلغ 100 ريال",
+  "truth": {
+   "kind": "d",
+   "amt": 100,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FEE9d",
+  "text": "غرامة تأخر سداد البطاقة الائتمانية 100 ريال تم خصمها من حسابك *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 100,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "FEE9e",
+  "text": "Payment of SAR 2,000.00 received for your credit card *4521",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "FEE9f",
+  "text": "تم سداد بطاقتك الائتمانية *4521 بمبلغ 2,000 ريال",
+  "truth": {
+   "kind": "r"
+  }
+ },
+ {
+  "id": "CAN10a",
+  "text": "Refund of SAR 150.00 for the cancelled transaction has been credited to your card *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "CAN10b",
+  "text": "Your order was cancelled. Refund of SAR 150.00 has been credited to your card *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "CAN10c",
+  "text": "تم إيداع مبلغ الاسترداد 150 ريال للعملية الملغاة في بطاقتك *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "CAN10d",
+  "text": "تم إلغاء العملية وتم إضافة مبلغ الاسترداد 150 ريال إلى بطاقتك *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "CAN10e",
+  "text": "Refund of SAR 150.00 was cancelled",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CAN10f",
+  "text": "Refund of SAR 150.00 for the cancelled transaction will be credited within 5 days",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CAN10g",
+  "text": "تم إلغاء عملية الشراء بمبلغ 150 ريال لدى نون بطاقة *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CAN10h",
+  "text": "Refund of SAR 150.00 for the declined transaction has been credited to your card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "CAN10i",
+  "text": "استرداد مبلغ 150 ريال للعملية الملغاة سيتم إضافته خلال 5 أيام",
+  "truth": {
+   "kind": "n"
+  }
+ }
+]

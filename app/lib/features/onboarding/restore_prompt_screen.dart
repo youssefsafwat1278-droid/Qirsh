@@ -6,8 +6,10 @@ import 'package:flutter_animate/flutter_animate.dart';
 import '../../core/backend/supabase_config.dart';
 import '../../core/utils/l10n_ext.dart';
 import '../../core/backup/backup_service.dart';
+import '../../core/backup/merchant_rule_restore.dart';
 import '../../core/backup/restore_backup_usecase.dart';
 import '../../core/backup/restore_controller.dart';
+import '../../core/backup/restore_plan.dart';
 import '../../core/di/app_providers.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_assets.dart';
@@ -16,6 +18,7 @@ import '../../core/theme/app_typography.dart';
 import '../budgets/budgets_providers.dart';
 import '../dashboard/dashboard_providers.dart';
 import '../goals/goals_providers.dart';
+import '../settings/learned_rules_screen.dart';
 import '../transactions/transactions_providers.dart';
 import 'setup_screen.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
@@ -61,8 +64,13 @@ class _RestorePromptScreenState extends ConsumerState<RestorePromptScreen> {
     // controller: PREPARE (download/decrypt/validate, no mutation) → explicit
     // user confirmation → COMMIT (destructive mutation via the maintenance gate).
     final service = ref.read(backupServiceProvider);
+    RestorePlan? prepared;
     final controller = RestoreController(
-      prepare: () => service.prepareRestore(passphrase: passphrase),
+      prepare: () async {
+        final plan = await service.prepareRestore(passphrase: passphrase);
+        prepared = plan;
+        return plan;
+      },
       mutate: (confirmation) =>
           service.commitRestore(confirmation: confirmation),
       reestablish: () => service.verifyRestoredDatabaseUsable(),
@@ -76,7 +84,7 @@ class _RestorePromptScreenState extends ConsumerState<RestorePromptScreen> {
         return;
       }
       // The database is NOT touched until the user confirms this replacement.
-      final confirmed = await _confirmRestore();
+      final confirmed = await _confirmRestore(prepared);
       if (!confirmed) {
         controller.cancel();
         if (mounted) setState(() => _busy = false);
@@ -85,6 +93,8 @@ class _RestorePromptScreenState extends ConsumerState<RestorePromptScreen> {
       await controller.confirm();
       if (controller.value.phase == RestoreUiPhase.completed) {
         _refreshLocalData();
+        if (!mounted) return;
+        await _showRulesToReview();
         if (!mounted) return;
         if (widget.onboardingFlow) {
           _replaceWithSetup(OnboardingSetupEntry.captureGuide);
@@ -113,7 +123,7 @@ class _RestorePromptScreenState extends ConsumerState<RestorePromptScreen> {
 
   /// The explicit final confirmation shown ONLY after preparation succeeds and
   /// BEFORE any destructive mutation. Cancelling changes nothing.
-  Future<bool> _confirmRestore() async {
+  Future<bool> _confirmRestore(RestorePlan? plan) async {
     if (!mounted) return false;
     // SP-12: state only the restore that applies to this device. Read-only;
     // the same decision the restore makes. If it cannot be read, the text
@@ -124,6 +134,18 @@ class _RestorePromptScreenState extends ConsumerState<RestorePromptScreen> {
           ref.read(appDatabaseProvider));
     } catch (_) {
       merge = null;
+    }
+    // Saved rules this merge would leave for the user's choice (read-only,
+    // the same classification the restore applies).
+    var rulesToReview = 0;
+    if (plan != null && merge == true) {
+      try {
+        rulesToReview =
+            await MerchantRuleRestore(ref.read(appDatabaseProvider))
+                .reviewCount(plan.tables, plan.snapshotSchemaVersion);
+      } catch (_) {
+        rulesToReview = 0;
+      }
     }
     if (!mounted) return false;
     final body = switch (merge) {
@@ -136,7 +158,11 @@ class _RestorePromptScreenState extends ConsumerState<RestorePromptScreen> {
       barrierDismissible: false,
       builder: (dialogContext) => GlassAlertDialog(
         title: Text(context.l10n.rpConfirmTitle),
-        content: Text(body),
+        content: SingleChildScrollView(
+          child: Text(rulesToReview == 0
+              ? body
+              : '$body\n\n${context.l10n.lrRestoreCount(rulesToReview)}'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -150,6 +176,42 @@ class _RestorePromptScreenState extends ConsumerState<RestorePromptScreen> {
       ),
     );
     return confirmed ?? false;
+  }
+
+  /// After a restore that left saved rules for the user's choice: say how
+  /// many and why, and offer the list (Settings → Learned rules). The choices
+  /// are stored, so "Not now" loses nothing.
+  Future<void> _showRulesToReview() async {
+    final List<RuleRestoreChoice> pending;
+    try {
+      pending =
+          await MerchantRuleRestore(ref.read(appDatabaseProvider)).pending();
+    } catch (_) {
+      return;
+    }
+    ref.invalidate(ruleRestoreChoicesProvider);
+    ref.invalidate(learnedRulesProvider);
+    if (pending.isEmpty || !mounted) return;
+    final review = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => GlassAlertDialog(
+        title: Text(context.l10n.lrRestoreCount(pending.length)),
+        content: SingleChildScrollView(
+          child: Text(context.l10n.lrRestoreExplanation),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(context.l10n.notNow),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(context.l10n.lrRestoreReview),
+          ),
+        ],
+      ),
+    );
+    if (review == true && mounted) await LearnedRulesScreen.open(context);
   }
 
   void _startFresh() {

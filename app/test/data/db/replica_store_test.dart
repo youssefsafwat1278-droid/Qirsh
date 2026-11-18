@@ -196,7 +196,7 @@ void main() {
       expect(
           (await db.customSelect('PRAGMA user_version;').getSingle())
               .read<int>('user_version'),
-          43);
+          44);
       expect(await db.count('replica_meta'), 0,
           reason: 'the migration never assigns an owner');
       await db.close();
@@ -211,7 +211,7 @@ void main() {
       var entries = await s.list();
       expect(entries.single.uidHash, h);
       expect(entries.single.state, ReplicaState.active);
-      expect(entries.single.schemaVersion, 43);
+      expect(entries.single.schemaVersion, 44);
       expect(entries.single.createdAt, clock);
 
       clock = clock.add(const Duration(hours: 1));
@@ -331,7 +331,7 @@ void main() {
       expect(e.state, ReplicaState.active);
       expect(e.adoptPending, isFalse);
       expect(e.legacyAdoptedAt, clock);
-      expect(e.schemaVersion, 43);
+      expect(e.schemaVersion, 44);
 
       final db = await s.openReplica(_uidA);
       expect(await probeRows(db), ['before']);

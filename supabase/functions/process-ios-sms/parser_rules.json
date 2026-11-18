@@ -171,7 +171,7 @@
     "summaryMarkers": ["spending this month", "spending summary", "monthly statement", "total spent", "total received", "alert settings", "alerts for", "notify me", "مصروفاتك", "ملخص", "هذا الشهر", "الشهر الحالي", "إجمالي مشترياتك", "اجمالي مشترياتك"],
     "doneVerbs": ["debited", "credited", "deducted", "charged", "paid", "spent", "withdrawn", "received", "deposited", "refunded", "transferred", "sent", "approved", "authorised", "authorized", "completed", "successful", "successfully", "processed", "posted", "settled", "done", "executed", "made", "تم", "تمت", "سداد المستحق", "سداد المبلغ المستحق"],
     "tenseMarkers": ["will", "will be", "to be", "shall", "once", "if", "when", "please", "request", "سيتم", "سوف", "إذا", "عند", "يرجى", "الرجاء", "طلب", "every"],
-    "noticeOpeners": ["please note", "kindly note", "please be informed", "please be advised", "kindly be informed", "يرجى العلم", "نود إعلامكم", "نود اعلامكم", "نحيطكم علما"],
+    "noticeOpeners": ["please note", "kindly note", "please be informed", "please be advised", "kindly be informed", "يرجى العلم", "نود إعلامكم", "نود اعلامكم", "نحيطكم علما", "as per your request", "as per your instruction", "as per your instructions", "per your request", "upon your request", "at your request", "as requested", "بناء على طلبك", "حسب طلبك"],
     "movementLeads": ["purchase", "pos", "withdrawal", "شراء", "سحب", "مشتريات"],
     "ownAccountStrong": ["term deposit", "fixed deposit", "time deposit", "deposit account", "from savings", "between your accounts", "own account", "وديعة"],
     "ownAccountMarkers": ["to current", "from current", "current account", "savings account", "between your accounts", "own account", "وديعة", "حساب التوفير", "الحساب الجاري"],
@@ -181,10 +181,10 @@
     "abbreviations": ["bal", "avl", "avail", "no", "ref", "amt", "txn", "trx", "acct", "ac", "a/c", "dr", "cr", "co", "ltd", "st", "min", "max", "mr", "ms", "dt", "inc", "approx", "tel", "sr", "rs"],
     "sourceOfFunds": ["from your account", "from your card", "من حسابك", "من بطاقتك"],
     "ownDestination": ["to your account", "into your account", "in your account", "to your card", "إلى حسابك", "الى حسابك", "لحسابك", "في حسابك", "إلى بطاقتك"],
-    "futureTense": ["will", "shall", "to be", "سيتم", "سوف"],
+    "futureTense": ["will", "shall", "to be", "سيتم", "سوف", "going to", "ستحصل", "ستستلم", "ستتلقى", "سيصلك"],
     "rewardMarkers": ["points", "reward points", "loyalty points", "miles", "نقاط مكافأة", "نقاط المكافآت", "نقاط الولاء", "رصيد النقاط"],
-    "debitFlow": ["debited", "deducted", "charged", "withdrawn", "spent", "sent to", "paid to", "paid at", "paid for", "paid using", "paid by card", "transferred to", "transfer to", "from your account", "from your card", "from account", "money out", "outgoing", "outward", "was used for", "has been used for", "تم خصم", "خصم مبلغ", "تم سحب", "مبلغ صادر", "حوالة صادرة", "تحويل صادر", "من حسابك", "من بطاقتك", "تم الدفع", "تم دفع", "تم سداد", "منك إلى", "منك الى"],
-    "creditFlow": ["credited", "received", "deposited to", "deposited into", "deposited in your", "paid into", "paid to your account", "transferred to your account", "transferred into your account", "transfer to your account", "sent to you", "refunded", "money in", "inward", "incoming", "تم إيداع", "تم ايداع", "حوالة واردة", "تحويل وارد", "تم استلام", "استلمت", "مبلغ وارد", "إلى حسابك", "الى حسابك", "تمت إضافة", "تم إضافة", "إضافتها", "إليك", "اليك"]
+    "debitFlow": ["debited", "deducted", "charged", "withdrawn", "spent", "sent to", "paid to", "paid at", "paid for", "paid using", "paid by card", "transferred to", "transfer to", "from your account", "from your card", "from account", "money out", "outgoing", "outward", "was used for", "has been used for", "تم خصم", "خصم مبلغ", "تم سحب", "مبلغ صادر", "حوالة صادرة", "تحويل صادر", "من حسابك", "من بطاقتك", "تم الدفع", "تم دفع", "تم سداد", "منك إلى", "منك الى", "استخدمت بطاقتك", "تم استخدام بطاقتك"],
+    "creditFlow": ["credited", "received", "deposited to", "deposited into", "deposited in your", "paid into", "paid to your account", "transferred to your account", "transferred into your account", "transfer to your account", "sent to you", "refunded", "money in", "inward", "incoming", "تم إيداع", "تم ايداع", "حوالة واردة", "تحويل وارد", "تم استلام", "استلمت", "مبلغ وارد", "إلى حسابك", "الى حسابك", "تمت إضافة", "تم إضافة", "إضافتها", "إليك", "اليك", "تم استرجاع", "استرجاع مبلغ", "استرجاع عملية", "مرتجع مشتريات", "رد مبلغ", "تم إرجاع", "تم ارجاع", "تمت إعادة", "إعادة مبلغ", "اعادة مبلغ"]
   },
   "_currencyTableReadme": "Round 3 (4.4, 3.7, V1-031): ISO 4217 codes recognised in capitals next to a figure, and local written forms mapped to a code next to a figure. Equal to app/lib/engine/parser/currency_table.dart (drift test). Recognising a code is not a claim of bank coverage.",
   "currencyTable": {
@@ -428,6 +428,21 @@
     "حوالة",
     "الحوالة"
   ],
+  "_awaitedReadme": "Follow-up 6 (CUE-1): the operation is still awaited (a merchant's confirmation, an authorisation) or was only attempted. Read together with declinedKeywords by every state-cue rule; identical to TransactionStateCues.awaited (drift test).",
+  "stateCueAwaitedWords": [
+    "awaiting",
+    "attempted",
+    "purchase attempt",
+    "payment attempt",
+    "transfer attempt",
+    "withdrawal attempt",
+    "بانتظار",
+    "في انتظار",
+    "محاولة شراء",
+    "محاولة دفع",
+    "محاولة سحب",
+    "محاولة تحويل"
+  ],
   "stateCueGenericNouns": [
     "transactions",
     "purchases",
@@ -441,7 +456,15 @@
     "عمليات",
     "العمليات",
     "معاملات",
-    "المعاملات"
+    "المعاملات",
+    "requests",
+    "refunds",
+    "orders",
+    "instructions",
+    "طلبات",
+    "الطلبات",
+    "أوامر",
+    "الأوامر"
   ],
   "stateCueReversalWords": [
     "reversal",

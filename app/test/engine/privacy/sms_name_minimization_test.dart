@@ -48,6 +48,30 @@ void main() {
     }
   });
 
+  // Round 4: the generated parity set. `expected` is the server's output,
+  // written by supabase/functions/_shared/sms_redaction_parity_test.ts; the
+  // device must reproduce it byte for byte, with or without a type hint.
+  test('generated parity set (device == server)', () {
+    final generated = (jsonDecode(File(
+                '../supabase/functions/_shared/fixtures/sms_redaction_parity_cases.json')
+            .readAsStringSync()) as List)
+        .cast<Map<String, dynamic>>();
+    expect(generated.length, greaterThan(249));
+    final mismatches = <String>[];
+    for (final c in generated) {
+      final raw = c['raw'] as String;
+      final out = SmsSanitizer.sanitize(raw);
+      if (out != c['expected'] ||
+          sanitizeWithMap(raw).text != out ||
+          SmsSanitizer.sanitize(raw, detectedType: TransactionType.payment) !=
+              out ||
+          SmsSanitizer.sanitize(out) != out) {
+        mismatches.add('${jsonEncode(raw)} -> ${jsonEncode(out)}');
+      }
+    }
+    expect(mismatches, isEmpty);
+  });
+
   group('shared redaction fixture (device == server)', () {
     test('fixture file is non-empty', () => expect(cases, isNotEmpty));
 
@@ -152,7 +176,14 @@ void main() {
     for (final f in realWorldBankSmsFixtures) {
       test(f.id, () {
         final out = SmsSanitizer.sanitize(f.rawSms);
-        if (f.expectedLast4 != null) {
+        // Round 4: in a transfer, an account line the text does not mark as
+        // the user's own ("To: <name>" then "Acc:3583*") is masked — it may
+        // be the beneficiary's. Every other fixture keeps its last digits.
+        final unmarkedTransferAccount =
+            f.expectedType == TransactionType.transfer &&
+                !RegExp(r'your|حسابك|بطاقتك', caseSensitive: false)
+                    .hasMatch(f.rawSms);
+        if (f.expectedLast4 != null && !unmarkedTransferAccount) {
           expect(out, contains(f.expectedLast4!), reason: 'card last digits');
         }
         final merchant = f.expectedMerchant;

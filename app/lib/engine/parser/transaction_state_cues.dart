@@ -113,6 +113,18 @@ class TransactionStateCues {
     'not posted',
   ];
 
+  /// Follow-up 6 (CUE-1): the operation is still awaited (a merchant's
+  /// confirmation, an authorisation) or was only attempted: no money has
+  /// moved. Read with [declined] by every rule below (a name, a generic
+  /// noun, a hypothetical clause and another operation's status still apply).
+  /// Equal to `stateCueAwaitedWords` in `parser_rules.json`.
+  static const List<String> awaited = [
+    'awaiting', 'attempted', 'purchase attempt', 'payment attempt',
+    'transfer attempt', 'withdrawal attempt',
+    'بانتظار', 'في انتظار', 'محاولة شراء', 'محاولة دفع', 'محاولة سحب',
+    'محاولة تحويل',
+  ];
+
   /// The message's own action returns money (a refund/reversal of the
   /// declined operation it names).
   static const List<String> creditAction = [
@@ -165,6 +177,10 @@ class TransactionStateCues {
     'transactions', 'purchases', 'payments', 'transfers', 'operations',
     'attempts', 'use', 'cards', 'balance', 'عمليات', 'العمليات', 'معاملات',
     'المعاملات',
+    // Follow-up 6 (FT-1, HOLD-1): general advice about refunds or standing
+    // orders ("Refund requests will be processed within 7 days").
+    'requests', 'refunds', 'orders', 'instructions', 'طلبات', 'الطلبات',
+    'أوامر', 'الأوامر',
   ];
 
   /// Rule 6: a reversal word in a message naming a [purchaseNouns] word.
@@ -241,10 +257,14 @@ class TransactionStateCues {
 
   static bool _isNotCompletedText(String rawText) {
     final text = foldForCues(rawText);
+    // Follow-up 6 (HOLD-1): "Your pending refund … has been credited" — a
+    // pending word that qualifies the refund itself describes what it was;
+    // the clause that states the credit happened decides.
+    final refundCredited = ParserEngine.refundCredited(rawText.toLowerCase());
     int? creditAt;
     var undone = false;
     for (final m in _creditAction.allMatches(text)) {
-      final done = _creditDone(text, m);
+      final done = _creditDone(text, m, refundCredited);
       if (done == null) continue;
       if (!done) {
         undone = true;
@@ -253,16 +273,62 @@ class TransactionStateCues {
       creditAt = m.start;
       break;
     }
-    if (_declined.allMatches(text).any((m) => _isDeclinedStatus(text, m))) {
+    if (_declined.allMatches(text).any((m) =>
+        !(refundCredited && _qualifiesRefund(text, m)) &&
+        _isDeclinedStatus(text, m))) {
       return true;
     }
+    // Follow-up 6: a reversal the message says returns a completed purchase
+    // ("Reversal of your completed purchase … has been credited") is a
+    // refund of money that was counted.
     if (!_declined.hasMatch(text) &&
+        !(refundCredited && _completedOriginal.hasMatch(text)) &&
         _purchase.hasMatch(text) &&
         _reversal.allMatches(text).any((m) => _creditDone(text, m) == true)) {
       return true;
     }
     return creditAt == null && undone && _declined.hasMatch(text);
   }
+
+  /// The cue [m] is a pending word directly qualifying a refund noun
+  /// ("pending refund", `الاسترداد المعلق`).
+  ///
+  /// Round 4 (real-model run): or a cancelled word about the original
+  /// operation, not the refund ("Refund … for the cancelled transaction has
+  /// been credited", `للعملية الملغاة`, "Your order was cancelled. Refund …
+  /// credited"): a cancelled operation had taken the money the refund now
+  /// returns. "Refund of SAR 99 was cancelled" is the refund's own status.
+  static bool _qualifiesRefund(String text, Match m) {
+    final cue = text.substring(m.start, m.end);
+    final before = text.substring(0, m.start);
+    final after = text.substring(m.end);
+    if (_pendingWord.hasMatch(cue)) {
+      return _refundNext.hasMatch(after) || _refundBefore.hasMatch(before);
+    }
+    if (!_cancelledWord.hasMatch(cue)) return false;
+    return _originalNext.hasMatch(after) ||
+        _originalBefore.hasMatch(before) ||
+        _originalInside.hasMatch(cue) ||
+        !_creditAction.hasMatch(
+            before.substring(_lastBoundary(before, before.length, _boundary)));
+  }
+
+  static final RegExp _cancelledWord =
+      RegExp('(?:cancelled|canceled|ملغاه|ملغيه|الغاء)');
+  static final RegExp _originalNext = RegExp(
+      r'^ (?:transaction|purchase|payment|order|booking|operation|txn|transfer)(?![a-z])');
+  static final RegExp _originalBefore =
+      RegExp(r'(?:عمليه|معامله|شراء|طلب|حجز|طلبك|حجزك) $');
+  static final RegExp _originalInside = RegExp('عمليه');
+
+  static final RegExp _pendingWord = RegExp(
+      '^(?:ال)?(?:${_alternation(MessageMeaning.pendingWords)})\$');
+  static final RegExp _refundNext = RegExp(r'^ (?:refund|reversal)(?![a-z])');
+  static final RegExp _refundBefore =
+      RegExp('(?:استرداد|استرجاع|المسترد) \$');
+  static final RegExp _completedOriginal = RegExp(
+      r'(?<![a-z])(?:completed|successful|settled) (?:purchase|payment|transaction|pos)(?![a-z])'
+      '|(?:شراء|عمليه|معامله) (?:ال)?(?:مكتمله|ناجحه|منفذه)');
 
   /// Whether the declined cue [m] states this message's status (rules 2, 3).
   static bool _isDeclinedStatus(String text, Match m) {
@@ -281,13 +347,14 @@ class TransactionStateCues {
 
   /// Whether the credit word [m] reports money returned: null when it is not
   /// a status at all, false when it is promised, negated or failed.
-  static bool? _creditDone(String text, Match m) {
+  static bool? _creditDone(String text, Match m,
+      [bool refundCredited = false]) {
     final why = _notStatus(text, m);
     if (why == _Skip.name) return null;
     return !(why == _Skip.hypothetical ||
         _negation.hasMatch(_clause(text, m.start)) ||
         _undoneNext.hasMatch(text.substring(m.end)) ||
-        _failsLater(text, m));
+        _failsLater(text, m, refundCredited));
   }
 
   /// The cue-matching form: [Normalizer.normalize] (tashkeel, tatweel,
@@ -309,9 +376,15 @@ class TransactionStateCues {
         m.start);
     final after = text.substring(m.end);
     final genericAfter = _genericNext.firstMatch(after);
-    final generic = genericAfter != null
-        ? !_header.hasMatch(after.substring(genericAfter.end))
-        : _genericBefore.hasMatch(sentence) && !_header.hasMatch(after);
+    // Follow-up 6: a promise ("will be processed", `سيتم تنفيذ`) whose clause
+    // names a plural generic subject ("Refund requests will be processed
+    // within 7 days") is advice about them, not this transaction's status.
+    final promised = _futureLed.hasMatch(text.substring(m.start, m.end)) &&
+        _genericAny.hasMatch(_clause(text, m.start));
+    final generic = promised ||
+        (genericAfter != null
+            ? !_header.hasMatch(after.substring(genericAfter.end))
+            : _genericBefore.hasMatch(sentence) && !_header.hasMatch(after));
     final named = _afterIntroducer.firstMatch(sentence);
     final nameWord = named?.group(1);
     // A feminine Arabic cue after a name word agrees with the operation
@@ -339,11 +412,12 @@ class TransactionStateCues {
 
   /// A declined status later in [credit]'s sentence that does not merely
   /// describe a transaction noun ("Refund of SAR 99 failed").
-  static bool _failsLater(String text, Match credit) {
+  static bool _failsLater(String text, Match credit, bool refundCredited) {
     final end = _sentenceEnd(text, credit.end).at;
     for (final d in _declined.allMatches(text, credit.end)) {
       if (d.start >= end) break;
-      if (_isDeclinedStatus(text, d) &&
+      if (!(refundCredited && _qualifiesRefund(text, d)) &&
+          _isDeclinedStatus(text, d) &&
           !_nounNext.hasMatch(text.substring(d.end)) &&
           !_nounBefore.hasMatch(text.substring(0, d.start))) {
         return true;
@@ -375,7 +449,10 @@ class TransactionStateCues {
   static final RegExp _boundary = RegExp(r'[\n!?؟;؛]|\.(?![0-9])');
   static final RegExp _clauseBoundary =
       RegExp(r'[\n!?؟;؛]|[.,،:](?![0-9])| [-–—](?= )');
-  static final RegExp _declined = _tokenPattern(declined, lam: false);
+  static final RegExp _declined =
+      _tokenPattern([...declined, ...awaited], lam: false);
+  static final RegExp _futureLed =
+      RegExp('^(?:وال|بال|فال|ال|و|ف|ب)?(?:${_alternation(futureMarkers)}) ');
   static final RegExp _creditAction = _tokenPattern(creditAction, lam: false);
   static final RegExp _reversal = _tokenPattern(reversalWords, lam: false);
   static final RegExp _purchase = _tokenPattern(purchaseNouns, lam: false);
@@ -403,7 +480,7 @@ class TransactionStateCues {
   // `الاسترداد مرفوض`.
   static final RegExp _undoneNext = RegExp(
       r'^ (?:was |has been |is |been |تم )?(?:'
-      '${_alternation([...declined, ...hypotheticalMarkers, ...negationMarkers])}'
+      '${_alternation([...declined, ...awaited, ...hypotheticalMarkers, ...negationMarkers])}'
       ')(?![a-z$_arabicLetter])');
   // A noun right after an English cue / right before an Arabic cue; a generic
   // noun also right after an Arabic cue (`سيتم تنفيذ العمليات المعلقة`).

@@ -91,9 +91,10 @@ void main() {
     // backed-up table appears as a `'name': [` key.
     expect(builder.contains("'remote_coupons': ["), isFalse,
         reason: 'the refetchable catalog cache must never enter the snapshot');
-    // The business snapshot version is untouched by the Drift bump.
+    // The business snapshot version is untouched by the COUPONS Drift bump. It
+    // is 5 since round 4 (saved-rule deletion history, unrelated to coupons).
     expect(_read('lib/core/backup/backup_snapshot_builder.dart')
-        .contains('currentSchemaVersion = 4'), isTrue);
+        .contains('currentSchemaVersion = 5'), isTrue);
   });
 
   test('§17 privacy: coupon remote calls carry no financial context', () {

@@ -199,11 +199,11 @@ void main() {
   });
 
   // ── Follow-up 3 (review SP-01 / SP-02) ──────────────────────────────────
-  // Saved merchant rules (merchant_category_map) are HARD-deleted ("Forget this
-  // rule", category deletion): nothing on the device records the removal, so a
-  // merge cannot tell "removed after the backup" from "never here". The
-  // device's rules are therefore kept exactly as they are; the backup adds none
-  // and changes none.
+  // Saved merchant rules (merchant_category_map). Round 4: a removal ("Forget
+  // this rule", category deletion) is now recorded (schema v44), so a merge
+  // restores a missing rule, keeps a removed one removed and keeps the more
+  // recently changed one. The full rule is in merchant_rule_restore_test.dart;
+  // these three reproductions of SP-01 stay as they were.
   Future<String?> ruleFor(String merchant) =>
       DriftMerchantCategoryRepository(d.db).userConfirmedCategoryFor(merchant);
 
@@ -337,12 +337,15 @@ void main() {
 
   test('the restore confirmation tells the user how rules and a device with '
       'records are handled (SP-01, SP-02)', () {
+    // Round 4: backup-only rules ARE now added (or left for the user's
+    // choice), so the sentence saying they are not added is gone; the rule
+    // wording is pinned in merchant_rule_restore_test.dart.
     final en = lookupAppL10n(const Locale('en')).rpConfirmBody;
-    expect(en, contains('rules that are only in the backup are not added'));
+    expect(en, contains('a rule you deleted stays deleted'));
     expect(en, contains('no accounts, transactions, plans, rules or custom '
         'categories'));
     final ar = lookupAppL10n(const Locale('ar')).rpConfirmBody;
-    expect(ar, contains('ولا تُضاف القواعد الموجودة في النسخة فقط'));
+    expect(ar, contains('وتبقى القاعدة التي حذفتها محذوفة'));
     expect(ar, contains('لا حسابات ولا عمليات'));
   });
 }

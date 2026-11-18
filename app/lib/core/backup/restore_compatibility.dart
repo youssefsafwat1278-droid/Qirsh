@@ -43,7 +43,7 @@ class SnapshotSchemaAdapter {
 class RestoreCompatibility {
   const RestoreCompatibility._();
 
-  static const int currentVersion = 4;
+  static const int currentVersion = 5;
 
   // The full restorable table set (current schema).
   static Set<String> get _allTables =>
@@ -55,6 +55,14 @@ class RestoreCompatibility {
     // uniform restorable column set — same required tables as v3, no warning (it
     // IS the current shape); the restore's version dispatch consumes the exact
     // minors directly.
+    // v5 adds the deletion history of saved category rules (three tables, any
+    // of which may be empty): same required tables as v4.
+    5: SnapshotSchemaAdapter(
+      version: 5,
+      requiredTables: const {'categories', 'accounts', 'user_settings'},
+      optionalTables: _allTables.difference(
+          const {'categories', 'accounts', 'user_settings'}),
+    ),
     4: SnapshotSchemaAdapter(
       version: 4,
       requiredTables: const {'categories', 'accounts', 'user_settings'},
