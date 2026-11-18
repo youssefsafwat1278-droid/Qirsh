@@ -5,7 +5,8 @@
 //
 // Known, spec-mandated differences from the app (NOT covered by the shared
 // fixtures, see ai_candidate_validator_test.ts):
-//  - server additionally requires the AI currency to be on CURRENCY_CODES;
+//  - server additionally requires the AI currency to be on CURRENCY_CODES
+//    (the parser currency table limited to persistable codes);
 //  - server additionally rejects an AI `direction` field that contradicts the
 //    message wording (the app only checks the normalized type);
 //  - server additionally requires amount and amount_text to agree;
@@ -16,7 +17,25 @@
 import { canonicalMoneyText } from './money_text.ts';
 import rules from '../process-ios-sms/parser_rules.json' with { type: 'json' };
 
-export const CURRENCY_CODES = ['SAR', 'AED', 'EGP', 'QAR', 'OMR', 'KWD', 'BHD', 'JOD', 'USD', 'EUR', 'GBP', 'JPY'];
+// Round 3 closure: the parser's currency table (parser_rules.json
+// currencyTable), limited to the codes persisted Money can hold
+// (CURRENCY_MINOR_UNITS). App twin: AiCandidateValidator.currencyCodes /
+// kCaptureCurrencyCodes. Drift test: _shared/ai_currency_table_drift_test.ts.
+const CURRENCY_TABLE = rules.currencyTable as { core: string[]; iso: string[]; localForms: string[][] };
+/// ISO-4217 minor units of the currencies recognised in message text — equal
+/// to the app's DETECTION registry `kDetectionCurrencyScale`
+/// (app/lib/domain/finance/currency_scale.dart), not its ISO-wide storage table.
+export const CURRENCY_SCALE: Readonly<Record<string, number>> = {
+  KWD: 3, BHD: 3, OMR: 3, JOD: 3, TND: 3, LYD: 3, IQD: 3,
+  JPY: 0, KRW: 0, ISK: 0, CLP: 0, VND: 0, XAF: 0, XOF: 0,
+  UGX: 0, RWF: 0, DJF: 0, GNF: 0, PYG: 0, KMF: 0,
+  SAR: 2, AED: 2, EGP: 2, QAR: 2, ILS: 2, LBP: 2, SYP: 2,
+  MAD: 2, MRU: 2, DZD: 2, SDG: 2, YER: 2, SOS: 2, TRY: 2,
+  USD: 2, EUR: 2, GBP: 2, INR: 2, PKR: 2, BDT: 2, PHP: 2,
+  IDR: 2, MYR: 2, SGD: 2, NGN: 2, KES: 2, ZAR: 2, ETB: 2,
+  GHS: 2, TZS: 2,
+};
+export const CURRENCY_CODES: readonly string[] = CURRENCY_TABLE.iso.filter((c) => c in CURRENCY_SCALE);
 
 export interface AiCandidate {
   amount?: number;
@@ -43,6 +62,8 @@ export type AiCandidateValidation =
   | {
     accepted: true;
     currency: string;
+    /** Where the currency came from (4.4: account_context is recorded). */
+    currencySource: 'message' | 'local' | 'account_context';
     /** Canonical exact amount text. */
     amountText: string;
     /** AI merchant when grounded, else the local one (or null). */
@@ -114,7 +135,51 @@ const DEBIT_WORDS = [
   'نقاط بيع',
 ];
 
-export function directionOfWording(text: string): WordDirection {
+// Closure round (parser meaning, §5): the clause structure decides first —
+// the earliest debit/credit flow phrase (messageMeaning.debitFlow/creditFlow),
+// as DirectionSignal.flowOf / message_meaning.flowOf. "SAR 500 deposited to
+// beneficiary Ali from your account" is a debit, "Purchase … at Refund Mart"
+// carries no flow and falls back to the word families. Mirrored here (not
+// imported) because message_meaning.ts imports this module.
+const MEANING = rules.messageMeaning as Record<string, string[]>;
+const flowEsc = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const flowPattern = (words: string[]) =>
+  new RegExp(`(?<![a-zء-ي])[وفب]?(?:${[...words].sort((a, b) => b.length - a.length).map(flowEsc).join('|')})(?![a-z])`);
+const DEBIT_FLOW_RE = flowPattern(MEANING.debitFlow);
+const CREDIT_FLOW_RE = flowPattern(MEANING.creditFlow);
+
+export function directionOfFlow(text: string): WordDirection {
+  const lower = text.toLowerCase();
+  const d = DEBIT_FLOW_RE.exec(lower);
+  let c = CREDIT_FLOW_RE.exec(lower);
+  if (c && !d && c[0] === 'received') {
+    const sentence = lower.split(/[\n!?؟;؛]|\.(?![0-9])/).find((x) => x.includes('received')) ?? '';
+    const before = sentence.slice(0, sentence.indexOf('received'));
+    if (/(?<![a-z])payment(?![a-z])/.test(before) && !/(?<![a-z])from(?![a-z])/.test(sentence)) c = null;
+  }
+  if (!d && !c) return 'unknown';
+  if (!c) return 'debit';
+  if (!d) return 'credit';
+  const credit = c.index < d.index || (c.index === d.index && c.index + c[0].length >= d.index + d[0].length);
+  if (credit && MEANING.sourceOfFunds.some((w) => lower.includes(w)) &&
+    !MEANING.ownDestination.some((w) => lower.includes(w))) return 'debit';
+  return credit ? 'credit' : 'debit';
+}
+
+// A bare "إلى حسابك" with no verb never decides (DirectionSignal.detect).
+const CREDIT_VERB_FLOW_RE = flowPattern(MEANING.creditFlow.filter((w) => w !== 'إلى حسابك' && w !== 'الى حسابك'));
+
+/**
+ * [clause] (default: the whole text) is where the flow is read: the
+ * sentence(s) that carry the booked amount, so a cashback or footer sentence
+ * never decides the purchase's direction. The word families still read the
+ * whole text when the clause has no flow phrase.
+ */
+export function directionOfWording(text: string, clause: string = text): WordDirection {
+  const flow = directionOfFlow(clause);
+  const bareDestination = flow === 'credit' && !DEBIT_FLOW_RE.test(clause.toLowerCase()) &&
+    !CREDIT_VERB_FLOW_RE.test(clause.toLowerCase());
+  if (flow !== 'unknown' && !bareDestination) return flow;
   const lower = text.toLowerCase();
   const hasCredit = CREDIT_WORDS.some((w) => lower.includes(w));
   const hasDebit = DEBIT_WORDS.some((w) => lower.includes(w));
@@ -145,9 +210,53 @@ function contradicts(wording: WordDirection, other: WordDirection): boolean {
 }
 
 /** True when an AI direction/type would contradict the message's own wording. */
-export function directionContradictsWording(text: string, type?: string, direction?: string): boolean {
-  const wording = directionOfWording(text);
+export function directionContradictsWording(
+  text: string,
+  type?: string,
+  direction?: string,
+  amountText?: string,
+  merchant?: string | null,
+): boolean {
+  // A merchant name is masked first, as the parser masks it for the type
+  // ("Purchase … at Salary Store" is a purchase).
+  const name = (merchant ?? '').trim();
+  if (name.length >= 3) text = text.replace(new RegExp(flowEsc(name), 'gi'), ' ');
+  const wording = directionOfWording(text, amountClause(text, amountText));
   return contradicts(wording, directionOfType(type)) || contradicts(wording, asDirection(direction));
+}
+
+// ── Charged total (closure round, follow-up 6 (5)) ───────────────────────────
+// A message that states a base amount with a tip, fee, VAT or tax AND the
+// total charged: the total is what left the account and is counted once
+// (a same-currency fee is never a second row). App twin:
+// AiCandidateValidator.chargedTotal; shared fixtures pin both.
+const TOTAL_COMPONENT =
+  /(?<![a-z])(?:tips?|gratuity|service charge|fees?|vat|tax)(?![a-z])|بقشيش|إكرامية|اكرامية|ضريبة|رسوم|عمولة/i;
+const CHARGED_TOTAL = new RegExp(
+  '(?:(?<![a-z])(?:grand total|total(?: amount)?(?: charged| paid| debited| deducted)?)' +
+    '|الإجمالي|الاجمالي|إجمالي المبلغ|اجمالي المبلغ|المبلغ الإجمالي|المبلغ الاجمالي|المجموع)' +
+    '\\s*(?:of|is|:|=)?\\s*(?:[a-z]{3}\\s?)?([0-9][0-9,]*(?:\\.[0-9]+)?)',
+  'i',
+);
+
+/** The stated charged total when the message also names a tip/fee/VAT/tax component; else null. */
+export function chargedTotal(text: string): number | null {
+  const t = normalizeCurrencyTokens(text.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660)));
+  if (!TOTAL_COMPONENT.test(t)) return null;
+  const m = CHARGED_TOTAL.exec(t);
+  if (!m) return null;
+  const canonical = canonicalMoneyText(m[1]);
+  return canonical == null ? null : Number(canonical);
+}
+
+/**
+ * The first sentence that names [amountText] as a whole figure (the event; a
+ * later equal figure such as "Credited points 45" is not); the whole text
+ * when none (or no amount).
+ */
+function amountClause(text: string, amountText?: string): string {
+  if (!amountText) return text;
+  return text.split(/[\n!?؟;؛]|\.(?![0-9])/).find((s) => amountTextGrounded(amountText, s)) ?? text;
 }
 
 // ── Amount grounding (port of app GroundingCheck) ────────────────────────────
@@ -230,10 +339,25 @@ export function normalizeCurrencyTokens(input: string): string {
   return out;
 }
 
-function currencyGrounded(iso: string, text: string): boolean {
+/** A currencyTable local form ("SR1,250", "₦5,000") next to a figure, as its ISO code. */
+const LOCAL_FORMS = CURRENCY_TABLE.localForms.map(([form, code]) => {
+  const f = form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return [new RegExp(`(?<![A-Za-z])${f}(?=\\s?[0-9])|(?<=[0-9]\\s?)${f}(?![A-Za-z])`, 'g'), code] as const;
+});
+
+/**
+ * A core parser code counts in any case as a whole word (unchanged); any other
+ * table code only in capitals right next to a figure ("NGN 5,000"), so words
+ * such as "ALL" or "TOP" are never a currency (ParserEngine._hasCurrency).
+ */
+export function currencyGrounded(iso: string, text: string): boolean {
   if (!iso) return false;
-  const code = new RegExp(`(?<![A-Za-z])${iso}(?![A-Za-z])`, 'i');
-  if (code.test(normalizeCurrencyTokens(text))) return true;
+  let normalized = normalizeCurrencyTokens(text);
+  for (const [re, code] of LOCAL_FORMS) normalized = normalized.replace(re, code);
+  const code = CURRENCY_TABLE.core.includes(iso)
+    ? new RegExp(`(?<![A-Za-z])${iso}(?![A-Za-z])`, 'i')
+    : new RegExp(`(?<![A-Za-z])${iso}(?=\\s?[0-9])|(?<=[0-9]\\s?)${iso}(?![A-Za-z])`);
+  if (code.test(normalized)) return true;
   return (EXTRA_ALIASES[iso] ?? []).some((a) => text.includes(a));
 }
 
@@ -443,41 +567,106 @@ export function isNonTransactionText(text: string, merchant?: string | null): bo
   return [...(rules.ignoreKeywords as string[]), ...NON_TRANSACTION_KEYWORDS, ...NOTICE_KEYWORDS]
     .some((w) => containsIgnoreWord(outside, w)) && !hasMoneyWord(lower);
 }
+// V1-086 / RR-03 — words that report a completed card or account movement
+// but are not money words (they were removed from moneyKeywords in round 10
+// because, in the DETERMINISTIC parser, they turned credits into payments).
+// Here they only decide whether an account-notice line elsewhere in the
+// message may be set aside; they never type or record anything.
+const COMPLETION_WORDS = ['authorised', 'authorized', 'approved', 'posted', 'direct debit', 'standing order', 'payroll'];
+const SENTENCE_CUT = /[\n!?؟;؛]|\.(?![0-9])/;
+
+/**
+ * V1-086 — [text] without the account-notice sentences ("Credit limit: SAR
+ * 20,000", "Your e-statement is available", "Card activated") that are
+ * unrelated to the amount the answer names. Only when the sentence holding
+ * [amountText] itself names a completed movement (a money word or a
+ * completion word), and only sentences that hold a notice word and no ignore
+ * word, non-transaction marker or OTP code. Everything else is unchanged, so
+ * an advert, an OTP or a notice whose own sentence carries the amount is
+ * still "not a transaction". Mirrors AiCandidateValidator.withoutUnrelatedNotices.
+ */
+export function withoutUnrelatedNotices(text: string, amountText: string | null): string {
+  if (amountText == null) return text;
+  const ascii = text.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660));
+  const sentences = ascii.split(SENTENCE_CUT);
+  const holds = (s: string) => amountTextGrounded(amountText, s);
+  const own = sentences.filter(holds);
+  const completed = (s: string) => {
+    const lower = s.toLowerCase();
+    return hasMoneyWord(lower) || COMPLETION_WORDS.some((w) => containsIgnoreWord(lower, w));
+  };
+  if (own.length === 0 || !own.some(completed)) return text;
+  const kept = sentences.filter((s) => {
+    if (holds(s)) return true;
+    const lower = s.toLowerCase();
+    const notice = NOTICE_KEYWORDS.some((w) => containsIgnoreWord(lower, w));
+    const marker = [...(rules.ignoreKeywords as string[]), ...NON_TRANSACTION_KEYWORDS]
+      .some((w) => containsIgnoreWord(lower, w)) || OTP_CODE.test(lower);
+    return !notice || marker;
+  });
+  return kept.join('\n');
+}
+
 export function validateAiCandidate(input: {
   candidate: AiCandidate;
   sanitizedText: string;
   receivedAt: string;
   local: LocalCandidate | null;
+  /**
+   * 4.4 — the currency of the one existing account the device matched this
+   * message to (sent only when that match is confident). Used only when the
+   * text names no currency at all and the answer gives exactly it.
+   */
+  accountCurrency?: string | null;
 }): AiCandidateValidation {
   const { candidate: c, sanitizedText: text, local } = input;
   const reject = (reason: string): AiCandidateValidation => ({ accepted: false, reason });
 
   // LR-06 — an OTP or an advert / account notice is never a transaction,
-  // whatever the model says.
-  if (isNonTransactionText(text, merchantGrounded(c.merchant, text) ? c.merchant : null)) {
+  // whatever the model says. V1-086: a notice line unrelated to the amount
+  // (a footer next to a completed movement) does not count.
+  const scoped = withoutUnrelatedNotices(
+    text,
+    typeof c.amount_text === 'string' ? canonicalMoneyText(c.amount_text) : null,
+  );
+  if (isNonTransactionText(scoped, merchantGrounded(c.merchant, text) ? c.merchant : null)) {
     return reject('not_a_transaction');
   }
   if (!amountGrounded(c.amount, text)) return reject('amount_not_grounded');
   // OR-03 — a limit, balance or minimum-due figure is never the amount.
   const ascii = text.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660));
   if (!amountGrounded(c.amount, maskAccountFigures(ascii))) return reject('amount_is_account_figure');
+  const total = chargedTotal(text);
+  if (total != null && Math.abs((c.amount as number) - total) >= 0.005) return reject('amount_not_charged_total');
   const amount = c.amount as number;
   const currency = (c.currency ?? '').trim().toUpperCase();
+  let currencySource: 'message' | 'local' | 'account_context' = local ? 'local' : 'message';
   if (local) {
     if (!(Math.abs(amount - local.amount) < 0.01)) return reject('amount_mismatch_local');
     if (currency !== local.currency.trim().toUpperCase()) return reject('currency_mismatch_local');
   } else {
     if (!CURRENCY_CODES.includes(currency)) return reject('currency_not_whitelisted');
-    if (!currencyGrounded(currency, text)) return reject('currency_not_grounded');
+    if (!currencyGrounded(currency, text)) {
+      // 4.4: never an AI guess — only the matched account's own currency, and
+      // only when the text names no currency that could contradict it.
+      const account = (input.accountCurrency ?? '').trim().toUpperCase();
+      const named = CURRENCY_CODES.some((code) => currencyGrounded(code, text));
+      if (!account || named || currency !== account) return reject('currency_not_grounded');
+      currencySource = 'account_context';
+    }
   }
 
   if (typeof c.amount_text !== 'string') return reject('amount_text_missing');
   const amountText = canonicalMoneyText(c.amount_text, currency);
   if (amountText == null) return reject('amount_text_not_canonical');
+  if ((amountText.split('.')[1]?.length ?? 0) > (CURRENCY_SCALE[currency] ?? Infinity)) {
+    return reject('amount_text_not_canonical');
+  }
   if (!(Math.abs(Number(amountText) - amount) < 0.01)) return reject('amount_text_mismatch');
   if (!amountTextGrounded(amountText, text)) return reject('amount_text_not_grounded');
 
-  if (directionContradictsWording(text, c.type, c.direction)) return reject('direction_contradiction');
+  if (directionContradictsWording(text, c.type, c.direction, amountText,
+    merchantGrounded(c.merchant, text) ? c.merchant : null)) return reject('direction_contradiction');
   // Direction is required (ValidatedCapture v1): resolved as process-ios-sms does,
   // from the deterministic direction, else the AI direction, else the AI type.
   if (
@@ -489,6 +678,7 @@ export function validateAiCandidate(input: {
   return {
     accepted: true,
     currency,
+    currencySource,
     amountText,
     merchant,
     occurredAt: inWindow(c.occurred_at, input.receivedAt),

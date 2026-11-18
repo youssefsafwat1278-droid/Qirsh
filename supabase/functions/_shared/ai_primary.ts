@@ -1,5 +1,11 @@
 import { amountTextGrounded } from './ai_candidate_validator.ts';
 import { geminiRequestBody } from './gemini_request.ts';
+import {
+  checkUnderstanding,
+  nonTransactionVerdict,
+  STRUCTURED_PROPERTIES,
+  UNDERSTANDING_SYSTEM_INSTRUCTION,
+} from './ai_understanding.ts';
 
 // AI owns interpretation. Validation constrains evidence/shape, never substitutes
 // a rule-based transaction. No payload, credential or provider body is logged.
@@ -7,7 +13,7 @@ export const AI_PRIMARY_MODE = 'ai_primary_v1';
 export const MAX_AI_ATTEMPTS = 3;
 export type PrimaryAiResult =
   | { ok: true; value: Record<string, unknown>; attempts: number }
-  | { ok: false; reason: 'unavailable' | 'invalid_result' | 'denied'; attempts: number };
+  | { ok: false; reason: 'unavailable' | 'invalid_result' | 'denied' | 'budget'; attempts: number };
 
 export const TRANSACTION_SCHEMA = {
   type: 'object',
@@ -25,6 +31,8 @@ export const TRANSACTION_SCHEMA = {
     occurred_at: { type: 'string' },
     occurredAt: { type: 'string' },
     last4: { type: 'string' },
+    // 4.2: message type, status, evidence quotes, original vs charged amount.
+    ...STRUCTURED_PROPERTIES,
   },
   required: ['is_transaction'],
   additionalProperties: false,
@@ -60,7 +68,14 @@ export async function runPrimaryAi(options: {
   key: string;
   model: string;
   beforeAttempt: () => Promise<boolean>;
+  /// V1-022: reserves one unit of the global AI budget, after [beforeAttempt]
+  /// and immediately before each provider request (repairs included). False
+  /// means the provider is not called and the result is `budget`.
+  reserveAttempt?: () => Promise<boolean>;
   validate: (value: Record<string, unknown>) => string | null;
+  /// The sanitized message, when the caller passes it apart from [prompt]:
+  /// the structured evidence checks (ai_understanding.ts) then run on it.
+  message?: string;
   timeoutMs?: number;
   fetcher?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
@@ -72,6 +87,9 @@ export async function runPrimaryAi(options: {
   let reason: 'unavailable' | 'invalid_result' = 'unavailable';
   for (let attempt = 1; attempt <= MAX_AI_ATTEMPTS; attempt++) {
     if (!(await options.beforeAttempt())) return { ok: false, reason: 'denied', attempts: attempt - 1 };
+    if (options.reserveAttempt && !(await options.reserveAttempt())) {
+      return { ok: false, reason: 'budget', attempts: attempt - 1 };
+    }
     let retryAfter = 0;
     try {
       const response = await send(
@@ -80,6 +98,8 @@ export async function runPrimaryAi(options: {
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': options.key },
           signal: AbortSignal.timeout(options.timeoutMs ?? 12000),
           body: geminiRequestBody({
+            // Every caller: the message is untrusted data, never instructions.
+            systemInstruction: { parts: [{ text: UNDERSTANDING_SYSTEM_INSTRUCTION }] },
             contents: [{ parts: [{ text: options.prompt + correction }] }],
             generationConfig: {
               temperature: 0,
@@ -110,8 +130,14 @@ export async function runPrimaryAi(options: {
           const parsed = typeof text === 'string' ? JSON.parse(text.replace(/^```(?:json)?\s*|\s*```$/g, '')) : null;
           if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) value = parsed;
         } catch { /* Ask AI to repair its own invalid JSON; no local substitute. */ }
-        if (value && value.is_transaction === false) return { ok: true, value, attempts: attempt };
-        const invalid = value ? options.validate(value) : 'valid_json_required';
+        // Not a completed movement (declined, pending, a notice, an advert …):
+        // a terminal verdict, normalized to is_transaction=false, never retried.
+        const verdict = value ? nonTransactionVerdict(value) : null;
+        if (verdict) return { ok: true, value: verdict, attempts: attempt };
+        const invalid = value
+          ? options.validate(value) ??
+            (options.message == null ? null : checkUnderstanding(value, options.message))
+          : 'valid_json_required';
         if (value && !invalid) return { ok: true, value, attempts: attempt };
         reason = 'invalid_result';
         // The correction is a bounded validator code, not raw provider output.

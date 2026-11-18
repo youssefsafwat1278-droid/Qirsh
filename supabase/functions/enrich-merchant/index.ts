@@ -16,6 +16,7 @@
 //   SUPABASE_URL
 //   SUPABASE_SERVICE_ROLE_KEY
 import { bumpCaptureEndpointRateLimit, corsHeaders, readString, serviceClient } from '../_shared/capture_auth.ts';
+import { reserveAiBudget } from '../_shared/ai_budget_gate.ts';
 import { redactPii } from '../_shared/sms_redaction.ts';
 import {
   apiError,
@@ -313,6 +314,15 @@ Deno.serve(async (req) => {
     category = bestEffortCategoryForMerchant(merchantName);
     placeName = merchantName;
   } else {
+    // V1-022: the global 'places' budget is reserved before the paid request.
+    // Refused: no Places call and no guessed category written to the shared
+    // catalogue; the client gets the retryable error it already handles.
+    if (!(await reserveAiBudget(supabase, 'places')).allowed) {
+      if (idempotencyClaimed) {
+        await completeIdempotency(supabase, identity.identity.ownerKey, 'enrich-merchant', requestId, 'failed', {});
+      }
+      return apiError('upstream_unavailable', { correlationId: cid, retryable: true });
+    }
     // ── Google Places Text Search ──────────────────────────────────────────────
     try {
       const region = countryCode.length === 2 ? countryCode : undefined;

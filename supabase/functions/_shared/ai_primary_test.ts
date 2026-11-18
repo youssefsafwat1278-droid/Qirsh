@@ -75,3 +75,50 @@ Deno.test('a permanent provider rejection is not retried', async () => {
   assertEquals(reply, { ok: false, reason: 'unavailable', attempts: 1 });
   assertEquals(calls, 1);
 });
+
+// V1-022: the global AI budget is reserved after the consent check and before
+// each provider request, repair retries included; a refusal sends nothing.
+Deno.test('global budget: one reservation per provider request, repairs included', async () => {
+  const order: string[] = [];
+  const reply = await runPrimaryAi({
+    key: 'test', model: 'gemini-3.8-flash', prompt: qnb,
+    beforeAttempt: () => (order.push('consent'), Promise.resolve(true)),
+    reserveAttempt: () => (order.push('budget'), Promise.resolve(true)),
+    validate: (value) => checkPrimaryAmount(value, qnb),
+    sleep: () => Promise.resolve(),
+    fetcher: () => {
+      order.push('provider');
+      return Promise.resolve(modelReply(order.filter((o) => o === 'provider').length === 1
+        ? { ...candidate, amount: 4750, amount_text: '4750.00' } : candidate));
+    },
+  });
+  assertEquals(reply, { ok: true, value: candidate, attempts: 2 });
+  assertEquals(order, ['consent', 'budget', 'provider', 'consent', 'budget', 'provider']);
+});
+
+Deno.test('global budget refused: the provider is never called', async () => {
+  let calls = 0;
+  const reply = await runPrimaryAi({
+    key: 'test', model: 'gemini-3.8-flash', prompt: qnb,
+    beforeAttempt: () => Promise.resolve(true),
+    reserveAttempt: () => Promise.resolve(false),
+    validate: () => null, sleep: () => Promise.resolve(),
+    fetcher: () => { calls++; return Promise.resolve(modelReply(candidate)); },
+  });
+  assertEquals(reply, { ok: false, reason: 'budget', attempts: 0 });
+  assertEquals(calls, 0);
+});
+
+Deno.test('global budget exhausted mid-repair: no further provider request', async () => {
+  let calls = 0;
+  let reservations = 0;
+  const reply = await runPrimaryAi({
+    key: 'test', model: 'gemini-3.8-flash', prompt: qnb,
+    beforeAttempt: () => Promise.resolve(true),
+    reserveAttempt: () => Promise.resolve(++reservations === 1),
+    validate: (value) => checkPrimaryAmount(value, qnb), sleep: () => Promise.resolve(),
+    fetcher: () => { calls++; return Promise.resolve(modelReply({ ...candidate, amount: 4750, amount_text: '4750.00' })); },
+  });
+  assertEquals(reply, { ok: false, reason: 'budget', attempts: 1 });
+  assertEquals(calls, 1);
+});

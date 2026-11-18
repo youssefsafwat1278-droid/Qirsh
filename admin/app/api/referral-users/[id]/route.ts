@@ -18,13 +18,13 @@ function dbFail(context: string, error: unknown) {
   return NextResponse.json(safeErrorBody(code), { status: code === "unexpected" ? 500 : 400 });
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await requireAdmin();
   } catch (e) {
     return adminAuthErrorResponse(e);
   }
-  const userId = params.id;
+  const userId = (await params).id;
   if (!isUuid(userId)) {
     return NextResponse.json(safeErrorBody("invalid_user_id"), { status: 400 });
   }

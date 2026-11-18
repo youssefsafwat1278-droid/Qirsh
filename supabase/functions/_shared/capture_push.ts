@@ -3,7 +3,8 @@
 //
 // * Old clients and hidden-content captures use a generic APNs alert. New
 //   clients explicitly opt in to a bounded transaction summary.
-//   SMS text, balances and account/card identifiers never enter that summary.
+//   SMS text, balances and full account/card numbers never enter that summary;
+//   decision 3.12 allows the masked last four ("••1234") the parser identified.
 // * A dead token is cleared by compare-and-swap, so a token the app re-registered in
 //   the meantime is never wiped.
 // * A retry is enqueued at most once per notification (UNIQUE(notification_log_id)).
@@ -15,21 +16,82 @@ type SupabaseClientLike = ReturnType<typeof serviceClient>;
 // Q3 wording, verbatim from the manifest. Title is omitted (iOS shows the app name).
 export const GENERIC_CAPTURE_PUSH = { title: '', body: 'New transaction captured' } as const;
 
+// Decision 3.12: what the server knows about a capture when it pushes. The
+// server never records anything in the user's ledger — the device does that
+// when it imports the row, and may still send it to review (V1-086/088) — so
+// no server push says "recorded". Wording mirrors the native banners
+// (app/ios/BankMessageShortcuts/BankMessageShortcuts.swift `captureBanner`).
+//   queued    — analysed; Qirsh checks it before adding it
+//   review    — needs the user's review before it is recorded
+//   duplicate — looks like one already recorded; needs review
+//   declined  — the message says the operation was declined or failed: not recorded
+//   excluded  — no completed movement (pending, scheduled, a notice …): not recorded
+//   unread    — not understood here; kept for the user to check: not recorded yet
+export type CaptureOutcome = 'queued' | 'review' | 'duplicate' | 'declined' | 'excluded' | 'unread';
+
+const STATUS_LINES: Record<CaptureOutcome, [string, string]> = {
+  queued: ['Not recorded yet: Qirsh checks it before adding it.',
+    'لم تُسجَّل بعد: يتحقق منها قِرش قبل إضافتها.'],
+  review: ['Needs your review in Qirsh before it is recorded.', 'تحتاج مراجعتك في قِرش قبل تسجيلها.'],
+  duplicate: ['Possible duplicate: needs your review in Qirsh before it is recorded.',
+    'قد تكون مكررة: تحتاج مراجعتك في قِرش قبل تسجيلها.'],
+  declined: ['Not recorded: the message says it was declined or failed.',
+    'لم تُسجَّل: تفيد الرسالة بأن العملية مرفوضة أو لم تتم.'],
+  excluded: ['Not recorded: no completed transaction in this message (for example pending or a notice).',
+    'لم تُسجَّل: لا توجد عملية مكتملة في هذه الرسالة (مثل عملية معلّقة أو إشعار).'],
+  unread: ['Not recorded yet: open Qirsh to check this bank message.',
+    'لم تُسجَّل بعد: افتح قِرش للتحقق من رسالة البنك هذه.'],
+};
+
+export function captureStatusLine(outcome: CaptureOutcome, ar: boolean): string {
+  return STATUS_LINES[outcome][ar ? 1 : 0];
+}
+
+/** Generic (no-detail) alert for a stored notification, by outcome then by type. */
+function genericCapturePush(n: { type?: unknown; captureOutcome?: unknown } | null, ar: boolean) {
+  const outcome = typeof n?.captureOutcome === 'string' && n.captureOutcome in STATUS_LINES
+    ? n.captureOutcome as CaptureOutcome
+    : n?.type === 'suspicious_duplicate' ? 'duplicate'
+    : n?.type === 'needs_review' ? 'review'
+    : n?.type === 'received' ? 'unread' : null;
+  // A plain new transaction keeps the manifest Q3 wording (it claims no record).
+  if (outcome == null || outcome === 'queued') {
+    return ar ? { title: '', body: 'تم رصد عملية جديدة' } : GENERIC_CAPTURE_PUSH;
+  }
+  return { title: '', body: captureStatusLine(outcome, ar) };
+}
+
 /** Old captures without an explicit push summary retain their privacy contract. */
 export function capturePushContent(notification: unknown): { title: string; body: string } {
-  const n = notification as { pushAlert?: { title?: unknown; body?: unknown }; pushLanguage?: string } | null;
+  const n = notification as {
+    pushAlert?: { title?: unknown; body?: unknown }; pushLanguage?: string;
+    type?: unknown; captureOutcome?: unknown;
+  } | null;
   const alert = n?.pushAlert;
   return alert && typeof alert.title === 'string' && typeof alert.body === 'string' &&
       alert.title.length > 0 && alert.title.length <= 120 && alert.body.length > 0 && alert.body.length <= 600
     ? { title: alert.title, body: alert.body }
-    : n?.pushLanguage === 'ar' ? { title: '', body: 'تم رصد عملية جديدة' } : GENERIC_CAPTURE_PUSH;
+    : genericCapturePush(n, n?.pushLanguage === 'ar');
+}
+
+/// Exactly four ASCII digits, or nothing: never a longer card/account number.
+export function safeLast4(value: unknown): string | undefined {
+  return typeof value === 'string' && /^[0-9]{4}$/.test(value) ? value : undefined;
 }
 
 export function transactionPushAlert(
   parsed: { amount?: number | null; currency?: string | null; merchant?: string | null;
-    direction?: string | null; type?: string | null; category?: string | null;
+    direction?: string | null; type?: string | null; last4?: string | null;
     occurredAt?: string; comparisonTimestamp?: string; rawMessage?: string }, locale: string,
-  context: { tzOffsetMinutes?: number | null; receivedAt?: string } = {},
+  context: { tzOffsetMinutes?: number | null; receivedAt?: string;
+    /// What the server knows (3.12); default: analysed, not yet recorded.
+    outcome?: CaptureOutcome;
+    /// A category the user decided (their saved merchant rule). A model's or
+    /// parser's category is a proposal and is never shown as final.
+    finalCategory?: string | null;
+    /// Masked last four of the card/account the parser identified (decision
+    /// 3.12: shown when details are shown; never a longer number).
+    includeLast4?: boolean } = {},
 ): { title: string; body: string } | undefined {
   if (typeof parsed.amount !== 'number' || !Number.isFinite(parsed.amount) || parsed.amount <= 0 ||
       !/^[A-Z]{3}$/.test(parsed.currency ?? '')) return undefined;
@@ -43,17 +105,22 @@ export function transactionPushAlert(
     : parsed.type === 'payment' ? (ar ? 'عملية شراء' : 'Purchase')
     : (ar ? 'معاملة جديدة' : 'New transaction');
   const amount = parsed.amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const merchant = parsed.merchant?.replace(/[\r\n\t]/g, ' ').trim().slice(0, 80);
+  // A run of five or more digits is never a merchant name (a card, IBAN or
+  // account number that slipped through): it is masked, never shown.
+  const merchant = parsed.merchant?.replace(/[\r\n\t]/g, ' ')
+    .replace(/[0-9\u0660-\u0669\u06F0-\u06F9]{5,}/g, '•••').trim().slice(0, 80);
   // Only the network name leaves this function, never the SMS or its identifiers.
   const network = parsed.type === 'transfer' && /\b(?:ipn|instapay)\b/i.test(parsed.rawMessage ?? '')
     ? (ar ? 'عبر InstaPay' : 'Via InstaPay') : undefined;
-  const category = PUSH_CATEGORIES[parsed.category ?? '']?.[ar ? 1 : 0];
+  const category = PUSH_CATEGORIES[context.finalCategory ?? '']?.[ar ? 1 : 0];
+  const last4 = context.includeLast4 ? safeLast4(parsed.last4) : undefined;
+  const card = last4 ? (ar ? `البطاقة/الحساب: ••${last4}` : `Card/account ••${last4}`) : undefined;
   const when = pushLocalTime(parsed.occurredAt ?? parsed.comparisonTimestamp ?? context.receivedAt,
     context.tzOffsetMinutes, ar);
   const details = [category, when].filter(Boolean).join(' · ');
   return { title: `${title} · ${amount} ${parsed.currency}`,
-    body: [network ?? merchant, details].filter(Boolean).join('\n') ||
-      (ar ? 'افتح قرش لعرض المعاملة' : 'Open Qirsh to view transaction') };
+    body: [network ?? merchant, card, details, captureStatusLine(context.outcome ?? 'queued', ar)]
+      .filter(Boolean).join('\n') };
 }
 
 const PUSH_CATEGORIES: Record<string, [string, string]> = {

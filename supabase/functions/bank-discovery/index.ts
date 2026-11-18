@@ -16,6 +16,7 @@ import {
   redactSenderForAi,
   redactThirdPartyNames,
 } from '../_shared/sms_redaction.ts';
+import { reserveAiBudget } from '../_shared/ai_budget_gate.ts';
 
 const MAX_BODY_BYTES = 8192;
 const MAX_SMS_LENGTH = 2000;
@@ -108,6 +109,13 @@ Deno.serve(async (req) => {
 
   if (!GEMINI_API_KEY) {
     safeLog({ event: 'bank_discovery_ai_unconfigured', correlation_id: cid });
+    return apiError('upstream_unavailable', { correlationId: cid, retryable: true });
+  }
+
+  // V1-022: the global 'gemini' budget is reserved immediately before the paid
+  // request (after consent and the per-identity cap). Refused: no model call,
+  // and the same retryable error an unconfigured key already returns.
+  if (!(await reserveAiBudget(supabase, 'gemini')).allowed) {
     return apiError('upstream_unavailable', { correlationId: cid, retryable: true });
   }
 

@@ -35,6 +35,11 @@ export function fakeCapture(opts: {
   onBeforeDispatch?: (state: ReturnType<typeof fakeCapture>['state']) => void;
   onDispatch?: (state: ReturnType<typeof fakeCapture>['state']) => void;
   onFinalize?: (state: ReturnType<typeof fakeCapture>['state']) => void;
+  /// consume_ai_global_budget (migration 20261117120000): 'allow' (default),
+  /// 'ceiling' after `budgetLimit` units, 'absent' (migration not applied:
+  /// PostgREST PGRST202) or 'error' (any other RPC failure).
+  budget?: 'allow' | 'ceiling' | 'absent' | 'error';
+  budgetLimit?: number;
 } = {}) {
   const device: FakeDevice = {
     user_id: null,
@@ -63,6 +68,7 @@ export function fakeCapture(opts: {
     rateLimited: false,
     dbSkewMs: 0,
     dbFixedMs: null as number | null, // pin the database clock for exact-boundary tests
+    budgetCalls: 0,
   };
   const dbNow = () => state.dbFixedMs ?? Date.now() + state.dbSkewMs;
   const liveRow = (r: Row) => captureContentLive(r.created_ms as number, dbNow());
@@ -322,6 +328,20 @@ export function fakeCapture(opts: {
       from,
       rpc: (fn: string, args: Row) => {
         state.tablesTouched.add(`rpc:${fn}`);
+        if (fn === 'consume_ai_global_budget') {
+          state.budgetCalls++;
+          const mode = opts.budget ?? 'allow';
+          if (mode === 'absent') {
+            return Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'function not found' } });
+          }
+          if (mode === 'error') return Promise.resolve({ data: null, error: { code: '57014', message: 'timeout' } });
+          const limit = mode === 'ceiling' ? opts.budgetLimit ?? 0 : 3000;
+          const allowed = state.budgetCalls <= limit;
+          return Promise.resolve({
+            data: { allowed, reason: allowed ? 'ok' : 'ceiling', used: Math.min(state.budgetCalls, limit), limit },
+            error: null,
+          });
+        }
         return Promise.resolve({ data: rpcImpl(fn, args), error: null });
       },
     },

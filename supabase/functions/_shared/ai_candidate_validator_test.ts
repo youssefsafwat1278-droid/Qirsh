@@ -46,10 +46,12 @@ for (const c of cases as Array<{
   });
 }
 
+// Closure round (parser currency table): INR is now on the list, so this
+// case uses NOK — a table ISO code persisted Money cannot hold.
 Deno.test('server-only: currency outside the whitelist is rejected even when grounded', () => {
   const out = validateAiCandidate({
-    candidate: { amount: 75, amount_text: '75.00', currency: 'INR' },
-    sanitizedText: 'Paid 75.00 INR at SHOP',
+    candidate: { amount: 75, amount_text: '75.00', currency: 'NOK' },
+    sanitizedText: 'Paid 75.00 NOK at SHOP',
     receivedAt: '2026-06-16T12:00:00Z',
     local: null,
   });

@@ -17,9 +17,29 @@ import {
   schemaError,
 } from '../_shared/ai_endpoint.ts';
 import { validateEvidenceSpans } from '../_shared/evidence_spans.ts';
+import {
+  buildUnderstandingPrompt,
+  clientResponse,
+  readCurrencyCode,
+  readLocalEvidence,
+  UNDERSTANDING_PROMPT_VERSION,
+} from '../_shared/ai_understanding.ts';
 import { redactPii, redactThirdPartyNames } from '../_shared/sms_redaction.ts';
 import { resolveGeminiRoute } from '../_shared/proof_contract.ts';
 import { amountFromText, groundedModelAmount } from './money.ts';
+import { reserveAiBudget } from '../_shared/ai_budget_gate.ts';
+import { messageMeaning } from '../process-ios-sms/parse.ts';
+
+/** A held message meaning as the structured response's bounded message_type. */
+const MEANING_MESSAGE_TYPE: Record<string, string> = {
+  declined_or_failed: 'declined_or_failed',
+  pending: 'pending_or_scheduled',
+  bill_due: 'bill_or_reminder',
+  scheduled_or_expected: 'pending_or_scheduled',
+  offer: 'marketing',
+  summary: 'other_non_transaction',
+  otp_code: 'otp_or_security',
+};
 
 const MAX_BODY_BYTES = 8192;
 const MAX_SMS_LENGTH = 2000;
@@ -319,6 +339,11 @@ Deno.serve(async (req) => {
 
   // Re-sanitize server-side before sending to Gemini
   const reSanitized = reSanitize(body.sanitized_sms as string);
+  // Optional context from the device (strictly shaped; anything else dropped).
+  const hints = {
+    local: readLocalEvidence(body.local_evidence),
+    accountCurrency: readCurrencyCode(body.account_currency),
+  };
 
   // PHASE 6 — if the caller supplied evidence spans, they must describe THIS
   // text, not the client's copy of it. Verified before any upstream call, so a
@@ -345,7 +370,10 @@ Deno.serve(async (req) => {
   const requestId = readString(body, 'request_id', 'requestId');
   let idempotencyClaimed = false;
   if (requestId) {
-    const hash = await payloadHash([identity.identity.ownerKey, 'parse-sms', reSanitized]);
+    // Hints change the answer, so they are part of the replay identity; a
+    // request without them hashes exactly as before.
+    const hash = await payloadHash([identity.identity.ownerKey, 'parse-sms', reSanitized,
+      ...(hints.local || hints.accountCurrency ? [JSON.stringify(hints)] : [])]);
     const claim = await claimIdempotency(supabase, identity.identity.ownerKey, 'parse-sms', requestId, hash);
     if (claim.outcome === 'mismatch') {
       return apiError('request_replay_mismatch', { correlationId: cid });
@@ -378,8 +406,18 @@ Deno.serve(async (req) => {
     }
     return apiError(code, { correlationId: cid, retryable: code === 'upstream_timeout' });
   };
+  // V1-022: the global AI budget refused the call. No provider request is
+  // made; the client gets the retryable error it already handles and keeps
+  // the message for review (never a fallback result).
+  const budgetRefused = async (): Promise<Response> => {
+    if (idempotencyClaimed) {
+      await completeIdempotency(supabase, identity.identity.ownerKey, 'parse-sms', requestId, 'failed', {});
+    }
+    return apiError('upstream_unavailable', { correlationId: cid, retryable: true });
+  };
+  const reserveAttempt = async () => (await reserveAiBudget(supabase, 'gemini')).allowed;
 
-  const prompt = `You are a bank SMS parser. Extract transaction details from this sanitized bank SMS.
+  const extractionRules = `You are a bank SMS parser. Extract transaction details from this sanitized bank SMS.
 Return ONLY a JSON object. Omit fields you cannot determine. Amount MUST appear in the message.
 Current date for missing year/month inference: ${today}.
 
@@ -445,34 +483,58 @@ Important ATM/bank-location rule:
   type="withdrawal" and category_key="cash". Do not treat the bank branch as a
   shopping merchant, bills, or other.
 - Only classify as payment when the location is a real merchant/store (examples:
-  Orange, Noon, Starbucks, Carrefour).
+  Orange, Noon, Starbucks, Carrefour).`;
+  // The legacy (non-primary) request is unchanged byte for byte.
+  const prompt = `${extractionRules}
 
 SMS: ${reSanitized}
 
 Return ONLY valid JSON. No markdown, no explanation.`;
 
   if (body.analysis_mode === AI_PRIMARY_MODE) {
+    // 4.2 / 4.3: structured, evidence-checked understanding. The device's own
+    // reading and the matched account's currency are context (evidence that
+    // may be wrong), never a substitute for the model's validated answer.
+    // Closure round (parser meaning, 4.1 / §5): a clear notice, an OTP or a
+    // review kind (not completed, an ATM cash deposit, own accounts, several
+    // movements) is never a transaction because the model says so. No
+    // provider request is made; old clients keep it for review (an AI "not a
+    // transaction" verdict is never an intentional drop on the device).
+    const meaning = messageMeaning(reSanitized);
+    if (meaning.disposition !== 'record') {
+      return finish({ is_transaction: false, message_type: MEANING_MESSAGE_TYPE[meaning.reason] ?? 'ambiguous' });
+    }
+    const meta = { model: GEMINI_MODEL, promptVersion: UNDERSTANDING_PROMPT_VERSION };
     const validate = (value: Record<string, unknown>) => {
       if (value.is_transaction !== true) return 'is_transaction_required';
       if (typeof value.category_key !== 'string' || !value.category_key) return 'category_required';
-      const checked = validateAiCandidate({ candidate: value,
-        sanitizedText: reSanitized, receivedAt: new Date().toISOString(), local: null });
+      const checked = validateAiCandidate({ candidate: value, sanitizedText: reSanitized,
+        receivedAt: new Date().toISOString(), local: null, accountCurrency: hints.accountCurrency });
       return checked.accepted ? checkPrimaryAmount(value, reSanitized) : checked.reason;
     };
-    const result = await runPrimaryAi({ prompt, key: route.key, model: GEMINI_MODEL,
+    const result = await runPrimaryAi({
+      prompt: buildUnderstandingPrompt({ task: extractionRules, message: reSanitized,
+        localEvidence: hints.local, accountCurrency: hints.accountCurrency }),
+      message: reSanitized, key: route.key, model: GEMINI_MODEL,
       validate, beforeAttempt: async () => {
         const fresh = await resolveVerifiedIdentity(req, supabase, body, cid);
         return fresh.ok && fresh.identity.ownerKey === identity.identity.ownerKey &&
           consentError(fresh.identity, 'ai', cid) == null;
-      } });
+      }, reserveAttempt });
     if (!result.ok) {
+      if (result.reason === 'budget') return budgetRefused();
       if (result.reason === 'denied') return apiError('consent_required', { correlationId: cid });
       return failUpstream(result.reason === 'unavailable' ? 'upstream_timeout' : 'upstream_rejected');
     }
-    if (result.value.is_transaction === false) return finish({ is_transaction: false });
-    return finish({ ...result.value, model_used: GEMINI_MODEL });
+    if (result.value.is_transaction === false) return finish(clientResponse(result.value, meta));
+    const accepted = validateAiCandidate({ candidate: result.value, sanitizedText: reSanitized,
+      receivedAt: new Date().toISOString(), local: null, accountCurrency: hints.accountCurrency });
+    const source = accepted.accepted && accepted.currencySource === 'account_context'
+      ? { currency_source: 'account_context' } : {};
+    return finish(clientResponse({ ...result.value, ...source }, meta));
   }
 
+  if (!(await reserveAttempt())) return await budgetRefused();
   let parsed: Record<string, unknown> | null = null;
   try {
     // THE routing fix: the credential comes from the contract router, never

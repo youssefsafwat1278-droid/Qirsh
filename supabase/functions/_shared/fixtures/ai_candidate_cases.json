@@ -677,5 +677,142 @@
       "merchant": "Offer Mart",
       "occurred_at_kept": false
     }
+  },
+  {
+    "name": "V1-086: an authorised purchase with an unrelated credit-limit line is accepted",
+    "sanitized_text": "Card *4521 authorised SAR 45.00 at Test Diner. Credit limit: SAR 20,000",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 45,
+      "amount_text": "45.00",
+      "currency": "SAR",
+      "merchant": "Test Diner",
+      "type": "payment"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR",
+      "merchant": "Test Diner",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "V1-086: an approved purchase with an e-statement line is accepted",
+    "sanitized_text": "Test Diner: SAR 45.00 approved on card *4521\nYour e-statement is available",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 45,
+      "amount_text": "45.00",
+      "currency": "SAR",
+      "type": "payment"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR",
+      "merchant": null,
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "V1-086: an advert next to a card activation stays not a transaction",
+    "sanitized_text": "Card activated. Spend SAR 500 this week to get cashback",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 500,
+      "amount_text": "500",
+      "currency": "SAR",
+      "type": "payment"
+    },
+    "expected": {
+      "accepted": false,
+      "reason": "not_a_transaction"
+    }
+  },
+  {
+    "name": "V1-086: a credit-limit notice carrying the amount stays not a transaction",
+    "sanitized_text": "Your credit limit is now SAR 20,000. Card *4521 authorised",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 20000,
+      "amount_text": "20,000",
+      "currency": "SAR",
+      "type": "payment"
+    },
+    "expected": {
+      "accepted": false,
+      "reason": "not_a_transaction"
+    }
+  },
+  {
+    "name": "Closure 6(5): base + tip with a stated total — the base is not the amount",
+    "sanitized_text": "Dinner at Test Diner SAR 100.00 + tip SAR 15.00. Total charged SAR 115.00 to card *1234",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 100,
+      "amount_text": "100.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": false,
+      "reason": "amount_not_charged_total"
+    }
+  },
+  {
+    "name": "Closure 6(5): base + tip with a stated total — the total charged is accepted",
+    "sanitized_text": "Dinner at Test Diner SAR 100.00 + tip SAR 15.00. Total charged SAR 115.00 to card *1234",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 115,
+      "amount_text": "115.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR"
+    }
+  },
+  {
+    "name": "Closure 6(5): Arabic base + VAT with a stated total — the base is not the amount",
+    "sanitized_text": "شراء من مطعم الاختبار بمبلغ 100.00 ريال + ضريبة 15.00 ريال. الإجمالي 115.00 ريال من بطاقتك 1234",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 100,
+      "amount_text": "100.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": false,
+      "reason": "amount_not_charged_total"
+    }
+  },
+  {
+    "name": "Closure 6(5): Arabic base + VAT with a stated total — the total is accepted",
+    "sanitized_text": "شراء من مطعم الاختبار بمبلغ 100.00 ريال + ضريبة 15.00 ريال. الإجمالي 115.00 ريال من بطاقتك 1234",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 115,
+      "amount_text": "115.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR"
+    }
   }
 ]

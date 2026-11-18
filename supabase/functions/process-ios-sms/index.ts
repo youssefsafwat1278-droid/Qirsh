@@ -8,7 +8,16 @@ import {
   verifyDevice,
 } from '../_shared/capture_auth.ts';
 import { sendCapturePush } from '../_shared/apns.ts';
-import { clearDeadApnsToken, enqueueNotificationRetry, capturePushContent, transactionPushAlert, isDeadApnsToken } from '../_shared/capture_push.ts';
+import {
+  type CaptureOutcome,
+  captureStatusLine,
+  clearDeadApnsToken,
+  enqueueNotificationRetry,
+  capturePushContent,
+  transactionPushAlert,
+  isDeadApnsToken,
+  safeLast4,
+} from '../_shared/capture_push.ts';
 import { fingerprintTimeKeys } from '../_shared/capture_fingerprint.ts';
 import { redactPii, redactSenderForAi, redactThirdPartyNames } from '../_shared/sms_redaction.ts';
 import { markApnsLogFailed, markApnsLogSent } from '../_shared/notification_logs.ts';
@@ -19,8 +28,10 @@ import {
 } from '../_shared/notification_retry_policy.ts';
 import { type FingerprintReservationStore, reserveCaptureFingerprint } from '../_shared/fingerprint_reservation.ts';
 import { apiError, correlationId } from '../_shared/ai_endpoint.ts';
-import { type ParsedCapture, parseSms } from './parse.ts';
+import { isDeclinedText, messageMeaning, type ParseOutcome, type ParsedCapture, parseSms } from './parse.ts';
 import { AI_PRIMARY_MODE } from '../_shared/ai_primary.ts';
+import { UNDERSTANDING_SYSTEM_VERSION } from '../_shared/ai_understanding.ts';
+import { reserveAiBudget } from '../_shared/ai_budget_gate.ts';
 
 export type { ParsedCapture };
 
@@ -32,7 +43,14 @@ type NotificationPayload = {
   title: string;
   body: string;
   type: 'new_transaction' | 'needs_review' | 'suspicious_duplicate' | 'received';
+  /// 3.12: what the server knows about the capture (additive; build 147
+  /// ignores it). Picks the wording of a push sent without details.
+  captureOutcome?: CaptureOutcome;
 };
+
+/// A parse plus the category of the owner's saved merchant rule, the only
+/// category the server may present as final (3.12, 4.5).
+type ShownCapture = ParsedCapture & { ruleCategory?: string };
 
 const CAPTURE_RATE_LIMIT_PER_DAY = 300;
 const LEASE_SECONDS = 60; // must stay well above the 3.5 s AI timeout (parse.ts)
@@ -256,6 +274,8 @@ export async function handleProcessIosSms(
     }
 
     let dispatchDenied: string | null = null;
+    // V1-022: the global AI budget refused a provider request (no call made).
+    let budgetRefused = false;
     // The client requested AI, but the claim may see a newer consent snapshot.
     // Preserve the reviewable capture without sending to AI or substituting a
     // deterministic transaction under the client's requested AI-only mode.
@@ -280,7 +300,13 @@ export async function handleProcessIosSms(
           p_lease_token: leaseToken,
         });
         const data = dispatch.data as Json | null;
-        if (!dispatch.error && data?.allowed === true) return true;
+        if (!dispatch.error && data?.allowed === true) {
+          // After consent, ownership and the quota (capture_claim, bumpRateLimit,
+          // capture_ai_dispatch), immediately before each provider request.
+          if ((await reserveAiBudget(supabase, 'gemini')).allowed) return true;
+          budgetRefused = true;
+          return false;
+        }
         dispatchDenied = dispatch.error?.code === '55P03'
           ? 'account_busy'
           : String(data?.reason ?? 'dispatch_failed');
@@ -313,7 +339,17 @@ export async function handleProcessIosSms(
       if (dispatchDenied === 'expired') return json({ error: 'capture_expired', state: 'expired', correlation_id: cid }, 409);
       return refusal(dispatchDenied === 'owner_changed' ? 'capture_owner_mismatch' : 'consent_required', cid);
     }
-    const parsed = outcome.parsed;
+    // V1-058: which model and which system instruction produced an AI
+    // result travel with the stored parse (processed_captures.parsed is
+    // jsonb, so no migration). Never on a parse no AI request was made for.
+    const parsed: ParsedCapture & { aiModel?: string; aiSystemVersion?: string; reviewReason?: string } =
+      outcome.aiInvoked
+      ? {
+        ...outcome.parsed,
+        aiModel: Deno.env.get('GEMINI_SMS_MODEL') ?? 'gemini-3.8-flash',
+        aiSystemVersion: UNDERSTANDING_SYSTEM_VERSION,
+      }
+      : outcome.parsed;
 
     // Metadata only — never the raw SMS, sender, amount, merchant, secret, or body.
     console.log(JSON.stringify({
@@ -333,6 +369,16 @@ export async function handleProcessIosSms(
     // confidence never matters). New captures are never 'needs_review'; that
     // value stays in CaptureStatus only because legacy rows/clients still carry it.
     let status = (outcome.accepted && parsed.amount && parsed.currency ? 'processed' : 'rejected') as CaptureStatus;
+    // Closure round (parser meaning, owner brief 4.1 / §5), both analysis
+    // modes: a clear notice, an OTP or a review kind (not completed, an ATM
+    // cash deposit, own accounts, several movements) is never processed money
+    // because a model (or any later step) answered with a transaction. It is
+    // kept for review with the reason; the device applies the same meaning.
+    const meaning = outcome.meaning ?? messageMeaning(sanitizedText);
+    if (status === 'processed' && meaning.disposition !== 'record') {
+      status = 'rejected';
+      parsed.reviewReason = meaning.reason;
+    }
 
     if (status !== 'rejected') {
       const duplicate = await detectDuplicate(supabase, auth.installIdHash, payloadId, parsed, ownerUid);
@@ -348,16 +394,19 @@ export async function handleProcessIosSms(
     // The app files this capture under the user's own merchant rule
     // (learnedRuleCategoryFor), so the alert says the same. Display only: the
     // stored parse is unchanged and the device still applies the rule itself.
-    const shown = status !== 'rejected' && ownerUid
+    const shown: ShownCapture = status !== 'rejected' && ownerUid
       ? await withUserMerchantRule(supabase, ownerUid, parsed)
       : parsed;
+    const captureOutcome = outcomeOf(status, sanitizedText, outcome);
     const notification: NotificationPayload = aiPrimary && status === 'rejected'
       ? { title: '', body: '', type: 'received' }
-      : buildNotification(status, shown, sender, receivedAt, tzOffsetMinutes, locale);
+      : buildNotification(status, shown, sender, receivedAt, tzOffsetMinutes, locale, captureOutcome);
     notification.pushLanguage = locale.toLowerCase().startsWith('ar') ? 'ar' : 'en';
     if (body.localNotification === true && !background) notification.localDelivery = true;
-    if (body.notificationDetails === true && status === 'processed') {
-      notification.pushAlert = transactionPushAlert(shown, locale, { receivedAt, tzOffsetMinutes });
+    if (body.notificationDetails === true && notification.title) {
+      notification.pushAlert = transactionPushAlert(shown, locale,
+        { receivedAt, tzOffsetMinutes, outcome: captureOutcome, finalCategory: shown.ruleCategory,
+          includeLast4: true });
     }
     // Each primary analysis already made its bounded provider attempts. A
     // model answer the validator rejected is terminal and preserved for
@@ -365,8 +414,11 @@ export async function handleProcessIosSms(
     // judged the capture: that stays retryable (bounded by capture_claim's
     // attempt cap and backoff), so a later client replay analyses it instead
     // of replaying a stored rejection forever.
-    const transient = outcome.aiTransientFailure === true &&
-      (!aiPrimary || (outcome as { aiProviderUnavailable?: boolean }).aiProviderUnavailable === true);
+    // A budget refusal is handled like a provider outage: the capture was never
+    // judged, so it stays a retryable pending item for review — never dropped,
+    // never saved from an unvalidated local reading.
+    const transient = budgetRefused || (outcome.aiTransientFailure === true &&
+      (!aiPrimary || (outcome as { aiProviderUnavailable?: boolean }).aiProviderUnavailable === true));
     const fin = await finalize({
       state: transient ? 'retryable' : status === 'rejected' ? 'rejected' : 'processed',
       status,
@@ -559,7 +611,7 @@ async function withUserMerchantRule(
   supabase: ReturnType<typeof serviceClient>,
   ownerUid: string,
   parsed: ParsedCapture,
-): Promise<ParsedCapture> {
+): Promise<ShownCapture> {
   const key = parsed.merchant ? merchantRuleKey(parsed.merchant) : '';
   if (!key) return parsed;
   try {
@@ -574,7 +626,7 @@ async function withUserMerchantRule(
     if (!category) return parsed;
     // The app names the cash category "سحب نقدي"; the title says so too.
     const type = category === 'cash' && parsed.direction !== 'credit' ? 'withdrawal' : parsed.type;
-    return { ...parsed, category, type };
+    return { ...parsed, category, type, ruleCategory: category };
   } catch {
     return parsed;
   }
@@ -621,73 +673,94 @@ async function detectDuplicate(
   );
 }
 
+/// 3.12: what the server can truthfully say about a capture it is about to
+/// notify. Nothing here is "recorded": the device records on import.
+export function outcomeOf(
+  status: CaptureStatus,
+  text: string,
+  outcome: Pick<ParseOutcome, 'parsed' | 'meaning'>,
+): CaptureOutcome {
+  if (status === 'processed') return 'queued';
+  if (status === 'duplicate') return 'duplicate';
+  if (status === 'needs_review') return 'review';
+  if (isDeclinedText(text)) return 'declined';
+  const meaning = outcome.meaning ?? messageMeaning(text);
+  if (outcome.parsed.parserSource === 'ai_ignored' || meaning.kind === 'not_completed' ||
+      meaning.kind === 'no_movement_notice' || meaning.kind === 'otp') return 'excluded';
+  // A cash deposit, own-account move or several movements: kept for review.
+  if (meaning.disposition === 'review') return 'review';
+  // Not understood by the server (the V1-088 class): the matching device
+  // build keeps it for review, so it is "not recorded yet", never "recorded".
+  return 'unread';
+}
+
+const DEFAULT_OUTCOME: Record<CaptureStatus, CaptureOutcome> = {
+  processed: 'queued', duplicate: 'duplicate', needs_review: 'review', rejected: 'unread',
+};
+
+/// An alphanumeric sender is the bank's registered brand ("SNB") and may be
+/// shown; a phone number or numeric short code identifies no bank and may be
+/// a person, so it is never shown (the alert reaches the lock screen).
+function senderBrand(sender: string): string | null {
+  return sender && redactSenderForAi(sender) === sender.trim() ? sender.trim() : null;
+}
+
 export function buildNotification(
   status: CaptureStatus,
-  parsed: ParsedCapture,
+  parsed: ShownCapture,
   sender: string,
   receivedAt: string,
   tzOffsetMinutes: number | null,
   locale = 'en',
+  captureOutcome: CaptureOutcome = DEFAULT_OUTCOME[status],
 ): NotificationPayload {
-  if (!locale.toLowerCase().startsWith('ar')) {
-    const detail = transactionPushAlert(parsed, 'en', { receivedAt, tzOffsetMinutes });
-    const summary = detail ? `${detail.title}\n${detail.body}\n` : '';
-    if (status === 'duplicate') return {
-      title: 'Similar transaction ⚠️', type: 'suspicious_duplicate',
-      body: `${summary}Already recorded? Open Qirsh to review.`,
-    };
-    if (status === 'needs_review') return {
-      title: 'Transaction needs review ⚠️', type: 'needs_review',
-      body: `${summary}Open Qirsh to review and confirm.`,
-    };
-    if (status === 'processed') return {
-      title: detail?.title ?? 'Transaction captured', type: 'new_transaction',
-      body: detail?.body ?? 'Open Qirsh to view transaction',
-    };
-    return { title: 'Bank message captured', type: 'received',
-      body: "Couldn't analyze this bank message. Paste it in Qirsh to add it manually." };
-  }
-  if (status === 'duplicate') {
+  const ar = locale.toLowerCase().startsWith('ar');
+  const statusLine = captureStatusLine(captureOutcome, ar);
+  const brand = senderBrand(sender);
+  if (!ar) {
+    const detail = transactionPushAlert(parsed, 'en',
+      { receivedAt, tzOffsetMinutes, outcome: captureOutcome, finalCategory: parsed.ruleCategory, includeLast4: true });
+    const summary = detail ? `${detail.title}\n${detail.body}` : statusLine;
+    if (status === 'duplicate') {
+      return { title: 'Similar transaction ⚠️', type: 'suspicious_duplicate', body: summary, captureOutcome };
+    }
+    if (status === 'needs_review') {
+      return { title: 'Transaction needs review ⚠️', type: 'needs_review', body: summary, captureOutcome };
+    }
+    if (status === 'processed') {
+      return { title: detail?.title ?? 'Bank message received', type: 'new_transaction',
+        body: detail?.body ?? statusLine, captureOutcome };
+    }
     return {
-      title: 'عملية مشابهة ⚠️',
-      body: `${detailLines(parsed, receivedAt, tzOffsetMinutes)}\nموجودة مسبقاً؟ افتح قرش للمراجعة.`,
-      type: 'suspicious_duplicate',
+      title: captureOutcome === 'unread' ? 'Bank message received' : 'Bank message not recorded',
+      type: 'received',
+      body: [brand ? `Message from ${brand}.` : null, detail ? `${detail.title}\n${detail.body}` : statusLine]
+        .filter(Boolean).join('\n'),
+      captureOutcome,
     };
+  }
+  const details = parsed.amount && parsed.currency ? detailLines(parsed, receivedAt, tzOffsetMinutes) : null;
+  const body = [details, statusLine].filter(Boolean).join('\n');
+  if (status === 'duplicate') {
+    return { title: 'عملية مشابهة ⚠️', body, type: 'suspicious_duplicate', captureOutcome };
   }
   if (status === 'needs_review') {
-    return {
-      title: 'عملية تحتاج مراجعة ⚠️',
-      body: parsed.amount && parsed.currency
-        ? `${detailLines(parsed, receivedAt, tzOffsetMinutes)}\nافتح قرش للمراجعة والتأكيد.`
-        : 'افتح قرش لمراجعة الرسالة.',
-      type: 'needs_review',
-    };
+    return { title: 'عملية تحتاج مراجعة ⚠️', body, type: 'needs_review', captureOutcome };
   }
   if (status === 'processed') {
-    return {
-      title: `تم رصد ${typeTitle(parsed)} ${typeEmoji(parsed)}`,
-      body: detailLines(parsed, receivedAt, tzOffsetMinutes),
-      type: 'new_transaction',
-    };
+    return { title: `تم رصد ${typeTitle(parsed)} ${typeEmoji(parsed)}`, body, type: 'new_transaction', captureOutcome };
   }
-  // rejected: لا يُنشأ أي عنصر داخل التطبيق (الـ relay يُحذف بعد الـ ack)،
-  // فلا نَعِد المستخدم بمراجعة غير موجودة — نرشده للّصق اليدوي بدلاً منها.
   return {
-    title: 'قِرش رصد رسالة بنك',
-    // The alert travels through APNs and shows on the lock screen. An
-    // alphanumeric sender is the bank's registered brand ("SNB") and is
-    // shown; a phone number or numeric short code identifies no bank and may
-    // be a person, so it falls back to the generic label.
-    body: sender && redactSenderForAi(sender) === sender.trim()
-      ? `رسالة من ${sender.trim()} لم نتمكن من تحليلها. الصقها يدوياً في قرش لإضافتها.`
-      : 'رسالة بنكية لم نتمكن من تحليلها. الصقها يدوياً في قرش لإضافتها.',
+    title: captureOutcome === 'unread' ? 'قِرش رصد رسالة بنك' : 'رسالة بنك لم تُسجَّل',
+    body: [brand ? `رسالة من ${brand}.` : null, body].filter(Boolean).join('\n'),
     type: 'received',
+    captureOutcome,
   };
 }
 
 // قائمة التفاصيل — سطر لكل معلومة متاحة. الرصيد لا يظهر أبداً (شاشة القفل).
 function detailLines(
-  parsed: ParsedCapture,
+  parsed: ShownCapture,
   receivedAt: string,
   tzOffsetMinutes: number | null,
 ): string {
@@ -703,12 +776,16 @@ function detailLines(
   const nature = natureLabelAr(parsed);
   if (nature) lines.push(`النوع: ${nature}`);
   if (parsed.merchant) {
-    lines.push(parsed.direction === 'credit' ? `المصدر: ${parsed.merchant}` : `التاجر: ${parsed.merchant}`);
+    const merchant = parsed.merchant.replace(/[\r\n\t]/g, ' ').trim().slice(0, 80);
+    lines.push(parsed.direction === 'credit' ? `المصدر: ${merchant}` : `التاجر: ${merchant}`);
   }
-  if (parsed.last4) lines.push(`البطاقة: ****${parsed.last4}`);
+  const last4 = safeLast4(parsed.last4);
+  if (last4) lines.push(`البطاقة: ****${last4}`);
   const time = timeLabel(parsed.occurredAt ?? receivedAt, tzOffsetMinutes);
   if (time) lines.push(`الوقت: ${time}`);
-  const category = categoryLabelAr(parsed.category);
+  // 3.12: only a category the user decided (their saved rule) is shown; a
+  // parser's or model's category is a proposal until the device applies it.
+  const category = parsed.ruleCategory ? categoryLabelAr(parsed.ruleCategory) : null;
   if (category) lines.push(`التصنيف: ${category}`);
   return lines.join('\n');
 }

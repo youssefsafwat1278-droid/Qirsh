@@ -13,6 +13,8 @@
 export function geminiRequestBody(body: {
   contents: unknown;
   generationConfig?: Record<string, unknown>;
+  /// Instructions kept apart from the (untrusted) message content.
+  systemInstruction?: { parts: Array<{ text: string }> };
 }): string {
   return JSON.stringify({ ...body, store: false });
 }

@@ -112,6 +112,19 @@ fi
 step "migration lint"
 if bash "$ROOT/supabase/tools/check_migrations.sh"; then ok "migrations"; else bad "migrations"; fi
 
+# V1-013 — backend behaviour (OPT-IN). Applies the whole migration chain to a
+# throwaway database on a LOCAL, DEDICATED Postgres named by BACKEND_PG_HOST
+# (and BACKEND_PG_PORT) and runs the SQL behaviour proofs (RLS, RPCs, grants).
+# Not requested => reported as NOT RUN, never counted as a pass and never
+# strict-fatal, so this gate does not depend on a database being available.
+backend_state="not-run"
+step "backend behaviour (opt-in: migrations apply + SQL proofs on a local Postgres)"
+if [ -n "${BACKEND_PG_HOST:-}" ]; then
+  if bash "$ROOT/tools/backend_behaviour.sh"; then ok "backend behaviour"; backend_state="passed"; else bad "backend behaviour"; backend_state="FAILED"; fi
+else
+  echo "  - backend behaviour NOT RUN (opt-in: set BACKEND_PG_HOST to a local, dedicated Postgres; see tools/backend_behaviour.sh) — not a pass"
+fi
+
 # Catalog parser rules exist in two places that must never disagree: the
 # canonical source and the bundled app asset. Migration 0091 widened the amount
 # quantifier in the database and the asset was never regenerated, so every
@@ -323,11 +336,12 @@ echo "  node tests skipped     : $node_skips  (credentials absent — see manife
 echo "  deno tests ignored     : $deno_ignored  (live-Postgres — see manifest)"
 echo "  flutter skip sites     : $flutter_skips  (static skip:/@Skip/markTestSkipped in app/test — see manifest; NOT counted as passed)"
 echo "  skip/ignore manifest   : $manifest_state"
+echo "  backend behaviour      : $backend_state  (opt-in; not-run is NOT a pass)"
 echo "  external verification  : pending (device / live Supabase / native timing — see PHASE_6 checklist)"
 echo "  retained lint exceptions: $LINT_EXCEPTIONS deno-lint-ignore (no-explicit-any; loosely-typed Supabase Edge client — see PHASE_7 doc)"
 # machine-readable line for CI assertions (no secrets). Each reason is preserved
 # as a distinct field — no broad bucket erases the classification (requirement 7).
-echo "CI_GATES_JSON {\"passed\":$pass_count,\"failed\":$fail_count,\"tool_missing\":$tool_missing_count,\"caller_skipped\":$caller_skipped_count,\"artifact_pending\":$artifact_pending_count,\"strict\":$REQUIRE_ALL_GATES,\"node_skipped\":\"$node_skips\",\"deno_ignored\":\"$deno_ignored\",\"flutter_skip_sites\":\"$flutter_skips\",\"manifest\":\"$manifest_state\",\"lint_exceptions\":$LINT_EXCEPTIONS}"
+echo "CI_GATES_JSON {\"passed\":$pass_count,\"failed\":$fail_count,\"tool_missing\":$tool_missing_count,\"caller_skipped\":$caller_skipped_count,\"artifact_pending\":$artifact_pending_count,\"strict\":$REQUIRE_ALL_GATES,\"node_skipped\":\"$node_skips\",\"deno_ignored\":\"$deno_ignored\",\"flutter_skip_sites\":\"$flutter_skips\",\"manifest\":\"$manifest_state\",\"backend_behaviour\":\"$backend_state\",\"lint_exceptions\":$LINT_EXCEPTIONS}"
 echo
 if [ "$fail" -eq 0 ]; then
   extra=$((unavail_count + caller_skipped_count + artifact_pending_count))

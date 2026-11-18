@@ -470,7 +470,17 @@ Deno.test('CAP-3: APNs alert is generic, with no amount, merchant, card or sende
   });
 });
 
-Deno.test('capture details opt-in sends amount and merchant without card or SMS; hidden stays generic', async () => {
+// Decision 3.12 privacy bound (same rule as _shared/capture_push_test.ts): the
+// only run of four or more digits allowed is the masked suffix "••dddd".
+function assertNoIdentifierDigits(text: string): void {
+  const rest = text.replace(/••[0-9]{4}(?![0-9])/g, '');
+  assertEquals(/[0-9\u0660-\u0669\u06F0-\u06F9]{4,}/.test(rest), false, text);
+}
+
+// Decision 3.12 (decided change): the opted-in alert may carry the parser's
+// masked card/account suffix "••1234" — exactly four digits — and nothing
+// longer; no SMS text. Hidden details stay generic with no digits.
+Deno.test('capture details opt-in sends amount, merchant and only the masked last four; hidden stays generic', async () => {
   for (const details of [true, false]) {
     const fake = fakeCapture({ device: { ...linkedA, apns_token: 'tok' } });
     await withApns(ok200, async (sent) => {
@@ -480,7 +490,9 @@ Deno.test('capture details opt-in sends amount and merchant without card or SMS;
       if (details) {
         assert(alert.title.includes('250.00 EGP'));
         assert(alert.body.includes('CARREFOUR'));
-        assert(!alert.body.includes('1234'));
+        assert(alert.body.includes('••1234'));
+        assertEquals(alert.body.split('1234').length, 2, 'the suffix appears once, masked');
+        assertNoIdentifierDigits(JSON.stringify(alert));
         assert(!alert.body.includes('Purchase of'));
       } else assertEquals(alert, { body: 'New transaction captured' });
     });
@@ -824,4 +836,40 @@ Deno.test('merchantRuleKey matches the device key (AppDatabase.normalizeMerchant
   assertEquals(merchantRuleKey('  cib-el  korba br iii 12 '), 'CIB-EL KORBA BR III');
   assertEquals(merchantRuleKey('BM NOZHA AUTO BR 3'), 'BM NOZHA AUTO BR');
   assertEquals(merchantRuleKey('123'), '');
+});
+
+// ── Decision 3.12: the APNs alert says what happened to the capture ─────────
+const DECLINED = 'Purchase of EGP 250.00 at CARREFOUR with card ending 1234 was declined';
+
+Deno.test('3.12: a processed capture push is "not recorded yet" and keeps the build-147 payload keys', async () => {
+  const fake = fakeCapture({ device: { ...linkedA, apns_token: 'tok' } });
+  await withApns(ok200, async (sent) => {
+    await post(fake, v2({ payloadId: 'p', sanitizedText: RESOLVED, notificationDetails: true, locale: 'en_EG' }));
+    const alert = (sent[0].body.aps as { alert: Record<string, string> }).alert;
+    assert(alert.body.endsWith('Not recorded yet: Qirsh checks it before adding it.'), alert.body);
+    for (const key of ['payloadId', 'notificationType', 'smartInboxItemId', 'transactionId', 'source']) {
+      assert(key in sent[0].body, key);
+    }
+    assertEquals(sent[0].body.notificationType, 'new_transaction');
+  });
+});
+
+Deno.test('3.12: a declined message is pushed as "not recorded", never as a captured transaction', async () => {
+  for (const [details, locale] of [[true, 'en'], [false, 'en'], [true, 'ar'], [false, 'ar']] as const) {
+    const fake = fakeCapture({ device: { ...linkedA, apns_token: 'tok' } });
+    await withApns(ok200, async (sent) => {
+      await post(fake, v2({ payloadId: 'p', sanitizedText: DECLINED, notificationDetails: details, locale }));
+      assertEquals(sent.length, 1, `${details}/${locale}`);
+      const alert = (sent[0].body.aps as { alert: Record<string, string> }).alert;
+      const line = locale === 'ar'
+        ? 'لم تُسجَّل: تفيد الرسالة بأن العملية مرفوضة أو لم تتم.'
+        : 'Not recorded: the message says it was declined or failed.';
+      assert(alert.body.endsWith(line), `${details}/${locale}: ${alert.body}`);
+      assert(!/captured|تم رصد عملية جديدة/.test(JSON.stringify(alert)), `${details}/${locale}`);
+      const wire = JSON.stringify(alert);
+      if (details) assertNoIdentifierDigits(wire);
+      else assert(!/[0-9]/.test(wire), 'a hidden-details push carries no digits');
+      assertEquals(sent[0].body.notificationType, 'received');
+    });
+  }
 });

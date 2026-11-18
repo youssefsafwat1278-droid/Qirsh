@@ -115,7 +115,9 @@ const REVISION = "Verify approved immutable CI revision";
 const XCTEST = "iOS native unit tests (RunnerTests on a simulator)";
 const PROFILES = "Set up provisioning profiles";
 const ASSERT = "Assert production Supabase config";
-const ADMOB = "Materialise AdMob release config (native)";
+// Owner decision 3.2 (V1 has no ads): the step that wrote the AdMob xcconfig
+// was replaced by one that keeps it out of the iOS build.
+const ADMOB = "Keep AdMob out of the iOS build (V1 has no ads)";
 const BUILD = "Build signed IPA";
 const STAMP = "Resolve, stamp, and verify the EXACT signed IPA";
 const SIGNING = "Verify distribution signing and entitlements of the EXACT signed IPA";
@@ -348,4 +350,42 @@ test("ios-signed keeps its current behavior", () => {
   const resolve = step(INTERNAL, BUILD_NUMBER).text;
   assert.ok(resolve.includes('--version-string "$MARKETING_VERSION"'));
   assert.ok(resolve.includes("IOS_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))"));
+});
+
+test("3.2: neither signed iOS workflow configures AdMob", () => {
+  for (const wf of [RELEASE, INTERNAL]) {
+    const t = normalize(workflows[wf].text);
+    assert.match(step(wf, ADMOB).text, /^\s*rm -f ios\/Flutter\/AdMob\.xcconfig$/m, wf);
+    assert.ok(!t.includes("ADMOB_APP_ID_IOS"), `${wf} must not write an AdMob app id`);
+    assert.ok(!/--dart-define=(ADMOB_|QIRSH_ADS_ENABLED)/.test(t), `${wf} must not compile ads in`);
+  }
+});
+
+// Runs a workflow's production-config assertion with the given environment.
+function runAssert(wf, env) {
+  return spawnSync("bash", ["-c", step(wf, ASSERT).text], {
+    encoding: "utf8",
+    env: { PATH: process.env.PATH, ...env },
+  });
+}
+
+test("3.11: both signed iOS workflows keep Apple, Google and email-code sign-in", () => {
+  for (const wf of [RELEASE, INTERNAL]) {
+    const t = workflows[wf].text;
+    for (const v of ["QIRSH_GOOGLE_AUTH_ENABLED", "QIRSH_EMAIL_AUTH_ENABLED"]) {
+      assert.ok(t.includes(`\n        ${v}: "true"\n`), `${wf} must set ${v}: "true"`);
+    }
+    const ok = {
+      SUPABASE_URL: "https://rjwphwsefnuotpbtuycf.supabase.co",
+      SUPABASE_ANON_KEY: "placeholder",
+      QIRSH_GOOGLE_AUTH_ENABLED: "true",
+      QIRSH_EMAIL_AUTH_ENABLED: "true",
+    };
+    assert.equal(runAssert(wf, ok).status, 0, `${wf}: the full sign-in set must pass`);
+    for (const k of ["QIRSH_GOOGLE_AUTH_ENABLED", "QIRSH_EMAIL_AUTH_ENABLED"]) {
+      const { [k]: _, ...unset } = ok;
+      assert.notEqual(runAssert(wf, unset).status, 0, `${wf}: unset ${k} must fail`);
+      assert.notEqual(runAssert(wf, { ...ok, [k]: "false" }).status, 0, `${wf}: ${k}=false must fail`);
+    }
+  }
 });
