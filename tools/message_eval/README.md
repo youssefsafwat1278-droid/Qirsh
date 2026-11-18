@@ -26,34 +26,28 @@ Results land in `$MESSAGE_EVAL_SCRATCH/<sha8>/metrics.{md,json}`;
 
 ## Real model (bounded, opt-in)
 
-The configured AI path is `process-ios-sms` → Gemini. Model defaults read from
-the code: `GEMINI_SMS_MODEL` unset → `gemini-3.8-flash`
-(`process-ios-sms/parse.ts`, `parse-sms/index.ts`); AI-primary makes up to
-`MAX_AI_ATTEMPTS = 3` requests per message (`_shared/ai_primary.ts`), hybrid 1.
+Use `real_model/run_real.sh` (see `real_model/README.md`). It runs sample A
+through local-only processing and through the normal AI-enabled path with the
+configured Gemini model, and records three layers per message: the model's
+answer, the validator's/gate's decision, and what was saved.
 
 ```bash
-MESSAGE_EVAL_GEMINI_KEY=<authorized TEST key>   # never a production secret
-MESSAGE_EVAL_MAX_REQUESTS=300                   # hard cap; default 0 = no real call
-MESSAGE_EVAL_REAL_MODES=primary_real            # or primary_real,hybrid_real
-MESSAGE_EVAL_REAL_SAMPLE=0                      # 0 = as many messages as the cap allows;
-                                                # N = class-stratified sample of N
-GEMINI_SMS_MODEL=gemini-3.8-flash               # optional, to compare models
-tools/message_eval/run.sh <commit>
+MESSAGE_EVAL_SCRATCH=<scratch> MESSAGE_EVAL_MODEL_MODE=stub \
+  tools/message_eval/real_model/run_real.sh <commit>          # dry run, no provider call
+MESSAGE_EVAL_SCRATCH=<scratch> MESSAGE_EVAL_MODEL_MODE=real \
+  MESSAGE_EVAL_KEY_FILE=<env file with GEMINI_API_KEY> \
+  tools/message_eval/real_model/run_real.sh <commit>          # hard cap: 300 requests, persistent
 ```
 
-The cap is enforced in the fetch wrapper: a message is started only if its
-worst case (3 requests for AI-primary) still fits under the cap, and any
-request beyond it is refused locally. Only `generativelanguage.googleapis.com`
-is reachable (`--allow-net`), and the text sent is exactly what `parseSms`
-sends (the server's own redaction). The key is read from the environment and
-never written or printed. Output: request count, prompt/output/thinking tokens,
-latency per request, errors.
-
-Cost estimate = prompt_tokens × input price + (output + thinking tokens) ×
-output price, using the provider's current published price for the model
-(not hard-coded here: check it on the day). Rough size: the AI-primary prompt
-is ~450 tokens + the message; 750 messages × ≤3 attempts ≈ 2,250 requests
-worst case, typically ~800.
+The older opt-in mode of `deno/server_eval.ts` (`MESSAGE_EVAL_GEMINI_KEY`,
+`MESSAGE_EVAL_MAX_REQUESTS`, `MESSAGE_EVAL_REAL_SAMPLE`) still exists and was
+never run with a real key. Checked on 2026-11-18, it is weaker than
+`run_real.sh` and should not be used for a real-model report:
+- it calls `parseSms` and re-creates the handler's status rule in the harness
+  (`stored()`), instead of running `handleProcessIosSms`;
+- the key comes from the environment of the command, and the request count
+  lives in memory only (a second invocation starts again from zero);
+- it keeps totals only: no request body, no raw answer, no per-answer verdict.
 
 ## Development siblings (not held-out)
 

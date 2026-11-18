@@ -61,3 +61,8 @@ Regions:
 ## Label changes after the record
 
 None.
+
+## Use record
+
+- **2026-11-18 — sample A is SEEN.** It was run once at `a157e68e`: local-only, and the normal AI-enabled path with the real `gemini-3.8-flash` (88 requests in total, smoke run included). Report: `docs/releases/version-1/evidence/closure/round4-gemini-eval.md`. The file and its labels are unchanged (same SHA-256). From now on sample A is a known set: its numbers after any fix are regression numbers, not fresh-sample numbers.
+- **Sample B is still unopened and unrun.** It is the only fresh confirmation sample.
