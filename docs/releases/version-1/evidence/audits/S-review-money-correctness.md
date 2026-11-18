@@ -436,3 +436,156 @@ The SM-04 residual (NEW-2) does not change build 147's totals, because build 147
 - Timing on an iPhone.
 - Any deployed server.
 - The held-out set.
+
+---
+
+## Re-review at 6f771108
+
+- Reviewer: `review-money`, independent, same rules as above. Model: `claude-opus-5-5`. Date: 2026-11-18.
+- Commits run side by side in scratch git worktrees: `ab5dc10a` → `5dae2e2d` ("pre") → `7577f347` → `7dd6efa8` → `6f771108` ("fin"). Device code ran under `flutter test --no-pub`, server code under Deno. All data was synthetic. `tools/message_eval/heldout/**` was not read.
+- Claims checked: parser.md "Follow-up 4"; ai.md "Follow-up 10" and "Follow-up 11".
+
+### Verdict: ACCEPT WITH FOLLOW-UP
+
+- No S1 or S2 money defect of this round remains open on my probes.
+- On every path and every probe set, `6f771108` has fewer wrong outcomes than `5dae2e2d`.
+- No message is wrong at `6f771108` that was right at `5dae2e2d`.
+- The redaction change sends exactly one new class of token: the user's own suffix of 4 digits or fewer.
+- The open items are S3/S4, plus pre-existing privacy leaks. They are listed below.
+
+### Status of earlier findings
+
+| Finding | Status at `6f771108` |
+|---|---|
+| NEW-1 / SM-03 (reward or cashback clause → income) | **Fixed.** All 24 RW probes, the 8 P-class probes and 35 new primary-clause probes are correct or review. "Purchase SAR 20.00 …, cashback SAR 50.00 credited" is still recorded as one event (IN 20 on eB); this is pre-existing, WONE. |
+| NEW-2 / SM-04 (completed purchase dropped by a tail) | **Mostly fixed; residual S3.** Server-silent completed purchases on the original 350: 63 at `7577f347`, 30 at `7dd6efa8`, 12 now. Four shapes are still `no_movement` on the server and review on the device. They were recorded at `5dae2e2d`: «دفع فاتورة 300 ريال…، تذكير: موعد السداد القادم 1/12»; «استخدمت بطاقتك … مجموع مصروفاتك هذا الشهر 3,200 ريال»; "Your scheduled transfer of SAR 1,000.00 to Ali has been executed as per your request"; "As per your request SAR 750.00 has been transferred to Sara as scheduled". The new client sends these to review. The server push wrongly says "not recorded". Build 147 records them locally. |
+| NEW-3 (status cue in the dropped middle) | **Fixed.** Every text over 2,000 characters is `uncertain/over_length` (review). 1,999 and 2,000 characters still record; a "declined" tail at 2,000 is not recorded. One gap (S4): an Arabic or Arabic-Indic 2,001-character text that redaction shortens is recorded on the server (the correct amount), while the device sends it to review. |
+| SM-06 (footers → multiple events) | **Fixed.** "Previous salary SAR …", "Last transaction SAR …", «آخر عملية» and «الراتب السابق» now record. "Refund … Original purchase was approved on 10 Nov" now goes to review on the device (S4). |
+| SM-07 (parity) | **Mostly fixed (S4).** Over 2,193 texts (my 578 plus the table), the disposition differs in 2. LB005: the device records, the server says multiple_events (a second "Total charged" figure). UN010: the device says multiple_events, the server records. Kind or reason differs in 163. |
+
+### New probes (122, aimed at the latest fixes)
+
+- **Primary-clause abuse (35):** refund after an earlier smaller debit figure; partial refund naming the larger purchase; fee plus purchase; purchase plus larger cashback or bonus; salary with a deduction clause; Arabic credit-first word order. 0 got worse than at `5dae2e2d`; 2 improved. Remaining wrong, all the same at `5dae2e2d`: two "m" shapes recorded as one event, and «تم إيداع 50 ريال استرداد نقدي … عن عملية شراء بمبلغ 500 ريال» recorded as IN 500 on the server.
+- **Tails that must still demote (27):** a real "declined" or "pending" after an offer, "was used for" or summary tail; future "will be used"; standing order "executes tomorrow"; cheque returned; refund request. 0 recorded.
+- **Exactly 1,999 / 2,000 / 2,001 / 2,002 characters (14):** as above.
+- **Ordinary purchases and transfers (30):** 0 newly sent to review against `5dae2e2d`.
+- **Card repayment (16):**
+  - 1 of 13 ordinary credit-card payments is caught by `card_repayment` and sent to review (S3, new): «سداد فاتورة 300 ريال ببطاقتك الائتمانية 4521».
+  - 1 of 3 real repayments is still booked as spend (pre-existing): "Credit card *4521 payment SAR 2,000.00 received. Thank you".
+
+### Completed messages moved to review against `5dae2e2d` (eB path)
+
+| Set | right → review | review → right | Main reasons for the right → review moves |
+|---|---|---|---|
+| Original 350 | 6 | 18 | Card repayment ×2 (owner policy), cash deposit (policy), the four NEW-2 shapes above |
+| rm3 | 3 | 6 | over_length, the NEW-2 Arabic tail, the UN010 refund |
+| rm4 | 7 | 4 | over_length ×4 (policy), CR010, the NEW-2 Arabic tail, "Salary … SAR 500.00 GOSI deducted" |
+
+### Wrong / silent outcomes
+
+W = wrong (wrong direction, amount or currency; recorded when nothing happened; own-account counted; one of two events lost; an exception). S = completed movement silent.
+
+**Original set (350):**
+
+| Path | ab5dc10a | 5dae2e2d | 7577f347 | 7dd6efa8 | 6f771108 |
+|---|---|---|---|---|---|
+| dB | W105 S6 | W31 S5 | W71 S5 | W8 S3 | **W3 S3** |
+| dN | W67 S6 | W16 S5 | W64 S5 | W5 S3 | **W1 S3** |
+| s | W75 S4 | W14 S10 | W50 S63 | W4 S30 | **W1 S12** |
+| eB | W97 S4 | W29 S3 | W69 S5 | W7 S3 | **W2 S3** |
+| eN | W82 S4 | W21 S3 | W66 S5 | W5 S3 | **W1 S3** |
+
+**rm3 (156, last round's probes):**
+
+| Path | ab5dc10a | 5dae2e2d | 7577f347 | 7dd6efa8 | 6f771108 |
+|---|---|---|---|---|---|
+| dB | W46 S2 | W15 S0 | W13 S0 | W13 S0 | **W3 S0** |
+| s | W30 S2 | W12 S6 | W12 S11 | W13 S12 | **W3 S6** |
+| eB | W43 S2 | W17 S0 | W10 S0 | W12 S0 | **W4 S0** |
+
+**rm4 (122, this round's probes):**
+
+| Path | ab5dc10a | 5dae2e2d | 7577f347 | 7dd6efa8 | 6f771108 |
+|---|---|---|---|---|---|
+| dB | W34 S0 | W14 S0 | W9 S0 | W9 S0 | **W4 S0** |
+| s | W32 S0 | W14 S2 | W12 S6 | W12 S5 | **W6 S4** |
+| eB | W33 S0 | W12 S0 | W10 S0 | W10 S0 | **W4 S0** |
+
+Every remaining wrong outcome at `6f771108` is also wrong at `5dae2e2d`:
+- own-account transfers (E022, E023);
+- two identical purchases recorded once;
+- buy-now-pay-later adverts recorded;
+- "Spend SAR 500 … get SAR 50 credited" recorded on the server;
+- the card-repayment receipt above.
+
+The only completed messages worse than at `5dae2e2d` are the server-silent NEW-2 shapes.
+
+### Privacy: what leaves the device, `5dae2e2d` vs `6f771108`
+
+**Method.** I generated 378 synthetic messages in English and Arabic, with Western and Arabic-Indic digits. Each one carries names, third-party accounts of 6–14 digits, the user's own full account, the user's own 4-digit suffix, unspaced and spaced IBANs, phone numbers, card numbers and OTPs. For each message I compared, token by token:
+- the device output `SmsSanitizer.sanitize` with no type and with the transfer, income and payment types (this is what is sent to the server and stored);
+- the server's `redactThirdPartyNames(redactPii(·))` applied to that output (this is what reaches the model).
+
+**Newly sent at `6f771108`, masked at `5dae2e2d`.** One class: **the user's own suffix of 4 digits or fewer after «إلى حسابك»** (for example «إلى حسابك ***4005»). That is 14 of 14 such messages, on every stage. It is by design and matches the claim.
+
+**Also newly kept.** Tense and status words, amounts, dates, and «من حسابك [ACCOUNT]». These are non-personal.
+
+**Newly masked.** The user's own full 8-digit account number in 5 messages.
+
+**No new leak** of names, third-party account digits, IBANs, phone numbers, cards or OTPs.
+
+**Pre-existing leaks, the same at `5dae2e2d` and `6f771108`. S2 privacy, not this round:**
+- English names after "Standing order to …" and "To Name:" (28 of 378) reach the server and the model.
+- Third-party account numbers of 6–8 digits after "account" ("to [NAME] account 60181590", 25) reach the server and the model.
+- A spaced IBAN keeps "SA88 … 9898" (check digits and the last group).
+
+**Their frozen-HEAD diff test.** It compares against `4d54d258`, not `5dae2e2d`. My comparison against `5dae2e2d` finds the same single new class, so on these inputs the test is not hiding anything. It does not catch the pre-existing leaks above, because it only checks for digit runs that HEAD removed.
+
+### The implementers' harness (`run.sh 5dae2e2d`, `server_diff.sh b6fc0dad`)
+
+**Reproduction.** Both exit 0. The device harness reports 0 regressions, with 35 of 35 budget for moves to review. The server differential reports 0 server regressions.
+
+**Planted mutations (scratch copy):**
+
+| Mutation | `run.sh` result | `server_diff.sh` result |
+|---|---|---|
+| (1) Wrong direction: `sideCreditClause` disabled on both sides | **Caught:** exit 1, 28 path-moves on 8 messages, and over the review budget | **Caught:** exit 1, 8 regressions |
+| (2) Mass move to review: every text containing "card" made `uncertain` | **Caught:** exit 1, 519 messages over the budget of 35 (it reported 0 "regressions") | — |
+
+The harness is now honest about moves to review. One limit: the budget is a message count, so a fix and a new move to review of the same size would cancel out.
+
+### Build 147 × new server (`6f771108` vs deployed `b6fc0dad`)
+
+Build 147 client import code was run against server rows from each server. With the new server, wrong outcomes on eB fall: 81 → 71, 16 → 15, 43 → 39 and 33 → 28 across my four sets.
+
+Worse with the new server, and changing totals: 2 messages, 1 class (S3).
+- **Class:** messages the new server now holds for review are booked by build 147's own local parse.
+  - "Credit card payment of AED 2,500.00 received" (card_repayment): booked OUT 2,500. The deployed server booked it IN.
+  - K001, a purchase with an injected "salary credit of SAR 9,999": booked IN 45.
+- No reward/cashback or tail class is worse any more.
+
+### Timing at `6f771108`
+
+The over-length policy holds. Device worst case at 2,000 characters is 392 ms on a Mac; at 20,000 characters it is 100 ms or less. The server takes 42 ms or less.
+
+### Open defects (none of S1/S2 from this round)
+
+| ID | Sev | Class | Description |
+|---|---|---|---|
+| NEW-2r | S3 | REPRODUCED, regression vs `5dae2e2d` | 4 completed shapes are `no_movement` on the server: the Arabic bill-reminder tail, the Arabic month-to-date total tail, "scheduled transfer … executed as per your request", and "transferred … as scheduled". The server push is false; the device sends them to review. |
+| CR-1 | S3 | REPRODUCED, new | `card_repayment` catches «سداد فاتورة … ببطاقتك الائتمانية» (a bill paid with a credit card), so it goes to review. |
+| B147-1 | S3 | REPRODUCED | Messages the new server holds for review (card repayment, multiple events) are booked wrongly by build 147's local parse (2 of 578). |
+| PAR-1 | S4 | REPRODUCED | 2 disposition differences between device and server (LB005, UN010), against the claim of 0. |
+| LEN-1 | S4 | REPRODUCED | A 2,001-character Arabic text shortened by redaction is recorded on the server but reviewed on the device. |
+| PRIV-0 | S2 | REPRODUCED, pre-existing (`5dae2e2d`) | English beneficiary names after "Standing order to" and "To Name:", 6–8-digit third-party account numbers after "account", and spaced IBAN fragments reach the server and the model. |
+| PRE-* | S3 | Pre-existing | Own-account transfers booked as spend or income; a card-repayment receipt booked as spend; buy-now-pay-later adverts recorded; two events recorded as one. |
+
+### Not checked
+
+- Real AI calls.
+- The native share and preview paths.
+- The Smart Inbox UI.
+- Timing on an iPhone.
+- Any deployed server.
+- The held-out set.
+- The restore-confirmation and UI parts of `6f771108`.
