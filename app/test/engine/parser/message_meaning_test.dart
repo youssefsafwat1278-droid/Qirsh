@@ -55,6 +55,8 @@ void main() {
           'Offer ends soon',
       'احصل على استرداد نقدي 20% حتى 50 ريال على مشترياتك القادمة. '
           'ينتهي العرض قريبا',
+      // An advert header split off by "!" is not a footer of a movement.
+      'عرض خاص! وفر SAR 50 هذا الأسبوع فقط باستخدام بطاقة البنك',
     ]) {
       test(text, () => expect(parse(text).recorded, isFalse));
     }

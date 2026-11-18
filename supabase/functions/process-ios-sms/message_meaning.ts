@@ -95,18 +95,29 @@ const flowPattern = (words: string[]) =>
 const DEBIT_FLOW_RE = flowPattern(DEBIT_FLOW);
 const CREDIT_FLOW_RE = flowPattern(CREDIT_FLOW);
 
-export const hasDebitFlow = (text: string) => DEBIT_FLOW_RE.test(text.toLowerCase());
-export const hasCreditFlow = (text: string) => CREDIT_FLOW_RE.test(text.toLowerCase());
+export const hasDebitFlow = (text: string) => firstMoneyFlow(DEBIT_FLOW_RE, text.toLowerCase()) !== null;
+export const hasCreditFlow = (text: string) => firstMoneyFlow(CREDIT_FLOW_RE, text.toLowerCase()) !== null;
 
 /**
  * The direction of the earliest flow phrase (a longer phrase wins at the same
  * position). "Payment … received" with no payer acknowledges the user's own
  * payment: not decisive. Mirrors DirectionSignal.flowOf.
  */
+const POINTS_AFTER = /^\s*(?:(?:reward|loyalty|bonus)\s+)?(?:points|miles)(?![a-z])|^\s*(?:ال)?نقاط(?!\s*البيع)|^\s*نقطة/;
+
+/** The first flow phrase that moves money ("credited points 45" moves points). Mirrors DirectionSignal._firstMoneyFlow. */
+function firstMoneyFlow(re: RegExp, lower: string): RegExpExecArray | null {
+  const all = new RegExp(re.source, re.flags.includes('g') ? re.flags : re.flags + 'g');
+  for (const m of lower.matchAll(all)) {
+    if (!POINTS_AFTER.test(lower.slice(m.index! + m[0].length))) return m as RegExpExecArray;
+  }
+  return null;
+}
+
 export function flowOf(text: string): 'debit' | 'credit' | 'unknown' {
   const lower = text.toLowerCase();
-  const d = DEBIT_FLOW_RE.exec(lower);
-  let c = CREDIT_FLOW_RE.exec(lower);
+  const d = firstMoneyFlow(DEBIT_FLOW_RE, lower);
+  let c = firstMoneyFlow(CREDIT_FLOW_RE, lower);
   if (c && !d && c[0] === 'received') {
     const sentence = lower.split(/[\n!?؟;؛]|\.(?![0-9])/).find((x) => x.includes('received')) ?? '';
     const before = sentence.slice(0, sentence.indexOf('received'));
@@ -221,18 +232,30 @@ export function clauseScope(text: string, hasDeclinedCue: (s: string) => boolean
   // words keep deciding the message: that header line is never a footer.
   const field = pieces.map((p) => isFieldLine(text.slice(p.start, p.end)));
   const anyMovement = roles.some((r, i) => r === 'event' && !notices[i] && !field[i]);
+  // An advert or OTP sentence is set aside only next to an event sentence that
+  // names a movement in its own words (a money word, a done verb, a flow).
+  const namedMovement = pieces.some((p, i) =>
+    roles[i] === 'event' && !notices[i] && !field[i] && namesMovement(text.slice(p.start, p.end).toLowerCase())
+  );
   let core = '';
   let footerCount = 0;
   pieces.forEach((p, i) => {
     const s = text.slice(p.start, p.end);
+    const lower = s.toLowerCase();
     const header = !field[i] && beforeFieldLine(text, pieces, field, i);
     const footer = !header && (roles[i] === 'figure' || (anyMovement && notices[i]) ||
-      (roles[i] === 'text' && footerCue(s.toLowerCase(), hasDeclinedCue)));
+      (roles[i] === 'text' && footerCue(lower, hasDeclinedCue) &&
+        (namedMovement || !IGNORE_WORDS.some((w) => containsIgnoreWord(lower, w)))));
     if (footer && s.trim()) footerCount++;
     if (!footer) core += s;
     core += text.slice(p.end, p.next);
   });
   return { text, core, eventSentences, footerCount };
+}
+
+/** [lower] names a money movement in its own words. Mirrors ParserEngine._namesMovement. */
+function namesMovement(lower: string): boolean {
+  return hasMoneyWord(lower) || [...lower.matchAll(DONE_VERB)].length > 0 || hasDebitFlow(lower) || hasCreditFlow(lower);
 }
 
 /** Whether piece i sits on the line just above a field line. */

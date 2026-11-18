@@ -814,5 +814,73 @@
       "accepted": true,
       "currency": "SAR"
     }
+  },
+  {
+    "name": "Points follow-up: 'credited points' in the amount's sentence is not a credit flow",
+    "sanitized_text": "POS purchase SAR 45.00 at SHOP, credited points 45",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 45,
+      "amount_text": "45.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR"
+    }
+  },
+  {
+    "name": "Points follow-up: 'credited miles' in the amount's sentence is not a credit flow",
+    "sanitized_text": "Card purchase SAR 45.00 at SHOP - credited miles 12",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 45,
+      "amount_text": "45.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR"
+    }
+  },
+  {
+    "name": "Points follow-up: Arabic 'تمت إضافة نقاط' is not a credit flow",
+    "sanitized_text": "شراء بمبلغ 45.00 ريال لدى المتجر وتمت إضافة نقاط 12",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 45,
+      "amount_text": "45.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR"
+    }
+  },
+  {
+    "name": "Points follow-up: a real money credit still contradicts a payment",
+    "sanitized_text": "SAR 45.00 credited to your account from SHOP",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 45,
+      "amount_text": "45.00",
+      "currency": "SAR",
+      "type": "payment",
+      "direction": "debit"
+    },
+    "expected": {
+      "accepted": false,
+      "reason": "direction_contradiction"
+    }
   }
 ]

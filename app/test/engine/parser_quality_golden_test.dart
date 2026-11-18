@@ -189,6 +189,12 @@ void _expectParsedFields(ParseResult result, BankSmsGoldenFixture fixture) {
     expect(result.isTransaction, isFalse);
     return;
   }
+  if (fixture.expectedStatus == ExpectedSmsStatus.review) {
+    // Never recorded, never silent: the amount is kept for review.
+    expect(result.isTransaction, isFalse);
+    expect(result.amountDetected, isTrue);
+    return;
+  }
 
   expect(result.isTransaction, isTrue);
   final transaction = result.transaction!;
@@ -232,7 +238,10 @@ ExpectedSmsStatus _finalStatus(
   BankSmsGoldenFixture fixture,
 ) {
   if (!result.isTransaction || result.transaction == null) {
-    return ExpectedSmsStatus.ignored;
+    return result.amountDetected &&
+            fixture.expectedStatus == ExpectedSmsStatus.review
+        ? ExpectedSmsStatus.review
+        : ExpectedSmsStatus.ignored;
   }
 
   final knownMerchant = fixture.expectedMerchant;

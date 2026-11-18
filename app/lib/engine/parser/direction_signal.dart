@@ -178,9 +178,9 @@ class DirectionSignal {
       '(?<![a-z\u0621-\u064a])[وفب]?(?:${(List.of(words)..sort((a, b) => b.length - a.length)).map(RegExp.escape).join('|')})(?![a-z])');
 
   static bool hasDebitFlow(String text) =>
-      _debitFlow.hasMatch(text.toLowerCase());
+      _firstMoneyFlow(_debitFlow, text.toLowerCase()) != null;
   static bool hasCreditFlow(String text) =>
-      _creditFlow.hasMatch(text.toLowerCase());
+      _firstMoneyFlow(_creditFlow, text.toLowerCase()) != null;
 
   /// The direction of the earliest flow phrase in [text] (a longer phrase
   /// wins at the same position: "transferred to your" is incoming).
@@ -189,8 +189,8 @@ class DirectionSignal {
   /// been received") acknowledges the user's own payment: not decisive.
   static TxnDirection flowOf(String text) {
     final lower = text.toLowerCase();
-    final d = _debitFlow.firstMatch(lower);
-    var c = _creditFlow.firstMatch(lower);
+    final d = _firstMoneyFlow(_debitFlow, lower);
+    var c = _firstMoneyFlow(_creditFlow, lower);
     if (c != null && d == null && c[0] == 'received') {
       final sentence = lower.split(RegExp(r'[\n!?؟;؛]|\.(?![0-9])')).firstWhere(
           (x) => x.contains('received'),
@@ -214,6 +214,19 @@ class DirectionSignal {
     }
     return credit ? TxnDirection.credit : TxnDirection.debit;
   }
+
+  /// The first [flow] phrase in [lower] that moves money: "تم إيداع نقاط
+  /// المكافآت" / "credited points 45" move loyalty points, not money.
+  /// Mirrors `firstMoneyFlow` in `process-ios-sms/message_meaning.ts`.
+  static RegExpMatch? _firstMoneyFlow(RegExp flow, String lower) {
+    for (final m in flow.allMatches(lower)) {
+      if (!_pointsAfter.hasMatch(lower.substring(m.end))) return m;
+    }
+    return null;
+  }
+
+  static final RegExp _pointsAfter = RegExp(
+      r'^\s*(?:(?:reward|loyalty|bonus)\s+)?(?:points|miles)(?![a-z])|^\s*(?:ال)?نقاط(?!\s*البيع)|^\s*نقطة');
 
   /// The direction implied by a classified [TransactionType], or
   /// [TxnDirection.unknown] when the type is inherently ambiguous (transfer).

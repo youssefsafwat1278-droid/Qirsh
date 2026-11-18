@@ -53,3 +53,23 @@ for (const [text, amount, type, direction] of wrong) {
     assertEquals(check(text, amount, type, direction), { accepted: false, reason: 'direction_contradiction' });
   });
 }
+
+// Parser follow-up 2: a flow phrase that moves points/miles is not a money
+// flow. The validator mirrors message_meaning.flowOf (it cannot import it:
+// message_meaning imports this module); this pins the two to the same answer.
+Deno.test('directionOfFlow agrees with the parser flowOf, points included', async () => {
+  const { directionOfFlow } = await import('./ai_candidate_validator.ts');
+  const { flowOf } = await import('../process-ios-sms/message_meaning.ts');
+  for (const text of [
+    'POS purchase SAR 45.00 at SHOP, credited points 45',
+    'Credited reward points 30 for this purchase. SAR 45.00 paid at SHOP',
+    'Card purchase SAR 45.00 at SHOP - credited miles 12',
+    'شراء بمبلغ 45.00 ريال لدى المتجر وتمت إضافة نقاط 12',
+    'تمت إضافة النقاط 12 إلى رصيدك',
+    'تم خصم 45.00 ريال عبر نقاط البيع لدى المتجر',
+    'SAR 45.00 credited to your account from SHOP',
+    'SAR 500.00 deposited to beneficiary Ali from your account *1234',
+  ]) {
+    assertEquals(directionOfFlow(text), flowOf(text), text);
+  }
+});

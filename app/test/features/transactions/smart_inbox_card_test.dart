@@ -105,7 +105,9 @@ void main() {
     expectNoGrant();
     await tester.tap(find.text('Enable Smart Analysis & Cloud Sync'));
     await tester.pumpAndSettle();
-    expect(find.text('Accept cloud sync and smart analysis'), findsOneWidget);
+    // Decided change (owner decision 3.8): the affirmative action is now
+    // "Agree and enable" (was "Accept cloud sync and smart analysis").
+    expect(find.text('Agree and enable'), findsOneWidget);
     expect(find.text('Continue locally'), findsOneWidget);
     expect(
         find.textContaining('sent to Qirsh servers after card, account and '
@@ -120,7 +122,7 @@ void main() {
     Navigator.of(context).pop();
     await tester.pumpAndSettle();
     expect(find.text('Continue locally'), findsNothing);
-    expect(find.text('Accept cloud sync and smart analysis'), findsNothing);
+    expect(find.text('Agree and enable'), findsNothing);
     expect(find.text('Enable Smart Analysis & Cloud Sync'), findsOneWidget);
     expectNoGrant();
   });

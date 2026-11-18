@@ -9,6 +9,12 @@
     "supabaseAnon": [
       "SUPABASE_URL",
       "SUPABASE_ANON_KEY"
+    ],
+    "localSupabaseStack": [
+      "LOCAL_SUPABASE_URL",
+      "LOCAL_SUPABASE_ANON_KEY",
+      "LOCAL_SUPABASE_SERVICE_ROLE_KEY",
+      "LOCAL_MAILPIT_URL"
     ]
   },
   "node": {
@@ -51,6 +57,42 @@
   "resolvedKnownFailures": [],
   "deno": {
     "expectedIgnored": [
+      {
+        "nameContains": "D1 inline deletion completes",
+        "group": "localSupabaseStack",
+        "class": "live-external",
+        "finding": "V1-062",
+        "reason": "Decision 3.4 proof against a developer's isolated LOCAL Supabase stack (loopback URL, local keys, local Mailpit; never production credentials): inline deletion completes. Ignored unless all four localSupabaseStack variables are set and the URL is loopback; run commands in docs/releases/version-1/evidence/closure/data.md (local-stack gate).",
+        "removeWhen": "a local Supabase stack runs in CI (then these run and must pass)",
+        "mustRunWhenPrereq": true
+      },
+      {
+        "nameContains": "D2 an accepted deletion whose inline run never happened",
+        "group": "localSupabaseStack",
+        "class": "live-external",
+        "finding": "V1-062",
+        "reason": "Decision 3.4 proof against a developer's isolated LOCAL Supabase stack (loopback URL, local keys, local Mailpit; never production credentials): the worker finishes an accepted deletion on its own. Ignored unless all four localSupabaseStack variables are set and the URL is loopback; run commands in docs/releases/version-1/evidence/closure/data.md (local-stack gate).",
+        "removeWhen": "a local Supabase stack runs in CI (then these run and must pass)",
+        "mustRunWhenPrereq": true
+      },
+      {
+        "nameContains": "D3 a storage failure schedules a retry",
+        "group": "localSupabaseStack",
+        "class": "live-external",
+        "finding": "V1-062",
+        "reason": "Decision 3.4 proof against a developer's isolated LOCAL Supabase stack (loopback URL, local keys, local Mailpit; never production credentials): a storage failure is retried by the worker (and a claim clock-skew retry). Ignored unless all four localSupabaseStack variables are set and the URL is loopback; run commands in docs/releases/version-1/evidence/closure/data.md (local-stack gate).",
+        "removeWhen": "a local Supabase stack runs in CI (then these run and must pass)",
+        "mustRunWhenPrereq": true
+      },
+      {
+        "nameContains": "D4 a later sign-up with the same email",
+        "group": "localSupabaseStack",
+        "class": "live-external",
+        "finding": "V1-062",
+        "reason": "Decision 3.4 proof against a developer's isolated LOCAL Supabase stack (loopback URL, local keys, local Mailpit; never production credentials): a later sign-up with the same email starts empty. Ignored unless all four localSupabaseStack variables are set and the URL is loopback; run commands in docs/releases/version-1/evidence/closure/data.md (local-stack gate).",
+        "removeWhen": "a local Supabase stack runs in CI (then these run and must pass)",
+        "mustRunWhenPrereq": true
+      },
       {
         "nameContains": "claim_ai_idempotency: claimed",
         "group": "supabaseServiceRole",

@@ -1829,7 +1829,11 @@ void main() {
     expect(saved!.type, TransactionTypeEntity.transfer);
   });
 
-  test('ATM cash deposit (withdrawal-typed + إيداع wording) becomes a transfer',
+  // Round 3 closure (owner brief §5; parser meaning gate in the use case):
+  // an ATM cash deposit is not proven income or a transfer — it is held for
+  // review (Smart Inbox, reason cash_deposit), never booked from a local
+  // reading. (Was: booked as a transfer.)
+  test('ATM cash deposit (withdrawal-typed + إيداع wording) is held for review',
       () async {
     final fakeParsed = ParsedTransaction(
       amountText: '300',
@@ -1849,10 +1853,13 @@ void main() {
       loadAiConsent: () async => false,
       dedupStore: _NoDedupStore(),
     );
-    await useCase(rawMessage: 'إيداع نقدي بمبلغ 300 ريال في حسابك عبر الصراف');
+    final result = await useCase(
+        rawMessage: 'إيداع نقدي بمبلغ 300 ريال في حسابك عبر الصراف');
 
-    expect(saved, isNotNull);
-    expect(saved!.type, TransactionTypeEntity.transfer);
+    expect(saved, isNull);
+    expect(result.outcome, AddTransactionOutcome.notTransaction);
+    expect(result.droppedByParser, isTrue);
+    expect(result.reviewReason, 'cash_deposit');
   });
 
   test('outgoing external transfer counts as expense (money sent)', () async {

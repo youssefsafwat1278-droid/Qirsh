@@ -540,8 +540,11 @@ void main() {
           await _until(tester,()=>ended>0&&!SyncRunState.instance.running&&events.contains('notification'));
           await _observe(tester,container.read(sessionAdConsentProvider).ensureGathered());
           await _observe(tester,container.read(notificationJourneyServiceProvider).evaluate());
-          if(!notification){expect(umpMethods,contains('UserMessagingPlatform#loadAndShowConsentFormIfRequired'));}
-          else {expect(umpMethods,isEmpty);}
+          // Decided change (owner decision 3.2, Version 1 has no advertising):
+          // a build without QIRSH_ADS_ENABLED compiles ads out, so the mounted
+          // cycle's ad-consent gathering makes NO UMP call in any scenario
+          // (before 3.2 the non-notification scenarios expected the UMP form).
+          expect(umpMethods,isEmpty);
           expect(unknownUmpMethods,isEmpty);
           await _background(tester,()=>AppSession.instance.drainAdmissions());
           events.clear();requests.clear();measuring=true;

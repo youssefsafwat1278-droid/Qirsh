@@ -1,6 +1,8 @@
 import 'package:money_companion/engine/models/transaction_type.dart';
 
-enum ExpectedSmsStatus { autoConfirm, pending, ignored }
+/// `review`: no transaction, with the amount kept for a review row (round 3
+/// closure, owner brief §5: an ATM cash deposit is not proven income).
+enum ExpectedSmsStatus { autoConfirm, pending, ignored, review }
 
 class BankSmsGoldenFixture {
   const BankSmsGoldenFixture({
@@ -395,19 +397,17 @@ At:19/04/26 11:07''',
     expectedOccurredAt: DateTime(2026, 4, 19, 11, 7),
     expectedStatus: ExpectedSmsStatus.pending,
   ),
+  // Round 3 closure (owner brief §5): an ATM cash deposit may be the user's
+  // own cash, so it is a review row with its amount, not income. (Was:
+  // income, pending.) The id is kept for traceability.
   BankSmsGoldenFixture(
     id: 'sa_anb_atm_deposit_income',
     description:
-        'ANB ATM deposit — income type, بـ:SAR pattern, YY-MM-DD date, no merchant',
+        'ANB ATM deposit — review row (not proven income), بـ:SAR pattern',
     sender: 'anb',
     rawSms:
         'إيداع ATM\nبـ:SAR 4000.00\nالحساب:0017\nبطاقة، مدى،1922\nفي:26-06-15 10:47',
-    expectedType: TransactionType.income,
-    expectedAmount: 4000.00,
-    expectedCurrency: 'SAR',
-    expectedMerchant: null,
-    expectedOccurredAt: DateTime(2026, 6, 15, 10, 47),
-    expectedStatus: ExpectedSmsStatus.pending,
+    expectedStatus: ExpectedSmsStatus.review,
   ),
   BankSmsGoldenFixture(
     id: 'sa_anb_govt_traffic_fine',

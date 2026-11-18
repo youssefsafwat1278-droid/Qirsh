@@ -336,3 +336,81 @@ Load average 9.2 at start and 13.8 at end: `+30: All tests passed!` (`data/prepa
 flutter test --no-pub --dart-define=SUPABASE_URL=$LOCAL_SUPABASE_URL \
   --dart-define=SUPABASE_ANON_KEY=$LOCAL_SUPABASE_ANON_KEY <file>
 ```
+
+---
+
+## Follow-up 2: skip/ignore manifest for D1–D4 (gate on `7cab5e8b`)
+
+**Problem:** `tools/check_test_skips.mjs` failed with "UNEXPECTED deno ignored test" for D1–D4. These tests are ignored whenever no local stack is configured.
+
+### Changes
+
+- **`tools/test_skip_manifest.json`:**
+  - New credential group `localSupabaseStack` = `LOCAL_SUPABASE_URL`, `LOCAL_SUPABASE_ANON_KEY`, `LOCAL_SUPABASE_SERVICE_ROLE_KEY`, `LOCAL_MAILPIT_URL`. These are a loopback stack's local keys, never production credentials.
+  - Four `deno.expectedIgnored` entries, one per test (`nameContains` "D1 …" through "D4 …"), each with `group: localSupabaseStack`, `class: live-external`, `finding: V1-062`, `removeWhen: a local Supabase stack runs in CI`, and `mustRunWhenPrereq: true`.
+  - So with all four variables set, a D-test that is still ignored FAILS the gate; a partly configured stack FAILS as `PARTIAL`; and a D-test missing from the output while no stack is configured FAILS as a stale entry.
+- **`tools/check_test_skips.mjs`:** unchanged. The checker is not weakened.
+- **`supabase/tests/skip_manifest_node_test.mjs`:**
+  - The clean credential environment also blanks the four `LOCAL_*` variables.
+  - Four new tests:
+    - ignored with no stack configured → pass;
+    - stack configured but still ignored → fail ("localSupabaseStack are PRESENT");
+    - partly configured → fail (PARTIAL);
+    - D4 missing while no stack is configured → fail (stale entry).
+- **`account-deletion-worker/local_stack_integration_test.ts`:** comment only. The header pointed at a script that does not exist (`tools/local_backend_behaviour.sh`); it now points at this report. Test names are unchanged; `deno lint` and `deno fmt --check` are clean.
+
+### Verification (run the way `tools/ci_gates.sh` runs it)
+
+The environment had no `LOCAL_*` or `SUPABASE_*` variables set.
+
+- `( cd supabase/functions && deno test --allow-all )`: `1058 passed | 0 failed | 6 ignored`. The six are the two live-Postgres claims plus D1–D4.
+- `node --test --test-reporter=tap supabase/tests/*.mjs`: exit 0.
+- `node tools/check_test_skips.mjs --node <tap> --deno <deno> --flutter app/test`:
+  - **Before**, with HEAD's manifest via `SKIP_MANIFEST_PATH`: exit 1, four "UNEXPECTED deno ignored test" errors.
+  - **After:** "skip/ignore manifest satisfied", exit 0. Totals: node 89 skips, deno 6 ignored, flutter 39 skip sites.
+- `node --test supabase/tests/skip_manifest_node_test.mjs supabase/tests/ci_gates_contract_node_test.mjs`: 28 pass, 0 fail.
+- `deno.lock` is unchanged.
+
+### `tools/backend_behaviour.sh`: not changed
+
+It is not a small addition:
+- the script requires `BACKEND_PG_HOST` at the top;
+- it refuses any cluster that is not dedicated to it, by design, because it drops and re-creates a cluster-wide role;
+- it explicitly says never to point it at a Supabase dev stack.
+
+A local-stack stage would need its own entry point and its own safety checks. That is `ops`' decision, so the commands are documented here instead.
+
+### Local-stack gate: exact commands
+
+All paths are relative to the worktree root.
+
+```bash
+S=<scratch>/stack                     # scratch COPY of supabase/ (config.toml, migrations, functions, templates)
+# config.toml in the copy: project_id = "qirsh_v1_closure"; api 57321, db 57322, shadow 57330,
+# pooler 57329, studio 57323, inbucket 57324, analytics 57327 (enabled = false), inspector 57328
+supabase start --workdir "$S" -x studio,vector,logflare,imgproxy,postgres-meta,realtime
+# write $S/stack.env (mode 600) from `supabase status --workdir "$S" -o env`:
+#   LOCAL_SUPABASE_URL=API_URL  LOCAL_SUPABASE_ANON_KEY=ANON_KEY
+#   LOCAL_SUPABASE_SERVICE_ROLE_KEY=SERVICE_ROLE_KEY  LOCAL_MAILPIT_URL=MAILPIT_URL
+#   (LOCAL_SUPABASE_DB_URL=DB_URL, LOCAL_SUPABASE_JWT_SECRET=JWT_SECRET)
+source "$S/stack.env"
+
+# D1-D4 (decision 3.4): must report "4 passed", never "ignored"
+( cd supabase/functions && deno test -A account-deletion-worker/local_stack_integration_test.ts )
+
+# R1-R9b (decision 3.3, restore = merge; account switch R7/R8): must report "+10: All tests passed!"
+( cd app && PUB_CACHE=$HOME/.pub-cache flutter test --no-pub --timeout 300s \
+    --dart-define=SUPABASE_URL=$LOCAL_SUPABASE_URL \
+    --dart-define=SUPABASE_ANON_KEY=$LOCAL_SUPABASE_ANON_KEY \
+    test/integration_local/restore_then_sync_local_supabase_test.dart )
+
+# Optional: the sync e2e suite (10 pass / 6 known failures, see Follow-up 1)
+( cd app && PUB_CACHE=$HOME/.pub-cache flutter test --no-pub --timeout 300s \
+    --dart-define=SUPABASE_URL=$LOCAL_SUPABASE_URL \
+    --dart-define=SUPABASE_ANON_KEY=$LOCAL_SUPABASE_ANON_KEY \
+    test/integration_local/sync_e2e_local_supabase_test.dart )
+
+supabase stop --workdir "$S" --no-backup   # removes the stack and its volumes
+```
+
+**If those commands run inside `ci_gates.sh` with the stack env sourced:** the `localSupabaseStack` group is present, so the skip checker requires D1–D4 to run. The Flutter suite asserts `SupabaseConfig.isConfigured`, so a run without the dart-defines fails instead of silently skipping the backfill.

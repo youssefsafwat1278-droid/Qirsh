@@ -3,6 +3,7 @@
 // Synthetic messages only. Deterministic parse with AI off.
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { deterministicParse, isResolved, messageMeaning, parseSms } from './parse.ts';
+import { flowOf } from './message_meaning.ts';
 
 const RECEIVED = '2026-11-17T10:00:00.000Z';
 const parse = (text: string) => deterministicParse(text, RECEIVED, 180);
@@ -39,6 +40,8 @@ Deno.test('clear notices and future or pending clauses are never accepted', asyn
     'سيتم خصم رسوم سنوية 250 ريال في 1 ديسمبر',
     'Get 20% cashback up to SAR 50.00 on your next purchase with your card. Offer ends soon',
     'احصل على استرداد نقدي 20% حتى 50 ريال على مشترياتك القادمة. ينتهي العرض قريبا',
+    // An advert header split off by "!" is not a footer of a movement.
+    'عرض خاص! وفر SAR 50 هذا الأسبوع فقط باستخدام بطاقة البنك',
   ]) {
     assertEquals(isResolved(parse(text)), false, text);
     assertEquals((await outcome(text)).accepted, false, text);
@@ -57,6 +60,11 @@ Deno.test('direction comes from the clause, not from nouns', () => {
     assert(isResolved(p), text);
     assertEquals([p.direction, p.type], ['debit', 'payment'], text);
   }
+});
+
+Deno.test('a flow phrase that moves loyalty points is not a money direction', () => {
+  assertEquals(flowOf('شراء عبر بطاقة، تم إيداع نقاط المكافآت'), 'unknown');
+  assertEquals(flowOf('SAR 100 credited to your account'), 'credit');
 });
 
 Deno.test('loyalty points are not money; the merchant ends at its sentence', () => {

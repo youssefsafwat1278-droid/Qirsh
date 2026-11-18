@@ -7,8 +7,8 @@
 //
 // SKIPPED unless LOCAL_SUPABASE_URL points at loopback and
 // LOCAL_SUPABASE_SERVICE_ROLE_KEY, LOCAL_SUPABASE_ANON_KEY and LOCAL_MAILPIT_URL
-// are set (see tools/local_backend_behaviour.sh). Synthetic accounts only; every
-// account it creates is deleted by the scenario itself.
+// are set (local-stack gate: docs/releases/version-1/evidence/closure/data.md).
+// Synthetic accounts only; every account it creates is deleted by the scenario.
 import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { buildAccountDeletionCoordinator } from '../_shared/account_deletion_adapter.ts';

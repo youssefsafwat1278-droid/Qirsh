@@ -34,6 +34,10 @@ function runChecker({ tap, deno, env = {} }) {
       SUPABASE_URL: "",
       SUPABASE_ANON_KEY: "",
       SUPABASE_SERVICE_ROLE_KEY: "",
+      LOCAL_SUPABASE_URL: "",
+      LOCAL_SUPABASE_ANON_KEY: "",
+      LOCAL_SUPABASE_SERVICE_ROLE_KEY: "",
+      LOCAL_MAILPIT_URL: "",
       ...env,
     },
   });
@@ -83,6 +87,47 @@ test("credentials PRESENT but the test still skipped → fail (must run)", () =>
   });
   assert.equal(r.status, 1);
   assert.match(r.stderr, /credentials \(supabaseServiceRole\) are PRESENT/);
+});
+
+// Deno output in which every committed deno ignore entry is ignored (the live
+// Postgres claims and the decision 3.4 local-stack deletion proofs D1-D4).
+const validDeno = [
+  "claim_ai_idempotency: claimed ... ignored (0ms)",
+  "concurrent claims resolve to exactly one claimed ... ignored (0ms)",
+  "D1 inline deletion completes: account data, cloud backups and profile photo are gone ... ignored (0ms)",
+  "D2 an accepted deletion whose inline run never happened is finished by the worker alone ... ignored (0ms)",
+  "D3 a storage failure schedules a retry; the worker resumes and finishes, claim clock-skew retried ... ignored (0ms)",
+  "D4 a later sign-up with the same email is a new, empty account ... ignored (0ms)",
+].join("\n");
+
+const localStack = {
+  LOCAL_SUPABASE_URL: "http://127.0.0.1:1",
+  LOCAL_SUPABASE_ANON_KEY: "a",
+  LOCAL_SUPABASE_SERVICE_ROLE_KEY: "s",
+  LOCAL_MAILPIT_URL: "http://127.0.0.1:2",
+};
+
+test("local-stack deletion proofs ignored with NO local stack configured → pass", () => {
+  const r = runChecker({ deno: validDeno });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+});
+
+test("local stack configured but a deletion proof still ignored → fail (must run)", () => {
+  const r = runChecker({ deno: validDeno, env: localStack });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /credentials \(localSupabaseStack\) are PRESENT/);
+});
+
+test("a partly configured local stack fails (not a silent ignore)", () => {
+  const r = runChecker({ deno: validDeno, env: { LOCAL_SUPABASE_URL: "http://127.0.0.1:1" } });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /'localSupabaseStack' is PARTIAL/);
+});
+
+test("a deletion proof missing from deno output while no stack is configured → fail (stale entry)", () => {
+  const r = runChecker({ deno: validDeno.split("\n").filter((l) => !l.startsWith("D4")).join("\n") });
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /expected deno ignore matched NOTHING: "D4/);
 });
 
 // A crafted manifest (via SKIP_MANIFEST_PATH) exercises the resolved-known-failure

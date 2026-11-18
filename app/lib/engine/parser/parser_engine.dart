@@ -329,16 +329,28 @@ class ParserEngine {
       for (var i = 0; i < pieces.length; i++)
         roles[i] == _Role.event && !notices[i] && !field[i]
     ].any((x) => x);
+    // An advert or OTP sentence is set aside only next to an event sentence
+    // that names a movement in its own words (a money word, a done verb, a
+    // flow): "عرض خاص! وفر SAR 50 …" stays one advert.
+    final namedMovement = [
+      for (var i = 0; i < pieces.length; i++)
+        if (roles[i] == _Role.event && !notices[i] && !field[i])
+          _namesMovement(
+              text.substring(pieces[i].start, pieces[i].end).toLowerCase())
+    ].any((x) => x);
     final core = StringBuffer();
     var footers = 0;
     for (var i = 0; i < pieces.length; i++) {
       final p = pieces[i];
       final s = text.substring(p.start, p.end);
+      final lower = s.toLowerCase();
       final header = !field[i] && _beforeFieldLine(text, pieces, field, i);
       final footer = !header &&
           (roles[i] == _Role.figure ||
               (anyMovement && notices[i]) ||
-              (roles[i] == _Role.text && _footerCue(s.toLowerCase())));
+              (roles[i] == _Role.text &&
+                  _footerCue(lower) &&
+                  (namedMovement || !hasIgnoreWord(lower))));
       if (footer && s.trim().isNotEmpty) footers++;
       if (!footer) core.write(s);
       core.write(text.substring(p.end, p.next));
@@ -349,6 +361,13 @@ class ParserEngine {
         eventSentences: events,
         footerCount: footers);
   }
+
+  /// [lower] names a money movement in its own words.
+  static bool _namesMovement(String lower) =>
+      hasMoneyWord(lower) ||
+      _doneVerb.hasMatch(lower) ||
+      DirectionSignal.hasDebitFlow(lower) ||
+      DirectionSignal.hasCreditFlow(lower);
 
   /// The message's meaning ([MessageMeaning]): decided on [clauseScope]
   /// before any amount is trusted. Mirrors `meaningOf` in

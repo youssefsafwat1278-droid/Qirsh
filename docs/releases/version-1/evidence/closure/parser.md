@@ -239,3 +239,30 @@ Requested by the orchestrator. Model: `claude-opus-5-5`. Synthetic messages only
   - **No newly wrong and no newly silent completed message on any leg.** The categories present are only fixed, ok→review, review→ok, silent→ok/review, and notice moves.
   - ok→review is the same set as v6: cash deposits, two-movement messages, Q057, Q134.
   - Notice REV→SIL: on the server 35 notices are now rejected with no AI (their truth is "not a movement"). On the device end-to-end legs Q11, a "Special offer" advert, is now dropped by the advert filter together with Q15 and Q16, as designed for promotions.
+
+## Follow-up 2 (strict gate on `7cab5e8b`: four failures in `app/test/engine`)
+
+Nothing committed. All four were caused by parser changes in this round. Verdict per test:
+
+| Test | Verdict | What changed |
+|---|---|---|
+| (a) `direction_signal_test.dart` "both families present → unknown (not decisive)" | **Regression, fixed in code** | A reward line such as "credited to your … points" counted as a credit flow, so a debit with a points footer read as "both families". `_firstMoneyFlow` (Dart `direction_signal.dart`, TS `message_meaning.ts`) now skips a flow phrase that is followed by points / miles / نقاط / نقطة. It does not skip نقاط البيع (point of sale). `hasDebitFlow`, `hasCreditFlow` and `flowOf` all use it. The `detect` meaning is otherwise unchanged. |
+| (b) `parser_quality_golden_test.dart` "sa_anb_atm_deposit_income" | **Decided change (owner brief §5: an ATM cash deposit is not proven income → review)** | The fixture is now `ExpectedSmsStatus.review` (new enum value). The golden test checks a review row: not a transaction, amount detected. This is the same decision as round9 PR-01 in the main report. |
+| (c) `parser_quality_golden_test.dart` negative corpus "promo_with_currency is ignored" | **Regression, fixed in code** | An advert sentence with an ignore word sat next to an event sentence that names no movement, and it was treated as a footer and removed. The core then looked like a transaction. Now an ignore-word text sentence counts as a footer only when an event sentence names a movement (`_namesMovement`, mirrored as `namesMovement` in TS). **The negative corpus is unchanged.** |
+| (d) `ai_cascade_test.dart` "ATM cash deposit (withdrawal-typed + إيداع wording) becomes a transfer" | **Decided change (owner brief §5, and the ai meaning gate)** | The test is renamed "… is held for review". It expects nothing saved, outcome notTransaction, droppedByParser true and reviewReason `cash_deposit`. |
+
+How the "before" was confirmed: (a), (b), (c) and (d) failed on the gate run at `7cab5e8b`. The new Deno test "flowOf skips points/miles" in `message_meaning_test.ts` fails against the `7cab5e8b` copy of `supabase/functions` and passes now. The Arabic promo case in `message_meaning_test.dart`/`.ts` ("عرض خاص! وفر SAR 50 …") pins (c) on both sides.
+
+Who calls `DirectionSignal.detect`, all checked:
+- `features/common/transaction_direction.dart` (transfer display)
+- `add_transaction_usecase._directionFromText`
+- `ai_candidate_validator.bookedDirection`
+
+None of them depended on points text counting as a flow. One note for the ai owner: the TS AI validator has its own copy of the flow list, and that copy does not yet skip points. It is outside my files and I did not edit it.
+
+Results after the change:
+- **Gate.** `flutter test --no-pub -j 2 test/engine/` plus every test outside it that imports `engine/parser` (36 files): **4,399 passed, 1 "failure".** The one failure is `test/domain/local_v2_support.dart`. It is a helper library with no `main` that my import grep picked up, so it fails to load as a test. It is not a real test failure. All four target tests pass.
+- `flutter analyze --no-pub lib/engine/parser test/engine`: clean.
+- Deno (`_shared/ process-ios-sms/ parse-sms/ sync-captures/`): **823 passed**. Lint clean. `deno.lock` unchanged.
+- Both declined tables: no pin changes (698 deviations, ceiling 700).
+- **Harness v8** (development, tuned-on, synthetic): the same as v7 on every leg (wrong dB 5, dN 5, s 12, eB 10, eN 10). No message became newly wrong or newly silent.

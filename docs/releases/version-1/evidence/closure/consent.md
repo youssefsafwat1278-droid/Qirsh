@@ -208,3 +208,23 @@ Adding about 100 codes would be a parser change, not a consent change. **Validat
   - Settings: Norway asks and saves the choice; dismissing saves nothing; Kuwait saves KWD.
 - Changed expectation (decided): `country_catalog_test` now expects `defaultCurrencyFor('AQ')` to be null (it was USD).
 - Run: `test/core/i18n test/features/onboarding settings_screen_test language_selector_test test/l10n` gave 223 passed. `flutter analyze --no-pub` on the touched files gave no issues. `gen-l10n` ran.
+
+## Follow-up: strict-gate failures on `7cab5e8b`
+
+1. **`app/test/features/transactions/smart_inbox_card_test.dart`** ("Enable opens disclosed choices without granting consent, and dismissal changes nothing").
+   - Cause: my consent change. The test looked for the old affirmative label "Accept cloud sync and smart analysis". Owner decision **3.8** renamed it to "Agree and enable".
+   - Not a regression: the sheet opens, nothing is granted, and dismissal changes nothing. The 90% height cap and the shared-learning prompt played no part.
+   - Change: the label in its two `find.text` checks (present while open, absent after dismissal) is now "Agree and enable". Every other assertion is unchanged.
+2. **`app/test/features/app/smart_inbox_status_cycle_test.dart`** (the 11 "actual mounted status/engagement …" cases, synthetic-define stage).
+   - Cause: `ios`'s ads gating (decision **3.2**, Version 1 has no advertising), not my work and not `a11y`'s.
+   - In `640562f6`, `UmpAdConsentService.canRequestAds()` returns false and makes no UMP call unless the build sets `QIRSH_ADS_ENABLED` (`AdMobBuildConfig.adsCompiledIn`). The test still expected `UserMessagingPlatform#loadAndShowConsentFormIfRequired` in the non-notification scenarios.
+   - Not a regression: no UMP call is the decided Version 1 behaviour.
+   - Change: one line. The expectation is now `expect(umpMethods, isEmpty)` in every scenario, with a comment citing 3.2. The `unknownUmpMethods` check and all sync assertions are unchanged.
+   - Pipeline coverage with ads enabled stays in `ios`'s ad tests, which use `debugAdsCompiledInOverride`.
+
+No product code was changed for either failure.
+
+**Runs** (from `app/`, `PUB_CACHE=$HOME/.pub-cache`):
+- `flutter test --no-pub -j 2 test/features/app test/features/transactions test/features/consent test/features/onboarding`: **559 passed, 1 skipped, 0 failed**.
+- Synthetic-define stage, run exactly as in `tools/ci_gates.sh`: the 5 files with the three defines and `--concurrency=1` gave **91 passed, 12 skipped, 0 failed**. The group command (`bootstrap_remove_data_integration_test.dart --plain-name 'configured real sender bootstrap receivers'`) gave **0 failed, 10 skipped**, the same as the existing gate; I did not touch it.
+- `flutter analyze --no-pub` on both test files: no issues.

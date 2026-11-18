@@ -148,10 +148,23 @@ const flowPattern = (words: string[]) =>
 const DEBIT_FLOW_RE = flowPattern(MEANING.debitFlow);
 const CREDIT_FLOW_RE = flowPattern(MEANING.creditFlow);
 
+// A flow phrase followed by points/miles moves rewards, not money ("credited
+// points 45"); نقاط البيع (point of sale) is not skipped. Same rule as
+// message_meaning.firstMoneyFlow / DirectionSignal._firstMoneyFlow (parser
+// follow-up 2); ai_direction_flow_test.ts checks directionOfFlow === flowOf.
+const POINTS_AFTER = /^\s*(?:(?:reward|loyalty|bonus)\s+)?(?:points|miles)(?![a-z])|^\s*(?:ال)?نقاط(?!\s*البيع)|^\s*نقطة/;
+
+function firstMoneyFlow(re: RegExp, lower: string): RegExpExecArray | null {
+  for (const m of lower.matchAll(new RegExp(re.source, re.flags + 'g'))) {
+    if (!POINTS_AFTER.test(lower.slice(m.index! + m[0].length))) return m as RegExpExecArray;
+  }
+  return null;
+}
+
 export function directionOfFlow(text: string): WordDirection {
   const lower = text.toLowerCase();
-  const d = DEBIT_FLOW_RE.exec(lower);
-  let c = CREDIT_FLOW_RE.exec(lower);
+  const d = firstMoneyFlow(DEBIT_FLOW_RE, lower);
+  let c = firstMoneyFlow(CREDIT_FLOW_RE, lower);
   if (c && !d && c[0] === 'received') {
     const sentence = lower.split(/[\n!?؟;؛]|\.(?![0-9])/).find((x) => x.includes('received')) ?? '';
     const before = sentence.slice(0, sentence.indexOf('received'));
@@ -177,8 +190,8 @@ const CREDIT_VERB_FLOW_RE = flowPattern(MEANING.creditFlow.filter((w) => w !== '
  */
 export function directionOfWording(text: string, clause: string = text): WordDirection {
   const flow = directionOfFlow(clause);
-  const bareDestination = flow === 'credit' && !DEBIT_FLOW_RE.test(clause.toLowerCase()) &&
-    !CREDIT_VERB_FLOW_RE.test(clause.toLowerCase());
+  const bareDestination = flow === 'credit' && !firstMoneyFlow(DEBIT_FLOW_RE, clause.toLowerCase()) &&
+    !firstMoneyFlow(CREDIT_VERB_FLOW_RE, clause.toLowerCase());
   if (flow !== 'unknown' && !bareDestination) return flow;
   const lower = text.toLowerCase();
   const hasCredit = CREDIT_WORDS.some((w) => lower.includes(w));
