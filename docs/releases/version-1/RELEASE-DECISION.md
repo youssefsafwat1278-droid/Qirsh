@@ -14,7 +14,7 @@ Candidate: **`a157e68e`** on the local branch `release-readiness/v1` ([RELEASE-M
 | Android | Outside V1 by owner decision 3.1 — not assessed for this release |
 | iPad | Outside V1 by owner decision 3.1 (the app is iPhone only; on an iPad it would run in compatibility mode, untested) |
 
-**Separately: ready for the owner to authorize the next steps** — a push to a `release/*` branch so Codemagic can build and sign `a157e68e`, a physical-iPhone test run of that build, and the production package in [RELEASE-PLAN.md](RELEASE-PLAN.md) (after its pre-flight items). Reasons: the strict gate passes at the candidate (15/15, local); the money-correctness review accepts it with follow-up and no open S1; no evaluation path got worse than build 147 in any class that changes totals; the deploy set is derived and unchanged at `a157e68e`; and the remaining blockers can only be cleared by those steps or by the owner. This is not a release decision: nothing reaches users until a later owner decision (G9).
+**Separately: ready for the owner to authorize the next steps** — a push to a `release/*` branch so Codemagic can build and sign `a157e68e`, a physical-iPhone test run of that build, and the production package in [RELEASE-PLAN.md](RELEASE-PLAN.md) (after its pre-flight items). Reasons: the strict gate passes at the candidate (15/15, local); the money-correctness review (S) and the platform review (T) both accept it with follow-up and no open S1; no evaluation path got worse than build 147 in any class that changes totals; the deploy set is derived and unchanged at `a157e68e`; and the remaining blockers can only be cleared by those steps or by the owner. This is not a release decision: nothing reaches users until a later owner decision (G9).
 
 ## Why NOT READY (decision rule applied)
 
@@ -31,7 +31,7 @@ Candidate: **`a157e68e`** on the local branch `release-readiness/v1` ([RELEASE-M
 | G5 Device verification | **not met** | n/a | Nothing has run on an iPhone |
 | G6 Store and policy | **not met** | — | App privacy answers and export compliance not entered; live legal site still shows the old policy; reviewer notes not submitted |
 | G7 Backend ready | — | **not met** | Plan written as one package and the set re-derived at `a157e68e`; but the production comparison and backend stage were measured at `f4dcabd3` and must be re-run in P0; no recovery exists today (PITR off, no backups; owner `pg_dump` proposed, not run); no alerting |
-| G8 Independent review | **partly** | **partly** | S: ACCEPT WITH FOLLOW-UP at `a157e68e` (PRIV-1r open). T last reviewed `7dd6efa8`; platform changes after it (restore confirmation copy, consent text, Swift redaction, plan regeneration) were not reviewed by T |
+| G8 Independent review | **partly** | **partly** | Both reviewers checked `a157e68e`. S: ACCEPT WITH FOLLOW-UP (PRIV-1r open). T: ACCEPT for the `textLength` rule and StackedChoices; ACCEPT WITH FOLLOW-UP for restore, consent wording and redaction, RELEASE-PLAN and records. Not met in full because supported findings are still open: PRIV-1r with SP-16 (S2), SP-19 (owner acceptance), SP-17, SP-18 |
 | G9 Owner decision | **not met** | **not met** | — |
 
 ## What changed since the round-2 decision (`5dae2e2d`)
@@ -57,11 +57,13 @@ Candidate: **`a157e68e`** on the local branch `release-readiness/v1` ([RELEASE-M
 | 1 | A signed build of `a157e68e` from the release workflow, inspected (G4) | V1-009, V1-055, V1-016 | Owner authorizes the push and the Codemagic build; confirms the sign-in variables |
 | 2 | iPhone device run of MANUAL-DEVICE-TESTS (including MDT-IOS-R3-01 … -16) and a period of real use with real bank messages (G5) | V1-001, V1-005, V1-007, V1-014, V1-020, V1-072, V1-078, V1-065, V1-034 … V1-038 | Owner or a tester with an iPhone |
 | 3 | Production package executed and observed (G7) | V1-062, V1-063, V1-022, V1-001 server side, V1-087 | Owner: `pg_dump`, approve package, run P0–P5 (or have it run) |
-| 4 | Name leak PRIV-1r (S2): fix it, or sign an exception | V1-091 | Engineering fix round with review S, or the owner |
+| 4 | Name leak PRIV-1r (S2), broader than first recorded (SP-16: labelled names never masked; third-party short suffixes kept): fix it, or sign an exception | V1-091, V1-107 | Engineering fix round with reviews S and T, or the owner |
 | 5 | Every other open S2 fixed or excepted (G3) — most clear with items 1–3; still needing work or a decision: real AI model never run (V1-074), no CI for backend behaviour and native tests (V1-012, V1-013), no recovery (V1-023), no alerting (V1-024), export compliance (V1-026) | ISSUES.md S2 list | Owner (key and budget, decisions), engineering |
 | 6 | Store items (G6): App privacy answers, export compliance and France, reviewer notes with the build, legal site redeploy, one support address | V1-003, V1-026, V1-015 | Owner, with counsel for export |
-| 7 | A narrow re-review by T of the platform changes after `7dd6efa8` (G8) | SP-11 … SP-15 | Engineering (can run now, no owner access needed) |
+| 7 | Restore: backup-only rules are not added on a merge, which departs from decision 3.3 ("restore missing records") — accept or reject (SP-19) | V1-110, DECISIONS-NEEDED C10 | Owner |
 | 8 | Owner's release decision (G9) | — | Owner |
+
+The former blocker "narrow re-review by T of the platform changes after `7dd6efa8`" is cleared: T checked them at `a157e68e`; its findings are items 4 and 7 above and the S4 items V1-108, V1-109.
 
 ## Owner actions and access — one list
 
@@ -75,6 +77,7 @@ Candidate: **`a157e68e`** on the local branch `release-readiness/v1` ([RELEASE-M
 8. After release: redeploy the legal site with the new policy; choose one support address.
 9. Name who watches the monitoring queries in RELEASE-PLAN (g) during the observation window.
 10. Allow a read-only look, in P0, at the one production account with 540 failed iOS notifications (error 2003) and 2 captures stuck in `processing`.
+11. Accept or reject that a merge restore does not add category rules found only in the backup (SP-19, DECISIONS-NEEDED C10). It departs from your decision 3.3 "restore missing records"; the alternative is a device schema change (rule tombstone).
 
 ## Production package (summary of RELEASE-PLAN; nothing executed)
 
@@ -89,7 +92,7 @@ One package, approved or edited as a whole, from `a157e68e`:
 
 ## Evidence
 
-[ISSUES.md](ISSUES.md) (status table) · [REVIEW-CLOSURE.md](REVIEW-CLOSURE.md) (127 findings: 43 closed, 51 partly, 27 open, 6 superseded) · [TEST-EVIDENCE.md](TEST-EVIDENCE.md) §7 · [`evidence/audits/S-review-money-correctness.md`](evidence/audits/S-review-money-correctness.md) · [`evidence/audits/T-review-platform-and-records.md`](evidence/audits/T-review-platform-and-records.md) · [`evidence/closure/`](evidence/closure/) · [RELEASE-PLAN.md](RELEASE-PLAN.md) · [`evidence/logs/gate-round3-run4.summary.txt`](evidence/logs/gate-round3-run4.summary.txt) · [MANUAL-DEVICE-TESTS.md](MANUAL-DEVICE-TESTS.md).
+[ISSUES.md](ISSUES.md) (status table) · [REVIEW-CLOSURE.md](REVIEW-CLOSURE.md) (131 findings: 48 closed, 47 partly, 30 open, 6 superseded) · [TEST-EVIDENCE.md](TEST-EVIDENCE.md) §7 · [`evidence/audits/S-review-money-correctness.md`](evidence/audits/S-review-money-correctness.md) · [`evidence/audits/T-review-platform-and-records.md`](evidence/audits/T-review-platform-and-records.md) · [`evidence/closure/`](evidence/closure/) · [RELEASE-PLAN.md](RELEASE-PLAN.md) · [`evidence/logs/gate-round3-run4.summary.txt`](evidence/logs/gate-round3-run4.summary.txt) · [MANUAL-DEVICE-TESTS.md](MANUAL-DEVICE-TESTS.md).
 
 ## Not performed
 

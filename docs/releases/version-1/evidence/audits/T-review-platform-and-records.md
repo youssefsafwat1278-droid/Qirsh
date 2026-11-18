@@ -140,3 +140,55 @@ Reviewer `review-platform`, model `claude-opus-5-5`, 2026-11-18. Read-only on th
 ### Not checked in this re-review
 
 Native/simulator runs; `merchant-category-contribution` redaction correctness itself (parser/privacy reviewer's area); whether 147's planning currency repair rewrites the server row; the legal text; `tools/prod_compare.sh` (needs production); the whole backup suite (implementer reports `+316`; I ran the restore subset). The working tree has an unrelated uncommitted change to `tools/message_eval/run.sh` that is not mine.
+
+---
+
+## Check at a157e68e
+
+Reviewer `review-platform`, model `claude-opus-5-5`, 2026-11-18. Narrow check of the platform changes after `7dd6efa8` and of the round-3 records at `0cc062af`. Read-only on the repository (this section is the only write). No local Supabase stack was used. Runs were made on a `git archive a157e68e` copy and on scratch scripts that import the repository's own sanitizers, all removed afterwards.
+
+### Runs
+
+| Run | Result |
+|---|---|
+| `stacked_choices_test`, `restore_confirmation_path_test`, `restore_confirmation_gate_test`, `restore_confirmation_cancel_surface_test`, `sms_sanitizer_test` (archive copy) | `+49: All tests passed!` |
+| 20 synthetic messages through device `SmsSanitizer.sanitize`, server `redactThirdPartyNames(redactPii(…))` and the Swift `sanitize` (extracted verbatim from `BankMessageShortcuts.swift` lines 987–1210, run with `swift`) | All three give **identical output** on every line |
+| `bash tools/deploy_set.sh b6fc0dad a157e68e` | 8 CHANGED, the same names RELEASE-PLAN records; `f4dcabd3..a157e68e` changes only 5 functions already in the set |
+| ISSUES totals, COVERAGE-MATRIX status column and DECISIONS-NEEDED counts, recounted by script | All add up: 90 + 16 rows; S1 13, S2 32, S3 54, S4 7; matrix 7 / 44 / 50 / 1 = 102; 34 earlier questions = 21 + 7 + 6 |
+
+### Findings
+
+1. **Restore confirmation (SP-12):** fixed. `restoreWillMerge` is the same function the restore itself calls. The prompt shows only the case that applies, and the merge text says a deleted transaction is not brought back and backup-only rules are not added. EN and AR are both tested. It still does not tell the user how to recover those rules: clear the device, then do a full restore.
+2. **StackedChoices test (SP-13):** fixed. The committed test asserts the button role, the label, the selected state, the tap and a height of at least 44.
+3. **Deploy set (SP-11) and P0 archive (SP-14):** fixed.
+   - Each of the seven functions has a rollback commit verified as identical to what is deployed.
+   - P0 archives the deployed bundles and has explicit stop conditions.
+4. **Stale text (SP-15):** fixed in substance.
+5. **`textLength` over-length rule:** consistent end to end, by reading the code.
+   - Swift (trimmed UTF-16 count, queued as `Payload.textLength`) → Dart replay (`message.textLength ?? message.text.length`) → server (used only when it is a non-negative integer; it can only move a capture to review).
+   - Build 147 sends no `textLength`. The server then skips the rule, so there is no change for 147.
+   - Nit: the Dart fallback measures untrimmed text, Swift measures trimmed text.
+
+| ID | Sev | Class | Finding |
+|---|---|---|---|
+| SP-16 | S3 | REPRODUCED | **PRIV-1r understates the leak.** Device, server and Swift (identical results) also leave these names unmasked: "Payment of SAR 99 to Omar Farooq via Mada", "Bill payment SAR 150 to account of Mohammed Abdullah", and "(Noura)" after an account suffix. They also leave a third party's ≤4-digit account suffix in place ("transferred to beneficiary account ****9876"). The «إلى حساب <name>» cue under `detectedType: payment` is confirmed (device). **Wording:** the consent text, the Settings text and policy §8 now claim only "what it recognises/detects … can miss some", and §8 limits the name cues to transfers and credits, so they are not false. They are still weaker than the facts: labelled names ("Name:", "Attn", "Customer") are missed systematically, not occasionally. Policy §8 and KNOWN-LIMITATIONS 1.3 say the digits that stay are "your own", but the code keeps any ≤4-digit suffix, and the consent bullet mentions only cards. Recommended: list the known unmasked cues in KNOWN-LIMITATIONS / V1-091, and change "your own card or account" to "a card or account" |
+| SP-17 | S4 | SUSPECTED | `hasCategoryForMerchant` (`drift_merchant_category_repository.dart:26`) does not filter out deleted categories, unlike the other two rule lookups. A merchant whose only rule points to a deleted category is therefore not treated as new (`add_transaction_usecase.dart:1093`), so the user is not asked to categorise it |
+| SP-18 | S4 | CODE-SUPPORTED | RELEASE-PLAN (c) still labels the build-147 measurement "AT `f4dcabd3`" and cites eval §12. The measurement at `a157e68e` is eval §13 (also 0 worse). The `merchant-category-contribution` "seven synthetic keys" check was made before `sms_redaction.ts` changed again. In the P0 loop, `break` on a failed download still runs `tar` and `prod_compare` (the stop list covers it, but the operator must notice) |
+| SP-19 | S4 | CODE-SUPPORTED | DECISIONS-NEEDED A/D presents "backup-only rules are not added" as a limit and an engineering choice. Brief §3.3 says "restore missing records". This is a deviation from an approved decision; it should be an item for the owner's acceptance (C10 is close), not only an engineering choice |
+
+**Records.** I found nothing presented as accepted by the owner beyond brief §3: the records state "no exception signed" throughout, and 3.10 is labelled as the orchestrator's reading. The evidence limits (synthetic data, no device, no CI, no real model) are stated plainly. One staleness after this check: "T did not see any commit after `7dd6efa8`".
+
+### Verdicts at a157e68e
+
+| Area | Verdict |
+|---|---|
+| Restore | ACCEPT WITH FOLLOW-UP (SP-19 to owner) |
+| Consent and privacy wording, redaction | ACCEPT WITH FOLLOW-UP: the wording is honest only in its minimal sense, and PRIV-1r (S2) is broader than recorded (SP-16) |
+| `textLength` rule and build-147 compatibility | ACCEPT |
+| Accessibility (StackedChoices) | ACCEPT |
+| RELEASE-PLAN | ACCEPT WITH FOLLOW-UP: one coherent package that can be executed, with correct order, rollback sources and stop conditions; SP-18 nits |
+| Records | ACCEPT WITH FOLLOW-UP (SP-16, SP-19) |
+
+### Not checked
+
+The Swift Shortcut on a device or simulator (I ran only the extracted `sanitize`); the queued-payload replay at run time; the legal site; `prod_compare.sh` (needs production); the eval §13 run itself; and the other records not named here (TEST-EVIDENCE, REVIEW-CLOSURE count 127, checked only by sum).

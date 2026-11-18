@@ -61,7 +61,7 @@ Local stack `qirsh_v1_verify` (Docker, ports 56321–56330, synthetic data): see
 | Owner decisions 3.1–3.15 implemented | done locally (`bae159e2`, `640562f6`), recorded as D-20 |
 | Held-out evaluation built and run at every reviewed commit | done; real model BLOCKED (no authorized key) |
 | Strict gate | run 1 at `7cab5e8b` failed 3 stages → `b6f102b4`; run 2 failed `analyze` → `7577f347`; run 3 at `f4dcabd3` 15/15; **run 4 at `a157e68e` 15/15** |
-| Reviews S and T and fix rounds | `7577f347` rejected → `7dd6efa8` → `6f771108` → `f4dcabd3` → **`a157e68e`** (S: accept with follow-up, PRIV-1r S2 open); T last reviewed `7dd6efa8` |
+| Reviews S and T and fix rounds | `7577f347` rejected → `7dd6efa8` → `6f771108` → `f4dcabd3` → **`a157e68e`** (S: accept with follow-up, PRIV-1r S2 open); T at `7dd6efa8`, then a narrow check at `a157e68e` (accept / accept with follow-up; SP-16 … SP-19) |
 | XCTest | 200/200 on an iPhone 17 Pro simulator (implementer) |
 | Production package | regenerated at `f4dcabd3` by ops; candidate id corrected to `a157e68e` by the records editor; nothing executed |
 | Records | reconciled to `a157e68e` (this update) |

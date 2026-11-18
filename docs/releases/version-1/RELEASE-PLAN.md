@@ -95,7 +95,7 @@ Build 147 = commit `b6fc0dad` (iOS, `ios-signed`, internal TestFlight). "Old bac
 
 **Build-147 parser condition (gate for `process-ios-sms` and `parse-sms`).** Condition: **no class that changes totals is worse for a build-147 user after the server deploy** than for the same user with today's server (`b6fc0dad`). Classes: purchase booked as income; completed purchase silent (neither recorded nor in review); wrong amount; declined, failed, refunded-pending or scheduled message counted as spending.
 
-> **MEASUREMENT AT `f4dcabd3`** (orchestrator, from the evaluation specialist's run; `evidence/closure/eval.md` §12)
+> **MEASUREMENT AT `f4dcabd3`, REPEATED AT `a157e68e` WITH IDENTICAL NUMBERS** (orchestrator, from the evaluation specialist's runs; `evidence/closure/eval.md` §12 and §13: 0 grade changes, identical metrics; the column headed `f4dcabd3` below holds for `a157e68e`)
 >
 > Runner and mode: `tools/message_eval/run.sh b6fc0dad` with `MESSAGE_EVAL_SERVER_REV` (build 147's own import code, server step from the named commit), Cloud on, deterministic path · Message set and count: the 753 synthetic held-out messages · Date: 2026-11-18
 >
@@ -158,6 +158,7 @@ for fn in account-deletion-worker process-notification-retries process-ios-sms p
   (cd "$ARCHIVE/$fn" && supabase functions download "$fn" --project-ref "$REF" --use-api --workdir .) ||
   { echo "STOP: download failed for $fn"; break; }
 done
+# CAUTION (review T, SP-18): `break` only leaves the loop. If any STOP line printed, stop here — do not run `tar` or `prod_compare.sh`.
 tar czf "$ARCHIVE.tar.gz" -C "$(dirname "$ARCHIVE")" "$(basename "$ARCHIVE")"
 shasum -a 256 "$ARCHIVE.tar.gz" > "$ARCHIVE.tar.gz.sha256"
 SUPABASE_PROJECT_REF="$REF" bash tools/prod_compare.sh a157e68e b6fc0dad 4bde299a a106bd6f

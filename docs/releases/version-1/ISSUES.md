@@ -13,7 +13,7 @@ Consolidated from the specialist audits, the independent reviews (I, K, L, N, O,
   - `ENGINEERING CHOICE` — chosen by an engineer in round 3 where no owner decision exists; the owner may reverse it ([DECISIONS-NEEDED.md](DECISIONS-NEEDED.md) table D).
   - `NEEDS ACCESS` / `NEEDS DEVICE` — cannot be done from this machine.
 - A row fixed in code that still needs a deploy, a signed build or a device run is **not closed**.
-- Round-3 reviews: S (money correctness) gave ACCEPT WITH FOLLOW-UP at `a157e68e` with one open S2 (PRIV-1r); T (platform and records) gave ACCEPT or ACCEPT WITH FOLLOW-UP in every area at `7dd6efa8` and did not re-review later commits. Reviews are by AI agents and are not approvals.
+- Round-3 reviews: S (money correctness) gave ACCEPT WITH FOLLOW-UP at `a157e68e` with one open S2 (PRIV-1r); T (platform and records) gave ACCEPT or ACCEPT WITH FOLLOW-UP in every area at `7dd6efa8`, and again at `a157e68e` in a narrow check of the later platform changes and these records (new findings SP-16 … SP-19). Reviews are by AI agents and are not approvals.
 
 ## Totals (counted from the rows below)
 
@@ -21,10 +21,10 @@ Consolidated from the specialist audits, the independent reviews (I, K, L, N, O,
 |---|---|---|---|
 | S1 | 13 | **10**: V1-001, V1-003, V1-005, V1-007, V1-014, V1-015, V1-020, V1-063, V1-072, V1-078 | 3: V1-002 (ledger known), V1-004 (Android out of V1, brief §3.1), V1-077 (branch-only regression, closed in round 2) |
 | S2 | 32 (31 + V1-091) | **26** | 6: V1-010, V1-017, V1-018, V1-019, V1-027 (Android, brief §3.1), V1-054 |
-| S3 | 54 (43 + 11 new) | not counted | — |
-| S4 | 7 rows (3 + 4 new) + backlog list | not counted | — |
+| S3 | 55 (43 + 12 new) | not counted | — |
+| S4 | 10 rows (3 + 7 new) + backlog list | not counted | — |
 
-**106 numbered rows** (V1-001 … V1-106). New in round 3: V1-091 … V1-106. "Closed" never means released.
+**110 numbered rows** (V1-001 … V1-110). New in round 3: V1-091 … V1-110 (V1-107 … V1-110 from T's check at `a157e68e`). "Closed" never means released.
 
 Of the 10 open S1 rows, 7 are fixed in code and wait only for a signed build, a device run and (for the parser rows) the server deploy: V1-001, V1-005, V1-007, V1-014, V1-020, V1-072, V1-078. Three wait for an owner action outside the code: V1-003 (App Store Connect privacy answers), V1-015 (reviewer notes submitted with the build), V1-063 (production ad flags off, plan step P4). V1-001 and V1-072 also carry open residual defects measured by review S (V1-094, V1-098).
 
@@ -126,15 +126,15 @@ This table is the current status. The detailed tables further down keep the roun
 | V1-088 | S3 | OPEN. Server alone rejects 102 completed held-out messages that the matching device recovers (A6 stays 0); review S: 26 silent server-side |
 | V1-089 | S3 | FIXED IN CODE (class 3, cashback reversal deducted is spending; parser specialist, shared cases). Not separately re-checked by S |
 | V1-090 | S3 | ENGINEERING CHOICE: ATM cash deposit → review (interim; owner may reverse). Truth labels in the shared table still say income |
-| V1-091 … V1-106 | — | New rows, below |
+| V1-091 … V1-110 | — | New rows, below |
 
 ## New in round 3 (open)
 
 | ID | Title | Source | Sev (by) | Class | Platforms | Status |
 |---|---|---|---|---|---|---|
-| V1-091 | PRIV-1r: some person names still reach the server and the AI model after redaction — after "From <Name>:", "Attn", "Name:", "Customer", and «إلى حساب <name>» under the `payment` hint (14 cases) | S at `a157e68e` | **S2** (S) | REPRODUCED (synthetic) | iOS, Backend | OPEN. Narrowed four times (`f4dcabd3`, `a157e68e`); 0 new leaks; device == server on 246 texts. Pre-existing. Consent text says sanitized text is not guaranteed anonymous (brief §3.8). Needs a fix or an owner-signed exception |
+| V1-091 | PRIV-1r: some person names still reach the server and the AI model after redaction — after "From <Name>:", "Attn", "Name:", "Customer", and «إلى حساب <name>» under the `payment` hint (14 cases) | S at `a157e68e` | **S2** (S) | REPRODUCED (synthetic) | iOS, Backend | OPEN. Narrowed four times (`f4dcabd3`, `a157e68e`); 0 new leaks in S's sets; device == server on 246 texts. **Broader than S recorded** (T, SP-16 → V1-107): labelled names are never masked. Pre-existing. Consent text says sanitized text is not guaranteed anonymous (brief §3.8). Needs a fix or an owner-signed exception |
 | V1-092 | MASK-1: "Card *4521: SAR 85.00 paid to <Merchant>" with no purchase word masks the merchant as a person; the model loses the merchant and category | S at `a157e68e` | S3 (S) | REPRODUCED | iOS, Backend | OPEN. New at `a157e68e`; amount, acceptance and date unchanged |
-| V1-093 | MASK-0: "Purchase To: <Merchant>" and «شراء … إلى <Merchant> بطاقة NNNN» mask the merchant and the user's own card suffix | S | S3 (S) | REPRODUCED | iOS, Backend | OPEN. Pre-existing |
+| V1-093 | MASK-0: "Purchase To: <Merchant>" and «شراء … إلى <Merchant> بطاقة NNNN» mask the merchant and the card suffix | S | S3 (S) | REPRODUCED | iOS, Backend | OPEN. Pre-existing |
 | V1-094 | CUE-1: recorded although no money moved — "Awaiting merchant confirmation", "Attempted purchase", "will receive … cashback on <date>", "… will be charged tomorrow", "awaiting authorization", Arabic «عملية معكوسة:» before a total | S | S3 (S) | REPRODUCED | iOS, Backend | OPEN. Pre-existing; wording gaps, not the gate |
 | V1-095 | HOLD-1: completed messages held for review — "expected/pending refund … credited", purchase with a refund footer, third-party transfer naming two account types, "Bill + VAT = total paid", FX-fee total | S | S3 (S) | REPRODUCED | iOS, Backend | OPEN since `f4dcabd3`. No wrong total; spending or income understated until the user acts |
 | V1-096 | FT-1: a purchase with a "Standing orders will be executed…" footer is silent on the server; the device reviews it | S | S3 (S) | REPRODUCED | Backend (iOS recovers) | OPEN |
@@ -148,6 +148,10 @@ This table is the current status. The detailed tables further down keep the roun
 | V1-104 | SP-07: code comments cite "decision B24" and "decision B26 (a)" as owner decisions (`sign_out_sheet.dart`, its test, `SceneDelegate.swift`); they are engineering choices | T | S4 (T) | CODE-SUPPORTED | iOS | OPEN (comments not edited) |
 | V1-105 | Large text: text clipped without an ellipsis is not detected; 3 collapsed navigation titles allowlisted; nothing checked on a device, VoiceOver or the largest accessibility sizes | T (SP-10 residual), a11y | S4 (T) | CODE-SUPPORTED | iOS | OPEN. SP-10 itself fixed and verified by T |
 | V1-106 | Production (read-only): one account has 540 failed iOS notifications in 7 days (error 2003) and 2 captures stuck in `processing` for over an hour | ops §9 | S3 (rated here: one account, delivery only; not rated by a reviewer) | REPRODUCED (production read-only) | Backend, iOS | OPEN. Not investigated; no production write is authorized |
+| V1-107 | SP-16: the name leak is broader than V1-091 records — "Payment of SAR 99 to <Name> via Mada", "Bill payment … to account of <Name>", "(<Name>)" after an account suffix, and a third party's ≤4-digit account suffix ("beneficiary account ****9876") are left unmasked; labelled names ("Name:", "Attn", "Customer") are missed every time, not occasionally. Policy §8 and earlier records called the kept digits "your own" | T at `a157e68e` | S3 (T) | REPRODUCED (device, server and Swift identical) | iOS, Backend | OPEN. Part of the same leak as V1-091, which stays **S2** |
+| V1-108 | SP-17: `hasCategoryForMerchant` does not filter deleted categories, so a merchant whose only rule points to a deleted category is not offered for categorisation | T | S4 (T) | SUSPECTED (code reading) | All | OPEN |
+| V1-109 | SP-18: RELEASE-PLAN nits — build-147 block labelled `f4dcabd3`; the `merchant-category-contribution` "seven synthetic keys" check predates the last redaction change; a failed P0 download breaks the loop but `tar` and `prod_compare` still run | T | S4 (T) | CODE-SUPPORTED | Backend | PARTLY: block header updated and a one-line P0 caution added (records editor); the seven-keys check not re-run |
+| V1-110 | SP-19: on a merge restore, rules only in the backup are not added. Brief §3.3 says "restore missing records", so this departs from an approved decision and needs the owner's acceptance or rejection, not only an engineering choice | T | S4 (T) | CODE-SUPPORTED | All | OPEN — OWNER DECISION (DECISIONS-NEEDED C10). Related: V1-102 |
 
 ## Round-2 rows (history; the status table above is current)
 

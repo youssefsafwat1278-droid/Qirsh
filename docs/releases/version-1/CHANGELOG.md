@@ -169,7 +169,7 @@ Consent flows and their text, privacy defaults, the privacy policy, store disclo
 
 # Round 3 (`bae159e2` … `a157e68e`, 2026-11-17 to 2026-11-18)
 
-The owner approved fifteen product decisions on 2026-11-17 ([OWNER-BRIEF-ROUND3.md](OWNER-BRIEF-ROUND3.md) §3; `docs/project/DECISIONS.md` D-20) and asked for them to be implemented and for message understanding to be rebuilt. Specialists (AI agents) implemented; reviews S and T (AI agents) challenged the result four and two times. Every item below is **implemented locally**; "verified" means on this Mac, a simulator or a local stack. Nothing is deployed or on a device.
+The owner approved fifteen product decisions on 2026-11-17 ([OWNER-BRIEF-ROUND3.md](OWNER-BRIEF-ROUND3.md) §3; `docs/project/DECISIONS.md` D-20) and asked for them to be implemented and for message understanding to be rebuilt. Specialists (AI agents) implemented; reviews S and T (AI agents) challenged the result; S checked five commits up to `a157e68e`, T checked `7577f347`, `7dd6efa8` and, narrowly, `a157e68e`. Every item below is **implemented locally**; "verified" means on this Mac, a simulator or a local stack. Nothing is deployed or on a device.
 
 ## Approved decisions implemented
 

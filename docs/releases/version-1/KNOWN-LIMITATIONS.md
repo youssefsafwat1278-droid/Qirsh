@@ -41,9 +41,9 @@ Transactions already stored stay as they are (decision 3.15): declined purchases
 
 ### 1.3 Privacy defects
 
-- **PRIV-1r (V1-091, S2, open):** some person names still reach the server and the AI model after redaction: after "From <Name>:", "Attn", "Name:", "Customer", and «إلى حساب <name>» on the `payment` path. The consent text says sanitized text is not guaranteed anonymous; that does not make the leak acceptable. Needs a fix or an owner-signed exception.
-- MASK-1 / MASK-0 (V1-092, V1-093, S3): some merchants are masked as if they were people, and the user's own card suffix is masked in "Purchase To:" forms, so the AI loses the merchant and category.
-- The user's own card suffix (≤ 4 digits) and «حسابك» are kept on purpose for account matching, so they reach the server.
+- **PRIV-1r (V1-091, S2, open; V1-107):** some person names still reach the server and the AI model after redaction. **Labelled names ("Name:", "Attn", "Customer") are not masked at all.** Also unmasked: "From <Name>:", «إلى حساب <name>» on the `payment` path, "Payment … to <Name> via Mada", "to account of <Name>", and "(<Name>)" after an account suffix (review S; review T at `a157e68e`; device, server and Swift behave identically). The consent text says sanitized text is not guaranteed anonymous; that does not make the leak acceptable. Needs a fix or an owner-signed exception.
+- MASK-1 / MASK-0 (V1-092, V1-093, S3): some merchants are masked as if they were people, and the card suffix is masked in "Purchase To:" forms, so the AI loses the merchant and category.
+- Account digits: the code keeps a suffix of at most four digits after an own-account word (and «حسابك») for account matching, so it reaches the server. **The code does not check that the number is the user's**: a third party's short suffix (for example "beneficiary account ****9876") is kept too (V1-107).
 
 ### 1.4 Other open defects users could notice
 
@@ -54,7 +54,7 @@ Transactions already stored stay as they are (decision 3.15): declined purchases
 
 ## Part 2 — Consequences of the approved decisions (listed, not accepted)
 
-- **Restore merges (3.3):** device rules win; rules that exist only in the backup are not added; a transaction deleted by mistake cannot be brought back by a merge, only by removing the device's data and doing a full restore, which loses anything newer (V1-102). The confirmation says which case applies. Two-device conflict cases S9/S9b were never run end to end (V1-101).
+- **Restore merges (3.3):** device rules win; rules that exist only in the backup are not added; a transaction deleted by mistake cannot be brought back by a merge, only by removing the device's data and doing a full restore, which loses anything newer (V1-102). The confirmation says which case applies. **Not adding backup-only rules departs from decision 3.3 ("restore missing records") and needs the owner's acceptance or rejection** (V1-110, DECISIONS-NEEDED C10). Two-device conflict cases S9/S9b were never run end to end (V1-101).
 - **Deletion is final (3.4):** no undo. Until plan step P1 runs, the deployed deletion worker leaves profile photos of deletions it resumes (V1-062).
 - **All countries (3.7):** bank formats are verified only for Saudi Arabia and Egypt; other countries get the generic parser and review. 155 currencies can be stored; only 50 are recognized in message text. A phone still on build 147 cannot show rows in the 105 new currencies (V1-100). Antarctica has no default currency; the user chooses.
 - **Shared learning (3.10):** on only after "Agree and enable"; existing users are asked once (orchestrator's reading; owner may reverse).
@@ -70,7 +70,7 @@ Transactions already stored stay as they are (decision 3.15): declined purchases
 - **No real AI model.** The AI path was tested against an oracle and against forged answers; the real model was never called (no authorized key; the key in a git-ignored local file was deliberately not used) (V1-074).
 - **No device.** Every runtime observation is on an iOS simulator or a local Supabase stack. VoiceOver, the largest accessibility sizes on a device, the live app switcher, notifications on a lock screen, Shortcuts and the share extension on a phone, upgrade from build 147: NOT TESTED.
 - **No CI, no signed build.** The strict gate passed 15/15 on this Mac at `a157e68e`; XCTest 200/200 on a simulator (implementer only). Nothing ran on Codemagic; no signed archive exists; the archive Privacy Report was not produced.
-- **AI review only.** Reviews S and T are AI agents; T did not see any commit after `7dd6efa8`.
+- **AI review only.** Reviews S and T are AI agents; T's check at `a157e68e` was narrow (no stack, no simulator).
 - **Large text:** the gate catches text cut with an ellipsis on 32 screens; text clipped without an ellipsis is not detected; three collapsed navigation titles are allowlisted (V1-105).
 - Parse time was measured on a Mac by review S (worst 392 ms at 2,000 characters, at `6f771108`), not on an iPhone and not re-measured at `a157e68e`.
 
