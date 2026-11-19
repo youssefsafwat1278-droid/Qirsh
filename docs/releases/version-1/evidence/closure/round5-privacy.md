@@ -143,3 +143,27 @@ Results:
 - `flutter analyze lib/engine/privacy test/engine/privacy`: no issues. Whole-app `flutter analyze` shows 9 errors, all in `lib/core/i18n/country_catalog.dart`: the gitignored generated `countries.g.dart` is absent in this fresh worktree (build_runner not run). They are not from this change.
 - `flutter test -j 1 test/engine/privacy test/engine/sms_sanitizer_test.dart test/engine/proof test/data/catalog/shared_category_learning_client_test.dart`: **706 passed**. This covers the Dart privacy acceptance test, the edit-map and outbound-payload tests.
 - Swift standalone (`swift_sanitize.sh`, `BackendCaptureClient.sanitize` compiled alone): **1,290 texts, 0 differences** from the server (522 acceptance, 400 parity, 314 labelled, 54 redaction cases). XCTest not run (disk).
+
+## Follow-up to narrow check Z of b2060a27 (N-P2)
+
+Worktree `v1-fix`; the three twins stay byte-identical. No commit.
+
+- **Rule.** When a text has no transfer word (those already mask every counterparty), no purchase reading and no merchant mark ("at <Capitalised>", "@", «لدى», «من متجر»), a counterparty after "from", "by" or «من» is masked unless it carries a business word (the existing `maskPayee` / COMPANY_MARKERS). The cue must follow an amount, or an incoming-money verb in the same sentence (within 60 characters):
+  - English verbs: got, received, credited, deposited, added, topped up, sent you.
+  - Arabic verbs: «قيد», «أودع», «أضيف», «وصلك», «استلمت», «حوّل».
+  - This is one pattern (`INCOMING_FROM_PATTERN` / `_incomingFrom` / Swift inline) plus the `MERCHANT_MARK` gate. It is not a pattern per sentence.
+- A leading name before "sent you" was already masked. «وصلك» and «استلمت» texts were already masked (transfer words); they are now in the set.
+- **"Payee Coffee".** This is a one-line guard in each twin, applied to both the person cue and the beneficiary-notice pattern: a cue word right after "at" is not a cue (`(?<!at[ \t]{1,3})`, bounded for ICU). "Purchase SAR 60.00 at Payee Coffee card *4521" now keeps the merchant and `*4521`.
+- **Acceptance set.** 522 → **540 rows**, with 18 `z_np2_*` rows:
+  - the 6 review texts;
+  - 6 siblings, 2 of them Arabic;
+  - 6 rows that must survive: "from Test Corp Payroll", «من شركة الاختبار», "Purchase from AMAZON", "Refund … from Noon", «شراء من كارفور», "at Payee Coffee".
+- **Regeneration.** `privacy_acceptance_expected.json` gained the 18 rows; **no existing row's expected output changed**. Regenerating the labelled and parity fixtures changed nothing.
+- **Business senders.** In credit or transfer wording ("Salary … credited from Test Corp Payroll"), a business sender was already masked under the transfer rule, and that is unchanged. It survives only in the new non-transfer class.
+- **"… from Test Pay".** In "You got SAR 50.00 cashback from Test Pay", "Test" is masked and "Pay" stays because "Pay" is a stop word. "Payment of SAR 85 from Careem" now masks Careem; this follows the unclear-wording rule.
+
+Results:
+- Deno `_shared` (`--no-check`; the money agent's `process-ios-sms` files are in flight): **696 passed, 0 failed, 2 ignored**. `deno check` and `deno lint` on `sms_redaction.ts`: clean.
+- `flutter analyze` (whole app): **No issues found**.
+- `flutter test -j 1 test/engine/privacy test/engine/sms_sanitizer_test.dart test/engine/proof test/data/catalog/shared_category_learning_client_test.dart`: **706 passed**. This covers the Dart privacy acceptance, edit-map and outbound-payload tests.
+- Swift standalone (`swift_sanitize.sh`, `BackendCaptureClient.sanitize` compiled alone): **1,308 texts, 0 differences** from the server (540 acceptance, 400 parity, 314 labelled, 54 redaction cases). XCTest not run (disk).

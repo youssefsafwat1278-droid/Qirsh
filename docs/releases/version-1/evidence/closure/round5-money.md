@@ -688,3 +688,98 @@ as a second row (`with_stated_fee_row`), as before.
 - On the server, a redacted business sender ("[NAME]") is read as a person
   and stays local; with a credit flow it records as before with the AI off.
 - No iOS build / Shortcut, no real model, no local Supabase stack.
+
+## Follow-up: narrow check Z (at b2060a27)
+
+Source: `docs/releases/version-1/evidence/audits/Z-round5-narrow-check.md`
+(N-M1b, N-M2b). Existing lists and patterns only. Nothing committed.
+
+### N-M1b: "added to your card" is not a credit — fixed
+
+- `statedCreditPattern` keeps "added to your account / wallet"; "card" is out
+  (an installment or fee added to a card adds to what is owed).
+- installment / instalment / «قسط» join the debit words (server
+  `debitKeywords`, device `DirectionSignal._namedDebit`), as "fee" and
+  "charge" already are.
+- `statedCreditDebtPattern` (`completionCertainty`, mirrored and
+  drift-tested): an installment / fee / charge / "interest charged" / «قسط»
+  noun together with a stated credit wording is a conflicting cue
+  (`conflictingCues`, both sides) → review.
+
+| Text | AI off | flipped model | right model |
+|---|---|---|---|
+| Installment of SAR 250.00 added to your card *4521 | review | review (direction_contradiction) | debit 250 |
+| Fee SAR 25.00 added to your account *5678 | review (conflicting_cues) | review | review (was debit 25: now an unnecessary review) |
+| «قسط 500 ريال أضيف لحسابك» | review (conflicting_cues) | review (was credit 500) | review |
+| Interest charged SAR 40.00 added to your account | review (was debit 40) | review | review |
+| Cashback of SAR 18.40 has been added to your card | review | review (direction_contradiction) | credit 18.40 (the cashback word) |
+
+### N-M2b: more received person transfers kept local — fixed
+
+`transferPattern` adds «وصلك / استلمت … من <شخص>» (with «لحسابك»), "<person>
+sent you <amount>" and "topped up (with) <amount> by <person>", with the same
+business-word exclusion, now also hospital / clinic / school and «مستشفى /
+عيادة / مدرسة» (university / «جامعة» were there). The redacted placeholder
+counts as the person on the server, as before.
+
+| Text | model requests (both server modes) | result (all modes) |
+|---|---|---|
+| «وصلك 250 ريال من نورة أحمد» | 0 | review (no completed form), as with the AI off |
+| «استلمت 400 ريال من محمد العتيبي» | 0 | credit 400, as with the AI off |
+| Ali Hassan sent you SAR 120.00 | 0 | review (transfer_not_clear) |
+| Your wallet was topped up with SAR 95.00 by Ali Hassan | 0 | review (no completed form) |
+| controls: "Test Corp sent you", «… من مستشفى الحياة», «استلمت … من شركة الاختبار», "… by King Fahd Hospital", "… by Test Corp" | not transfers | as before (a flipped model is refused) |
+
+### Frozen set, residual, budget
+
+- `build_money_cases.py` adds Z-NM1b-installment and the four Z-NM2b texts;
+  regenerated once: 2,229 rows.
+- No residual row stopped being wrong and none was added:
+  `flipped_residual.json` is unchanged (server 15 / 15, device AI-primary 24,
+  own model 16; forged device rule-parse rows 16).
+- `run.sh 5dae2e2d`: 0 regressions, 336 to review; the budget stays 336.
+  `server_diff.sh`: 0 regressions against b6fc0dad (300 / 734 / 88) and
+  a157e68e (157 / 233 / 3).
+
+### Acceptance (final code)
+
+Server, 7/7 passed, 0 silent, no transfer or own-account row reached the model:
+
+| Mode | ok | ok_alt | ok_ignored | unnecessary review | wrong (= residual) | model requests |
+|---|---|---|---|---|---|---|
+| ai_off | 1,507 | 19 | 76 | 627 | 0 | 0 |
+| ai_correct, rule parse + model | 1,619 | 19 | 76 | 515 | 0 | 1,566 |
+| ai_correct, AI-primary | 1,563 | 5 | 76 | 585 | 0 | 2,084 |
+| ai_wrong_completed, rule parse + model | 1,605 | 20 | 75 | 515 | 0 | 1,563 |
+| ai_wrong_completed, AI-primary | 1,549 | 6 | 75 | 585 | 0 | 2,207 |
+| ai_flipped, rule parse + model | 706 | 18 | — | 745 | 15 | 1,326 |
+| ai_flipped, AI-primary | 69 | — | — | 1,400 | 15 | 3,336 |
+
+Device, 9/9 passed, 0 silent:
+
+| Mode | ok | ok_alt | unnecessary review | extra review | wrong (= residual) |
+|---|---|---|---|---|---|
+| ai_off | 1,273 | 8 | 915 | 33 | 0 |
+| ai_correct, AI-primary row | 1,592 | 5 | 582 | 50 | 0 |
+| ai_wrong_completed, AI-primary row | 1,552 | 6 | 582 | 75 | 0 |
+| ai_wrong_completed, rule-parse row | 1,531 | 7 | 603 | 74 | 0 |
+| ai_flipped, AI-primary row | — | — | 1,460 | — | 24 |
+| ai_flipped, rule-parse row | 78 | 1 | 1,389 | — | 16 (forged) |
+| ai_correct, own model | 1,636 | 8 | 552 | 33 | 0 |
+| ai_wrong_completed, own model | 1,623 | 8 | 552 | 32 | 0 |
+| ai_flipped, own model | 577 | 8 | 883 | — | 16 |
+
+Suites: `completion_certainty_test` + drift 99 passed;
+`review_x_direction_test.ts` 46 passed; Deno `process-ios-sms` (acceptance
+excluded) 720 passed; Dart test/engine + test/domain + test/architecture 6,154
+passed; `flutter analyze` no issues.
+
+### Not verified
+
+- The four N-M2b texts through the handler's redaction (probed raw and with
+  the `[NAME]` placeholder in `parseSms`; "Ali Hassan" after "by" is not
+  redacted today, N-P2, owned by the privacy agent).
+- "Fee / interest charged … added to your account" now go to review with a
+  right model too (safe, unnecessary review).
+- The 16 forged device rule-parse rows; no iOS build, real model or Supabase
+  stack.

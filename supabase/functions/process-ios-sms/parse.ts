@@ -2,7 +2,7 @@ import { checkPrimaryAmount, runPrimaryAi } from '../_shared/ai_primary.ts';
 import { geminiRequestBody } from '../_shared/gemini_request.ts';
 import rules from './parser_rules.json' with { type: 'json' };
 import { canonicalMoneyText } from '../_shared/money_text.ts';
-import { isTransfer, statedDirection, uncertaintyOf } from './completion_certainty.ts';
+import { isTransfer, statedCreditWithDebt, statedDirection, uncertaintyOf } from './completion_certainty.ts';
 import {
   applyLocalForms,
   bounded,
@@ -995,6 +995,9 @@ export function conflictingCues(normalized: string): boolean {
   // Money between the user's own accounts is a transfer whichever way it is
   // worded («من حسابك … لحسابك الآخر»).
   if (isOwnAccountMove(clauseScope(normalized, CUE_DEPS).core.toLowerCase())) return false;
+  // Narrow check Z (N-M1b): "Installment … added to your account" adds to
+  // what is owed: a stated credit wording with a debt noun is a conflict.
+  if (statedCreditWithDebt(normalized)) return true;
   const core = clauseScope(normalized, CUE_DEPS).core.toLowerCase();
   // A merchant's name ("Deposit Mart", "Refund Mart") names no direction; a
   // negated word ("no fee", «بدون خصم») neither.

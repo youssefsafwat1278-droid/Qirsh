@@ -503,6 +503,9 @@ class ParserEngine {
     // Money between the user's own accounts is a transfer whichever way it
     // is worded («من حسابك … لحسابك الآخر»).
     if (isOwnAccountMove(rawText)) return false;
+    // Narrow check Z (N-M1b): "Installment … added to your account" adds to
+    // what is owed: a stated credit wording with a debt noun is a conflict.
+    if (CompletionCertainty.statedCreditWithDebt(rawText)) return true;
     final core = clauseScope(bounded(rawText)).core.toLowerCase();
     // A merchant's name ("Deposit Mart", "Refund Mart") names no direction;
     // a negated word ("no fee", «بدون خصم») neither.

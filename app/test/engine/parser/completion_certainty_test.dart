@@ -23,6 +23,7 @@ void main() {
     expect(server['transferPattern'], CompletionCertainty.transferPattern);
     expect(server['statedCreditPattern'], CompletionCertainty.statedCreditPattern);
     expect(server['statedDebitPattern'], CompletionCertainty.statedDebitPattern);
+    expect(server['statedCreditDebtPattern'], CompletionCertainty.statedCreditDebtPattern);
   });
 
   // Review X (X-M1/X-M2/X-M4): the direction the rule parser reads — the
@@ -38,7 +39,6 @@ void main() {
       'Dividend SAR 300.00 to your account *5678': TxnDirection.credit,
       'Rent SAR 3,000.00 from Test Tenant arrived in account *5678': TxnDirection.credit,
       'Cashback of SAR 18.40 has been added to your card *4521': TxnDirection.credit,
-      'Fee SAR 25.00 added to your account *5678': TxnDirection.debit,
       'Annual card fee SAR 250.00 applied to card *4521': TxnDirection.debit,
       'You were billed SAR 199.00 by Test Telecom on card *4521': TxnDirection.debit,
       'المبلغ المخصوم 75.00 ريال, بطاقة 4521,': TxnDirection.debit,
@@ -71,6 +71,11 @@ void main() {
       // with a company stays a debit.
       'تم دفع 500 ريال لحسابك في شركة الكهرباء': TxnDirection.debit,
       'Purchase SAR 45.00 at Topped Up Cafe card *4521': TxnDirection.debit,
+      // Narrow check Z (N-M1b): "added to your card" adds to what is owed.
+      'Installment of SAR 250.00 added to your card *4521': TxnDirection.debit,
+      // A debt noun with a stated credit wording is a conflicting cue.
+      'Fee SAR 25.00 added to your account *5678': TxnDirection.unknown,
+      'قسط 500 ريال أضيف لحسابك *5678': TxnDirection.unknown,
     };
     for (final MapEntry(key: text, value: direction) in cases.entries) {
       test(text, () {
@@ -103,6 +108,11 @@ void main() {
       'You got SAR 750.00 from Ali via Test Pay',
       'قيد مبلغ 2,000 ريال لحسابك *5678 من علي',
       'You received SAR 300.00 from Sara Ahmed via Test Pay',
+      // Narrow check Z (N-M2b).
+      'وصلك 250 ريال من نورة أحمد',
+      'استلمت 400 ريال من محمد العتيبي',
+      'Ali Hassan sent you SAR 120.00',
+      'Your wallet was topped up with SAR 95.00 by Ali Hassan',
     ]) {
       expect(CompletionCertainty.isTransfer(text), isTrue, reason: text);
     }
@@ -111,6 +121,10 @@ void main() {
       'قُيّد مبلغ 2,000 ريال لحسابك *5678 من شركة الاختبار',
       'You got SAR 120.00 cashback from Test Store',
       'Your account *5678 was topped up with SAR 1,800.00 by Test Corp',
+      'Test Corp sent you SAR 120.00',
+      'وصلك 250 ريال من مستشفى الحياة',
+      'استلمت 400 ريال من شركة الاختبار',
+      'Your wallet was topped up with SAR 95.00 by King Fahd Hospital',
     ]) {
       expect(CompletionCertainty.isTransfer(text), isFalse, reason: text);
     }

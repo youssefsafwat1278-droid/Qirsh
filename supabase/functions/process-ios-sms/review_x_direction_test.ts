@@ -17,7 +17,6 @@ const DIRECTION: Array<[string, 'credit' | 'debit', number]> = [
   ['Dividend SAR 300.00 to your account *5678', 'credit', 300],
   ['Rent SAR 3,000.00 from Test Tenant arrived in account *5678', 'credit', 3000],
   ['Cashback of SAR 18.40 has been added to your card *4521', 'credit', 18.4],
-  ['Fee SAR 25.00 added to your account *5678', 'debit', 25],
   ['Annual card fee SAR 250.00 applied to card *4521', 'debit', 250],
   ['You were billed SAR 199.00 by Test Telecom on card *4521', 'debit', 199],
   ['المبلغ المخصوم 75.00 ريال, بطاقة 4521,', 'debit', 75],
@@ -41,6 +40,8 @@ const DIRECTION: Array<[string, 'credit' | 'debit', number]> = [
   ['SAR 300.00 posted to your account *5678 from Ali', 'credit', 300],
   ['Recharge balance SAR 100 for mobile via card *4521 successful', 'debit', 100],
   ['Balance recharge of SAR 100.00 completed using card *4521', 'debit', 100],
+  // Narrow check Z (N-M1b): "added to your card" adds to what is owed.
+  ['Installment of SAR 250.00 added to your card *4521', 'debit', 250],
 ];
 
 // Review Y (N-M2): received person-to-person transfers never reach the model.
@@ -48,6 +49,11 @@ const PERSON_TRANSFER: Array<[string, number]> = [
   ['You got SAR 750.00 from Ali via Test Pay', 750],
   ['قيد مبلغ 2,000 ريال لحسابك *5678 من علي', 2000],
   ['You received SAR 300.00 from Sara Ahmed via Test Pay', 300],
+  // Narrow check Z (N-M2b).
+  ['وصلك 250 ريال من نورة أحمد', 250],
+  ['استلمت 400 ريال من محمد العتيبي', 400],
+  ['Ali Hassan sent you SAR 120.00', 120],
+  ['Your wallet was topped up with SAR 95.00 by Ali Hassan', 95],
 ];
 
 const CONFLICTING: Array<[string, number]> = [
@@ -55,6 +61,9 @@ const CONFLICTING: Array<[string, number]> = [
   ['POS Refund SAR 64.50 HYPERPANDA card *4521', 64.5],
   ['تم إيداع 50 ريال استرداد نقدي لبطاقتك 4521 عن عملية شراء بمبلغ 500 ريال', 50],
   ['Purchase SAR 20.00 at Jarir card *4521, cashback SAR 50.00 credited', 20],
+  // Narrow check Z (N-M1b): a debt noun with a stated credit wording.
+  ['Fee SAR 25.00 added to your account *5678', 25],
+  ['قسط 500 ريال أضيف لحسابك *5678', 500],
 ];
 
 const OWN_ACCOUNT: Array<[string, number]> = [

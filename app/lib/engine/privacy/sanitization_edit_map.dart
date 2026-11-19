@@ -235,6 +235,9 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
       names(SmsSanitizer.labelCuePattern, SmsSanitizer.maskPayee);
       names(SmsSanitizer.toHeadingPattern, SmsSanitizer.maskPayee);
       names(SmsSanitizer.paymentToPattern, SmsSanitizer.maskPayee);
+      if (!SmsSanitizer.merchantMarkPattern.hasMatch(current)) {
+        names(SmsSanitizer.incomingFromPattern, SmsSanitizer.maskPayee);
+      }
     }
     names(SmsSanitizer.parenNamePattern, SmsSanitizer.maskPerson);
     names(SmsSanitizer.nameBeforeVerbPattern, SmsSanitizer.maskPerson);

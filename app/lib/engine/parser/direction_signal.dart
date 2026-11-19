@@ -188,9 +188,9 @@ class DirectionSignal {
       r'|(?<![a-z])credit(?![a-z])(?! card| limit)'
       r'|أودع|اودع|مكافأة|مكافاة|حواله وارده|استرجاع|وصلك');
   static final RegExp _namedDebit = RegExp(
-      r'(?<![a-z])(?:fees?|billed|charged?|renewed|atm cash|used for|authori[sz]ed|pos|mpos|epos|standing order|booked on|approved on|transfer sent)(?![a-z])'
+      r'(?<![a-z])(?:fees?|billed|charged?|renewed|atm cash|used for|authori[sz]ed|pos|mpos|epos|standing order|booked on|approved on|transfer sent|installments?|instalments?)(?![a-z])'
       r'|(?<![a-z])debit(?![a-z])(?! card)'
-      r'|المخصوم|سدد|سُدد|سداد|عمولة|أمر مستديم|استخدمت|على بطاقتك|على حسابك');
+      r'|المخصوم|سدد|سُدد|سداد|عمولة|أمر مستديم|استخدمت|على بطاقتك|على حسابك|قسط');
 
   /// Round 5 (X-M3): with no money word, an amount spent at a merchant ("SAR
   /// 45.00 at Test Mart", "@ Test Bakery", «لدى») is a debit. Mirrors

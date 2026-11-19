@@ -1373,14 +1373,14 @@ struct BackendCaptureClient {
     // PRIV-1: cues that only ever introduce a person (payee, beneficiary,
     // sender …) apply in any message, transfer word or not.
     try maskPerson(
-      #"(\#(noLetterBefore)(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?"# +
+      #"(\#(noLetterBefore)(?<!\#(noLetterBefore)at[ \t]{1,3})(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?"# +
         #"|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of"# +
         #"|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول"# +
         #"|لصالح|باسم|للسيدة|للسيد)\.?\#(notLetter)\#(labelSep))(\#(name))"#)
     // N-P1: a beneficiary notice names a person wherever the name sits: after
     // the cue and its status words, between commas, and before the role.
     try maskPerson(
-      #"(\#(noLetterBefore)(?:beneficiary|beneficiaries|payee|المستفيد|مستفيد|للمستفيد)\#(notLetter)"# +
+      #"(\#(noLetterBefore)(?<!\#(noLetterBefore)at[ \t]{1,3})(?:beneficiary|beneficiaries|payee|المستفيد|مستفيد|للمستفيد)\#(notLetter)"# +
         #"(?:[ \t]+(?:new|added|successfully|has|have|been|was|الجديد|جديد|بنجاح)\#(notLetter))*"# +
         #"(?:[ \t]*[:,،\-][ \t]*|[ \t]+))(\#(name))"#)
     try maskPerson(
@@ -1419,6 +1419,15 @@ struct BackendCaptureClient {
           #"((?:^|(?<=[\n.!?؟;؛]))[ \t]*(?:to|from|من)[ \t]+)(\#(name))(?=[ \t]*:)"#)
         try maskPayee(
           #"(\#(noLetterBefore)(?:payment|payments|paid|pay)\#(notLetter)(?:[^.\n;؛!?؟]|\.(?=\#(d))){0,40}?\#(noLetterBefore)to[ \t]+)(\#(name))"#)
+        // N-P2: money in from someone, where nothing marks a merchant.
+        let merchantMark = try regex(
+          #"\#(noLetterBefore)(?:at|At|AT)[ \t]+(?=\p{Lu})|@|\#(noLetterBefore)(?:لدى|من[ \t]+متجر)\#(notLetter)"#, false)
+        if !has(merchantMark, value) {
+          try maskPayee(
+            #"((?:\#(d)|\#(noLetterBefore)(?:got|received|credited|deposited|added|topped[ \t]+up|sent[ \t]+you"# +
+              #"|قيد|أودع|اودع|أضيف|اضيف|وصلك|استلمت|حول|حوّل|حُوّل)\#(notLetter))"# +
+              #"(?:[^.\n;؛!?؟]|\.(?=\#(d))){0,60}?\#(noLetterBefore)(?:from|by|من)[ \t]+)(\#(name))"#)
+        }
       }
       // SP-16: a name in parentheses right after an account or card number.
       try maskPerson(

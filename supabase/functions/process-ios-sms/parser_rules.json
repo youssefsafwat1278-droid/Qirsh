@@ -522,10 +522,12 @@
       "تاكيد السداد",
       "trx. of"
     ],
-    "transferPattern": "(?<![a-z])(?:transfer[a-z]*|remittance|ipn|instapay|wire|sent to|received from|credited by|debited by)(?![a-z])|(?<![ء-ي])(?:و|ف|ب|ل|ال|وال|بال)?(?:تحويل|تحويلات|حواله|حوالات|حولت|محول|محوله|انستاباي)(?![ء-ي])|(?<![a-z])you (?:have )?(?:got|received) (?:[a-z]{3} ?)?[0-9][0-9.,]*(?: ?[a-z]{3})? from (?!(?:your|the|a|an) |account|card|[^\\n.,]*?(?<![a-z])(?:corp|corporation|company|co|ltd|limited|llc|inc|est|trading|group|bank|holding|ministry|university|payroll|salary|store|mart|shop|market)(?![a-z]))(?:[a-z]|\\[name\\])|لحسابك(?:[^\\n.]|\\.(?=[0-9]))*? من (?!حساب|بطاق|[^\\n.,،]*?(?<![ء-ي])(?:ال)?(?:شركه|مؤسسه|مجموعه|بنك|مصرف|متجر|مطعم|محل|وزاره|هيئه|جامعه|راتب)(?![ء-ي]))(?:[ء-ي]|\\[(?:name|redacted)\\])",
+    "transferPattern": "(?<![a-z])(?:transfer[a-z]*|remittance|ipn|instapay|wire|sent to|received from|credited by|debited by)(?![a-z])|(?<![ء-ي])(?:و|ف|ب|ل|ال|وال|بال)?(?:تحويل|تحويلات|حواله|حوالات|حولت|محول|محوله|انستاباي)(?![ء-ي])|(?<![a-z])you (?:have )?(?:got|received) (?:[a-z]{3} ?)?[0-9][0-9.,]*(?: ?[a-z]{3})? from (?!(?:your|the|a|an) |account|card|[^\\n.,]*?(?<![a-z])(?:corp|corporation|company|co|ltd|limited|llc|inc|est|trading|group|bank|holding|ministry|university|school|hospital|clinic|payroll|salary|store|mart|shop|market)(?![a-z]))(?:[a-z]|\\[name\\])|(?<![a-z])topped up (?:with )?(?:[a-z]{3} ?)?[0-9][0-9.,]*(?: ?[a-z]{3})? by (?!(?:your|the|a|an) |account|card|[^\\n.,]*?(?<![a-z])(?:corp|corporation|company|co|ltd|limited|llc|inc|est|trading|group|bank|holding|ministry|university|school|hospital|clinic|payroll|salary|store|mart|shop|market)(?![a-z]))(?:[a-z]|\\[name\\])|(?:(?<![a-z])(?:(?!(?:your|the|we|you|has|have|corp|corporation|company|co|ltd|limited|llc|inc|est|trading|group|bank|holding|ministry|university|school|hospital|clinic|payroll|salary|store|mart|shop|market)(?![a-z]))[a-z]+ ){1,3}|\\[name\\] )sent you (?:[a-z]{3} ?)?[0-9]|(?:لحسابك|وصلك|استلمت)(?:[^\\n.]|\\.(?=[0-9]))*? من (?!حساب|بطاق|[^\\n.,،]*?(?<![ء-ي])(?:ال)?(?:شركه|مؤسسه|مجموعه|بنك|مصرف|متجر|مطعم|محل|وزاره|هيئه|جامعه|مدرسه|مستشفي|عياده|راتب)(?![ء-ي]))(?:[ء-ي]|\\[(?:name|redacted)\\])",
     "_statedDirectionReadme": "Review Y (N-M1): a direction the wording states when no money word names one (\"topped up with\", «قيد … لحسابك», \"recharge … via card\"). Read only by the local direction a model answer must agree with (parse.ts localDirection, DirectionSignal.localOf); never records a row by itself. Folded text, as transferPattern.",
-    "statedCreditPattern": "(?<![a-z])(?:added to your (?:account|card|wallet)|topped up with|(?:has been|was|been) topped up|you got (?:[a-z]{3} ?)?[0-9]|posted to (?:your )?account[^\\n.]*? from )|(?<![ء-ي])(?:تم )?(?:قيد|اضيف|اضيفت)(?![ء-ي])(?:[^\\n.]|\\.(?=[0-9]))*?لحسابك",
-    "statedDebitPattern": "(?<![a-z])recharge[a-z]*(?![a-z])[^\\n]*?(?<![a-z])(?:via|using|with|by) (?:your )?card"
+    "statedCreditPattern": "(?<![a-z])(?:added to your (?:account|wallet)|topped up with|(?:has been|was|been) topped up|you got (?:[a-z]{3} ?)?[0-9]|posted to (?:your )?account[^\\n.]*? from )|(?<![ء-ي])(?:تم )?(?:قيد|اضيف|اضيفت)(?![ء-ي])(?:[^\\n.]|\\.(?=[0-9]))*?لحسابك",
+    "statedDebitPattern": "(?<![a-z])recharge[a-z]*(?![a-z])[^\\n]*?(?<![a-z])(?:via|using|with|by) (?:your )?card",
+    "_statedCreditDebtReadme": "Narrow check Z (N-M1b): an installment, fee or charge with a stated credit wording (\"Installment … added to your account\") is a conflicting cue: review, never a credit (ParserEngine.conflictingCues / parse.ts conflictingCues).",
+    "statedCreditDebtPattern": "(?<![a-z])(?:installments?|instalments?|fees?|charges?|interest charged)(?![a-z])|(?<![ء-ي])(?:ال)?(?:قسط|اقساط)(?![ء-ي])"
   },
   "debitKeywords": [
     "عملية شراء",
@@ -565,7 +567,10 @@
     "على بطاقتك",
     "على حسابك",
     "transfer sent",
-    "approved on"
+    "approved on",
+    "installment",
+    "instalment",
+    "قسط"
   ],
   "creditKeywords": [
     "إيداع",
