@@ -13,6 +13,7 @@ import 'package:money_companion/core/session/app_session.dart';
 import 'package:money_companion/core/session/capture_queue.dart';
 import 'package:money_companion/core/startup/bootstrap_runner.dart';
 import 'package:money_companion/data/db/database_access_broker.dart';
+import 'package:money_companion/data/db/replica_store.dart';
 import 'package:money_companion/features/capture/services/native_capture_bridge.dart';
 import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -246,5 +247,47 @@ void main() {
     await runner.run();
     expect(identical(runner.debugCoordinator, coordinator), isTrue);
     expect(events.where((e) => e == 'coordinator'), hasLength(1));
+  });
+
+  test('run() is single-flight: a second call while one is in flight joins it',
+      () async {
+    final reads = <String>[];
+    storage.gate = (op, key) async {
+      if (op == 'read') reads.add(key);
+    };
+    String? held;
+    final hold = storage.holdOnce((op, key) {
+      if (op != 'read') return false;
+      held = key;
+      return true;
+    });
+    final runner = BootstrapRunner(debugAuthClient: absentClient())
+      ..captureQueue = queue;
+    runners.add(runner);
+
+    final first = runner.run();
+    await hold.reached.future;
+    final second = runner.run();
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(reads.where((k) => k == held), isEmpty,
+        reason: 'no second run reached the step the first is held at');
+
+    hold.release.complete();
+    final results = await Future.wait([first, second]);
+    expect(identical(results[0], results[1]), isTrue);
+  });
+
+  test('a failed device-salt read is not cached: the next call reads again',
+      () async {
+    var failNext = true;
+    storage.gate = (op, key) async {
+      if (op == 'read' && key == ReplicaStore.saltKey && failNext) {
+        failNext = false;
+        throw PlatformException(code: '-25308', message: 'interaction');
+      }
+    };
+    final store = ReplicaStore(appSupportDirectory: support.path);
+    await expectLater(store.uidHash('u1'), throwsA(isA<PlatformException>()));
+    expect(await store.uidHash('u1'), hasLength(32));
   });
 }

@@ -5728,8 +5728,7 @@ class AppL10nEn extends AppL10n {
   String get startFailed => 'Qirsh could not start';
 
   @override
-  String get startCheckConnection =>
-      'Check your internet connection and try again.';
+  String get startTryLater => 'Please try again in a moment.';
 
   @override
   String startStepId(String step) {
@@ -5748,6 +5747,16 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get dbRecoveryReset => 'Reset the data';
+
+  @override
+  String get dbResetConfirmTitle => 'Delete the data on this device?';
+
+  @override
+  String get dbResetConfirmBody =>
+      'Data on this device that is not in the cloud will be deleted and cannot be recovered.';
+
+  @override
+  String get dbResetConfirmAction => 'Delete and reset';
 
   @override
   String get lockTitle => 'Qirsh is locked';

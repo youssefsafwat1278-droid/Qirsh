@@ -1,5 +1,6 @@
 import '../observability/app_diagnostics.dart';
 import 'package:drift/native.dart';
+import 'package:drift/isolate.dart' show DriftRemoteException;
 import '../security/lock_prompt_language.dart';
 import '../theme/theme_mode_controller.dart';
 import '../../features/dashboard/home_hero_period_controller.dart';
@@ -96,6 +97,27 @@ class BootstrapCoordinatorUnavailable implements Exception {
   final String reason;
   @override
   String toString() => 'BootstrapCoordinatorUnavailable($reason)';
+}
+
+/// The account's local database is positively unreadable: it was opened with a
+/// key that was READ from secure storage, and SQLCipher reports not-a-database
+/// (26) or corrupt (11), while protected data was not reported unavailable. The
+/// ONLY startup failure that offers the destructive reset; every other one
+/// (busy/locked, keychain read errors, refusals, timeouts, unknown) is retried.
+class BootstrapDatabaseUnreadable implements Exception {
+  const BootstrapDatabaseUnreadable();
+
+  /// Whether [error] is SQLite's not-a-database or corrupt result. A background
+  /// connection's error arrives wrapped in a [DriftRemoteException].
+  @visibleForTesting
+  static bool matches(Object error) {
+    final cause = error is DriftRemoteException ? error.remoteCause : error;
+    if (cause is! SqliteException) return false;
+    return cause.resultCode == 26 || cause.resultCode == 11;
+  }
+
+  @override
+  String toString() => 'BootstrapDatabaseUnreadable()';
 }
 
 /// A headless cold-start capture drain of this process holds the database
@@ -439,14 +461,14 @@ class BootstrapRunner {
           : () =>
               ConsentAuthority(settings).allows(EgressClass.profileAndSettings);
 
-  /// Name of the step that was running when the most recent [run] call
-  /// failed (or is currently running). `'database_open'` specifically means
-  /// the local encrypted DB could not be opened (corrupt file/key mismatch)
-  /// — callers should offer a reset action rather than a plain retry.
+  /// Name of the last step that STARTED (a step nested inside another
+  /// overwrites it). A diagnostic identifier only: whether the database is
+  /// unreadable is [BootstrapDatabaseUnreadable], never this name.
   String? get lastStep => _lastStep;
 
   /// Deletes the unopenable encrypted DB file so the next [run] can create a
-  /// fresh one. Only relevant when [lastStep] is `'database_open'`.
+  /// fresh one. Only after [BootstrapDatabaseUnreadable] and the user's
+  /// explicit confirmation.
   Future<void> resetDatabaseAndRetry() async {
     _ensureCoordinator(); // before this destructive entry
     // WP-3b: the file that failed to open is the signed-in account's replica
@@ -465,12 +487,20 @@ class BootstrapRunner {
   /// Runs the full startup sequence, or resumes/retries a previous attempt
   /// without repeating steps that already completed. Returns the ready
   /// [AppDatabase] to be handed to `appDatabaseProvider`.
+  ///
+  /// Single-flight: a call while a run is in flight (also one that already
+  /// outlived [timeout], which does not cancel it) joins that run instead of
+  /// starting a second one on the same host.
   Future<AppDatabase> run() {
-    return _runSteps().timeout(
+    final running =
+        _inFlight ??= _runSteps().whenComplete(() => _inFlight = null);
+    return running.timeout(
       timeout,
       onTimeout: () => throw BootstrapTimeoutException(_lastStep),
     );
   }
+
+  Future<AppDatabase>? _inFlight;
 
   Future<AppDatabase> _runSteps() async {
     // Runs in EVERY build mode. In release a missing/non-production Supabase
@@ -881,8 +911,19 @@ class BootstrapRunner {
       // The launch-specific private reservation is minted by AppSession for the
       // owner it chose above; the open is tracked before any opener runs.
       final reserveLaunch = AppSession.instance.coldLaunchReserver(launch);
-      await _step('database_open',
-          () => host.openAtLaunch(launchUid, reserveLaunch: reserveLaunch));
+      await _step('database_open', () async {
+        try {
+          return await host.openAtLaunch(launchUid,
+              reserveLaunch: reserveLaunch);
+        } catch (error) {
+          if (BootstrapDatabaseUnreadable.matches(error) &&
+              await _authCoordinator?.store.keychain.protectedDataAvailable() !=
+                  false) {
+            throw const BootstrapDatabaseUnreadable();
+          }
+          rethrow;
+        }
+      });
       // The owner marker names a uid whose replica could not be opened (missing,
       // locked, quarantined): the signed-out scope is open, so the session must
       // not look authenticated. Routing to sign-in lets an explicit sign-in
