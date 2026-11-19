@@ -12,6 +12,11 @@
 // recorded; `rejected` = kept for review (the device shows it, or reads it
 // itself on the rule-parse path). A transfer never reaches the model.
 // Acceptance: zero wrong financial entries; unnecessary reviews are counted.
+// Round 5 (review X, X-M3): no row is exempt. In ai_flipped, a row recorded
+// with the model's flipped direction because the text gives the rule parser no
+// direction is still a wrong entry: those rows are listed by hand in
+// tools/acceptance/flipped_residual.json (per path) and the test fails on any
+// wrong row not listed there and on any listed row that is no longer wrong.
 // ACCEPTANCE_OUT=<file> writes the per-row result. Synthetic messages only.
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { handleProcessIosSms } from './index.ts';
@@ -21,11 +26,8 @@ import { isTransfer } from './completion_certainty.ts';
 type Booking = { class: string; amount: number; currency: string };
 // alt: a recorded outcome that is not a wrong entry (the original-currency
 // figure of a foreign purchase; the paid total of a tip message).
-// model_dependent: a wrong model answer cannot be told from a right one by
-// construction (mark_model_dependence.ts); counted apart, never as ok.
 type Expected = {
   outcome: 'recorded' | 'review' | 'ignored'; class?: string; amount?: number; currency?: string; alt?: Booking[];
-  model_dependent?: boolean;
 };
 type Row = {
   id: string;
@@ -37,6 +39,10 @@ type Row = {
 
 const ROWS: Row[] = (await Deno.readTextFile(new URL('../../../tools/acceptance/money_cases.jsonl', import.meta.url)))
   .split('\n').filter((l) => l.trim()).map((l) => JSON.parse(l));
+
+const RESIDUAL: Record<string, Array<{ id: string; text: string }>> = JSON.parse(
+  await Deno.readTextFile(new URL('../../../tools/acceptance/flipped_residual.json', import.meta.url)),
+);
 
 const OWNER = '00000000-0000-0000-0000-00000000a001';
 
@@ -116,13 +122,8 @@ function observe(stored: { state: string; parsed?: Record<string, unknown> } | u
   };
 }
 
-/** ok / wrong / unnecessary_review / model_dependent (the server keeps every non-processed capture). */
+/** ok / wrong / unnecessary_review (the server keeps every non-processed capture). */
 function grade(e: Expected, o: Observed, truth: string): string {
-  const g = gradeOf(e, o, truth);
-  return g === 'wrong' && e.model_dependent ? 'model_dependent' : g;
-}
-
-function gradeOf(e: Expected, o: Observed, truth: string): string {
   if (o.outcome === 'recorded' && e.alt?.some((a) =>
     a.class === o.cls && a.currency === o.currency && Math.abs(a.amount - o.amount!) < 0.005
   )) return 'ok_alt';
@@ -168,6 +169,8 @@ for (const m of MODES) {
     Deno.test(`acceptance set — ${name}: no wrong entry; a transfer never reaches the model`, async () => {
       const counts: Record<string, number> = {};
       const failures: string[] = [];
+      const residual = new Set((RESIDUAL[`server ${name}`] ?? []).map((x) => x.id));
+      const wrongIds = new Set<string>();
       let modelCalls = 0;
       for (const [i, r] of ROWS.entries()) {
         const answer = m.answer(r);
@@ -178,12 +181,17 @@ for (const m of MODES) {
         const g = grade(r.expected[m.mode]!, o, r.truth);
         counts[g] = (counts[g] ?? 0) + 1;
         (results[r.id] ??= {})[name] = `${g} ${o.outcome}${o.cls ? ` ${o.cls} ${o.amount} ${o.currency}` : ''}`;
-        if (g === 'wrong') {
+        if (g === 'wrong') wrongIds.add(r.id);
+        if (g === 'wrong' && !residual.has(r.id)) {
           failures.push(`${r.id}: expected ${JSON.stringify(r.expected[m.mode])}, got ${JSON.stringify(o)} — ${r.text}`);
         }
-        if (calls > 0 && isTransfer(r.text)) failures.push(`${r.id}: a transfer reached the model — ${r.text}`);
+        if (calls > 0 && (isTransfer(r.text) || r.truth === 't')) {
+          failures.push(`${r.id}: a transfer or own-account move reached the model — ${r.text}`);
+        }
       }
-      console.log(`ROUND5 SERVER ${name}: ${JSON.stringify(counts)} model requests ${modelCalls}`);
+      for (const id of residual) if (!wrongIds.has(id)) failures.push(`${id}: listed as residual but no longer wrong`);
+      console.log(`ROUND5 SERVER ${name}: ${JSON.stringify(counts)} model requests ${modelCalls}` +
+        ` residual (recorded with the model's flipped direction: the text gives the rule parser no direction) ${residual.size}`);
       if (out) await Deno.writeTextFile(out, JSON.stringify(results));
       assertEquals(failures, []);
     });

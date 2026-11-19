@@ -86,8 +86,13 @@ void main() {
       expect(r.rejectionReason, 'direction_unresolved');
     }
     expect(run(null, TransactionType.payment).accepted, isTrue);
-    expect(run(null, TransactionType.refund).accepted, isTrue);
-    expect(run('credit', TransactionType.unknown).accepted, isTrue);
+    // (Round 5, review X: a model's direction only where the rule parser
+    // reads the same one — "at SHOP ONE" is spent at a merchant.)
+    expect(run(null, TransactionType.refund).rejectionReason,
+        'direction_contradiction');
+    expect(run('debit', TransactionType.unknown).accepted, isTrue);
+    expect(run('credit', TransactionType.unknown).rejectionReason,
+        'direction_contradiction');
   });
 
   group('GroundingCheck thousands separators', () {
@@ -264,7 +269,11 @@ void main() {
       // "[NAME]" IS in the sanitized text, so plain grounding would accept it.
       for (final m in ['[NAME]', 'from [NAME]', '[REDACTED]', '[ref]']) {
         final v = _run(
-            AiParseResponse(amount: 1250, currency: 'EGP', merchantName: m),
+            AiParseResponse(
+                amount: 1250,
+                currency: 'EGP',
+                merchantName: m,
+                direction: 'credit'),
             'Transfer received from [NAME] EGP 1,250.00 Ref [REF] [REDACTED]');
         expect(v.accepted, isTrue, reason: m);
         expect(v.merchantName, isNull, reason: m);
@@ -342,7 +351,9 @@ void main() {
           type: TransactionType.payment);
       expect(v.accepted, isFalse);
       expect(v.rejectionReason, 'direction_contradiction');
-      final ok = _run(const AiParseResponse(amount: 1250, currency: 'EGP'),
+      final ok = _run(
+          const AiParseResponse(
+              amount: 1250, currency: 'EGP', direction: 'credit'),
           'received EGP 1,250.00 from Ali',
           messageText: 'received EGP 1,250.00 from Ali',
           type: TransactionType.income);
@@ -368,7 +379,7 @@ void main() {
       final base = run(null, null, null, null);
       for (final v in [
         run('payment', 'food', 'debit', 'gpt-x'),
-        run('income', 'other', 'credit', 'confidence=0.99'),
+        run('payment', 'other', 'debit', 'confidence=0.99'),
         run('transfer', 'transfers', 'debit', 'confidence=0.01'),
       ]) {
         expect(v.accepted, base.accepted);

@@ -251,65 +251,33 @@ String? meaningHoldReason(String text,
   return severalMovements(text, meaning) ? 'multiple_amounts' : null;
 }
 
-/// Round 5 (direction hazard): the direction [text] names, as the server's
-/// `namedDirection` (process-ios-sms/parse.ts): the meaning's flow, else the
-/// earliest money keyword of [namedDebitKeywords] / [namedCreditKeywords]
-/// ("credit card/limit" is a product; a standing order or direct debit names
-/// the instrument and decides only when nothing else does). Used only to
-/// reject a row that books the other direction (review), never to record.
-TxnDirection namedDirection(String text) {
-  final flow = ParserEngine.meaningOf(text).direction;
-  if (flow != TxnDirection.unknown) return flow;
-  final lower = text.toLowerCase();
-  int? earliest(String s, List<String> words) {
-    int? at;
-    for (final w in words) {
-      final i = s.indexOf(w);
-      if (i >= 0 && (at == null || i < at)) at = i;
-    }
-    return at;
-  }
-
-  const instrument = ['standing order', 'أمر مستديم', 'direct debit'];
-  var debitText = lower;
-  for (final w in instrument) {
-    debitText = debitText.replaceAll(w, ' ' * w.length);
-  }
-  final debit = earliest(debitText, namedDebitKeywords);
-  final credit = earliest(
-      lower.replaceAll(RegExp(r'credit(?= card| limit)'), '      '),
-      namedCreditKeywords);
-  if (debit == null && credit == null) {
-    return earliest(lower, instrument) == null
-        ? TxnDirection.unknown
-        : TxnDirection.debit;
-  }
-  if (credit == null) return TxnDirection.debit;
-  if (debit == null) return TxnDirection.credit;
-  return debit <= credit ? TxnDirection.debit : TxnDirection.credit;
+/// Round 5 (review X, X-M1): a server row whose direction is a model's
+/// answer (the rule parse + model or AI-primary path) is refused when the
+/// device's rule parser reads another direction in [text], or reads none and
+/// the message has a completed-event form the model does not decide
+/// ([DirectionSignal.modelDirectionRefused]).
+bool modelRowDirectionRefused(Map<String, dynamic>? parsed, String text) {
+  if (!isModelRow(parsed)) return false;
+  return _modelDirectionRefused(text,
+      _asDirection(parsed?['direction'] as String?),
+      _directionOfType(parsed?['type'] as String?));
 }
 
-/// Equal to `debitKeywords` / `creditKeywords` in
-/// `process-ios-sms/parser_rules.json` (drift test:
-/// completion_certainty_test.dart).
-const List<String> namedDebitKeywords = [
-  'عملية شراء', 'شراء', 'خصم', 'سحب', 'مدى', 'سداد', 'مشتريات', 'مدفوعات',
-  'pos', 'purchase', 'debit', 'withdraw', 'payment', 'paid', 'spent',
-  'standing order', 'أمر مستديم',
-];
-const List<String> namedCreditKeywords = [
-  'إيداع', 'ايداع', 'حوالة واردة', 'حواله وارده', 'تحويل وارد', 'استرداد',
-  'تم استرجاع', 'استرجاع مبلغ', 'راتب', 'credited', 'credit', 'deposit',
-  'received', 'refund', 'salary', 'reversal', 'reversed',
-];
+bool _modelDirectionRefused(
+        String text, TxnDirection direction, TxnDirection typeDirection) =>
+    [direction, typeDirection].any((d) =>
+        d != TxnDirection.unknown &&
+        DirectionSignal.modelDirectionRefused(text, d));
+
+/// A server row whose figure and direction are a model's answer.
+bool isModelRow(Map<String, dynamic>? parsed) =>
+    parsed?['parserSource'] == 'ai_hybrid' || parsed?['parserSource'] == 'ai';
 
 /// Round 5: a server row whose figure is a model's validated answer (the
 /// rule parse + model or AI-primary path), not the rule parse alone, and not
 /// a transfer (transfers are decided on the device's own reading).
 bool isModelDecidedRow(Map<String, dynamic>? parsed) =>
-    (parsed?['parserSource'] == 'ai_hybrid' ||
-        parsed?['parserSource'] == 'ai') &&
-    parsed?['type'] != 'transfer';
+    isModelRow(parsed) && parsed?['type'] != 'transfer';
 
 final RegExp _sentenceCut = RegExp(r'[\n!?؟;؛]|\.(?![0-9])');
 
@@ -415,6 +383,7 @@ CaptureValidation validateCaptureCandidate({
   required String text,
   required DateTime receivedAt,
   bool modelDecided = false,
+  bool fromModel = false,
 }) {
   const reject = CaptureValidation.rejected;
   // DATA-01 / REV-03 — a declined/failed/cancelled message moved no money,
@@ -469,13 +438,12 @@ CaptureValidation validateCaptureCandidate({
           : null);
   final aiDirection = _asDirection(candidate.direction);
   final typeDirection = _directionOfType(candidate.type);
-  // Round 5 (direction hazard): a direction the text names ("Direct debit",
-  // "Payroll credit", «خصم», «إيداع») is never flipped by a row.
-  final named = namedDirection(text);
+  // Round 5 (X-M1): a model's direction only where the device's rule parser
+  // reads the same one ([modelRowDirectionRefused]).
   if (_contradicts(wording, typeDirection) ||
       _contradicts(wording, aiDirection) ||
-      _contradicts(named, aiDirection) ||
-      _contradicts(named, typeDirection)) {
+      (fromModel &&
+          _modelDirectionRefused(text, aiDirection, typeDirection))) {
     return reject('direction_contradiction');
   }
   // Direction is required: the explicit direction, else the one the type implies.

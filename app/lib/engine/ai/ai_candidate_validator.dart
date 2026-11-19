@@ -198,6 +198,28 @@ class AiCandidateValidator {
     if (!hasDirection) {
       return const AiCandidateValidation.rejected('direction_unresolved');
     }
+    // Round 5 (review X, X-M2): the model's direction only where the rule
+    // parser reads the same one in the text, or reads none and the message
+    // has no completed-event form (the model decides it).
+    final typeDirection = normalizedType == null
+        ? TxnDirection.unknown
+        : normalizedType.isExpense
+            ? TxnDirection.debit
+            : normalizedType == TransactionType.income ||
+                    normalizedType == TransactionType.refund
+                ? TxnDirection.credit
+                : TxnDirection.unknown;
+    final answered = aiDirection == 'debit'
+        ? TxnDirection.debit
+        : aiDirection == 'credit'
+            ? TxnDirection.credit
+            : TxnDirection.unknown;
+    if ([answered, typeDirection].any((d) =>
+        d != TxnDirection.unknown &&
+        DirectionSignal.modelDirectionRefused(
+            messageText ?? sanitizedText, d))) {
+      return const AiCandidateValidation.rejected('direction_contradiction');
+    }
 
     final merchant = _merchantGrounded(response.merchantName, sanitizedText)
         ? response.merchantName

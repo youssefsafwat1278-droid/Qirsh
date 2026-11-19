@@ -156,7 +156,7 @@ const KEPT: Kept[] = [
     text: 'تم إيداع مبلغ الاسترداد المعلق 150 ريال في حسابك *4521' },
   { name: 'an Arabic refund that names the purchase', amount: 150, type: 'refund', direction: 'credit',
     text: 'استرجاع عملية شراء بمبلغ 150 ريال من نون بطاقة *4521' },
-  { name: 'a third-party transfer naming two account types', r5: true, amount: 500, type: 'payment', direction: 'debit',
+  { name: 'a third-party transfer naming two account types', amount: 500, type: 'payment', direction: 'debit',
     text: 'SAR 500.00 transferred from your current account to savings account of Ali' },
   { name: 'a bill, its VAT and the total paid', amount: 230, type: 'payment', direction: 'debit',
     text: 'Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 paid from account *4521' },

@@ -606,6 +606,7 @@ class CaptureImportService {
       text: item.text,
       receivedAt: item.receivedAt ?? dto.createdAt ?? DateTime.now().toUtc(),
       modelDecided: isModelDecidedRow(p),
+      fromModel: isModelRow(p),
     );
   }
 

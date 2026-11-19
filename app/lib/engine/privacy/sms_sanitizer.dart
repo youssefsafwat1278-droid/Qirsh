@@ -1185,9 +1185,9 @@ class SmsSanitizer {
   // PRIV-1: cues that only ever introduce a person (a payee, a beneficiary,
   // a sender), so they apply in any message. Server twin: PERSON_CUE_PATTERN.
   static final _personCue = RegExp(
-    r'((?<![\p{L}\p{M}])(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?'
+    r'((?<![\p{L}\p{M}])(?:beneficiary(?:[ \t]+(?:name|added))?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?'
     r'|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of'
-    r'|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول'
+    r'|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد(?:[ \t]+الجديد)?|مستفيد(?:[ \t]+جديد)?|للمستفيد|المرسل|المستلم|للمستلم|المحول'
     r'|لصالح|باسم|للسيدة|للسيد)'
     '\\.?(?![\\p{L}\\p{M}])$_labelSep)($_name)',
     caseSensitive: false,
@@ -1278,8 +1278,8 @@ class SmsSanitizer {
   static final _nameBeforeVerb = RegExp(
     r'((?:^|(?<=[\n.!?؟;؛:]))[ \t]*)'
     '($_looseName)'
-    r'(?=[ \t]+(?:has[ \t]+|have[ \t]+)?(?:sent|transferred|paid|remitted)[ \t]+'
-    r'(?:you(?![\p{L}\p{M}])|(?:[^.\n]|\.(?=[0-9٠-٩۰-۹])){0,30}?(?<![\p{L}\p{M}])(?:to|into)[ \t]+you))',
+    r'(?=[ \t]+(?:has[ \t]+|have[ \t]+)?(?:sent|transferred|paid|remitted|requested)[ \t]+'
+    r'(?:you(?![\p{L}\p{M}])|(?:[^.\n]|\.(?=[0-9٠-٩۰-۹])){0,30}?(?<![\p{L}\p{M}])(?:to|into|from)[ \t]+you))',
     caseSensitive: false,
     unicode: true,
   );
@@ -1318,7 +1318,7 @@ class SmsSanitizer {
   // TRANSFER_WORDS.
   static final _transferContext = RegExp(
     r'transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|'
-    r'\bsent\b|payable\s+to|request(?:ed)?\s+from|حوال|تحويل|حول|وارد|وصلك|طلب\s+دفع|استلام|استلمت|إيداع|ايداع|أودع|اودع|'
+    r'\bsent\b|payable\s+to|request(?:ed)?\s+from|money\s+request|request\s+to\s+pay|\brequested\b|حوال|تحويل|حول|وارد|وصلك|طلب\s+دفع|استلام|استلمت|إيداع|ايداع|أودع|اودع|'
     r'مستفيد|المرسل|انستا|لصالح|standing\s+order|أمر\s+(?:مستديم|دائم)|'
     r'امر\s+(?:مستديم|دائم)',
     caseSensitive: false,
@@ -1329,7 +1329,7 @@ class SmsSanitizer {
   // PURCHASE_WORDS, WEAK_PURCHASE_WORDS, PURCHASE_CONTEXT.
   static final _purchaseWords = RegExp(
     r'purchase|\bpos\b|point of sale|paid at|spent|refund|revers|e-?commerce|'
-    r'\bbill|شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|'
+    r'\bbill|شراء|انترنت|إنترنت|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|'
     r'مرتجع|إرجاع|ارجاع|فاتور|سداد',
     caseSensitive: false,
     unicode: true,
@@ -1341,7 +1341,7 @@ class SmsSanitizer {
   // twin: STRONG_TRANSFER_WORDS.
   static final _strongTransfer = RegExp(
     r'transfer|remit|beneficiary|\bipn\b|instapay|\bsent\b|payable\s+to|'
-    r'request(?:ed)?\s+from|standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|'
+    r'request(?:ed)?\s+from|money\s+request|request\s+to\s+pay|\brequested\b|standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|'
     r'لصالح|وصلك|أرسل|ارسل|طلب\s+دفع|انستا|أمر\s+(?:مستديم|دائم)|'
     r'امر\s+(?:مستديم|دائم)',
     caseSensitive: false,
@@ -1520,7 +1520,7 @@ class SmsSanitizer {
   static final _destinationLabel =
       RegExp('^(?:لحساب|للحساب|لبطاقة|للبطاقة)(?!$_l)', unicode: true);
   static final _creditVerbBefore = _ci(
-      '(?<!$_l)(?:credited|deposited|refunded|refund|reversal|added|received|returned|arrived|posted|applied|charged|billed|[وف]?(?:إيداع|ايداع|أودع|اودع|أضيف|اضيف|إضاف|اضاف)$_l*|استرداد|استرجاع|واردة|وارده|وارد)(?!$_l)(?:[^.\\n;؛!?؟]|\\.(?=$_dc)){0,60}\$');
+      '(?<!$_l)(?:credited|deposited|refunded|refund|reversal|added|received|returned|arrived|posted|applied|charged|billed|[وف]?(?:إيداع|ايداع|أودع|اودع|أضيف|اضيف|إضاف|اضاف)$_l*|استرداد|استرجاع|واردة|وارده|وارد)(?!$_l)(?:[^.\\n;؛!?؟]|\\.(?=$_dc)|\\.(?=[ \\t]+(?:to|into)(?!$_l))){0,60}\$');
   static final _outgoingWords = _ci(
       '(?<!$_l)(?:transferred|sent|paid|دفع|صادرة|صادره|صادر|حولت|أرسلت|ارسلت)(?!$_l)');
   static final _incomingWords = _ci(
@@ -1601,14 +1601,10 @@ class SmsSanitizer {
     return found;
   }
 
-  /// True when the text reads as a purchase, refund or bill, or as a card
-  /// payment: it names the user's own card and has no transfer word. The
-  /// counterparty of such a message is a merchant (MASK-1). Server twin:
-  /// isMerchantContext.
-  static bool isMerchantContext(String text) =>
-      _readsAsPurchase(text) ||
-      (!_transferContext.hasMatch(text) &&
-          scanSuffixes(text, purchase: false).any((s) => s.card && s.own));
+  /// True when the text reads as a purchase, refund or bill: its counterparty
+  /// is a merchant (MASK-1). An own card alone does not make "paid to X" a
+  /// purchase (X-P1). Server twin: isMerchantContext.
+  static bool isMerchantContext(String text) => _readsAsPurchase(text);
 
   /// True when [text] carries a transfer or credit word.
   static bool hasTransferWord(String text) => _transferContext.hasMatch(text);

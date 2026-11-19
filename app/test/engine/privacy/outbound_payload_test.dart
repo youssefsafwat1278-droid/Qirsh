@@ -364,10 +364,13 @@ void main() {
           rawMerchant: 'Careem', categoryKey: 'transport', isUserConfirmed: true);
       expect((await learnedRuleCategoryFor(rules, 'Careem'))?.categoryKey,
           'transport');
+      // X-P1: an own card alone does not keep the payee.
       const carded = 'Payment of SAR 85.00 to Careem with card *4521';
-      expect(SmsSanitizer.sanitize(carded), carded);
-      expect(SmsSanitizer.masksPartOf(carded, 'Careem'), isFalse);
-      final fromRedacted = merchantOf(SmsSanitizer.sanitize(carded));
+      expect(SmsSanitizer.masksPartOf(carded, 'Careem'), isTrue);
+      const purchase = 'Purchase of SAR 85.00 at Careem with card *4521';
+      expect(SmsSanitizer.sanitize(purchase), purchase);
+      expect(SmsSanitizer.masksPartOf(purchase, 'Careem'), isFalse);
+      final fromRedacted = merchantOf(SmsSanitizer.sanitize(purchase));
       if (fromRedacted != null) {
         final hit = await learnedRuleCategoryFor(rules, fromRedacted);
         expect(hit?.categoryKey, 'transport');

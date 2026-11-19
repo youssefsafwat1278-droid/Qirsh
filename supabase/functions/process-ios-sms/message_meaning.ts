@@ -141,6 +141,27 @@ function firstMoneyFlow(re: RegExp, lower: string): RegExpExecArray | null {
   return null;
 }
 
+/**
+ * Which flow families [text] names. A phrase inside a longer phrase of the
+ * other family ("sent to" in "sent to you") is that longer phrase
+ * (DirectionSignal.flowFamilies).
+ */
+export function flowFamilies(text: string): { debit: boolean; credit: boolean } {
+  const lower = text.toLowerCase();
+  const live = (re: RegExp) =>
+    [...lower.matchAll(new RegExp(re.source, 'g'))]
+      .map((m) => [m.index!, m.index! + m[0].length])
+      .filter(([s, e]) => !isRewardFlow(lower, s, e));
+  const inside = ([s, e]: number[], other: number[][]) => other.some(([os, oe]) => os <= s && oe >= e && oe - os > e - s);
+  const d = live(DEBIT_FLOW_RE), c = live(CREDIT_FLOW_RE);
+  return { debit: d.some((m) => !inside(m, c)), credit: c.some((m) => !inside(m, d)) };
+}
+
+/** [lower] with every flow phrase blanked (DirectionSignal.withoutFlows). */
+export const withoutFlows = (lower: string) =>
+  lower.replace(new RegExp(DEBIT_FLOW_RE.source, 'g'), (w) => ' '.repeat(w.length))
+    .replace(new RegExp(CREDIT_FLOW_RE.source, 'g'), (w) => ' '.repeat(w.length));
+
 /** [lower] with every side-credit clause blanked (DirectionSignal.withoutSideCredits). */
 export function withoutSideCredits(lower: string): string {
   const all = new RegExp(CREDIT_FLOW_RE.source, 'g');
@@ -520,7 +541,7 @@ function clauseCut(s: string, end: number): number {
 export function isOwnAccountMove(core: string): boolean {
   if (hasAnyWord(core, OWN_ACCOUNT_STRONG)) return true;
   // Follow-up 5 (c): both ends are the user's named account types.
-  if (NAMED_ACCOUNTS.test(core) || OWN_ENDS.test(core)) return true;
+  if (NAMED_ACCOUNTS.test(core) || OWN_ENDS.test(core) || WALLET_TOP_UP.test(core)) return true;
   // "from your account *1234 to your account *5678": out of and into the user's own accounts.
   const both = (hasDebitFlow(core) && hasCreditFlow(core)) ||
     (SOURCE_OF_FUNDS.some((w) => core.includes(w)) && OWN_DESTINATION.some((w) => core.includes(w)));
@@ -719,8 +740,16 @@ const NAMED_ACCOUNTS = new RegExp(
 // Follow-up 6 (PRE-AT008): both ends named as the user's own in one clause,
 // with only an account reference between them.
 const OWN_ENDS = new RegExp(
-  '(?<![a-z])from your (?:account|card|wallet)(?: ?(?:\\*+ ?|x+)?[0-9]{3,6}| \\[(?:account|card)\\])? to your (?:other |own )?(?:account|card|wallet)(?![a-z])' +
-    '|من حسابك(?:\\s*(?:رقم\\s*)?\\*{0,4}\\s?[0-9]{3,8}|\\s*\\[(?:account|card)\\])?\\s+(?:إلى|الى)\\s+حسابك',
+  '(?<![a-z])from your (?:(?:credit|debit|current|savings) )?(?:account|card|wallet)(?: ?(?:\\*+ ?|x+)?[0-9]{3,6}| \\[(?:account|card)\\])? to your (?:other |own )?(?:account|card|wallet)(?![a-z])' +
+    // Round 5 (X-M5): «من بطاقتك الائتمانية إلى حسابك الجاري».
+    '|من (?:حسابك|بطاقتك)(?:\\s+ال[ء-ي]+)?(?:\\s*(?:رقم\\s*)?\\*{0,4}\\s?[0-9]{3,8}|\\s*\\[(?:account|card)\\])?\\s+(?:إلى|الى)\\s+(?:حسابك|بطاقتك)',
+);
+// Round 5 (X-M5): the user's wallet topped up from a card ("Your STC Pay
+// wallet was topped up with SAR 100 from Al Rajhi card *4521"): between the
+// user's own accounts. Mirrors ParserEngine._walletTopUp.
+const WALLET_TOP_UP = new RegExp(
+  '(?=.*(?:(?<![a-z])wallet(?![a-z])|محفظ))(?=.*(?:(?<![a-z])(?:topped up|top-?up|top up)(?![a-z])|شحن|تعبئة))' +
+    '.*(?:(?<![a-z])from(?![a-z])[^.\\n]{0,40}(?<![a-z])card(?![a-z])|من\\s+(?:ال)?بطاق)',
 );
 const MERCHANT_AFTER = /^\s*(?:(?:at|@)\s+(?![0-9])|لدى\s|\((?![0-9]))/;
 const LIST_ITEM_BEFORE = /(?:^|\n)\s*[0-9]{1,2}[).]\s*$/;
@@ -751,6 +780,16 @@ function lineAfter(s: string, at: number, n: number): string {
   return nl < 0 ? piece : piece.slice(0, nl);
 }
 /** Follow-up 5 (e). Mirrors ParserEngine.partsTotal. */
+/**
+ * Round 5 (X-M4): the distinct currency figures of [lower] other than a
+ * balance, limit or due figure. Mirrors ParserEngine.movementFigureCount.
+ */
+export function movementFigureCount(lower: string): number {
+  return new Set(
+    currencyFigures(lower).filter((f) => !STANDING_FIGURE_LABEL.test(lineBefore(lower, f.start, 30))).map((f) => f.value),
+  ).size;
+}
+
 export function partsTotal(lower: string): number | null {
   if (!TOTAL_OR_INCL.test(lower)) return null;
   const figures = currencyFigures(lower).filter((f) => !STANDING_FIGURE_LABEL.test(lineBefore(lower, f.start, 30)));

@@ -100,3 +100,25 @@ No patch outside my paths was needed. Suggested for the l10n owner: `privSharedL
 - XCTest (`RunnerTests`, `SmsRedactionParityTests`) was not run: it needs `flutter build ios --config-only` and a simulator build, and the disk has about 16 GB free. The Swift function was compiled standalone from the source file instead. The RunnerTests read the same three fixtures, and the Swift output equals them. Run it in the gate.
 - Real-model behaviour; the routing that keeps transfers away from the model.
 - The full Flutter suite.
+
+## Follow-up to review X of e5881120 (X-P1, X-P2, X-P3, S3)
+
+Same three twins, byte-identical. No commit.
+
+- **X-P1 (own card no longer keeps "paid to X").** `isMerchantContext` is now the purchase reading alone; the branch "own card suffix and no transfer word" is removed. In "paid to X", "payment to X" and «دفع … إلى X», X is kept only with a business word or in purchase wording ("purchase at", "POS", «شراء», and «عملية انترنت»: «انترنت|إنترنت» added to the purchase words because STC's online-purchase format has no other purchase word and lost its merchant otherwise). "SAR 75.00 paid to Ahmed Saleh using your card *4521", "Card *4521: SAR 85.00 paid to Omar Farooq", "Apple Pay: … paid to Omar Farooq using card *4521" and «دفع 85 ريال إلى عمر فاروق ببطاقة مدى 4521» are masked.
+- **X-P2 (money requests).** "money request", "request to pay" and "requested" join the transfer words and the strong transfer words, so the counterparty after "from" is masked unconditionally. The name-before-verb cue takes "requested … from you" ("Fatima Zahra requested SAR 150 from you" → "[NAME] requested …").
+- **X-P3 (beneficiary notices).** The person cue takes "beneficiary added", «مستفيد جديد» and «المستفيد الجديد» (before, «جديد» stopped the name and "added" left the colon unmatched).
+- **S3 (own suffix after "to account").** One rule: the credit-verb window now crosses a period followed by "to"/"into" ("credited from ACME Trading Co. to account *5678" keeps `*5678`).
+
+Fixtures: two labelled rows that relied on the own-card rule moved to purchase wording (`r4_pair_card_paid_to_merchant`: "Card *4521: SAR 85.00 purchase at Example Diner"; `r5_decision_payment_card`: "Purchase of SAR 85.00 at Careem with card *4521"). Acceptance set: 490 → **504 rows** (14 `x_*` rows from the review texts; `own_r4p03_careem_card` is now must-not "Careem"); 53 merchant rows. Regenerated once and frozen: `privacy_acceptance_expected.json`, labelled `expected`; `sms_redaction_parity_cases.json` was unchanged by regeneration. Dart test "payment wording masks the payee; purchase wording keeps its rule" now checks the carded payment is masked and the purchase text keeps Careem and its rule.
+
+**Survivors after this follow-up (honest list):**
+- "Payment of SAR 85.00 to Careem with card *4521" is now **masked** (Careem is a one-word brand with no business word). "Purchase of SAR 85.00 at Careem with card *4521" survives.
+- "Paid SAR 50.00 to Ahmed Trading" and "Card *4521: SAR 85.00 paid to Jarir Bookstore" survive (business word; item 1 above).
+- A person in purchase wording survives (item 2 above), now including «عملية انترنت … إلى عمر فاروق».
+- Over-masking, not a leak: in «… إلى عمر فاروق ببطاقة مدى 4521» the name span runs over «ببطاقة» and the own suffix becomes `[ACCOUNT]` (same as the transfer twin «تحويل … ببطاقة مدى 4521» at e5881120). In the S3 text "ACME Trading Co." is masked (credit wording is the transfer class); only the suffix was fixed.
+
+Results:
+- Deno `_shared` (`--no-check`; type check fails only in `process-ios-sms/parse.ts`, parser agent's in-flight file): **696 passed, 0 failed, 2 ignored**.
+- `flutter analyze lib/engine/privacy test/engine/privacy`: no issues. `flutter test test/engine/privacy test/data/catalog/shared_category_learning_client_test.dart`: **483 passed**. `test/engine/sms_sanitizer_test.dart test/engine/proof test/features/capture/{android_sms_permission,capture_sync_service}_test.dart`: **306 passed**.
+- Swift standalone (`swift_sanitize.sh`, `BackendCaptureClient.sanitize` compiled alone): **1,272 texts, 0 differences** from the server (504 acceptance, 400 parity, 314 labelled, 54 redaction cases). XCTest not run (disk).

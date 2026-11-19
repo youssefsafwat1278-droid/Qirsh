@@ -60,7 +60,7 @@
     {"id": "DEV057", "src": "c_own_account", "kind": "r", "text": "حولت 3,150.00 جنيه من حساب التوفير الخاص بك إلى حسابك الجاري"},
     {"id": "DEV058", "src": "c_own_account", "kind": "r", "text": "Savings to Current: EGP 2,200.00 transferred successfully."},
     {"id": "DEV059", "src": "c_third_party", "kind": "d", "text": "You transferred EGP 1,500.00 from your Current account to Basma R.", "amount": 1500.0, "currency": "EGP", "server": "review", "pin": "safe deviation: review (the cloud path asks the AI)"},
-    {"id": "DEV060", "src": "c_third_party", "kind": "d", "text": "SAR 2,000.00 transferred from your Savings account to Adel M. (IBAN ending 4410).", "amount": 2000.0, "currency": "SAR", "server": "review", "pin": "safe deviation: review (the cloud path asks the AI)"},
+    {"id": "DEV060", "src": "c_third_party", "kind": "d", "text": "SAR 2,000.00 transferred from your Savings account to Adel M. (IBAN ending 4410).", "amount": 2000.0, "currency": "SAR"},
     {"id": "DEV061", "src": "c_third_party", "kind": "d", "text": "تم تحويل 900 جنيه من حسابك الجاري إلى حساب ريم ش.", "amount": 900.0, "currency": "EGP"},
     {"id": "DEV062", "src": "c_third_party", "kind": "d", "text": "Transfer of AED 1,100.00 from your Current account to Karim T. completed.", "amount": 1100.0, "currency": "AED", "server": "review", "pin": "safe deviation: review (the cloud path asks the AI)"},
     {"id": "DEV063", "src": "d_two_purchases", "kind": "r", "text": "2 transactions on card *5520: SAR 120.00 at Maple Court Diner; SAR 45.50 at Lumen Audio."},

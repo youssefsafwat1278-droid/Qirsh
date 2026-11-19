@@ -368,3 +368,184 @@ Results:
 - Both acceptance runs and all three harnesses: every number is identical
   to the tables above. The declined-table pins and the 794 ceiling are
   unchanged. `run.sh` exits 0 (331 against a budget of 331).
+
+## Follow-up: independent review X (money REJECT at e5881120)
+
+Source: `docs/releases/version-1/evidence/audits/X-round5-review.md`, X-M1..X-M5.
+The design is kept; the fixes are rules, not word lists where a rule does it.
+Nothing committed.
+
+### X-M1 / X-M2 (S1): a flipped model direction was recorded — fixed
+
+Rule, on every path that accepts a model answer (server rule parse + model,
+server AI-primary, device import/sync of model rows via
+`validateCaptureCandidate(fromModel:)` / `modelRowDirectionRefused`, and the
+device's own-model path `AddTransactionUseCase._tryAiParseFirst`, through
+`AiCandidateValidator.validate`, which now refuses a model direction that
+contradicts the local reading; own-account moves there stay local):
+
+- the model's direction is accepted only when it equals the direction the
+  local parser itself derives for the text (`localDirection` in `parse.ts`,
+  `DirectionSignal.localOf` on the device — the same reading that records the
+  row when AI is off);
+- local direction known and the model disagrees → review
+  (`direction_contradiction`; the server keeps a more specific held reason
+  through `refusalReason`);
+- local direction unknown → the model's direction is accepted only for class
+  (a), no completed-event form. Those are the only model-dependent rows.
+
+Local reading extended where it was missing: whole-word `payroll`, `wages`,
+`bonus`, `dividend`, `cashback`, `charge(d)`, `billed`, `renewed`,
+`authorised/authorized`, `mpos/epos` (whole-word, so "deposited" no longer
+reads as "epos"); debit flow "transferred from your"; «لحسابك» removed as a
+credit word (it names the destination of a payment as often as a credit);
+named nouns ("X store/mart/shop/market", "cashback card", "security
+deposit", «متجر/محل/مطعم …») and a marked merchant ("at"/"@"/«لدى») no longer
+cast a direction.
+
+Reviewer texts, server (rule parse + model / AI-primary), stub model:
+
+| Text (abridged) | AI off | flipped model | correct model |
+|---|---|---|---|
+| payroll SAR 8,500 posted to account | credit 8500 | review (direction_contradiction) | credit 8500 |
+| Payroll / Bonus SAR … to account from Test Corp | review (no form) | review (direction_contradiction) | credit |
+| «أودع مبلغ 2,000 ريال في حسابك» / «مكافأة 2,000 ريال لحسابك» | review | review (direction_contradiction) | credit 2000 |
+| Dividend / Rent … arrived in account / Cashback … added to your card | review | review (direction_contradiction) | credit |
+| Fee … added to your account / Annual card fee applied / billed by Test Telecom | review | review (direction_contradiction) | debit |
+| «المبلغ المخصوم 75.00» / «سُدد مبلغ 300» | review | review (direction_contradiction) | debit |
+| ATM cash SAR 500 / Gym membership renewed on card / Debit SAR 45 card | review | review (direction_contradiction) | debit |
+| Refund … returned to card / Standing order executed / «سداد فاتورة 300» | recorded right | review (direction_contradiction) | recorded right |
+
+Device: the same texts are in `completion_certainty_test.dart` and the X rows
+of the acceptance set; 0 wrong on every device path (tables below).
+
+### X-M3 (S1, test integrity): exemptions computed by the code under test — fixed
+
+`mark_model_dependence.ts` is gone. Every acceptance row carries a hand or
+source-derived truth direction; in the ai_flipped modes any recorded row
+whose direction differs from truth is counted wrong. The only allowed ones
+are pinned, per path, by id and text in `tools/acceptance/flipped_residual.json`
+("recorded with the model's flipped direction because the text gives the
+local parser no direction"); a wrong row not listed, or a listed row that is
+no longer wrong, fails the test. The device acceptance test also runs the
+own-model path (AI consent on, fake client).
+
+Residual (this file must be tracked for `head_completeness_test` to pass):
+
+| Path | Residual rows | Why |
+|---|---|---|
+| server, rule parse + model | 22 | class (a): no completed-event form, e.g. "SAR 250.00 Test Cafe 14:02", «بطاقة *4521 مبلغ 89.50 ريال Test Mart», "SAR 500.00 added to your account" |
+| server, AI-primary | 22 | class (a), same texts |
+| device, AI-primary row | 39 | class (a) |
+| device, own model | 23 | class (a) |
+| device, rule-parse row (forged) | 17 | a deterministic server row forged with a flipped direction; the device checks direction only on model rows, so it trusts it (e.g. "SAR 300.00 posted to your account *5678 from Ali", «تم قيد مبلغ 2,000 ريال لحسابك») |
+
+The 17 are not a model answer: they need a server that sends a wrong
+deterministic row. Extending the device check to all server rows closes them
+but breaks capture fixtures that use placeholder `rawMessage`s; left as a
+decision.
+
+### X-M4 (S1, pre-existing, AI off): local direction errors — fixed (review)
+
+Rule (`conflictingCues`, both sides): a text with direction cues of both
+families for the event, or more than one movement figure with both families,
+is not "clearly completed" → uncertain (review / model class), unless the
+clause flow settles it (a source of funds named and no own destination, or a
+side credit / reward clause separate from the amount sentence). Own-account
+moves exit first.
+
+| Text | before | now (server and device, every mode) |
+|---|---|---|
+| Purchase SAR 150.00 at Noon card *4521 completed. Merchant confirmation received | credit | review (conflicting_cues) |
+| POS Refund SAR 64.50 HYPERPANDA card *4521 | debit (server) | review (conflicting_cues) — safe, an unnecessary review |
+| Arabic cashback 50 vs purchase 500 | credit 500 | review (conflicting_cues) |
+| Purchase SAR 20 …, cashback SAR 50 credited | credit 20 | review (conflicting_cues) |
+
+These, the U §1 cashback texts and R4M-10 are in the frozen set
+(`money_cases.jsonl`, regenerated once by `build_money_cases.py`, byte for
+byte reproducible: 2,221 rows — d 1,187, n 586, c 289, i 76, r 64, t 19).
+
+### X-M5 (S2): own-account moves — fixed
+
+"Your STC Pay wallet was topped up with SAR 100 from Al Rajhi card *45…" and
+«تم تحويل 300 ريال من بطاقتك الائتمانية إلى حسابك الجاري» → review
+(own_accounts) on every path, no model request; never spending or income.
+In all acceptance modes no transfer or own-account row reached the model.
+
+### S3 labels — corrected
+
+declined/841, 842, 843, 957 → r; pre_round/8 → d; pre_round/84 → d;
+AM-R4M09a → t. `pre_round_not_completed.json` still lists the pre_round/8 and
+pre_round/84 texts (not changed here; owner's call).
+
+### Case pins changed
+
+- H03 (follow_up3): defect fixed; pin removed.
+- S05 (follow_up3), N1a / N1g / N1i (follow_up4): now review on both sides
+  (X-M4 rule).
+- DEV060 (follow_up5), AT004a / AT004b (follow_up6): server review pin removed
+  (now recorded right).
+- Declined table re-pinned: 137 server-unresolved pins and 14 device-review
+  pins removed, 1 device → review, 1 server → unresolved; deviations 771.
+
+### Acceptance (final code, stub model; wrong includes residual)
+
+Server, 7/7 passed, 0 silent:
+
+| Mode | ok | ok_alt | ok_ignored | unnecessary review | wrong | of which residual | model requests |
+|---|---|---|---|---|---|---|---|
+| ai_off | 1,505 | 19 | 76 | 621 | 0 | 0 | 0 |
+| ai_correct, rule parse + model | 1,612 | 19 | 76 | 514 | 0 | 0 | 1,576 |
+| ai_correct, AI-primary | 1,556 | 5 | 76 | 584 | 0 | 0 | 2,106 |
+| ai_wrong_completed, rule parse + model | 1,598 | 20 | 75 | 514 | 0 | 0 | 1,573 |
+| ai_wrong_completed, AI-primary | 1,542 | 6 | 75 | 584 | 0 | 0 | 2,229 |
+| ai_flipped, rule parse + model | 704 | 18 | — | 732 | 22 | 22 | 1,336 |
+| ai_flipped, AI-primary | 66 | — | — | 1,388 | 22 | 22 | 3,360 |
+
+(Round 5 at e5881120: ai_off 1,368 ok / 741 unnecessary review; flipped
+"0 wrong" only after 185–186 rows were exempted by production code.)
+
+Device, 9/9 passed, 0 silent:
+
+| Mode | ok | ok_alt | unnecessary review | extra review | wrong | of which residual |
+|---|---|---|---|---|---|---|
+| ai_off | 1,273 | 8 | 907 | 33 | 0 | 0 |
+| ai_correct, AI-primary row | 1,587 | 5 | 579 | 50 | 0 | 0 |
+| ai_wrong_completed, AI-primary row | 1,547 | 6 | 579 | 75 | 0 | 0 |
+| ai_wrong_completed, rule-parse row | 1,533 | 7 | 593 | 74 | 0 | 0 |
+| ai_flipped, AI-primary row | — | — | 1,437 | — | 39 | 39 |
+| ai_flipped, rule-parse row | 78 | 1 | 1,380 | — | 17 | 17 |
+| ai_correct, own model | 1,631 | 8 | 549 | 33 | 0 | 0 |
+| ai_wrong_completed, own model | 1,618 | 8 | 549 | 32 | 0 | 0 |
+| ai_flipped, own model | 577 | 8 | 868 | — | 23 | 23 |
+
+ai_off also records one purchase with its stated fee as a second row
+(`with_stated_fee_row`), as before.
+
+### Review budget
+
+`run.sh 5dae2e2d` with the budget lifted measures **336** messages to review
+(was 331), 0 regressions. `REVIEW_BUDGET` default in `tools/parser_diff/diff.py`
+(and the `run.sh` comment) is now 336, so there is again zero headroom by
+design: any further move to review fails until justified.
+
+### Other harnesses and suites
+
+- `flutter analyze`: no issues. Dart engine/domain/architecture/core/data/
+  adversarial: 10,065 passed, 23 skipped, 1 failed (`head_completeness`:
+  the acceptance test reads the untracked `tools/acceptance/flipped_residual.json`;
+  clears once it is tracked). Capture files: 1,673 passed.
+- Deno process-ios-sms / parse-sms / _shared (acceptance excluded): 1,412
+  passed, 0 failed, 2 ignored.
+- `server_diff.sh` (base b6fc0dad): 0 regressions; 300 rejected → processed,
+  734 processed → rejected, 88 booking changed. Against a157e68e: 0
+  regressions; 157 / 233 / 3 booking changed (all wrong direction → right).
+  MA39 «Cashback card annual fee SAR 150 deducted …» is review → debit 150 on
+  both (it was recorded as income before "cashback card" became a named noun).
+
+### Not verified
+
+- POS Refund HYPERPANDA is now an unnecessary review (safe).
+- The 17 forged deterministic rows on the device rule-parse path (see X-M3).
+- `pre_round_not_completed.json` still lists pre_round/8 and pre_round/84.
+- No iOS build / Shortcut, no real model, no local Supabase stack.

@@ -740,9 +740,7 @@
    "text": "SAR 500.00 transferred from your current account to savings account of Ali",
    "amount": 500,
    "currency": "SAR",
-   "answer": 500,
-   "server": "review",
-   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+   "answer": 500
   },
   {
    "id": "AT004b",
@@ -750,9 +748,7 @@
    "text": "SAR 500.00 transferred from your current account *4521 to the savings account of Sara Ahmed",
    "amount": 500,
    "currency": "SAR",
-   "answer": 500,
-   "server": "review",
-   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+   "answer": 500
   },
   {
    "id": "AT004c",

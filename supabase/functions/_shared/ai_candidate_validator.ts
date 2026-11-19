@@ -495,7 +495,10 @@ export const LABELLED_FIGURE = new RegExp(
     'minimum due|minimum payment|minimum amount|min\\.? due|amount due|due amount|total due|' +
     'الحد|حد الائتمان|حد ائتماني|حد البطاقة|حد الشراء|حد السحب|حد التحويل|حد العمليات|موعد سداد|' +
     'الرصيد|رصيد|المتبقي|المستحق|المتاح)(?![a-z])' +
-    '(?:(?!مبلغ|بقيمة|amount|amt|debited|credited|deducted|paid|transfer|خصم|تحويل|إيداع|ايداع)[^0-9\n|;]){0,32}[0-9][0-9,]*(?:\\.[0-9]+)?',
+    '(?:(?!مبلغ|بقيمة|amount|amt|debited|credited|deducted|paid|transfer|خصم|تحويل|إيداع|ايداع)[^0-9\n|;]){0,32}[0-9][0-9,]*(?:\\.[0-9]+)?' +
+    // Round 5 (review X, X-M3): the balance after the operation («رصيدك بعد
+    // الخصم 5,000 ريال»), as ParserEngine reads it; not «بعد خصم 1,000».
+    '|(?<![\u0621-\u064a])[وبل]?(?:ال)?رصيد(?:ك|كم)? بعد ال[\u0621-\u064a]+\\s*[0-9][0-9,]*(?:\\.[0-9]+)?',
   'gi',
 );
 

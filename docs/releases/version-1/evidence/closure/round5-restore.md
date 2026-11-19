@@ -15,7 +15,7 @@ For one merchant key, every side holds either a **rule** or a **removal**, with 
 
 | Finding | Fix | Test (status) |
 |---|---|---|
-| R4R-01 / AR-08..10: restored rule pushed over an unread removal; no push before a successful pull | Backfill only after a pull that completed; every restore deletes the rule pull cursor and the backfill markers (stored, survives restarts); restore drops queued intents for merchants it changed; the pull compares times and queues the newer device state | `merchant_rule_precedence_test.dart` "R4R-01 the pull fails once after a restore…", "R4R-01 the very first backfill also waits…" (pass) |
+| R4R-01 / AR-08..10: restored rule pushed over an unread removal; no push before a successful pull | (Correction, see "Review X" below: at `e5881120` this held for the backfill and restored rules only; queued user changes, including "Leave out", were still pushed before the pull.) Backfill only after a pull that completed; every restore deletes the rule pull cursor and the backfill markers (stored, survives restarts); restore drops queued intents for merchants it changed; the pull compares times and queues the newer device state | `merchant_rule_precedence_test.dart` "R4R-01 the pull fails once after a restore…", "R4R-01 the very first backfill also waits…" (pass) |
 | AR-08 backup removal ignored when the device holds the old rule | A backup removal newer than the device rule removes it, with the backup's time | precedence tables "backup removal newer than device rule" (pass) |
 | AR-09 older unread cloud change overwrites a restored newer edit | Same rule; the device's newer rule stands and is pushed | "AR-09 a restored newer edit is kept…" (pass) |
 | AR-10 same-category pull keeps old time; pulled removal stamped "now" | Cloud time adopted in both cases | "AR-10 a pull of the same category…", "AR-10 a pulled removal is not re-stamped…" (pass) |
@@ -73,3 +73,41 @@ A backup rule with nothing on the device is never added silently: it goes to the
 - The "Leave out" mark is imported by a merge restore only where the device also holds the removal; a full restore takes it as is.
 - A rule waiting for a choice while the device holds NO removal (legacy backup, nothing here) is still replaced by a cloud rule for that merchant, as before: the cloud already holds it, so nothing is resurrected.
 - A device on build 147 still applies cloud rules without comparing times.
+
+---
+
+# Review X (X-R1, X-R2): pull first, then push
+
+Review X of `e5881120` (`docs/releases/version-1/evidence/audits/X-round5-review.md`) rejected restore on two S2 findings. Working tree on `d658dbce`, nothing committed.
+
+**Correction.** The claim above "no push before a successful pull" was wrong at `e5881120`. It held for the backfill and for restored rules, but `MerchantRuleSyncService._run` pushed the outbox BEFORE the pull. The server's upsert has no time guard, so a queued "Leave out" (X-R1) or an older offline edit (X-R2, pre-existing) overwrote a newer change made on another device.
+
+**Fix** (`app/lib/features/planning_sync/services/merchant_rule_sync_service.dart` only):
+- Every run pulls first. A push happens only after a pull that completed in the same run; if the pull fails (any page), nothing is pushed and the queue is kept.
+- The sign-out flush (`push()`) follows the same order: pull, then push (without the backfill).
+- During the pull, each queued local change is compared with the cloud's version of its merchant by the one rule (`ruleVersionSupersedes`, the device's change carrying its own stamp). If the cloud's version is newer, the queued change is dropped from the outbox and never sent, and the cloud's version is taken by the normal path. For a losing "Leave out" that path is the existing exception: the newer cloud rule goes on the review list, it is neither applied nor removed. If the queued change is at least as recent, it stands and is pushed after the pull.
+- No server change: `user_merchant_rules` has no conditional (updated_at-guarded) update, so none is used.
+
+**Tests** (`app/test/core/backup/merchant_rule_precedence_test.dart`, with `fake_rule_cloud.dart` gaining `failFetchNumber`). All four failed on the tree before the fix and pass after:
+
+| Test | Before | After |
+|---|---|---|
+| "X-R1 a queued Leave out is not pushed over a newer rule another device saved before this sync…" | FAIL: cloud `removed` | pass: cloud keeps `shopping`, device removed, merchant back on the list, outbox empty |
+| "X-R2 an older queued edit does not overwrite another device's later edit; a newer queued edit still wins" | FAIL: `groceries` overwrote `shopping` | pass (both directions) |
+| "no push unless the pull of the same run completed: a pull failing on page 2…" | FAIL: pushed in the failing run | pass |
+| "the push-only flush (sign-out) also pulls first…" | FAIL: cloud `removed` | pass |
+
+Two existing tests changed setup, not expectation of behaviour:
+- "R4R-02 / A4": the cloud's copy is now stamped before the "Leave out" (it was written by the fake cloud's clock, which runs a month ahead of the device, so under pull-first it read as newer and went back on the list; that clock-ahead case is the separate signed-out test, which still passes).
+- The page-2 test allows the one-time backfill to re-send, with the same values, the two rules the broken run had already read.
+
+Still passing: restore→sync→restore (all precedence tables), R4R-01 (pull fails once after restore), "Leave out"→pull→restore ("the record of Leave out travels in a backup", "a backup rule newer than Leave out"), and the review-screen and result-dialog tests.
+
+**Remaining limits.**
+- A change written on another device between this run's pull and its push can still be overwritten (no server-side guard); the window is one run.
+- Times compared across devices come from different clocks until a change has been through the cloud; a device clock far ahead or behind still decides a race (R4R-05).
+- After an interrupted first pull, the one-time backfill re-sends rules the device already took from the cloud (same values).
+
+**Commands** (from `app/`): `PUB_CACHE=$HOME/.pub-cache flutter analyze`, then `PUB_CACHE=$HOME/.pub-cache flutter test --no-pub -j 2 test/core/backup test/data test/features/settings test/features/planning_sync test/core/privacy test/architecture test/integration_local`. Results: analyze **No issues found!**; the full run gave **+3365 ~34 -1**, the one failure being `test/architecture/destructive_path_inventory_test.dart` counting the new outbox `DELETE` in `merchant_rule_sync_service.dart`. I recorded it in that inventory (count 1 → 2, with the reason) and re-ran the inventory and precedence tests: **+81, all passed**. (`~34` skips are `test/integration_local`, which needs a local stack; no stack was started.)
+
+Files changed for review X: `merchant_rule_sync_service.dart`, `test/core/backup/merchant_rule_precedence_test.dart`, `test/core/backup/fake_rule_cloud.dart`, `test/architecture/destructive_path_inventory_test.dart` (outside my original list: inventory entry only), this file.

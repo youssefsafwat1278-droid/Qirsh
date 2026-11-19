@@ -11,6 +11,11 @@ class FakeRuleCloud implements MerchantRuleRemote {
 
   /// The next N fetches throw (a dropped connection during the pull).
   int failFetches = 0;
+
+  /// Fetch number N (1-based, counted from now on) throws: e.g. 2 fails the
+  /// second page of a pull.
+  int? failFetchNumber;
+  var _fetches = 0;
   var _clock = 0;
 
   String _tick() => DateTime.utc(2027, 1, 1)
@@ -34,6 +39,11 @@ class FakeRuleCloud implements MerchantRuleRemote {
   @override
   Future<List<Map<String, dynamic>>> fetchRows(
       {required SyncCursor after, int limit = 200}) async {
+    if (failFetchNumber != null && ++_fetches == failFetchNumber) {
+      failFetchNumber = null;
+      _fetches = 0;
+      throw StateError('synthetic network failure on a later page');
+    }
     if (failFetches > 0) {
       failFetches--;
       throw StateError('synthetic network failure');

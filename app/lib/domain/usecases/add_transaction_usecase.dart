@@ -945,8 +945,11 @@ class AddTransactionUseCase {
         !wasIgnored && meaning.disposition != MessageDisposition.record;
     // Round 5 (owner decision): a transfer to or from a person or between
     // accounts never goes to the model; the device's own reading decides it
-    // (clearly completed: recorded; otherwise review).
-    final localTransfer = CompletionCertainty.isTransfer(rawMessage);
+    // (clearly completed: recorded; otherwise review). Round 5 (X-M5): so
+    // does a move between the user's own accounts (a card repayment, a
+    // wallet topped up from a card).
+    final localTransfer = CompletionCertainty.isTransfer(rawMessage) ||
+        ParserEngine.isOwnAccountMove(rawMessage);
     // Round 5 (owner decision): an uncertain message (no completed-event
     // form, or a doubt) is asked of the model when AI is allowed; the
     // validator records only a "completed" answer for a text with no doubt.

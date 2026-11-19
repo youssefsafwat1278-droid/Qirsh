@@ -67,14 +67,24 @@ void main() {
   });
   tearDown(() => admission.finish());
 
-  Future<void> sync() => MerchantRuleSyncService(
+  MerchantRuleSyncService service({int pageSize = 200}) =>
+      MerchantRuleSyncService(
         db: db,
         queue: queue(),
         remote: cloud,
         getAuthUserId: () async => signedIn,
         mayEgress: () async => true,
         serverReady: () async => true,
-      ).sync();
+        pageSize: pageSize,
+      );
+  Future<void> sync({int pageSize = 200}) => service(pageSize: pageSize).sync();
+  Future<List<String>> queued() async => [
+        for (final r in await db
+            .customSelect('SELECT entity_id FROM planning_sync_outbox '
+                "WHERE entity_type = 'merchant_rule';")
+            .get())
+          r.read<String>('entity_id'),
+      ];
 
   Future<void> clearOutbox() => db.customStatement(
       "DELETE FROM planning_sync_outbox WHERE entity_type = 'merchant_rule';");
@@ -397,7 +407,10 @@ void main() {
       (backup['tables'] as Map)
           .removeWhere((t, _) => MerchantRuleRestore.historyTables.contains(t));
       await deviceHolds(null);
-      cloud.otherDevice(key, _a); // live in the cloud, not pulled yet
+      // Live in the cloud since before the "Leave out", not pulled yet. (With
+      // a cloud clock running ahead it would read as newer and go back on
+      // the list instead: see the signed-out test below.)
+      cloud.otherDevice(key, _a, at: '2026-01-01T00:00:00.000Z');
 
       await d.restore(backup);
       expect(await MerchantRuleRestore(db).pending(), hasLength(1));
@@ -435,7 +448,8 @@ void main() {
 
     Future<List<String>> tombstones() async => [
           for (final r in await db
-              .customSelect('SELECT merchant_key FROM merchant_rule_tombstones;')
+              .customSelect(
+                  'SELECT merchant_key FROM merchant_rule_tombstones;')
               .get())
             r.read<String>('merchant_key'),
         ];
@@ -514,6 +528,83 @@ void main() {
       await leaveOut(signedInNow: true);
       await d.restore(newer);
       expect(await device(), 'removed');
+      expect(await MerchantRuleRestore(db).pending(), hasLength(1));
+    });
+
+    test(
+        'X-R1 a queued "Leave out" is not pushed over a newer rule another '
+        'device saved before this sync: the cloud keeps it and the merchant '
+        'goes back on the list', () async {
+      await leaveOut(signedInNow: true);
+      expect(await queued(), [key], reason: 'the removal is queued');
+      cloud.otherDevice(key, _b); // later, on another device, not pulled
+
+      await sync();
+      await sync();
+      expect(cloudState(), _b, reason: 'the newer rule is not overwritten');
+      expect(await device(), 'removed', reason: 'not applied silently');
+      expect(
+          (await MerchantRuleRestore(db).pending())
+              .map((c) => (c.merchantKey, c.categoryKey)),
+          [(key, _b)]);
+      expect(await queued(), isEmpty, reason: 'the losing removal is dropped');
+    });
+
+    test(
+        'X-R2 an older queued edit does not overwrite another device\'s '
+        'later edit; a newer queued edit still wins', () async {
+      await rules.confirmMerchantCategory(
+          rawMerchant: shop, categoryKey: _a, isUserConfirmed: true);
+      await sync();
+      // Offline edit here, then a later edit on another device.
+      await rules.confirmMerchantCategory(
+          rawMerchant: shop, categoryKey: 'groceries', isUserConfirmed: true);
+      cloud.otherDevice(key, _b);
+      await sync();
+      await sync();
+      expect(await device(), _b);
+      expect(cloudState(), _b);
+      expect(await queued(), isEmpty);
+
+      // The other way round: the other device first, then a newer edit here.
+      cloud.otherDevice(key, _a, at: '2026-01-01T00:00:00.000Z');
+      await rules.confirmMerchantCategory(
+          rawMerchant: shop, categoryKey: 'groceries', isUserConfirmed: true);
+      await sync();
+      expect(await device(), 'groceries');
+      expect(cloudState(), 'groceries');
+    });
+
+    test(
+        'no push unless the pull of the same run completed: a pull failing '
+        'on page 2 pushes nothing; the next run reconciles and pushes',
+        () async {
+      for (final other in ['SYNTHETIC OTHER A', 'SYNTHETIC OTHER B']) {
+        cloud.otherDevice(other, _a);
+      }
+      await rules.confirmMerchantCategory(
+          rawMerchant: shop, categoryKey: _a, isUserConfirmed: true);
+      cloud.pushedKeys.clear();
+      cloud.failFetchNumber = 2;
+      await sync(pageSize: 2);
+      expect(cloud.pushedKeys, isEmpty);
+      expect(await queued(), [key], reason: 'kept for the next run');
+      await sync(pageSize: 2);
+      // (The one-time backfill also re-sends the two rules the first run
+      // read before its pull broke off: same values, nothing overwritten.)
+      expect(cloud.pushedKeys, contains(key));
+      expect(cloudState(), _a);
+      expect(cloud.live().values.toSet(), {_a});
+      expect(await queued(), isEmpty);
+    });
+
+    test(
+        'the push-only flush (sign-out) also pulls first: a queued '
+        '"Leave out" is not pushed over a newer rule', () async {
+      await leaveOut(signedInNow: true);
+      cloud.otherDevice(key, _b);
+      await service().push();
+      expect(cloudState(), _b);
       expect(await MerchantRuleRestore(db).pending(), hasLength(1));
     });
 

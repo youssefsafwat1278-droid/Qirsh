@@ -590,7 +590,12 @@
       "currency": "EGP",
       "merchant": null,
       "occurred_at_kept": false
-    }
+    },
+    "expected_device": {
+      "accepted": false,
+      "reason": "direction_contradiction"
+    },
+    "note_device": "Round 5 (review X, X-M2/X-M4): purchase and refund both named give the rule parser no direction and the text has a completed form: the device validator refuses the model direction (the server applies the same rule in parse.ts, after this validator)."
   },
   {
     "name": "LR-06 OTP 'use NNNN as OTP' is not a transaction",

@@ -34,8 +34,10 @@ import 'planning_outbox_queue.dart';
 /// restore): per merchant, the more recent of "rule" and "removal" wins, the
 /// device on a tie. The cloud's time is the row's server-owned `updated_at`
 /// (so the keyset pull never skips a row); after a push or a pull the device
-/// copy carries that same time. A pull never overwrites a merchant that still
-/// has a local outbox row (that edit is pushed and wins). When the device's
+/// copy carries that same time. Every run PULLS FIRST and pushes only after
+/// that pull completed: a queued local change (outbox row) is compared with
+/// the cloud's version by the same rule; if the cloud's is newer the queued
+/// change is dropped and never sent. When the device's
 /// state is the newer one and differs from the cloud row, the pull queues it,
 /// so a removal or a newer rule on the device reaches the cloud instead of
 /// being undone by an older cloud row. One exception: a newer cloud rule
@@ -173,18 +175,20 @@ class MerchantRuleSyncService {
   late final _rules = DriftMerchantCategoryRepository(_db); // never enqueues
   bool _busy = false;
 
-  /// Push, then pull, then the one-time backfill.
+  /// Pull, then the one-time backfill, then push — the push only after a
+  /// pull that completed in the same run.
   Future<MerchantRuleSyncResult> sync() => syncWithPhase(SyncPhaseBinding());
 
   Future<MerchantRuleSyncResult> syncWithPhase(SyncPhaseBinding phase) =>
-      _run(phase, pull: true);
+      _run(phase, backfill: true);
 
-  /// Push only (the sign-out flush).
+  /// The sign-out flush: queued changes are delivered, but like every run
+  /// only after a completed pull has compared them with the cloud.
   Future<MerchantRuleSyncResult> push() =>
-      _run(SyncPhaseBinding(), pull: false);
+      _run(SyncPhaseBinding(), backfill: false);
 
   Future<MerchantRuleSyncResult> _run(SyncPhaseBinding phase,
-      {required bool pull}) async {
+      {required bool backfill}) async {
     if (_busy) return const MerchantRuleSyncResult();
     _busy = true;
     try {
@@ -210,19 +214,22 @@ class MerchantRuleSyncService {
       if (!await _serverReady() || !run.isCurrent) {
         return const MerchantRuleSyncResult();
       }
-      final pushed = await _push(run, phase, uid);
-      if (!pull) {
-        return MerchantRuleSyncResult(pushed: pushed.$1, failed: pushed.$2);
-      }
+      // Pull FIRST: every queued change is compared with the cloud's version
+      // of its merchant (one precedence rule) before anything is sent; a
+      // queued change that loses is dropped. The server's upsert has no time
+      // guard, so pushing first could overwrite a newer change made on
+      // another device.
       final pulled = await _pull(run, phase, uid);
-      // Not after a failed or interrupted pull: the marker stays unset, so
-      // the backfill waits for a later run whose pull completes.
-      if (pulled.completed) await _backfill(run, uid, pulled.seen);
-      // Rows the backfill just queued go out in this same run.
-      final more = await _push(run, phase, uid);
+      var pushed = (0, 0);
+      // Nothing is pushed after a failed or interrupted pull; the queue and
+      // the backfill marker stay for a later run whose pull completes.
+      if (pulled.completed) {
+        if (backfill) await _backfill(run, uid, pulled.seen);
+        pushed = await _push(run, phase, uid);
+      }
       return MerchantRuleSyncResult(
-        pushed: pushed.$1 + more.$1,
-        failed: pushed.$2 + more.$2,
+        pushed: pushed.$1,
+        failed: pushed.$2,
         applied: pulled.applied,
         removed: pulled.removed,
         parked: await run.runLocal(_parkedCount),
@@ -359,17 +366,26 @@ class MerchantRuleSyncService {
         !DriftMerchantCategoryRepository.isSyncableMerchantKey(key)) {
       return _Outcome.skipped;
     }
-    // A local edit not yet pushed wins: it is newer than anything here.
-    if (await _hasLocalIntent(key)) {
-      await _unpark(serverId);
-      return _Outcome.skipped;
-    }
     final at = RuleVersion.parse('${row['updated_at']}');
     final deleted = row['deleted_at'] != null;
     final held = await deviceRuleVersion(_db, key);
     final wins = ruleVersionSupersedes(
         deleted ? RuleVersion.removal(at) : RuleVersion.rule(category, at),
         held);
+    final queued = await _hasLocalIntent(key);
+    if (!wins && queued) {
+      // A queued local change at least as recent as the cloud's: it stands
+      // and is pushed after this pull.
+      await _unpark(serverId);
+      return _Outcome.skipped;
+    }
+    if (wins && queued) {
+      // The cloud's version is newer than the queued local change: the change
+      // is dropped, never pushed, and the cloud's version is taken below.
+      await _db.customStatement('DELETE FROM planning_sync_outbox '
+          'WHERE entity_type = ${sqlString(entityType)} '
+          'AND entity_id = ${sqlString(key)};');
+    }
     if (!wins) {
       // The device's rule or removal is at least as recent: it stands, and
       // where it differs from the cloud row it is sent, like the user's own

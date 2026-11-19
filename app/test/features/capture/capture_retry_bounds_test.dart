@@ -219,7 +219,9 @@ ProcessedCaptureDto _processedFor(String id) => ProcessedCaptureDto(
         'merchant': 'NETFLIX',
         'last4': '4521',
         'occurredAt': '2026-04-08T09:45:00.000Z',
-        'rawMessage': 'sanitized',
+        // Review X (X-M1): a model row's direction is checked against the
+        // device's rule reading of the message the server returns.
+        'rawMessage': _bankPurchase,
         'parserSource': 'ai',
         'confidence': 0.95,
       },

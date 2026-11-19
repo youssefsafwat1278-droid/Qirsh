@@ -1929,8 +1929,8 @@
  },
  {
   "id": "r4_pair_card_paid_to_merchant",
-  "raw": "Card *4521: SAR 85.00 paid to Example Diner",
-  "expected": "Card *4521: SAR 85.00 paid to Example Diner",
+  "raw": "Card *4521: SAR 85.00 purchase at Example Diner",
+  "expected": "Card *4521: SAR 85.00 purchase at Example Diner",
   "pair": "r4_pair_paid_to_person",
   "secrets": [],
   "mustKeep": [
@@ -3755,8 +3755,8 @@
  },
  {
   "id": "r5_decision_payment_card",
-  "raw": "Payment of SAR 85.00 to Careem with card *4521",
-  "expected": "Payment of SAR 85.00 to Careem with card *4521",
+  "raw": "Purchase of SAR 85.00 at Careem with card *4521",
+  "expected": "Purchase of SAR 85.00 at Careem with card *4521",
   "secrets": [],
   "mustKeep": [
    "85.00",

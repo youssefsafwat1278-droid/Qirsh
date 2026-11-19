@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:money_companion/domain/capture/validated_capture.dart';
+import 'package:money_companion/engine/parser/direction_signal.dart';
 import 'package:money_companion/engine/parser/completion_certainty.dart';
 import 'package:money_companion/engine/parser/message_meaning.dart';
 import 'package:money_companion/engine/parser/parser_engine.dart';
@@ -23,13 +23,72 @@ void main() {
     expect(server['transferPattern'], CompletionCertainty.transferPattern);
   });
 
-  test('the named-direction keywords equal the server lists (drift)', () {
-    final rules = jsonDecode(File(
-            '../supabase/functions/process-ios-sms/parser_rules.json')
-        .readAsStringSync()) as Map<String, dynamic>;
-    expect((rules['debitKeywords'] as List).cast<String>(), namedDebitKeywords);
-    expect(
-        (rules['creditKeywords'] as List).cast<String>(), namedCreditKeywords);
+  // Review X (X-M1/X-M2/X-M4): the direction the rule parser reads — the
+  // one a model's answer must agree with. Server twin:
+  // process-ios-sms/review_x_direction_test.ts.
+  group('local direction (review X wordings)', () {
+    const cases = {
+      'Your payroll of SAR 8,500.00 has been posted to account *5678': TxnDirection.credit,
+      'Payroll SAR 12,000.00 to account *5678 from Test Corp': TxnDirection.credit,
+      'أودع مبلغ 2,000 ريال في حسابك *5678': TxnDirection.credit,
+      'Bonus SAR 2,000.00 to account *5678 from Test Corp': TxnDirection.credit,
+      'مكافأة 2,000 ريال لحسابك *5678': TxnDirection.credit,
+      'Dividend SAR 300.00 to your account *5678': TxnDirection.credit,
+      'Rent SAR 3,000.00 from Test Tenant arrived in account *5678': TxnDirection.credit,
+      'Cashback of SAR 18.40 has been added to your card *4521': TxnDirection.credit,
+      'Fee SAR 25.00 added to your account *5678': TxnDirection.debit,
+      'Annual card fee SAR 250.00 applied to card *4521': TxnDirection.debit,
+      'You were billed SAR 199.00 by Test Telecom on card *4521': TxnDirection.debit,
+      'المبلغ المخصوم 75.00 ريال, بطاقة 4521,': TxnDirection.debit,
+      'سُدد مبلغ 300 ريال لـ Test Electricity من حساب *5678': TxnDirection.debit,
+      'ATM cash SAR 500.00 card *4521 at Olaya branch': TxnDirection.debit,
+      'Gym membership SAR 199.00 renewed on card *4521': TxnDirection.debit,
+      'Debit SAR 45.00 card *4521 Test Diner': TxnDirection.debit,
+      'Credit transaction: SAR 4,000.00 from Test Corp Payroll': TxnDirection.credit,
+      'Refund for your purchase at Noon: SAR 150.00 returned to card *4521': TxnDirection.credit,
+      'Standing order of SAR 1,000.00 to Ali executed today': TxnDirection.debit,
+      'سداد فاتورة 300 ريال ببطاقتك الائتمانية 4521': TxnDirection.debit,
+      // X-M4: conflicting cues give no local direction.
+      'Purchase SAR 150.00 at Noon card *4521 completed. Merchant confirmation received':
+          TxnDirection.unknown,
+      'Purchase SAR 20.00 at Jarir card *4521, cashback SAR 50.00 credited':
+          TxnDirection.unknown,
+      'تم إيداع 50 ريال استرداد نقدي لبطاقتك 4521 عن عملية شراء بمبلغ 500 ريال':
+          TxnDirection.unknown,
+    };
+    for (final MapEntry(key: text, value: direction) in cases.entries) {
+      test(text, () {
+        expect(DirectionSignal.localOf(text), direction);
+        final flipped = direction == TxnDirection.credit
+            ? TxnDirection.debit
+            : TxnDirection.credit;
+        expect(DirectionSignal.modelDirectionRefused(text, flipped), isTrue);
+        if (direction != TxnDirection.unknown) {
+          expect(DirectionSignal.modelDirectionRefused(text, direction), isFalse);
+        }
+      });
+    }
+  });
+
+  test('conflicting cues are not clearly completed (X-M4)', () {
+    for (final text in [
+      'Purchase SAR 150.00 at Noon card *4521 completed. Merchant confirmation received',
+      'Purchase SAR 20.00 at Jarir card *4521, cashback SAR 50.00 credited',
+      'تم إيداع 50 ريال استرداد نقدي لبطاقتك 4521 عن عملية شراء بمبلغ 500 ريال',
+    ]) {
+      expect(ParserEngine.meaningOf(text).reason, 'conflicting_cues', reason: text);
+    }
+  });
+
+  test('own-account moves are read locally only (X-M5)', () {
+    for (final text in [
+      'Your STC Pay wallet was topped up with SAR 100 from Al Rajhi card *4521',
+      'تم تحويل 300 ريال من بطاقتك الائتمانية إلى حسابك الجاري',
+    ]) {
+      expect(ParserEngine.isOwnAccountMove(text), isTrue, reason: text);
+      expect(ParserEngine.meaningOf(text).disposition,
+          isNot(MessageDisposition.record), reason: text);
+    }
   });
 
   group('doubt families (one wording each; the families are what counts)', () {

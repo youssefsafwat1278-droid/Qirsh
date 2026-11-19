@@ -2,7 +2,7 @@
 // (tools/acceptance/money_cases.jsonl) through the device's FINAL effect —
 // the saved row, the dashboard totals and the review list — with the real
 // CaptureImportService, CaptureSyncService and AddTransactionUseCase on an
-// in-memory database, in three modes:
+// in-memory database, in these modes:
 //   ai_off              the device alone (Cloud and AI off);
 //   ai_correct          an AI-primary server row carrying the right answer
 //                       (a processed row for a completed movement, a
@@ -10,11 +10,18 @@
 //                       an OTP or advert);
 //   ai_wrong_completed  a server row (AI-primary, and the rule parse) forged
 //                       as "completed" with a figure of the text;
-//   ai_flipped          the same forged row with the direction flipped.
-// Rows marked model_dependent (a wrong "completed" on a text with no doubt
-// and no known completed wording) are counted apart, not hidden.
-// Acceptance: zero wrong financial entries and zero silent losses in every
-// mode; unnecessary reviews are counted and printed, not failures.
+//   ai_flipped          the same forged row with the direction flipped;
+//   own model (correct / wrong_completed / flipped)
+//                       the device's own model path (AI consent on, no
+//                       server: AddTransactionUseCase._tryAiParseFirst) with a
+//                       fake AiParserClient giving those answers.
+// Round 5 (review X, X-M3): no row is exempt. In ai_flipped, a row recorded
+// with the model's flipped direction because the text gives the rule parser
+// no direction is still a wrong entry: those rows are listed by hand in
+// tools/acceptance/flipped_residual.json (per path); the test fails on any
+// wrong row not listed there and on any listed row that is no longer wrong.
+// Acceptance: zero wrong financial entries (beyond that list) and zero silent
+// losses in every mode; unnecessary reviews are counted, not failures.
 // Synthetic messages only. ACCEPTANCE_OUT=<file> writes the per-row result.
 import 'dart:convert';
 import 'dart:io';
@@ -72,8 +79,11 @@ class _Guard extends OwnershipGuard {
   Future<bool> isCurrent(AdmissionToken token) async => token == _token;
 }
 
-/// The import path makes no AI request of its own; counted.
+/// The import path makes no AI request of its own; counted. On the own model
+/// path it gives [answer] (null: "not a transaction").
 class _SpyAi implements AiParserClient {
+  _SpyAi([this.answer]);
+  final AiParseResponse? answer;
   int calls = 0;
   @override
   Future<AiParseResponse?> parse({
@@ -82,7 +92,7 @@ class _SpyAi implements AiParserClient {
     required String installId,
   }) async {
     calls++;
-    return null;
+    return answer;
   }
 }
 
@@ -147,15 +157,8 @@ String _classOf(TransactionEntity t) {
       : 'debit';
 }
 
-/// ok / wrong / silent / unnecessary_review / extra_review, and
-/// model_dependent: a wrong entry on a row marked so (a forged answer that is
-/// by construction indistinguishable from a right one — reported, not hidden).
+/// ok / wrong / silent / unnecessary_review / extra_review.
 String _grade(Map<String, dynamic> e, _Observed o) {
-  final g = _gradeOf(e, o);
-  return g == 'wrong' && e['model_dependent'] == true ? 'model_dependent' : g;
-}
-
-String _gradeOf(Map<String, dynamic> e, _Observed o) {
   // alt: a recorded outcome that is not a wrong entry (the original-currency
   // figure of a foreign purchase; the paid total of a tip message).
   final alt = (e['alt'] as List?)?.cast<Map<String, dynamic>>() ?? const [];
@@ -278,6 +281,51 @@ CaptureServerFetch? _flipped(Map<String, dynamic> r, {required bool ai}) {
   });
 }
 
+/// The model's answer on the device's own model path: the server row's
+/// answer of the same mode as a model response (null: "not a transaction").
+AiParseResponse? _ownAnswer(Map<String, dynamic> r, String mode) {
+  final f = r['forged'] as Map<String, dynamic>?;
+  if (f == null) return null;
+  final e = r['expected'][mode] as Map<String, dynamic>?;
+  if (e == null) return null;
+  var direction = f['direction'] as String;
+  var type = f['type'] as String;
+  if (mode == 'ai_correct') {
+    if (e['outcome'] != 'recorded') return null;
+    final cls = e['class'] as String;
+    direction = cls == 'credit' ? 'credit' : 'debit';
+    type = cls == 'transfer'
+        ? 'transfer'
+        : cls == 'credit'
+            ? (f['type'] == 'refund' ? 'refund' : 'income')
+            : 'payment';
+  } else if (mode == 'ai_flipped') {
+    final credit = direction == 'credit';
+    direction = credit ? 'debit' : 'credit';
+    type = credit ? 'payment' : 'refund';
+  }
+  return AiParseResponse(
+    amount: (f['amount'] as num).toDouble(),
+    amountText: f['amount_text'] as String,
+    currency: f['currency'] as String,
+    type: type,
+    direction: direction,
+    categoryKey: type == 'payment' ? 'shopping' : 'other',
+    messageType: 'transaction',
+    status: 'completed',
+  );
+}
+
+Map<String, List<String>> _residual() {
+  final json = jsonDecode(
+          File('../tools/acceptance/flipped_residual.json').readAsStringSync())
+      as Map<String, dynamic>;
+  return {
+    for (final e in json.entries)
+      e.key: [for (final x in e.value as List) (x as Map)['id'] as String]
+  };
+}
+
 void main() {
   // ACCEPTANCE_ONLY=<id>,<id> runs those rows only (investigation).
   final only = Platform.environment['ACCEPTANCE_ONLY']?.split(',').toSet();
@@ -286,8 +334,12 @@ void main() {
   final out = Platform.environment['ACCEPTANCE_OUT'];
   final results = <String, Map<String, String>>{};
 
+  final residualByPath = _residual();
+
   Future<_Observed> run(Map<String, dynamic> r,
-      {required CaptureServerFetch fetch, required bool aiPrimary}) async {
+      {required CaptureServerFetch fetch,
+      required bool aiPrimary,
+      String? ownModel}) async {
     final db = await AppDatabase.open(
         executor: NativeDatabase.memory(), keyStore: _MemoryKeyStore());
     try {
@@ -312,7 +364,7 @@ void main() {
         backendConfigured: true,
         loadInstallId: () async => 'install',
       );
-      final ai = _SpyAi();
+      final ai = _SpyAi(ownModel == null ? null : _ownAnswer(r, ownModel));
       final queue = _Queue()
         ..items.add(SharedCapturedMessage(
             id: _id,
@@ -330,10 +382,23 @@ void main() {
         dedupStore: DriftDedupStore(db),
         parserIsolate: const FakeParserIsolate(),
         aiClient: ai,
-        loadAiConsent: () async => false,
+        loadAiConsent: () async => ownModel != null,
         installId: 'install',
       ));
-      await CaptureImportService(
+      // The device's own model path (manual paste, the Shortcut's local path,
+      // Android notifications): the use case itself, AI consent on; an
+      // accepted reading is confirmed (no user confirmation in between).
+      final ownResult = ownModel == null
+          ? null
+          : await ingest.fromCapturedMessage(
+              CapturedMessage(
+                  text: r['text'] as String,
+                  senderId: r['sender'] as String?,
+                  source: CapturedMessageSource.manualPaste,
+                  receivedAt: _received),
+              forceLocalAutoConfirm: true);
+      if (ownModel == null) {
+        await CaptureImportService(
         queue: queue,
         server: _Server(fetch),
         captureSyncService: sync,
@@ -343,8 +408,15 @@ void main() {
         replicaOwnerUid: () async => 'user-A',
         ownershipGuard: _Guard(),
         aiPrimarySelected: aiPrimary ? () async => true : null,
-      ).run();
-      expect(ai.calls, 0, reason: 'the import path makes no AI request');
+        ).run();
+      }
+      if (ownModel == null) {
+        expect(ai.calls, 0, reason: 'the import path makes no AI request');
+      } else if (CompletionCertainty.isTransfer(r['text'] as String) ||
+          r['truth'] == 't') {
+        expect(ai.calls, 0,
+            reason: 'a transfer or own-account move never reaches the model');
+      }
       final saved = (await txRepo.getAll())
           .where((t) => t.status == TransactionStatus.confirmed)
           .toList();
@@ -408,10 +480,13 @@ void main() {
           reason: null
         );
       }
-      // A pending (unconfirmed) row would be visible too.
+      // A pending (unconfirmed) row would be visible too, as would a message
+      // the own path hands to Smart Inbox (unprocessable).
       final pending = await txRepo.getAll();
+      final kept = pending.isNotEmpty ||
+          ownResult?.disposition == CapturedMessageDisposition.unprocessable;
       return (
-        outcome: pending.isEmpty ? 'ignored' : 'review',
+        outcome: kept ? 'review' : 'ignored',
         cls: null,
         amount: null,
         currency: null,
@@ -423,50 +498,69 @@ void main() {
     }
   }
 
-  final paths = <String, (String mode, bool aiPrimary,
-      CaptureServerFetch? Function(Map<String, dynamic>))>{
-    'ai_off (device alone)': (
-      'ai_off',
-      false,
-      (_) => const CaptureServerFetch(CaptureFetchStatus.notConfigured)
-    ),
+  const off = CaptureServerFetch(CaptureFetchStatus.notConfigured);
+  // name: (mode, AI-primary server row, server answer, own-model answer mode)
+  final paths = <String, (String, bool,
+      CaptureServerFetch? Function(Map<String, dynamic>), String?)>{
+    'ai_off (device alone)': ('ai_off', false, (_) => off, null),
     'ai_correct (AI-primary row)': (
       'ai_correct',
       true,
-      (r) => CaptureServerFetch(CaptureFetchStatus.ok, {_id: _correct(r)})
+      (r) => CaptureServerFetch(CaptureFetchStatus.ok, {_id: _correct(r)}),
+      null
     ),
     'ai_wrong_completed (AI-primary row)': (
       'ai_wrong_completed',
       true,
-      (r) => _forged(r, ai: true)
+      (r) => _forged(r, ai: true),
+      null
     ),
     'ai_wrong_completed (rule-parse row)': (
       'ai_wrong_completed',
       false,
-      (r) => _forged(r, ai: false)
+      (r) => _forged(r, ai: false),
+      null
     ),
     'ai_flipped (AI-primary row)': (
       'ai_flipped',
       true,
-      (r) => _flipped(r, ai: true)
+      (r) => _flipped(r, ai: true),
+      null
     ),
     'ai_flipped (rule-parse row)': (
       'ai_flipped',
       false,
-      (r) => _flipped(r, ai: false)
+      (r) => _flipped(r, ai: false),
+      null
+    ),
+    'ai_correct (own model)': ('ai_correct', false, (_) => off, 'ai_correct'),
+    'ai_wrong_completed (own model)': (
+      'ai_wrong_completed',
+      false,
+      (r) => r['forged'] == null ? null : off,
+      'ai_wrong_completed'
+    ),
+    'ai_flipped (own model)': (
+      'ai_flipped',
+      false,
+      (r) => r['expected']['ai_flipped'] == null ? null : off,
+      'ai_flipped'
     ),
   };
 
-  for (final MapEntry(key: name, value: (mode, aiPrimary, fetchOf))
+  for (final MapEntry(key: name, value: (mode, aiPrimary, fetchOf, own))
       in paths.entries) {
     test('acceptance set — $name: no wrong entry, no silent loss', () async {
       final counts = <String, int>{};
       final failures = <String>[];
+      final residual = (residualByPath['device $name'] ?? const []).toSet();
+      final wrongIds = <String>{};
       final notInTotals = <String>[];
       for (final r in rows) {
         final fetch = fetchOf(r);
         if (fetch == null) continue; // no figure to forge
-        final o = await run(r, fetch: fetch, aiPrimary: aiPrimary);
+        final o =
+            await run(r, fetch: fetch, aiPrimary: aiPrimary, ownModel: own);
         final e = r['expected'][mode] as Map<String, dynamic>;
         final g = _grade(e, o);
         counts[g] = (counts[g] ?? 0) + 1;
@@ -483,18 +577,24 @@ void main() {
         }
         (results[r['id'] as String] ??= {})[name] =
             '$g ${o.outcome}${o.cls == null ? '' : ' ${o.cls} ${o.amount} ${o.currency}'}';
-        if (g == 'wrong' || g == 'silent') {
+        if (g == 'wrong') wrongIds.add(r['id'] as String);
+        if (g == 'silent' || (g == 'wrong' && !residual.contains(r['id']))) {
           failures.add('$g ${r['id']}: expected ${jsonEncode(e)}, got '
               '${o.outcome} ${o.cls ?? ''} ${o.amount ?? ''} ${o.currency ?? ''} '
               '(rows ${o.rows}) — ${r['text']}');
         }
       }
+      for (final id in residual.difference(wrongIds)) {
+        failures.add('$id: listed as residual but no longer wrong');
+      }
       // ignore: avoid_print
-      print('ROUND5 DEVICE $name: ${jsonEncode(counts)}');
+      print('ROUND5 DEVICE $name: ${jsonEncode(counts)} residual (recorded '
+          "with the model's flipped direction: the text gives the rule parser "
+          'no direction) ${residual.length}');
       // ignore: avoid_print
       if (notInTotals.isNotEmpty) print('NOT IN TOTALS:\n${notInTotals.join('\n')}');
       if (out != null) {
-        File('$out.${mode}_${aiPrimary ? 'primary' : 'rule'}.json')
+        File('$out.${mode}_${own != null ? 'own' : aiPrimary ? 'primary' : 'rule'}.json')
             .writeAsStringSync(jsonEncode(results));
       }
       expect(failures, isEmpty, reason: failures.join('\n'));

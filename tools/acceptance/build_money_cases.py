@@ -22,8 +22,9 @@ answer used for mode (c), and the expected outcome for the three modes:
 ai_off, ai_correct (the model answers right), ai_wrong_completed (the model
 answers "completed" with the forged figure), and ai_flipped (completed
 debit/credit rows: the model answers the true figure in the other direction).
-An expected outcome carries `model_dependent: true` where a wrong model answer
-cannot be told from a right one (model_dependence.json). An expected outcome is
+Round 5 (review X, X-M3): no row is exempt; a recorded row whose class or
+figure differs from the truth is a wrong entry in every mode. An expected
+outcome is
 {"outcome": "recorded", "class": debit|credit|transfer, "amount", "currency"},
 {"outcome": "review"} or {"outcome": "ignored"}. Synthetic messages only.
 """
@@ -44,12 +45,25 @@ RELABEL = {
     # transcription's 'n' is a mislabel. The original-currency figure is the
     # declined_cases.json `foreign` convention.
     'FXFEE': ('d', 383.25, 'SAR', FX_ALT),
+    # Review X (X-S2): a move between the user's own accounts.
+    'R4M09a': ('t', 500, 'SAR', None),
 }
 # Case-table rows relabelled on the text (round 5), with the reason.
 TABLE_RELABEL = {
     # "Earn a point for every SAR 10 you spend with your card": an advert (the
     # table's 'n' only says "never recorded"; it may be dropped).
-    'follow_up3/H13': 'i',
+    'follow_up3/H13': ('i', None, None),
+    # Review X (X-S1): card repayments ("Credit card payment … received",
+    # "Minimum due … paid") are own-account moves: policy review, as the hand
+    # label U-S1-card-repayment.
+    'declined/841': ('r', None, None),
+    'declined/842': ('r', None, None),
+    'declined/843': ('r', None, None),
+    'declined/957': ('r', None, None),
+    # Review X (X-S2): completed movements the pre-round parser read as not
+    # completed (an earlier attempt failed; the returned cheque's fee debited).
+    'pre_round/8': ('d', 50.0, 'SAR'),
+    'pre_round/84': ('d', 100.0, 'SAR'),
 }
 # A recorded outcome that is not a wrong entry although the table asks for a
 # review: the paid total of a tip message (follow_up4 Gt rows, SM-07; the
@@ -108,6 +122,44 @@ FIGURE = re.compile(rf'(?:(?<![A-Za-z])({CODES})\s?{FIG})|(?:{FIG}\s?(?:({CODES}
 CREDITISH = re.compile(r'refund|credited|cashback|deposit|received|reversal|استرداد|استرجاع|رد مبلغ|إيداع|ايداع|وارد|مرتجع', re.I)
 
 
+# Review X (round 5): X-M1/X-M2 direction wordings, X-M4 conflicting cues
+# (with U R4M-10 and the two U §1 cashback texts), X-M5 own-account moves.
+# Added after every other source: a text already in the set keeps its id.
+X_ROWS = [
+    ('X-M1-payroll-posted', 'c', 8500, 'SAR', 'X X-M1', 'Your payroll of SAR 8,500.00 has been posted to account *5678'),
+    ('X-M1-payroll', 'c', 12000, 'SAR', 'X X-M1', 'Payroll SAR 12,000.00 to account *5678 from Test Corp'),
+    ('X-M1-awda', 'c', 2000, 'SAR', 'X X-M1', 'أودع مبلغ 2,000 ريال في حسابك *5678'),
+    ('X-M1-bonus', 'c', 2000, 'SAR', 'X X-M1', 'Bonus SAR 2,000.00 to account *5678 from Test Corp'),
+    ('X-M1-mukafaa', 'c', 2000, 'SAR', 'X X-M1', 'مكافأة 2,000 ريال لحسابك *5678'),
+    ('X-M1-dividend', 'c', 300, 'SAR', 'X X-M1', 'Dividend SAR 300.00 to your account *5678'),
+    ('X-M1-rent', 'c', 3000, 'SAR', 'X X-M1', 'Rent SAR 3,000.00 from Test Tenant arrived in account *5678'),
+    ('X-M1-cashback', 'c', 18.40, 'SAR', 'X X-M1', 'Cashback of SAR 18.40 has been added to your card *4521'),
+    ('X-M1-fee', 'd', 25, 'SAR', 'X X-M1', 'Fee SAR 25.00 added to your account *5678'),
+    ('X-M1-annual-fee', 'd', 250, 'SAR', 'X X-M1', 'Annual card fee SAR 250.00 applied to card *4521'),
+    ('X-M1-billed', 'd', 199, 'SAR', 'X X-M1', 'You were billed SAR 199.00 by Test Telecom on card *4521'),
+    ('X-M1-makhsoom', 'd', 75, 'SAR', 'X X-M1', 'المبلغ المخصوم 75.00 ريال, بطاقة 4521,'),
+    ('X-M1-sudid', 'd', 300, 'SAR', 'X X-M1', 'سُدد مبلغ 300 ريال لـ Test Electricity من حساب *5678'),
+    ('X-M1-atm-cash', 'd', 500, 'SAR', 'X X-M1', 'ATM cash SAR 500.00 card *4521 at Olaya branch'),
+    ('X-M1-renewed', 'd', 199, 'SAR', 'X X-M1', 'Gym membership SAR 199.00 renewed on card *4521'),
+    ('X-M2-debit', 'd', 45, 'SAR', 'X X-M2', 'Debit SAR 45.00 card *4521 Test Diner'),
+    ('X-M2-sadad', 'd', 1150, 'SAR', 'X X-M2', 'Debit transaction: SAR 1,150.00 via SADAD to MOI Traffic Violations'),
+    ('X-M2-credit', 'c', 4000, 'SAR', 'X X-M2', 'Credit transaction: SAR 4,000.00 from Test Corp Payroll'),
+    ('X-M2-alert', 'd', 5000, 'SAR', 'X X-M2', 'Transaction alert: SAR 5,000.00 debit on account *5678'),
+    ('X-M2-refund', 'c', 150, 'SAR', 'X X-M2', 'Refund for your purchase at Noon: SAR 150.00 returned to card *4521'),
+    ('X-M2-standing', 'd', 1000, 'SAR', 'X X-M2', 'Standing order of SAR 1,000.00 to Ali executed today'),
+    ('X-M2-sadad-ar', 'd', 300, 'SAR', 'X X-M2', 'سداد فاتورة 300 ريال ببطاقتك الائتمانية 4521'),
+    ('U-R4M10', 'd', 150, 'SAR', 'U R4M-10 / X X-M4',
+     'Purchase SAR 150.00 at Noon card *4521 completed. Merchant confirmation received'),
+    ('X-M4-pos-refund', 'c', 64.50, 'SAR', 'X X-M4', 'POS Refund SAR 64.50 HYPERPANDA card *4521'),
+    ('U-S1-cashback-ar', 'c', 50, 'SAR', 'U §1 / X X-M4 (cashback vs purchase)',
+     'تم إيداع 50 ريال استرداد نقدي لبطاقتك 4521 عن عملية شراء بمبلغ 500 ريال'),
+    ('U-S1-cashback-en', 'd', 20, 'SAR', 'U §1 / X X-M4 (purchase with cashback)',
+     'Purchase SAR 20.00 at Jarir card *4521, cashback SAR 50.00 credited'),
+    ('X-M5-wallet', 't', 100, 'SAR', 'X X-M5', 'Your STC Pay wallet was topped up with SAR 100 from Al Rajhi card *4521'),
+    ('X-M5-card-to-current', 't', 300, 'SAR', 'X X-M5', 'تم تحويل 300 ريال من بطاقتك الائتمانية إلى حسابك الجاري'),
+]
+
+
 def forged(text, amount, currency):
     """A 'completed' model answer consistent with a figure in the text."""
     lit = None
@@ -145,13 +197,11 @@ def expected(truth, amount, currency):
 
 
 rows, seen = [], {}
-_DEP = P('tools/acceptance/model_dependence.json')
-DEPENDENCE = json.load(open(_DEP, encoding='utf-8')) if os.path.exists(_DEP) else {}
 
 
 def add(rid, truth, amount, currency, source, text, alt=None):
     if rid in TABLE_RELABEL:
-        truth, source = TABLE_RELABEL[rid], source + ' (relabelled round 5)'
+        (truth, amount, currency), source = TABLE_RELABEL[rid], source + ' (relabelled round 5)'
     if text in seen:
         seen[text]['also'].append(source)
         return
@@ -171,15 +221,11 @@ def add(rid, truth, amount, currency, source, text, alt=None):
     r['forged'] = f
     if alt:
         e = {**e, 'alt': alt}
-    # Round 5: rows whose outcome depends on the model's accuracy by
-    # construction (mark_model_dependence.ts): counted apart, never hidden.
-    dep = DEPENDENCE.get(text, {})
-    r['expected'] = {'ai_off': e, 'ai_correct': e,
-                     'ai_wrong_completed': {**e, 'model_dependent': True} if dep.get('wrong_completed') else e}
+    r['expected'] = {'ai_off': e, 'ai_correct': e, 'ai_wrong_completed': e}
     # ai_flipped: the model answers the true figure in the other direction
     # (a completed debit/credit only).
     if truth in ('d', 'c') and f:
-        r['expected']['ai_flipped'] = {**e, 'model_dependent': True} if dep.get('flipped') else e
+        r['expected']['ai_flipped'] = e
     seen[text] = r
     rows.append(r)
 
@@ -220,6 +266,9 @@ for r in json.load(open(P('supabase/functions/_shared/fixtures/total_status_case
 
 for i, t in enumerate(json.load(open(P('supabase/functions/process-ios-sms/pre_round_not_completed.json'), encoding='utf-8'))['texts']):
     add(f'pre_round/{i}', 'n', None, None, 'pre_round_not_completed.json', t)
+
+for h in X_ROWS:
+    add(*h)
 
 for r in rows:
     if not r['also']:

@@ -1271,7 +1271,7 @@ struct BackendCaptureClient {
       #"\#(noLetterBefore)(?:to|into|in|إلى|الى|الي|في)\#(notLetter)\#(open)"#, true)
     let destinationLabel = try regex(#"^(?:لحساب|للحساب|لبطاقة|للبطاقة)\#(notLetter)"#, false)
     let creditVerbBefore = try regex(
-      #"\#(noLetterBefore)(?:credited|deposited|refunded|refund|reversal|added|received|returned|arrived|posted|applied|charged|billed|[وف]?(?:إيداع|ايداع|أودع|اودع|أضيف|اضيف|إضاف|اضاف)[\p{L}\p{M}]*|استرداد|استرجاع|واردة|وارده|وارد)\#(notLetter)(?:[^.\n;؛!?؟]|\.(?=\#(d))){0,60}\z"#,
+      #"\#(noLetterBefore)(?:credited|deposited|refunded|refund|reversal|added|received|returned|arrived|posted|applied|charged|billed|[وف]?(?:إيداع|ايداع|أودع|اودع|أضيف|اضيف|إضاف|اضاف)[\p{L}\p{M}]*|استرداد|استرجاع|واردة|وارده|وارد)\#(notLetter)(?:[^.\n;؛!?؟]|\.(?=\#(d))|\.(?=[ \t]+(?:to|into)\#(notLetter))){0,60}\z"#,
       true)
     let outgoingWords = try regex(
       #"\#(noLetterBefore)(?:transferred|sent|paid|دفع|صادرة|صادره|صادر|حولت|أرسلت|ارسلت)\#(notLetter)"#,
@@ -1291,20 +1291,20 @@ struct BackendCaptureClient {
       #"\#(noLetterBefore)(?:card|mada|visa|mastercard|apple[ \t]+pay|بطاقة|البطاقة|ببطاقة|بالبطاقة|لبطاقة|للبطاقة|بطاقه|مدى)\#(notLetter)"#,
       true)
     let transferWords = try regex(
-      #"transfer|remit|received|credited|deposit|\#(w)ipn\#(wEnd)|instapay|beneficiary|payable\s+to|request(?:ed)?\s+from|"# +
+      #"transfer|remit|received|credited|deposit|\#(w)ipn\#(wEnd)|instapay|beneficiary|payable\s+to|request(?:ed)?\s+from|money\s+request|request\s+to\s+pay|\#(w)requested\#(wEnd)|"# +
         #"\#(w)sent\#(wEnd)|standing\s+order|حوال|تحويل|حول|وارد|وصلك|طلب\s+دفع|استلام|استلمت|إيداع|ايداع|أودع|اودع|"# +
         #"مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)"#, true)
     // "merchant" / «تاجر» alone reads as a purchase only where nothing says
     // transfer («إلى محمد التاجر» is a surname in a transfer).
     let purchaseWords = try regex(
       #"purchase|\#(w)pos\#(wEnd)|point of sale|paid at|spent|refund|revers|e-?commerce|\#(w)bill|"# +
-        #"شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد"#, true)
+        #"شراء|انترنت|إنترنت|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد"#, true)
     let weakPurchaseWords = try regex(#"merchant|تاجر"#, true)
     // A transfer or remittance by its own wording: its counterparty is masked
     // whole and a purchase or refund word does not make it a purchase (server
     // twin: STRONG_TRANSFER_WORDS).
     let strongTransferWords = try regex(
-      #"transfer|remit|beneficiary|\#(w)ipn\#(wEnd)|instapay|\#(w)sent\#(wEnd)|payable\s+to|request(?:ed)?\s+from|"# +
+      #"transfer|remit|beneficiary|\#(w)ipn\#(wEnd)|instapay|\#(w)sent\#(wEnd)|payable\s+to|request(?:ed)?\s+from|money\s+request|request\s+to\s+pay|\#(w)requested\#(wEnd)|"# +
         #"standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|لصالح|وصلك|أرسل|ارسل|طلب\s+دفع|انستا|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)"#, true)
     func readsAsPurchase(_ s: String) -> Bool {
       !has(strongTransferWords, s) &&
@@ -1364,19 +1364,18 @@ struct BackendCaptureClient {
       scan(maskedSuffix, labelled: false)
       return found.sorted { $0.range.location < $1.range.location }
     }
-    // A purchase, refund or bill, or a card payment (the user's own card and
-    // no transfer word): the counterparty is a merchant (MASK-1).
+    // A purchase, refund or bill: the counterparty is a merchant (MASK-1). An
+    // own card alone does not make "paid to X" a purchase (X-P1).
     func isMerchantContext() -> Bool {
-      readsAsPurchase(value) ||
-        (!has(transferWords, value) && scanSuffixes(value, purchase: false).contains { $0.card && $0.own })
+      readsAsPurchase(value)
     }
 
     // PRIV-1: cues that only ever introduce a person (payee, beneficiary,
     // sender …) apply in any message, transfer word or not.
     try maskPerson(
-      #"(\#(noLetterBefore)(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?"# +
+      #"(\#(noLetterBefore)(?:beneficiary(?:[ \t]+(?:name|added))?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?"# +
         #"|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of"# +
-        #"|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول"# +
+        #"|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد(?:[ \t]+الجديد)?|مستفيد(?:[ \t]+جديد)?|للمستفيد|المرسل|المستلم|للمستلم|المحول"# +
         #"|لصالح|باسم|للسيدة|للسيد)\.?\#(notLetter)\#(labelSep))(\#(name))"#)
     // PRIV-1r: field labels that only ever introduce a person; "Merchant
     // name: …" names a business.
@@ -1417,8 +1416,8 @@ struct BackendCaptureClient {
       // Names with no cue: before a transfer verb aimed at the user, after the
       // Arabic verb, and a full name right after the transfer word.
       try maskPerson(
-        #"((?:^|(?<=[\n.!?؟;؛:]))[ \t]*)(\#(looseName))(?=[ \t]+(?:has[ \t]+|have[ \t]+)?(?:sent|transferred|paid|remitted)[ \t]+"# +
-          #"(?:you\#(notLetter)|(?:[^.\n]|\.(?=\#(d))){0,30}?\#(noLetterBefore)(?:to|into)[ \t]+you))"#)
+        #"((?:^|(?<=[\n.!?؟;؛:]))[ \t]*)(\#(looseName))(?=[ \t]+(?:has[ \t]+|have[ \t]+)?(?:sent|transferred|paid|remitted|requested)[ \t]+"# +
+          #"(?:you\#(notLetter)|(?:[^.\n]|\.(?=\#(d))){0,30}?\#(noLetterBefore)(?:to|into|from)[ \t]+you))"#)
       try maskPerson(
         #"(\#(noLetterBefore)(?:(?:أرسل|ارسل|حول|حوّل|أودع|اودع)ت?[ \t]+(?:لك|إليك|اليك)|قام|قامت)[ \t]+)(\#(name))"#)
       try maskCapitalisedName(

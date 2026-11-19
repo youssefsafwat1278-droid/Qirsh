@@ -134,10 +134,18 @@ class DirectionSignal {
     if (flow != TxnDirection.unknown) return flow;
     // A flow that moves reward points ("12 miles credited to your account")
     // is not a money word either (follow-up 3, SM-03).
-    return detectWords(_withoutRewardFlows(core.toLowerCase()));
+    final lower = withoutRewardFlows(core.toLowerCase());
+    final words = detectWords(lower);
+    if (words != TxnDirection.unknown) return words;
+    final families = wordFamilies(lower);
+    return !families.debit && !families.credit && _merchantMark.hasMatch(lower)
+        ? TxnDirection.debit
+        : TxnDirection.unknown;
   }
 
-  static String _withoutRewardFlows(String lower) {
+  /// [lower] without its reward flows and side-credit clauses: what the
+  /// money words of the movement are read on.
+  static String withoutRewardFlows(String lower) {
     for (final flow in [_debitFlow, _creditFlow]) {
       for (final m in flow.allMatches(lower).toList().reversed) {
         // A side credit's whole clause goes ("…, تم إيداع استرداد نقدي 2
@@ -160,12 +168,82 @@ class DirectionSignal {
 
   /// The word-family reading of [text] (both or neither family: unknown).
   static TxnDirection detectWords(String text) {
-    final lower = text.toLowerCase();
-    final hasCredit = _creditWords.any(lower.contains);
-    final hasDebit = _debitWords.any(lower.contains);
+    final (:debit, :credit) = wordFamilies(text);
+    final hasCredit = credit;
+    final hasDebit = debit;
     if (hasCredit && !hasDebit) return TxnDirection.credit;
     if (hasDebit && !hasCredit) return TxnDirection.debit;
     return TxnDirection.unknown;
+  }
+
+  /// Round 5 (review X, X-M1): direction families the word lists missed,
+  /// English as whole words ("fee", never "coffee"). Only the direction
+  /// reading ([detectWords]) uses them. The server's `debitKeywords` /
+  /// `creditKeywords` (process-ios-sms/parser_rules.json) carry the same.
+  /// With the server's bare "debit" / "credit" (never "debit card", "credit
+  /// card" or "credit limit"), "POS", a standing order and «سداد».
+  static final RegExp _namedCredit = RegExp(
+      r'(?<![a-z])(?:payroll|wages|bonus|dividends?|cash ?back|arrived in|landed in|transfer received)(?![a-z])'
+      r'|(?<![a-z])credit(?![a-z])(?! card| limit)'
+      r'|أودع|اودع|مكافأة|مكافاة|حواله وارده|استرجاع|وصلك');
+  static final RegExp _namedDebit = RegExp(
+      r'(?<![a-z])(?:fees?|billed|charged?|renewed|atm cash|used for|authori[sz]ed|pos|mpos|epos|standing order|booked on|approved on|transfer sent)(?![a-z])'
+      r'|(?<![a-z])debit(?![a-z])(?! card)'
+      r'|المخصوم|سدد|سُدد|سداد|عمولة|أمر مستديم|استخدمت|على بطاقتك|على حسابك');
+
+  /// Round 5 (X-M3): with no money word, an amount spent at a merchant ("SAR
+  /// 45.00 at Test Mart", "@ Test Bakery", «لدى») is a debit. Mirrors
+  /// `MERCHANT_MARK` in `process-ios-sms/parse.ts`.
+  // "at" at the end: the merchant after it was blanked (localOf).
+  static final RegExp _merchantMark =
+      RegExp(r'(?<![a-z])at(?: (?![0-9])|$)|@|لدى');
+
+  /// Which direction families the money words of [text] name.
+  static ({bool debit, bool credit}) wordFamilies(String text) {
+    final lower = text
+        .toLowerCase()
+        .replaceAllMapped(namedNoun, (m) => ' ' * m[0]!.length);
+    return (
+      debit: _debitWords.any(lower.contains) || _namedDebit.hasMatch(lower),
+      credit: _creditWords.any(lower.contains) || _namedCredit.hasMatch(lower),
+    );
+  }
+
+  /// Round 5 (X-M1): the direction the device's rule parser itself reads in
+  /// [text] — the reading that books it with the AI off: none when the event
+  /// carries conflicting cues ([ParserEngine.conflictingCues]); else the
+  /// clause flow and money words ([detect]); else the direction of the rule
+  /// parse's type.
+  static TxnDirection localOf(String text) {
+    if (ParserEngine.conflictingCues(text)) return TxnDirection.unknown;
+    // With no flow phrase, a merchant's name after "at" ("at Arrived In
+    // Account Cafe") names no direction.
+    final core = ParserEngine.clauseScope(text).core;
+    final words = flowOf(core) == TxnDirection.unknown &&
+            _merchantMark.hasMatch(core.toLowerCase())
+        ? detect(ParserEngine.merchantMasked(text))
+        : detect(text);
+    if (words != TxnDirection.unknown) return words;
+    final type = const ParserEngine().parse(text).transaction?.type;
+    if (type == null) return TxnDirection.unknown;
+    if (type.isExpense) return TxnDirection.debit;
+    return type == TransactionType.income || type == TransactionType.refund
+        ? TxnDirection.credit
+        : TxnDirection.unknown;
+  }
+
+  /// Round 5 (X-M1/X-M2): a model's [direction] for [text] is accepted only
+  /// when it is the one the rule parser reads ([localOf]). When the text
+  /// gives the rule parser no direction, only a message with no
+  /// completed-event form (`no_completed_form`, decided by the model) takes
+  /// the model's. Server twin: `modelDirectionRefused` in
+  /// `process-ios-sms/parse.ts`.
+  static bool modelDirectionRefused(String text, TxnDirection direction) {
+    final local = localOf(text);
+    if (local != TxnDirection.unknown) return direction != local;
+    final meaning = ParserEngine.meaningOf(text);
+    return !(meaning.kind == MessageKind.uncertain &&
+        meaning.reason == 'no_completed_form');
   }
 
   /// Outgoing structure: a debit verb or "… to / from your account".
@@ -173,8 +251,8 @@ class DirectionSignal {
   static const List<String> debitFlow = [
     'debited', 'deducted', 'charged', 'withdrawn', 'spent', 'sent to',
     'paid to', 'paid at', 'paid for', 'paid using', 'paid by card',
-    'transferred to', 'transfer to', 'from your account', 'from your card',
-    'from account', 'money out', 'outgoing', 'outward', 'was used for',
+    'transferred to', 'transfer to', 'transferred from your',
+    'from your account', 'from your card', 'from account', 'money out', 'outgoing', 'outward', 'was used for',
     'has been used for',
     'تم خصم', 'خصم مبلغ', 'تم سحب', 'مبلغ صادر', 'حوالة صادرة',
     'تحويل صادر', 'من حسابك', 'من بطاقتك', 'تم الدفع', 'تم دفع', 'تم سداد',
@@ -206,6 +284,34 @@ class DirectionSignal {
   static final RegExp _creditFlow = _flowPattern(creditFlow);
   static RegExp _flowPattern(List<String> words) => RegExp(
       '(?<![a-z\u0621-\u064a])[وفب]?(?:${(List.of(words)..sort((a, b) => b.length - a.length)).map(RegExp.escape).join('|')})(?![a-z])');
+
+  /// A store's name ("Cashback Store", «متجر أودع»), a card product
+  /// ("Cashback card") or a "security deposit" names no direction. Mirrors
+  /// `NAMED_NOUN` in process-ios-sms/parse.ts.
+  static final RegExp namedNoun = RegExp(
+      r'(?<![a-z])[a-z]+ (?:store|mart|shop|market)(?![a-z])|cash ?back (?:credit )?card|security deposit|(?:متجر|محل|مطعم) [ء-ي]+');
+
+  /// Which flow families [text] names. A phrase inside a longer phrase of
+  /// the other family ("sent to" in "sent to you") is that longer phrase.
+  static ({bool debit, bool credit}) flowFamilies(String text) {
+    final lower = text.toLowerCase();
+    List<RegExpMatch> live(RegExp re) => re
+        .allMatches(lower)
+        .where((m) => !isRewardFlow(lower, m.start, m.end))
+        .toList();
+    bool inside(RegExpMatch m, List<RegExpMatch> other) => other.any((o) =>
+        o.start <= m.start && o.end >= m.end && o.end - o.start > m.end - m.start);
+    final d = live(_debitFlow), c = live(_creditFlow);
+    return (
+      debit: d.any((m) => !inside(m, c)),
+      credit: c.any((m) => !inside(m, d)),
+    );
+  }
+
+  /// [lower] with every flow phrase blanked.
+  static String withoutFlows(String lower) => lower
+      .replaceAllMapped(_debitFlow, (m) => ' ' * m[0]!.length)
+      .replaceAllMapped(_creditFlow, (m) => ' ' * m[0]!.length);
 
   static bool hasDebitFlow(String text) =>
       _firstMoneyFlow(_debitFlow, text.toLowerCase()) != null;

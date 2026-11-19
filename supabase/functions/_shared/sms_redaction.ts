@@ -813,9 +813,9 @@ const COUNTERPARTY_PATTERN = new RegExp(
 /// PRIV-1: cues that only ever introduce a person (a payee, a beneficiary, a
 /// sender), so they apply in any message, transfer word or not.
 const PERSON_CUE_PATTERN = new RegExp(
-  `((?<![\\p{L}\\p{M}])(?:beneficiary(?:[ \\t]+name)?|benef|payee(?:[ \\t]+name)?|sender(?:[ \\t]+name)?` +
+  `((?<![\\p{L}\\p{M}])(?:beneficiary(?:[ \\t]+(?:name|added))?|benef|payee(?:[ \\t]+name)?|sender(?:[ \\t]+name)?` +
     `|remitter(?:[ \\t]+name)?|recipient(?:[ \\t]+name)?|payer(?:[ \\t]+name)?|on[ \\t]+behalf[ \\t]+of|in[ \\t]+favou?r[ \\t]+of` +
-    `|payable[ \\t]+to|(?:for[ \\t]+)?employee|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول` +
+    `|payable[ \\t]+to|(?:for[ \\t]+)?employee|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد(?:[ \\t]+الجديد)?|مستفيد(?:[ \\t]+جديد)?|للمستفيد|المرسل|المستلم|للمستلم|المحول` +
     `|لصالح|باسم|للسيدة|للسيد)\\.?(?![\\p{L}\\p{M}])${LABEL_SEP})(${NAME})`,
   'giu',
 );
@@ -882,8 +882,8 @@ const PAREN_NAME_PATTERN = new RegExp(
 /// form takes only capitalised Latin words (see [maskCapitalisedName]); the
 /// others take a name in any letter case.
 const NAME_BEFORE_VERB_PATTERN = new RegExp(
-  `((?:^|(?<=[\\n.!?؟;؛:]))[ \\t]*)(${LOOSE_NAME})(?=[ \\t]+(?:has[ \\t]+|have[ \\t]+)?(?:sent|transferred|paid|remitted)[ \\t]+` +
-    `(?:you(?![\\p{L}\\p{M}])|(?:[^.\\n]|\\.(?=${D})){0,30}?(?<![\\p{L}\\p{M}])(?:to|into)[ \\t]+you))`,
+  `((?:^|(?<=[\\n.!?؟;؛:]))[ \\t]*)(${LOOSE_NAME})(?=[ \\t]+(?:has[ \\t]+|have[ \\t]+)?(?:sent|transferred|paid|remitted|requested)[ \\t]+` +
+    `(?:you(?![\\p{L}\\p{M}])|(?:[^.\\n]|\\.(?=${D})){0,30}?(?<![\\p{L}\\p{M}])(?:to|into|from)[ \\t]+you))`,
   'giu',
 );
 const NAME_AFTER_VERB_AR_PATTERN = new RegExp(
@@ -910,11 +910,11 @@ const CAPITALISED_RUN = /^[\p{Lu}\p{Lo}*][^ \t]*(?:[ \t]+[\p{Lu}\p{Lo}*][^ \t]*)
 
 /// The text reads as money moving between people.
 const TRANSFER_WORDS =
-  /transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|\bsent\b|payable\s+to|request(?:ed)?\s+from|standing\s+order|حوال|تحويل|حول|وارد|وصلك|طلب\s+دفع|استلام|استلمت|إيداع|ايداع|أودع|اودع|مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
+  /transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|\bsent\b|payable\s+to|request(?:ed)?\s+from|money\s+request|request\s+to\s+pay|\brequested\b|standing\s+order|حوال|تحويل|حول|وارد|وصلك|طلب\s+دفع|استلام|استلمت|إيداع|ايداع|أودع|اودع|مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
 // "merchant" / «تاجر» alone reads as a purchase only where nothing says
 // transfer («إلى محمد التاجر» is a surname in a transfer).
 const PURCHASE_WORDS =
-  /purchase|\bpos\b|point of sale|paid at|spent|refund|revers|e-?commerce|\bbill|شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد/iu;
+  /purchase|\bpos\b|point of sale|paid at|spent|refund|revers|e-?commerce|\bbill|شراء|انترنت|إنترنت|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد/iu;
 const WEAK_PURCHASE_WORDS = /merchant|تاجر/iu;
 /// A transfer or remittance by its own wording, whatever else the text says.
 /// THE TRANSFER RULE: in such a text every counterparty is masked whole, with
@@ -922,7 +922,7 @@ const WEAK_PURCHASE_WORDS = /merchant|تاجر/iu;
 /// make it a purchase (privacy wins where the reading is mixed). "credited",
 /// "received" or «إيداع» alone are not here: a merchant's refund says them too.
 const STRONG_TRANSFER_WORDS =
-  /transfer|remit|beneficiary|\bipn\b|instapay|\bsent\b|payable\s+to|request(?:ed)?\s+from|standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|لصالح|وصلك|أرسل|ارسل|طلب\s+دفع|انستا|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
+  /transfer|remit|beneficiary|\bipn\b|instapay|\bsent\b|payable\s+to|request(?:ed)?\s+from|money\s+request|request\s+to\s+pay|\brequested\b|standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|لصالح|وصلك|أرسل|ارسل|طلب\s+دفع|انستا|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
 const PURCHASE_CONTEXT = {
   test: (text: string) =>
     !STRONG_TRANSFER_WORDS.test(text) &&
@@ -1012,7 +1012,7 @@ const POSSESSIVE_BEFORE = new RegExp(`(?<!${L})(?:your|my)[ \\t]+$`, 'iu');
 const DESTINATION_BEFORE = new RegExp(`(?<!${L})(?:to|into|in|إلى|الى|الي|في)(?!${L})${OPEN}`, 'iu');
 const DESTINATION_LABEL = new RegExp(`^(?:لحساب|للحساب|لبطاقة|للبطاقة)(?!${L})`, 'u');
 const CREDIT_VERB_BEFORE = new RegExp(
-  `(?<!${L})(?:credited|deposited|refunded|refund|reversal|added|received|returned|arrived|posted|applied|charged|billed|[وف]?(?:إيداع|ايداع|أودع|اودع|أضيف|اضيف|إضاف|اضاف)${L}*|استرداد|استرجاع|واردة|وارده|وارد)(?!${L})(?:[^.\\n;؛!?؟]|\\.(?=${D})){0,60}$`,
+  `(?<!${L})(?:credited|deposited|refunded|refund|reversal|added|received|returned|arrived|posted|applied|charged|billed|[وف]?(?:إيداع|ايداع|أودع|اودع|أضيف|اضيف|إضاف|اضاف)${L}*|استرداد|استرجاع|واردة|وارده|وارد)(?!${L})(?:[^.\\n;؛!?؟]|\\.(?=${D})|\\.(?=[ \\t]+(?:to|into)(?!${L}))){0,60}$`,
   'iu',
 );
 const OUTGOING_WORDS = new RegExp(
@@ -1092,13 +1092,11 @@ function scanSuffixes(text: string, purchase: boolean): Suffix[] {
   return found.sort((a, b) => a.start - b.start);
 }
 
-/// True when the text reads as a purchase, refund or bill, or as a card
-/// payment: it names the user's own card and has no transfer word. The
-/// counterparty of such a message is a merchant (MASK-1: "Card *4521: SAR
-/// 85.00 paid to <Merchant>").
+/// True when the text reads as a purchase, refund or bill: its counterparty
+/// is a merchant (MASK-1). An own card alone does not make "paid to X" a
+/// purchase (X-P1): X then keeps only with a business word.
 function isMerchantContext(text: string): boolean {
-  return PURCHASE_CONTEXT.test(text) ||
-    (!TRANSFER_WORDS.test(text) && scanSuffixes(text, false).some((s) => s.card && s.own));
+  return PURCHASE_CONTEXT.test(text);
 }
 
 /// True when a `from` / `to` / `من` / `إلى` counterparty is a person rather

@@ -971,7 +971,9 @@ class CaptureSyncService {
     // FR-02 / LR-04 — the device's own parse of the same text reads the
     // opposite money direction (debit vs credit), or drops it as not a
     // transaction: the same recoverable review path.
-    if (localParseContradictsServer(
+    if (modelRowDirectionRefused(
+            parsed, _string(parsed['rawMessage']) ?? capture.sanitizedText ?? '') ||
+        localParseContradictsServer(
       text: _string(parsed['rawMessage']) ?? capture.sanitizedText ?? '',
       direction: _string(parsed['direction']),
       type: _string(parsed['type']),

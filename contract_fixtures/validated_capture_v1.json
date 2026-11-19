@@ -337,7 +337,7 @@
     },
     {
       "id": "direction_type_only_debit_valid",
-      "text": "Transaction of 75.00 SAR at SHOP ONE completed",
+      "text": "Transaction of 75.00 SAR completed",
       "candidate": {
         "amount": 75,
         "amount_text": "75.00",
@@ -351,7 +351,7 @@
     },
     {
       "id": "direction_type_only_credit_valid",
-      "text": "Transaction of 75.00 SAR at SHOP ONE completed",
+      "text": "Transaction of 75.00 SAR completed",
       "candidate": {
         "amount": 75,
         "amount_text": "75.00",

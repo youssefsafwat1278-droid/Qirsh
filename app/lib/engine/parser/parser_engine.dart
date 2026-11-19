@@ -279,6 +279,18 @@ class ParserEngine {
   /// ignore word inside it is part of a name ("Offer Mart", "Won Kitchen"),
   /// not an advert. Mirrors `outsideMerchant` in
   /// `_shared/ai_candidate_validator.ts`.
+  /// [rawText], lower-cased, with the merchant the rule parse extracts
+  /// blanked (review X: a merchant's name names no direction).
+  static String merchantMasked(String rawText) {
+    final text = Normalizer.normalizeCurrencyTokens(
+        Normalizer.normalize(bounded(rawText)));
+    final merchant = const ParserEngine()
+        ._extractMerchantAndSource(text.split('\n'),
+            bank: BankProfiles.detect(text))
+        .merchant;
+    return outsideMerchant(bounded(rawText).toLowerCase(), merchant);
+  }
+
   static String outsideMerchant(String lower, String? merchant) {
     if (merchant == null) return lower;
     final span = merchant.toLowerCase().split(_merchantSpanEnd).first.trim();
@@ -461,8 +473,11 @@ class ParserEngine {
         !_amountWithCurrency.hasMatch(text)) {
       return m;
     }
-    final reason = CompletionCertainty.uncertaintyOf(text,
+    final doubt = CompletionCertainty.uncertaintyOf(text,
         hasFlow: m.direction != TxnDirection.unknown);
+    final reason = doubt != 'not_clearly_completed' && conflictingCues(text)
+        ? 'conflicting_cues'
+        : doubt;
     return reason == null
         ? m
         : MessageMeaning(
@@ -475,6 +490,89 @@ class ParserEngine {
   }
 
   /// The meaning before the completion-certainty test: what the clauses say.
+  /// Round 5 (X-M4): the event's clauses name both directions (flows or
+  /// money words of both families; an instrument such as "debit card" or
+  /// «مدى» aside) and either the message states more than one movement
+  /// figure (a purchase and its cashback; a balance or limit does not count)
+  /// or the sentence that carries the amount has no flow of one family to
+  /// settle it ("Purchase … completed. Merchant confirmation received"). Not
+  /// clearly completed. Mirrors `conflictingCues` in `process-ios-sms/parse.ts`.
+  static bool conflictingCues(String rawText) {
+    final text = Normalizer.normalizeCurrencyTokens(
+        Normalizer.normalize(bounded(rawText)));
+    // Money between the user's own accounts is a transfer whichever way it
+    // is worded («من حسابك … لحسابك الآخر»).
+    if (isOwnAccountMove(rawText)) return false;
+    final core = clauseScope(bounded(rawText)).core.toLowerCase();
+    // A merchant's name ("Deposit Mart", "Refund Mart") names no direction;
+    // a negated word ("no fee", «بدون خصم») neither.
+    final merchant = const ParserEngine()
+        ._extractMerchantAndSource(text.split('\n'),
+            bank: BankProfiles.detect(text))
+        .merchant;
+    String blank(String s, RegExp re) =>
+        s.replaceAllMapped(re, (m) => ' ' * m[0]!.length);
+    bool both(String flows) {
+      // Words inside a flow phrase ("sent to you") are counted as that flow.
+      final words = blank(
+          outsideMerchant(DirectionSignal.withoutFlows(flows), merchant),
+          _negatedWord);
+      final debitWords = DirectionSignal.wordFamilies(
+              blank(blank(words, _debitInstrument), _refundedEvent))
+          .debit;
+      final f = DirectionSignal.flowFamilies(flows);
+      return (f.debit || debitWords) &&
+          (f.credit || DirectionSignal.wordFamilies(words).credit);
+    }
+
+    // Two movement figures with both directions named (a purchase and its
+    // cashback): which figure moved which way is not settled.
+    if (movementFigureCount(core) > 1 && both(core)) return true;
+    // One figure: reward flows and side credits ("…, 45 points credited")
+    // are not a second direction; a flow of one family in the amount's
+    // sentence settles it.
+    final rest = DirectionSignal.withoutRewardFlows(core);
+    if (!both(rest)) return false;
+    final sentence = rest.split(_figureSentenceCut).firstWhere(
+        (s) => DirectionSignal.currencyFigures(s).isNotEmpty,
+        orElse: () => rest);
+    final f = DirectionSignal.flowFamilies(sentence);
+    // "SAR 500 credited to Ali from your account": the source of funds
+    // settles it (DirectionSignal.flowOf).
+    if (f.debit &&
+        f.credit &&
+        MessageMeaning.sourceOfFunds.any(sentence.contains) &&
+        !MessageMeaning.ownDestination.any(sentence.contains)) {
+      return false;
+    }
+    return f.debit == f.credit;
+  }
+
+  static final RegExp _debitInstrument = RegExp(r'direct debit|debit card|مدى');
+
+  /// A word the text negates ("no fee", «بدون خصم») names no direction.
+  static final RegExp _negatedWord =
+      RegExp(r'(?<![a-z])(?:without|no) [a-z]+|(?:بدون|دون) [ء-ي]+');
+
+  /// The event a refund names is not a second direction ("Refund for your
+  /// purchase at Noon", «استرداد مبلغ عملية شراء»). Mirrors `REFUNDED_EVENT`
+  /// in `process-ios-sms/parse.ts`.
+  static final RegExp _refundedEvent = RegExp(
+      r'(?<![a-z])(?:refund|reversal|return)(?:ed)?(?: of [a-z]{3} [0-9][0-9.,]*)? (?:for|of|on) (?:(?:your|the|a) )?(?:(?:pos|card|online) )?'
+      r'(?:purchase|payment|transaction)s?(?![a-z])'
+      r'|(?<![a-z])(?:fees?|charges?|purchase|payment) (?:refund|reversal)(?![a-z])'
+      r'|(?:استرداد|استرجاع|مرتجع|إرجاع|ارجاع) (?:مبلغ )?(?:(?:ال)?عملية )?(?:ال)?(?:شراء|مشتريات)');
+  static final RegExp _figureSentenceCut = RegExp(r'[\n!?؟;؛]|\.(?![0-9])');
+
+  /// Round 5 (X-M4): the distinct currency figures of [lower] other than a
+  /// balance, limit or due figure. Mirrors `movementFigureCount` in
+  /// `process-ios-sms/message_meaning.ts`.
+  static int movementFigureCount(String lower) => {
+        for (final f in DirectionSignal.currencyFigures(lower))
+          if (!_standingFigureLabel.hasMatch(_lineBefore(lower, f.start, 30)))
+            f.value
+      }.length;
+
   static MessageMeaning _structuralMeaningOf(String rawText) {
     // Follow-up 4 (NEW-3): a text over the bound is read in part (its head
     // and tail, [bounded]); a status in the part not read could undo the
@@ -930,8 +1028,17 @@ class ParserEngine {
   /// clause ("from your account *4521 to your account *7788", «من حسابك 4521
   /// إلى حسابك 7788»), with only an account reference between them.
   static final RegExp _ownEnds = RegExp(
-      r'(?<![a-z])from your (?:account|card|wallet)(?: ?(?:\*+ ?|x+)?[0-9]{3,6}| \[(?:account|card)\])? to your (?:other |own )?(?:account|card|wallet)(?![a-z])'
-      r'|من حسابك(?:\s*(?:رقم\s*)?\*{0,4}\s?[0-9]{3,8}|\s*\[(?:account|card)\])?\s+(?:إلى|الى)\s+حسابك');
+      r'(?<![a-z])from your (?:(?:credit|debit|current|savings) )?(?:account|card|wallet)(?: ?(?:\*+ ?|x+)?[0-9]{3,6}| \[(?:account|card)\])? to your (?:other |own )?(?:account|card|wallet)(?![a-z])'
+      // Round 5 (X-M5): «من بطاقتك الائتمانية إلى حسابك الجاري».
+      r'|من (?:حسابك|بطاقتك)(?:\s+ال[ء-ي]+)?(?:\s*(?:رقم\s*)?\*{0,4}\s?[0-9]{3,8}|\s*\[(?:account|card)\])?\s+(?:إلى|الى)\s+(?:حسابك|بطاقتك)');
+
+  /// Round 5 (X-M5): the user's wallet topped up from a card ("Your STC Pay
+  /// wallet was topped up with SAR 100 from Al Rajhi card *4521"): between
+  /// the user's own accounts. Mirrors `WALLET_TOP_UP` in
+  /// `process-ios-sms/message_meaning.ts`.
+  static final RegExp _walletTopUp = RegExp(
+      r'(?=.*(?:(?<![a-z])wallet(?![a-z])|محفظ))(?=.*(?:(?<![a-z])(?:topped up|top-?up|top up)(?![a-z])|شحن|تعبئة))'
+      r'.*(?:(?<![a-z])from(?![a-z])[^.\n]{0,40}(?<![a-z])card(?![a-z])|من\s+(?:ال)?بطاق)');
 
   /// Follow-up 5 (d): how many distinct figures are each tied to their own
   /// merchant: followed by "at" / "@" / «لدى» / "(", or opening a numbered
@@ -1097,11 +1204,24 @@ class ParserEngine {
   /// Money between the user's own accounts: a strong marker (a term deposit,
   /// "between your accounts", savings → …), or two account references or an
   /// account-type word with both an outgoing and an incoming clause.
+  /// Round 5 (X-M5): [rawText] moves money between the user's own accounts
+  /// (a card repayment, a wallet topped up from a card, savings → current):
+  /// read locally only, never asked of a model. Mirrors `isLocalOnly` in
+  /// `process-ios-sms/parse.ts` (with [CompletionCertainty.isTransfer]).
+  static bool isOwnAccountMove(String rawText) {
+    final core = clauseScope(bounded(rawText)).core.toLowerCase();
+    return _cardRepayment.hasMatch(core) || _isOwnAccountMove(core);
+  }
+
   static bool _isOwnAccountMove(String core) {
     if (_hasAnyWord(core, MessageMeaning.ownAccountStrong)) return true;
     // Follow-up 5 (c): both ends are the user's named account types
     // ("from your Savings account to your Current account").
-    if (_namedAccounts.hasMatch(core) || _ownEnds.hasMatch(core)) return true;
+    if (_namedAccounts.hasMatch(core) ||
+        _ownEnds.hasMatch(core) ||
+        _walletTopUp.hasMatch(core)) {
+      return true;
+    }
     // "from your account *1234 to your account *5678" takes money out of
     // and puts it into the user's own accounts.
     final both = (DirectionSignal.hasDebitFlow(core) &&
@@ -1135,13 +1255,18 @@ class ParserEngine {
           ]));
 
   /// Distinct amounts among event sentences that each name a movement.
+  static final RegExp _partFee = RegExp(r'(?<![a-z])fees?(?![a-z])');
+
   static int _distinctMovementAmounts(List<String> events) {
     const engine = ParserEngine();
     final amounts = <String>{};
     for (final s in events) {
       if (_noMovementReason(s.toLowerCase()) != null) continue;
+      // A part of a bill ("service fee QAR 90") is not a movement of its own.
       if (!hasMoneyWord(s.toLowerCase()) &&
-          DirectionSignal.detectWords(s) == TxnDirection.unknown) {
+          DirectionSignal.detectWords(
+                  s.toLowerCase().replaceAll(_partFee, ' ')) ==
+              TxnDirection.unknown) {
         continue;
       }
       final ex = engine._extractAmounts([s], text: s, bank: null);

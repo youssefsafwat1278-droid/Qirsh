@@ -17,7 +17,7 @@ base not-completed message now recorded — unless its id is on the explicit
 VERIFIED_COMPLETED list and every recording path books it exactly as
 labelled; the list is printed on every run) or when the messages that moved
 from right (labelled) or recorded (unlabelled) to a review row exceed the
-review budget: PARSER_DIFF_REVIEW_BUDGET (default 331 messages since Round 5, the owner's
+review budget: PARSER_DIFF_REVIEW_BUDGET (default 336 messages since review X of Round 5, the owner's
 completion-certainty rule — see REVIEW_BUDGET; it was 38: the 35 justified at Follow-up 4
 plus the 3 ACCEPTED review moves below). Each such move is listed and must be
 justified in the closure record. The ACCEPTED list (coordinator decision,
@@ -37,7 +37,9 @@ TEXP = {'completed_payment': 'd', 'completed_withdrawal': 'd', 'completed_income
 # decided by the model when AI is on; 14 transfers, local only), 28 cash
 # deposits and 17 other holds. With AI on and a right model, 256 would stay
 # review. It was 38 (35 justified at Follow-up 4 + 3 ACCEPTED).
-REVIEW_BUDGET = int(os.environ.get('PARSER_DIFF_REVIEW_BUDGET', '331'))
+# Review X follow-up: 336, measured (conflicting direction cues and several
+# amounts with different roles are no longer "clearly completed").
+REVIEW_BUDGET = int(os.environ.get('PARSER_DIFF_REVIEW_BUDGET', '336'))
 # Accepted moves (coordinator decision, Follow-up 5), each with its reason.
 # ACCEPTED_REVIEW: right/recorded -> review moves counted inside the budget.
 # ACCEPTED_SERVER: server rows right at base and rejected now; only a
