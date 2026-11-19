@@ -82,7 +82,8 @@ export function safeLast4(value: unknown): string | undefined {
 export function transactionPushAlert(
   parsed: { amount?: number | null; currency?: string | null; merchant?: string | null;
     direction?: string | null; type?: string | null; last4?: string | null;
-    occurredAt?: string; comparisonTimestamp?: string; rawMessage?: string }, locale: string,
+    occurredAt?: string; comparisonTimestamp?: string; rawMessage?: string;
+    counterpartyKind?: string | null }, locale: string,
   context: { tzOffsetMinutes?: number | null; receivedAt?: string;
     /// What the server knows (3.12); default: analysed, not yet recorded.
     outcome?: CaptureOutcome;
@@ -96,7 +97,12 @@ export function transactionPushAlert(
   if (typeof parsed.amount !== 'number' || !Number.isFinite(parsed.amount) || parsed.amount <= 0 ||
       !/^[A-Z]{3}$/.test(parsed.currency ?? '')) return undefined;
   const ar = locale.toLowerCase().startsWith('ar');
+  // Gemini-first phase 1: a transfer to or from a person never names them.
+  const friend = parsed.type === 'transfer' && parsed.counterpartyKind === 'person' &&
+    (parsed.direction === 'credit' || parsed.direction === 'debit');
   const title = parsed.type === 'refund' ? (ar ? 'استرداد' : 'Refund received')
+    : friend ? (parsed.direction === 'credit'
+      ? (ar ? 'تحويل من صديق' : 'Transfer from a friend') : (ar ? 'تحويل لصديق' : 'Transfer to a friend'))
     : parsed.type === 'transfer' ? (parsed.direction === 'credit'
       ? (ar ? 'تحويل وارد' : 'Transfer received') : parsed.direction === 'debit'
       ? (ar ? 'تحويل صادر' : 'Transfer sent') : (ar ? 'تحويل' : 'Transfer'))

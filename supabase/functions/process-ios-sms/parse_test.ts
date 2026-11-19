@@ -643,7 +643,9 @@ Deno.test('declined table: not completed is never confirmed money, on every serv
         const primary = await parseSms({ text, rawText: text, sender: 'BANK', receivedAt: RECEIVED,
           tzOffsetMinutes: 180, locale: 'ar', allowAi: true, aiPrimary: true });
         assertEquals(primary.accepted, false, text);
-        if (!pending) {
+        // Gemini-first phase 1: on the AI-primary path a pending transfer
+        // reaches the model like any pending message (never accepted).
+        if (!(m.kind === 'not_completed' && m.reason === 'pending')) {
           assertEquals(stub.calls, 0, text);
           // (A transfer may be held on its own reading: deterministic.)
           const sources = isTransfer(text) ? ['ai_ignored', 'deterministic'] : ['ai_ignored'];

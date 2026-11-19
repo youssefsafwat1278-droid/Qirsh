@@ -13,7 +13,14 @@ export const AI_PRIMARY_MODE = 'ai_primary_v1';
 export const MAX_AI_ATTEMPTS = 3;
 export type PrimaryAiResult =
   | { ok: true; value: Record<string, unknown>; attempts: number }
-  | { ok: false; reason: 'unavailable' | 'invalid_result' | 'denied' | 'budget'; attempts: number };
+  | {
+    ok: false;
+    reason: 'unavailable' | 'invalid_result' | 'denied' | 'budget';
+    attempts: number;
+    /** invalid_result only: the validator code of the last answer, and that answer (server-side use only). */
+    invalid?: string;
+    value?: Record<string, unknown>;
+  };
 
 export const TRANSACTION_SCHEMA = {
   type: 'object',
@@ -85,6 +92,7 @@ export async function runPrimaryAi(options: {
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   let correction = '';
   let reason: 'unavailable' | 'invalid_result' = 'unavailable';
+  let lastInvalid: { invalid: string; value: Record<string, unknown> } | undefined;
   for (let attempt = 1; attempt <= MAX_AI_ATTEMPTS; attempt++) {
     if (!(await options.beforeAttempt())) return { ok: false, reason: 'denied', attempts: attempt - 1 };
     if (options.reserveAttempt && !(await options.reserveAttempt())) {
@@ -140,6 +148,7 @@ export async function runPrimaryAi(options: {
           : 'valid_json_required';
         if (value && !invalid) return { ok: true, value, attempts: attempt };
         reason = 'invalid_result';
+        lastInvalid = value ? { invalid: invalid ?? 'invalid_result', value } : undefined;
         // The correction is a bounded validator code, not raw provider output.
         correction = '\nReview your extraction again. Return valid transaction JSON with exact amount_text, currency and direction. '
           + 'Distinguish the transaction amount from remaining balance, card/account numbers and reference codes. '
@@ -150,5 +159,7 @@ export async function runPrimaryAi(options: {
     }
     if (attempt < MAX_AI_ATTEMPTS) await sleep(Math.max(retryAfter, attempt * 400));
   }
-  return { ok: false, reason, attempts: MAX_AI_ATTEMPTS };
+  return reason === 'invalid_result' && lastInvalid
+    ? { ok: false, reason, attempts: MAX_AI_ATTEMPTS, ...lastInvalid }
+    : { ok: false, reason, attempts: MAX_AI_ATTEMPTS };
 }

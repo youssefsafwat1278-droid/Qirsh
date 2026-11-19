@@ -19,6 +19,8 @@ const C = rules.completionCertainty as {
   statedCreditPattern: string;
   statedDebitPattern: string;
   statedCreditDebtPattern: string;
+  transferCreditPattern: string;
+  transferDebitPattern: string;
 };
 
 // Same as TransactionStateCues.foldForCues / parse.ts foldForCues (kept here
@@ -43,6 +45,8 @@ const TRANSFER = new RegExp(C.transferPattern);
 const STATED_CREDIT = new RegExp(C.statedCreditPattern);
 const STATED_DEBIT = new RegExp(C.statedDebitPattern);
 const STATED_CREDIT_DEBT = new RegExp(C.statedCreditDebtPattern);
+const TRANSFER_CREDIT = new RegExp(C.transferCreditPattern);
+const TRANSFER_DEBIT = new RegExp(C.transferDebitPattern);
 const CLAUSE_END = /[\n!?؟;؛]|[.,،](?![0-9])| [-–—] /g;
 const FORM_WORD = new RegExp(
   `(?<![a-zء-ي])(?:و|ف)?(?:${
@@ -81,6 +85,17 @@ export function hasCompletedForm(text: string): boolean {
 /** A transfer to or from a person or between accounts: decided locally, never sent to the model. */
 export function isTransfer(text: string): boolean {
   return TRANSFER.test(fold(text));
+}
+
+/**
+ * Gemini-first phase 1: the direction a transfer's own flow states ("sent",
+ * "to <someone>", «إلى …» / "received", "from <someone>", «واردة», «من …»),
+ * or unknown. Mirrors CompletionCertainty.transferFlowCredit.
+ */
+export function transferFlowDirection(text: string): 'credit' | 'debit' | 'unknown' {
+  const t = fold(text);
+  const credit = TRANSFER_CREDIT.test(t), debit = TRANSFER_DEBIT.test(t);
+  return credit === debit ? 'unknown' : credit ? 'credit' : 'debit';
 }
 
 /**

@@ -16,11 +16,12 @@
 // to ignore instructions found in it.
 import { amountTextGrounded, CURRENCY_CODES, currencyGrounded } from './ai_candidate_validator.ts';
 import { canonicalMoneyText } from './money_text.ts';
+import { COUNTERPARTY_KINDS, MODEL_REASON_CODES } from './analysis_reasons.ts';
 
 /** Recorded with every result (V1-058). Bump on any prompt/schema change. */
-export const UNDERSTANDING_PROMPT_VERSION = 'sms-understanding-v3';
+export const UNDERSTANDING_PROMPT_VERSION = 'sms-understanding-v4';
 /** The system instruction every primary AI request carries (all callers). */
-export const UNDERSTANDING_SYSTEM_VERSION = 'sms-system-v3';
+export const UNDERSTANDING_SYSTEM_VERSION = 'sms-system-v4';
 
 export const MESSAGE_TYPES = [
   'transaction',
@@ -65,6 +66,10 @@ export const STRUCTURED_PROPERTIES: Record<string, unknown> = {
   currency_source: { type: 'string', enum: ['message', 'account_context'] },
   missing_information: { type: 'array', items: { type: 'string' } },
   contradictions: { type: 'array', items: { type: 'string' } },
+  // Gemini-first phase 1: why a message is not recorded (closed set; the app
+  // shows its own sentence for it) and who the other side of a movement is.
+  reason_code: { type: 'string', enum: [...MODEL_REASON_CODES] },
+  counterparty_kind: { type: 'string', enum: [...COUNTERPARTY_KINDS] },
 };
 
 export const SMS_OPEN = '<sms_message>';
@@ -93,7 +98,9 @@ First decide what the message is (message_type) and the status of the operation 
 A message can carry a completed movement plus an unrelated footer (balance, due date, limit, advert); the completed movement decides, the footer does not.
 The transaction amount is never the available balance, a credit or transfer limit, a reference number, an OTP, a card or account number, or a fee/VAT/tip when a separate total was charged. When a foreign amount and the amount charged to the account both appear, amount_text is the charged amount and original_amount_text/original_currency hold the foreign one; it is one event.
 Give amount_evidence, currency_evidence, status_evidence and direction_evidence as short exact quotes copied from the SMS. Never invent a currency: if the SMS names none, leave currency_source empty unless the request gives an account currency, and then set currency_source=account_context.
-List missing_information and contradictions briefly. Do not invent facts.`;
+List missing_information and contradictions briefly. Do not invent facts.
+For anything that is not a completed movement set reason_code: otp, promo, declined, pending, balance_only, payment_reminder, own_account, not_financial or unclear.
+For a completed movement set counterparty_kind: person (a transfer to or from an individual), merchant (a business, biller or ATM), own_account (between the user's own accounts) or unknown. A person's name is never a merchant: for a transfer to or from a person, merchant is only the payment network the SMS names (for example InstaPay), else omitted.`;
 
 export interface LocalEvidence {
   amount_text: string;
@@ -158,6 +165,9 @@ export function nonTransactionVerdict(value: Record<string, unknown>): Record<st
   const out: Record<string, unknown> = { is_transaction: false };
   if (type && (MESSAGE_TYPES as readonly string[]).includes(type)) out.message_type = type;
   if (status && (STATUSES as readonly string[]).includes(status)) out.status = status;
+  if (typeof value.reason_code === 'string' && (MODEL_REASON_CODES as readonly string[]).includes(value.reason_code)) {
+    out.reason_code = value.reason_code;
+  }
   return out;
 }
 

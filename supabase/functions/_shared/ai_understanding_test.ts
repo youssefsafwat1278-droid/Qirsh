@@ -75,7 +75,11 @@ Deno.test('instruction-bearing message: a model that obeys it is not accepted', 
       return Promise.resolve(modelReply(obeying));
     },
   });
-  assertEquals(result, { ok: false, reason: 'invalid_result', attempts: 3 });
+  // Gemini-first phase 1: the failed result also names the last validator
+  // code (server-side only; never recorded, never shown as model text).
+  assertEquals({ ...result, value: undefined }, {
+    ok: false, reason: 'invalid_result', attempts: 3, invalid: 'amount_text_not_grounded', value: undefined,
+  });
   assertEquals(calls, 3);
   // A grounded figure with a made-up quote is caught by the evidence check.
   assertEquals(checkUnderstanding({ ...answer, amount_evidence: 'paid SAR 45.00 to Test Diner' }, purchase),

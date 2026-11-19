@@ -5,7 +5,7 @@
 // (localDirection); conflicting cues are not clearly completed; an
 // own-account move never reaches the model. Device twin:
 // app/test/engine/parser/completion_certainty_test.dart. Synthetic messages.
-import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { localDirection, messageMeaning, parseSms } from './parse.ts';
 
 const DIRECTION: Array<[string, 'credit' | 'debit', number]> = [
@@ -55,6 +55,9 @@ const PERSON_TRANSFER: Array<[string, number]> = [
   ['Ali Hassan sent you SAR 120.00', 120],
   ['Your wallet was topped up with SAR 95.00 by Ali Hassan', 95],
 ];
+// Gemini-first phase 1: a transfer whose flow names no other side ("by Ali"
+// is not a transfer flow) stays local on the AI-primary path too.
+const LOCAL_ON_PRIMARY = new Set(['Your wallet was topped up with SAR 95.00 by Ali Hassan']);
 
 const CONFLICTING: Array<[string, number]> = [
   ['Purchase SAR 150.00 at Noon card *4521 completed. Merchant confirmation received', 150],
@@ -141,13 +144,24 @@ for (const [text, amount] of CONFLICTING) {
 }
 
 for (const [text, amount] of PERSON_TRANSFER) {
-  Deno.test(`N-M2: a person-to-person transfer never reaches the model — ${text}`, async () => {
+  // Gemini-first phase 1 (owner decision): on the AI-primary path a person
+  // transfer reaches the model (masked); its debit answer against the
+  // incoming wording is held for confirmation, never recorded. The
+  // rule-parse path still decides it locally.
+  Deno.test(`N-M2: a person-to-person transfer reaches the model only on the AI-primary path — ${text}`, async () => {
     for (const primary of [false, true]) {
+      let reasonCode: string | undefined;
       const calls = await withModel('debit', amount, text, async () => {
         const o = await parse(text, primary);
         assertEquals(o.accepted && o.parsed.direction === 'debit', false);
+        reasonCode = o.parsed.reasonCode;
       });
-      assertEquals(calls, 0);
+      if (primary && !LOCAL_ON_PRIMARY.has(text)) {
+        assert(calls > 0, 'the model reads it');
+        assertEquals(reasonCode, 'direction_conflict');
+      } else {
+        assertEquals(calls, 0);
+      }
     }
   });
 }

@@ -10,7 +10,9 @@
 //                       debit/credit in the other direction.
 // Both analysis modes (rule parse + model, AI-primary). Stored `processed` =
 // recorded; `rejected` = kept for review (the device shows it, or reads it
-// itself on the rule-parse path). A transfer never reaches the model.
+// itself on the rule-parse path). On the rule-parse path a transfer never
+// reaches the model; Gemini-first phase 1: on the AI-primary path a person
+// transfer does (masked), and only a move between own accounts never does.
 // Acceptance: zero wrong financial entries; unnecessary reviews are counted.
 // Round 5 (review X, X-M3): no row is exempt. In ai_flipped, a row recorded
 // with the model's flipped direction because the text gives the rule parser no
@@ -166,7 +168,7 @@ for (const m of MODES) {
   for (const primary of [false, true]) {
     if (m.mode === 'ai_off' && primary) continue;
     const name = `${m.name} (${primary ? 'AI-primary' : 'rule parse + model'})`;
-    Deno.test(`acceptance set — ${name}: no wrong entry; a transfer never reaches the model`, async () => {
+    Deno.test(`acceptance set — ${name}: no wrong entry; ${primary ? 'an own-account move' : 'a transfer'} never reaches the model`, async () => {
       const counts: Record<string, number> = {};
       const failures: string[] = [];
       const residual = new Set((RESIDUAL[`server ${name}`] ?? []).map((x) => x.id));
@@ -185,7 +187,7 @@ for (const m of MODES) {
         if (g === 'wrong' && !residual.has(r.id)) {
           failures.push(`${r.id}: expected ${JSON.stringify(r.expected[m.mode])}, got ${JSON.stringify(o)} — ${r.text}`);
         }
-        if (calls > 0 && (isTransfer(r.text) || r.truth === 't')) {
+        if (calls > 0 && ((!primary && isTransfer(r.text)) || r.truth === 't')) {
           failures.push(`${r.id}: a transfer or own-account move reached the model — ${r.text}`);
         }
       }

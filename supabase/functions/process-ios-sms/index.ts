@@ -34,6 +34,7 @@ import { gatedMeaning, meaningRejectionOf } from './meaning_gate.ts';
 import { AI_PRIMARY_MODE } from '../_shared/ai_primary.ts';
 import { UNDERSTANDING_SYSTEM_VERSION } from '../_shared/ai_understanding.ts';
 import { reserveAiBudget } from '../_shared/ai_budget_gate.ts';
+import { meaningReasonCode } from '../_shared/analysis_reasons.ts';
 
 export type { ParsedCapture };
 
@@ -397,11 +398,17 @@ export async function handleProcessIosSms(
       status = 'rejected';
       parsed.reviewReason = meaning.reason;
     }
+    // Gemini-first phase 1 (additive field): every kept-for-review capture
+    // with a known reason carries its closed code; the app words it.
+    if (status === 'rejected' && parsed.reasonCode == null && parsed.reviewReason) {
+      parsed.reasonCode = meaningReasonCode(parsed.reviewReason);
+    }
 
     if (status !== 'rejected') {
       const duplicate = await detectDuplicate(supabase, auth.installIdHash, payloadId, parsed, ownerUid);
       if (duplicate) {
         status = 'duplicate';
+        parsed.reasonCode = 'duplicate';
         parsed.duplicateStatus = 'suspicious_duplicate';
         parsed.possibleDuplicateOfPayloadId = duplicate;
       } else {
