@@ -22,6 +22,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/theme/widgets/ring_progress.dart';
 import '../../../core/utils/app_lucide_icons.dart';
 import 'home_v2_style.dart';
+import '../../capture/analysis_reason_text.dart';
 
 /// Home's «المصروفات اليومية» card.
 ///
@@ -323,8 +324,10 @@ class DailySpendCard extends StatelessWidget {
 
   Widget _topRow(BuildContext context, MaliTokens t, TransactionEntity tx) {
     final category = catalog.byId(tx.categoryId);
-    final title =
-        tx.rawMerchant ?? category?.name ?? context.l10n.txnTransactionWord;
+    final title = personTransferTitle(context.l10n, tx, category?.key) ??
+        tx.rawMerchant ??
+        category?.name ??
+        context.l10n.txnTransactionWord;
     final logo = BrandMark.logoFor(title, merchantLogos);
     final categoryTile = AppAvatar.category(
         iconName: category?.iconName,

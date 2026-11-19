@@ -13008,6 +13008,102 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'{count, plural, =1{عملية سحب نقدي أو تحويل — غيّر نوعها أولًا} =2{عمليتا سحب نقدي أو تحويل — غيّر نوعهما أولًا} few{{count} عمليات سحب نقدي أو تحويل — غيّر نوعها أولًا} many{{count} عملية سحب نقدي أو تحويل — غيّر نوعها أولًا} other{{count} عملية سحب نقدي أو تحويل — غيّر نوعها أولًا}}'**
   String ccPastExclTypeLocked(int count);
+
+  /// No description provided for @inboxReasonOtp.
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز تحقق أو رسالة أمان، ولا تحتوي على عملية'**
+  String get inboxReasonOtp;
+
+  /// No description provided for @inboxReasonPromo.
+  ///
+  /// In ar, this message translates to:
+  /// **'عرض أو رسالة تسويقية، ولا تحتوي على عملية'**
+  String get inboxReasonPromo;
+
+  /// No description provided for @inboxReasonDeclined.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملية مرفوضة أو لم تكتمل، ولم يتحرك أي مبلغ'**
+  String get inboxReasonDeclined;
+
+  /// No description provided for @inboxReasonPending.
+  ///
+  /// In ar, this message translates to:
+  /// **'عملية معلّقة أو مجدولة لم تكتمل بعد'**
+  String get inboxReasonPending;
+
+  /// No description provided for @inboxReasonBalanceOnly.
+  ///
+  /// In ar, this message translates to:
+  /// **'إشعار بالرصيد أو الحد فقط، ولا توجد عملية'**
+  String get inboxReasonBalanceOnly;
+
+  /// No description provided for @inboxReasonPaymentReminder.
+  ///
+  /// In ar, this message translates to:
+  /// **'تذكير بدفعة مستحقة، ولم يتم الدفع بعد'**
+  String get inboxReasonPaymentReminder;
+
+  /// No description provided for @inboxReasonOwnAccount.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل بين حساباتك، راجعه وسجّله إن أردت'**
+  String get inboxReasonOwnAccount;
+
+  /// No description provided for @inboxReasonNotFinancial.
+  ///
+  /// In ar, this message translates to:
+  /// **'رسالة لا تخص عملية مالية'**
+  String get inboxReasonNotFinancial;
+
+  /// No description provided for @inboxReasonUnclear.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتضح نوع العملية، راجعها'**
+  String get inboxReasonUnclear;
+
+  /// No description provided for @inboxReasonDuplicate.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبدو مكررة لعملية مسجّلة'**
+  String get inboxReasonDuplicate;
+
+  /// No description provided for @inboxReasonAmountMismatch.
+  ///
+  /// In ar, this message translates to:
+  /// **'المبلغ لا يطابق نص الرسالة، أكّده قبل التسجيل'**
+  String get inboxReasonAmountMismatch;
+
+  /// No description provided for @inboxReasonDirectionConflict.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم يتضح إن كانت مصروفًا أم دخلًا، أكّد قبل التسجيل'**
+  String get inboxReasonDirectionConflict;
+
+  /// Smart Inbox one-tap confirmation: record the held capture as spending. amount is the formatted amount with its currency.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّلها مصروفًا {amount}'**
+  String inboxRecordAsExpense(String amount);
+
+  /// Smart Inbox one-tap confirmation: record the held capture as income. amount is the formatted amount with its currency.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّلها دخلًا {amount}'**
+  String inboxRecordAsIncome(String amount);
+
+  /// Title of an outgoing transfer to a person; the person is never named.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل لصديق'**
+  String get txnTransferToFriend;
+
+  /// Title of an incoming transfer from a person; the person is never named.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل من صديق'**
+  String get txnTransferFromFriend;
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {

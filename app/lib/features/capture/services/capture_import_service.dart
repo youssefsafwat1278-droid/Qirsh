@@ -17,6 +17,7 @@ import 'capture_retry_ledger.dart';
 import 'capture_sync_service.dart';
 import 'native_capture_bridge.dart';
 import 'shared_capture_handoff_service.dart';
+import '../../../domain/capture/analysis_reason.dart';
 
 enum CaptureImportPath {
   /// A receipt or a transaction with the capture id already existed: the item
@@ -492,7 +493,8 @@ class CaptureImportService {
         // Smart Inbox (row + receipt, one transaction) before it is removed.
         if (!ParserEngine.isIgnoredMessage(item.text, senderId: item.sender)) {
           await _sync.persistUnprocessableCapture(item,
-              isOwnerCurrent: () => _stillOwner(owner));
+              isOwnerCurrent: () => _stillOwner(owner),
+              server: ServerReviewInfo.fromParsed(result?.parsed));
         }
         await _removeNative(owner, id);
         acks.add(id);
@@ -530,7 +532,12 @@ class CaptureImportService {
           isOwnerCurrent: () => _stillOwner(owner),
           reviewReason: held ??
               (serverReason is String ? serverReason : null) ??
-              refused);
+              refused,
+          // The device's own hold reason decides the wording over the
+          // server's code; a server proposal is kept for confirmation.
+          server: held == null && refused == null
+              ? ServerReviewInfo.fromParsed(result?.parsed)
+              : null);
       await _removeNative(owner, id);
       if (result != null) acks.add(id);
       return CaptureImportItem(id: id, path: CaptureImportPath.server,

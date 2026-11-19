@@ -69,6 +69,8 @@ import '../../core/theme/widgets/glass_sheet.dart';
 import '../../core/theme/widgets/glass_dialog.dart';
 import '../../core/theme/widgets/glass_pickers.dart';
 import '../common/app_error_state.dart';
+import '../../domain/capture/analysis_reason.dart';
+import '../capture/analysis_reason_text.dart';
 
 class TransactionsScreen extends ConsumerStatefulWidget {
   const TransactionsScreen({super.key});
@@ -119,7 +121,8 @@ class _TransactionsScreenState extends ConsumerState<TransactionsScreen> {
           final sections = view.sections;
           Widget txRow(TransactionEntity tx) {
             final category = view.catalog.byId(tx.categoryId);
-            final title = tx.rawMerchant ??
+            final title = personTransferTitle(context.l10n, tx, category?.key) ??
+                tx.rawMerchant ??
                 category?.name ??
                 context.l10n.txnTransactionWord;
             final row = AppTransactionRow(
@@ -1930,7 +1933,8 @@ class SmartInboxCard extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(item.title, style: AppTypography.bodyStrong(c.textMain)),
+          Text(inboxItemTitle(context.l10n, item),
+              style: AppTypography.bodyStrong(c.textMain)),
           if (item.body?.isNotEmpty == true) ...[
             const SizedBox(height: 5),
             Text(item.body!, style: AppTypography.caption(c.textMuted)),
@@ -1940,6 +1944,8 @@ class SmartInboxCard extends ConsumerWidget {
             Wrap(
               spacing: 8,
               children: [
+                if (item.proposal != null)
+                  ..._confirmProposalButtons(context, ref, item.proposal!),
                 TextButton(
                   onPressed: () async {
                     final saved = await ManualTransactionSheet.show(context);
@@ -1951,7 +1957,11 @@ class SmartInboxCard extends ConsumerWidget {
                   },
                   child: Text(context.l10n.cesManualEntry),
                 ),
-                if (smartAnalysisOn && item.body?.isNotEmpty == true)
+                // Only where a new analysis can change the outcome (never
+                // analysed by the model, and no reason that settles it).
+                if (smartAnalysisOn &&
+                    item.body?.isNotEmpty == true &&
+                    inboxCanReanalyse(item))
                   _RetryInboxAnalysis(item: item),
                 if (settings != null && !smartAnalysisOn)
                   TextButton(
@@ -1987,6 +1997,48 @@ class SmartInboxCard extends ConsumerWidget {
         ],
       ),
     );
+  }
+
+  /// One-tap confirmation of the model's reading held for review
+  /// (`amount_mismatch`, `direction_conflict`): a direction conflict offers
+  /// both directions, an amount mismatch the model's.
+  List<Widget> _confirmProposalButtons(
+      BuildContext context, WidgetRef ref, CaptureProposal proposal) {
+    final amount = '${formatMoney(Money.parse(proposal.amountText, proposal.currency))} '
+        '${Currency.label(context, proposal.currency)}';
+    final directions = inboxReasonCode(item) == AnalysisReason.directionConflict
+        ? [proposal.isDebit, !proposal.isDebit]
+        : [proposal.isDebit];
+    return [
+      for (final isDebit in directions)
+        FilledButton.tonal(
+          onPressed: () => _confirmProposal(ref, proposal, isDebit),
+          child: Text(isDebit
+              ? context.l10n.inboxRecordAsExpense(amount)
+              : context.l10n.inboxRecordAsIncome(amount)),
+        ),
+    ];
+  }
+
+  Future<void> _confirmProposal(
+      WidgetRef ref, CaptureProposal proposal, bool isDebit) async {
+    // The model's category only for its own direction; the other direction
+    // falls back to a neutral one.
+    final category = isDebit == proposal.isDebit ? proposal.category : null;
+    await ref.read(saveManualTransactionUseCaseProvider)(
+      amount: Money.parse(proposal.amountText, proposal.currency),
+      currency: proposal.currency,
+      type: isDebit
+          ? TransactionTypeEntity.payment
+          : TransactionTypeEntity.income,
+      occurredAt: item.createdAt,
+      categoryKey: category ?? (isDebit ? 'other' : 'income'),
+      merchant: proposal.merchant,
+    );
+    await ref.read(smartInboxRepositoryProvider).resolve(item.id);
+    refreshTransactions(ref);
+    ref.invalidate(dashboardDataProvider);
+    ref.invalidate(smartInboxItemsProvider);
   }
 }
 

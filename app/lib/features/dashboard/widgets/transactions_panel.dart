@@ -16,6 +16,7 @@ import '../../common/app_transaction_row.dart';
 import '../../common/category_catalog.dart';
 import '../../common/transaction_direction.dart';
 import 'home_v2_style.dart';
+import '../../capture/analysis_reason_text.dart';
 
 /// One rendered day inside [TransactionsPanel].
 class TransactionDay {
@@ -188,8 +189,10 @@ class TransactionsPanel extends StatelessWidget {
 
   Widget _row(BuildContext context, TransactionEntity tx) {
     final category = catalog.byId(tx.categoryId);
-    final title =
-        tx.rawMerchant ?? category?.name ?? context.l10n.txnTransactionWord;
+    final title = personTransferTitle(context.l10n, tx, category?.key) ??
+        tx.rawMerchant ??
+        category?.name ??
+        context.l10n.txnTransactionWord;
     return AppTransactionRow(
       title: title,
       amount: tx.amount,

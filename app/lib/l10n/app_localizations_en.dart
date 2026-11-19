@@ -7838,4 +7838,68 @@ class AppL10nEn extends AppL10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get inboxReasonOtp =>
+      'A verification code or security message, with no transaction';
+
+  @override
+  String get inboxReasonPromo =>
+      'An offer or marketing message, with no transaction';
+
+  @override
+  String get inboxReasonDeclined =>
+      'A declined or failed operation; no money moved';
+
+  @override
+  String get inboxReasonPending =>
+      'A pending or scheduled operation that has not completed yet';
+
+  @override
+  String get inboxReasonBalanceOnly =>
+      'A balance or limit notice only, with no transaction';
+
+  @override
+  String get inboxReasonPaymentReminder =>
+      'A payment reminder; nothing has been paid yet';
+
+  @override
+  String get inboxReasonOwnAccount =>
+      'A transfer between your own accounts; review it and record it if you want';
+
+  @override
+  String get inboxReasonNotFinancial =>
+      'This message is not about a money movement';
+
+  @override
+  String get inboxReasonUnclear =>
+      'The operation is not clear; please review it';
+
+  @override
+  String get inboxReasonDuplicate =>
+      'Looks like a duplicate of a recorded transaction';
+
+  @override
+  String get inboxReasonAmountMismatch =>
+      'The amount does not match the message; confirm it before recording';
+
+  @override
+  String get inboxReasonDirectionConflict =>
+      'Unclear whether this is spending or income; confirm before recording';
+
+  @override
+  String inboxRecordAsExpense(String amount) {
+    return 'Record as expense $amount';
+  }
+
+  @override
+  String inboxRecordAsIncome(String amount) {
+    return 'Record as income $amount';
+  }
+
+  @override
+  String get txnTransferToFriend => 'Transfer to a friend';
+
+  @override
+  String get txnTransferFromFriend => 'Transfer from a friend';
 }

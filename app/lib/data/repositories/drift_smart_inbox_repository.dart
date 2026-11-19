@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../../domain/capture/analysis_reason.dart';
 import '../../domain/entities/smart_inbox_item_entity.dart';
 import '../../domain/repositories/smart_inbox_repository.dart';
 import '../db/app_database.dart';
@@ -72,6 +73,8 @@ class DriftSmartInboxRepository implements SmartInboxRepository {
     String lang = 'ar',
     bool awaitingAnalysis = false,
     String? reviewReason,
+    ServerReviewInfo? server,
+    String? reasonTitle,
   }) async {
     final itemId = 'local_capture:$payloadId';
     final now = DateTime.now().toUtc();
@@ -90,12 +93,15 @@ class DriftSmartInboxRepository implements SmartInboxRepository {
         Variable.withString(itemId),
         Variable.withString(itemId),
         Variable.withString(payloadId),
+        // Gemini-first phase 1: the generic "unsupported" title only when no
+        // reason is known ([reasonTitle] is the reason in [lang]).
         Variable.withString(awaitingAnalysis ||
                 reviewReason == SmartInboxReviewReason.analysisUnavailable
             ? (lang == 'en' ? 'Bank message awaiting analysis'
                 : 'رسالة بنكية بانتظار التحليل')
-            : (lang == 'en' ? 'An unsupported bank message that needs review'
-                : 'رسالة بنكية غير مدعومة تحتاج مراجعة')),
+            : reasonTitle ??
+                (lang == 'en' ? 'An unsupported bank message that needs review'
+                    : 'رسالة بنكية غير مدعومة تحتاج مراجعة')),
         Variable.withString(rawMessage),
         Variable.withString(jsonEncode({
           'capture_disposition': 'unprocessable',
@@ -105,6 +111,9 @@ class DriftSmartInboxRepository implements SmartInboxRepository {
           'local_only': true,
           if (awaitingAnalysis) 'manual_analysis_draft': true,
           if (reviewReason != null) 'review_reason': reviewReason,
+          if (server?.reasonCode != null) 'reason_code': server!.reasonCode,
+          if (server?.aiAnalysed == true) 'ai_analysed': true,
+          if (server?.proposal != null) 'proposal': server!.proposal!.toJson(),
         })),
         Variable.withString(dateTimeToSql(effectiveReceivedAt)),
         Variable.withString(dateTimeToSql(now)),
@@ -182,7 +191,17 @@ class DriftSmartInboxRepository implements SmartInboxRepository {
     });
   }
 
-  SmartInboxItemEntity _fromRow(QueryRow row) => SmartInboxItemEntity(
+  SmartInboxItemEntity _fromRow(QueryRow row) {
+    Map<String, dynamic> meta = const {};
+    try {
+      final raw = row.readNullable<String>('metadata_json');
+      final decoded = raw == null ? null : jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) meta = decoded;
+    } on FormatException {
+      meta = const {};
+    }
+    final reviewReason = meta['review_reason'];
+    return SmartInboxItemEntity(
         id: row.read<String>('server_id'),
         transactionId: row.readNullable<String>('transaction_id'),
         payloadId: row.readNullable<String>('payload_id'),
@@ -192,5 +211,10 @@ class DriftSmartInboxRepository implements SmartInboxRepository {
         status: row.read<String>('status'),
         confidence: row.readNullable<double>('confidence'),
         createdAt: dateTimeFromSql(row.read<String>('server_created_at')),
+        reviewReason: reviewReason is String ? reviewReason : null,
+        reasonCode: AnalysisReason.parse(meta['reason_code']),
+        aiAnalysed: meta['ai_analysed'] == true,
+        proposal: CaptureProposal.fromJson(meta['proposal']),
       );
+  }
 }

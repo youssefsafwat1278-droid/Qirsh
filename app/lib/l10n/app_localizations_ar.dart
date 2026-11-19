@@ -7879,4 +7879,61 @@ class AppL10nAr extends AppL10n {
     );
     return '$_temp0';
   }
+
+  @override
+  String get inboxReasonOtp => 'رمز تحقق أو رسالة أمان، ولا تحتوي على عملية';
+
+  @override
+  String get inboxReasonPromo => 'عرض أو رسالة تسويقية، ولا تحتوي على عملية';
+
+  @override
+  String get inboxReasonDeclined =>
+      'عملية مرفوضة أو لم تكتمل، ولم يتحرك أي مبلغ';
+
+  @override
+  String get inboxReasonPending => 'عملية معلّقة أو مجدولة لم تكتمل بعد';
+
+  @override
+  String get inboxReasonBalanceOnly =>
+      'إشعار بالرصيد أو الحد فقط، ولا توجد عملية';
+
+  @override
+  String get inboxReasonPaymentReminder =>
+      'تذكير بدفعة مستحقة، ولم يتم الدفع بعد';
+
+  @override
+  String get inboxReasonOwnAccount => 'تحويل بين حساباتك، راجعه وسجّله إن أردت';
+
+  @override
+  String get inboxReasonNotFinancial => 'رسالة لا تخص عملية مالية';
+
+  @override
+  String get inboxReasonUnclear => 'لم يتضح نوع العملية، راجعها';
+
+  @override
+  String get inboxReasonDuplicate => 'تبدو مكررة لعملية مسجّلة';
+
+  @override
+  String get inboxReasonAmountMismatch =>
+      'المبلغ لا يطابق نص الرسالة، أكّده قبل التسجيل';
+
+  @override
+  String get inboxReasonDirectionConflict =>
+      'لم يتضح إن كانت مصروفًا أم دخلًا، أكّد قبل التسجيل';
+
+  @override
+  String inboxRecordAsExpense(String amount) {
+    return 'سجّلها مصروفًا $amount';
+  }
+
+  @override
+  String inboxRecordAsIncome(String amount) {
+    return 'سجّلها دخلًا $amount';
+  }
+
+  @override
+  String get txnTransferToFriend => 'تحويل لصديق';
+
+  @override
+  String get txnTransferFromFriend => 'تحويل من صديق';
 }

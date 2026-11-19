@@ -1,3 +1,5 @@
+import 'dart:ui' show Locale;
+
 import 'budget_alert_commits.dart';
 import 'package:flutter/foundation.dart';
 
@@ -37,6 +39,9 @@ import 'capture_device_registration_service.dart';
 import 'capture_retry_ledger.dart';
 import 'native_capture_bridge.dart';
 import 'local_notification_service.dart';
+import '../../../domain/capture/analysis_reason.dart';
+import '../../../l10n/app_localizations.dart';
+import '../analysis_reason_text.dart';
 
 class CaptureSyncResult {
   const CaptureSyncResult({
@@ -558,6 +563,7 @@ class CaptureSyncService {
     SharedCapturedMessage message, {
     required Future<bool> Function() isOwnerCurrent,
     String? reviewReason,
+    ServerReviewInfo? server,
   }) async {
     final payloadId = message.id?.trim();
     if (payloadId == null || payloadId.isEmpty) {
@@ -577,6 +583,7 @@ class CaptureSyncService {
         receivedAt: message.receivedAt,
         requireCurrentAdmission: requireOwner,
         reviewReason: reviewReason,
+        server: server,
       );
       await requireOwner();
       return itemId;
@@ -593,16 +600,27 @@ class CaptureSyncService {
     DateTime? receivedAt,
     Future<void> Function()? requireCurrentAdmission,
     String? reviewReason,
+    ServerReviewInfo? server,
   }) async {
     await requireCurrentAdmission?.call();
+    final lang = LocalNotificationService.instance.notificationLanguage;
+    // Gemini-first phase 1: the row's title is its reason, in the reader's
+    // language, whenever one is known.
+    final code = AnalysisReason.of(
+        reasonCode: server?.reasonCode, reviewReason: reviewReason);
     final itemId = await _smartInboxRepository.saveUnprocessableCapture(
       payloadId: payloadId,
       rawMessage: rawMessage,
       source: source,
       senderId: senderId,
       receivedAt: receivedAt,
-      lang: LocalNotificationService.instance.notificationLanguage,
+      lang: lang,
       reviewReason: reviewReason,
+      server: server,
+      reasonTitle: code == null
+          ? null
+          : analysisReasonText(
+              lookupAppL10n(Locale(lang == 'en' ? 'en' : 'ar')), code),
     );
     await requireCurrentAdmission?.call();
     await markPayloadImported(
@@ -684,6 +702,7 @@ class CaptureSyncService {
       reviewReason: parsed['parserSource'] == 'ai_pending'
           ? SmartInboxReviewReason.analysisUnavailable
           : null,
+      server: ServerReviewInfo.fromParsed(parsed),
     );
   }
 

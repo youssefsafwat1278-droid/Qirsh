@@ -40,6 +40,7 @@ import '../../core/utils/app_lucide_icons.dart';
 import '../common/repo_error_messages.dart';
 import '../../core/theme/widgets/glass_dialog.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
+import '../capture/analysis_reason_text.dart';
 
 /// The other leg of a transfer between the user's own accounts, or null.
 final _transferSiblingProvider = FutureProvider.autoDispose
@@ -157,9 +158,10 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
         final sibling =
             ref.watch(_transferSiblingProvider(tx.id)).valueOrNull;
         final amountColor = isDebit ? c.textPrimary : c.success;
-        final merchantTitle = tx.rawMerchant?.trim().isNotEmpty == true
-            ? tx.rawMerchant!.trim()
-            : category?.name ?? context.l10n.txnTransactionWord;
+        final merchantTitle = personTransferTitle(context.l10n, tx, category?.key) ??
+            (tx.rawMerchant?.trim().isNotEmpty == true
+                ? tx.rawMerchant!.trim()
+                : category?.name ?? context.l10n.txnTransactionWord);
         // v2 QStatusChip: warningBg/warningText for review, successBg for
         // confirmed (the old beige-on-beige chip failed contrast in light).
         final statusTone = switch (tx.status) {

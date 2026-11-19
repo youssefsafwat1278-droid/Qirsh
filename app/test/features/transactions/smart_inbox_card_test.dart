@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/di/app_providers.dart';
+import 'package:money_companion/domain/capture/analysis_reason.dart';
 import 'package:money_companion/domain/entities/smart_inbox_item_entity.dart';
 import 'package:money_companion/domain/entities/supporting_entities.dart';
 import 'package:money_companion/domain/repositories/smart_inbox_repository.dart';
@@ -20,6 +21,11 @@ class _FakeInbox implements SmartInboxRepository {
 SmartInboxItemEntity _item({
   String id = 'local_capture:p1',
   String? transactionId,
+  String? body,
+  String? reviewReason,
+  String? reasonCode,
+  bool aiAnalysed = false,
+  CaptureProposal? proposal,
 }) =>
     SmartInboxItemEntity(
       id: id,
@@ -29,7 +35,14 @@ SmartInboxItemEntity _item({
       createdAt: DateTime(2026, 1, 1),
       transactionId: transactionId,
       payloadId: 'p1',
+      body: body,
+      reviewReason: reviewReason,
+      reasonCode: reasonCode,
+      aiAnalysed: aiAnalysed,
+      proposal: proposal,
     );
+
+const _sms = 'Purchase EGP 45.00 at Test Mart';
 
 Future<void> _pump(
   WidgetTester tester,
@@ -126,5 +139,91 @@ void main() {
     expect(find.text('Agree and enable'), findsNothing);
     expect(find.text('Enable Smart Analysis & Cloud Sync'), findsOneWidget);
     expectNoGrant();
+  });
+
+  group('Gemini-first phase 1: reason title and re-analyse visibility', () {
+    testWidgets('no reason known: generic title, re-analyse offered',
+        (tester) async {
+      await _pump(tester, _item(body: _sms), consentOn: true);
+      expect(find.text('Unsupported'), findsOneWidget);
+      expect(find.text('Retry smart analysis'), findsOneWidget);
+    });
+
+    testWidgets('analysis did not run: re-analyse offered', (tester) async {
+      await _pump(
+          tester,
+          _item(
+              body: _sms,
+              reviewReason: SmartInboxReviewReason.analysisUnavailable),
+          consentOn: true);
+      expect(find.text('Retry smart analysis'), findsOneWidget);
+    });
+
+    testWidgets('model verdict: reason as title, no re-analyse',
+        (tester) async {
+      await _pump(
+          tester,
+          _item(body: _sms, reasonCode: 'promo', aiAnalysed: true),
+          consentOn: true);
+      expect(find.text('An offer or marketing message, with no transaction'),
+          findsOneWidget);
+      expect(find.text('Unsupported'), findsNothing);
+      expect(find.text('Retry smart analysis'), findsNothing);
+    });
+
+    testWidgets('a device hold that settles the message: no re-analyse',
+        (tester) async {
+      await _pump(tester, _item(body: _sms, reviewReason: 'bill_due'),
+          consentOn: true);
+      expect(find.text('A payment reminder; nothing has been paid yet'),
+          findsOneWidget);
+      expect(find.text('Retry smart analysis'), findsNothing);
+    });
+
+    testWidgets('unclear without AI: re-analyse offered', (tester) async {
+      await _pump(
+          tester, _item(body: _sms, reviewReason: 'no_completed_form'),
+          consentOn: true);
+      expect(find.text('The operation is not clear; please review it'),
+          findsOneWidget);
+      expect(find.text('Retry smart analysis'), findsOneWidget);
+    });
+
+    testWidgets('direction conflict: one-tap confirmation in both directions',
+        (tester) async {
+      await _pump(
+          tester,
+          _item(
+            body: _sms,
+            reasonCode: 'direction_conflict',
+            aiAnalysed: true,
+            proposal: const CaptureProposal(
+                amountText: '120.00', currency: 'EGP', isDebit: false),
+          ),
+          consentOn: true);
+      expect(
+          find.text(
+              'Unclear whether this is spending or income; confirm before recording'),
+          findsOneWidget);
+      expect(find.textContaining('Record as income 120.00'), findsOneWidget);
+      expect(find.textContaining('Record as expense 120.00'), findsOneWidget);
+      expect(find.text('Retry smart analysis'), findsNothing);
+    });
+
+    testWidgets('amount mismatch: one-tap confirmation of the model reading',
+        (tester) async {
+      await _pump(
+          tester,
+          _item(
+            body: _sms,
+            reasonCode: 'amount_mismatch',
+            aiAnalysed: true,
+            proposal: const CaptureProposal(
+                amountText: '54.00', currency: 'EGP', isDebit: true),
+          ),
+          consentOn: true);
+      expect(find.textContaining('Record as expense 54.00'), findsOneWidget);
+      expect(find.textContaining('Record as income'), findsNothing);
+    });
   });
 }

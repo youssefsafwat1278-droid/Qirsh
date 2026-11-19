@@ -1,3 +1,5 @@
+import '../capture/analysis_reason.dart';
+
 class SmartInboxItemEntity {
   const SmartInboxItemEntity({
     required this.id,
@@ -9,6 +11,10 @@ class SmartInboxItemEntity {
     this.payloadId,
     this.body,
     this.confidence,
+    this.reviewReason,
+    this.reasonCode,
+    this.aiAnalysed = false,
+    this.proposal,
   });
 
   final String id;
@@ -20,6 +26,14 @@ class SmartInboxItemEntity {
   final String status;
   final double? confidence;
   final DateTime createdAt;
+
+  /// Local capture rows only (metadata): the stored review reason, the
+  /// server's reason code, whether the model analysed the capture, and the
+  /// model's reading held for a one-tap confirmation.
+  final String? reviewReason;
+  final String? reasonCode;
+  final bool aiAnalysed;
+  final CaptureProposal? proposal;
 }
 
 /// Why a capture was parked in Smart Inbox, stored as `review_reason` in the

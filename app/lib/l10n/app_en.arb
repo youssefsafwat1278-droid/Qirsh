@@ -3992,5 +3992,21 @@
       }
     }
   },
-  "ccIncludeImportedConfirmYes": "Yes, change them"
+  "ccIncludeImportedConfirmYes": "Yes, change them",
+  "inboxReasonOtp": "A verification code or security message, with no transaction",
+  "inboxReasonPromo": "An offer or marketing message, with no transaction",
+  "inboxReasonDeclined": "A declined or failed operation; no money moved",
+  "inboxReasonPending": "A pending or scheduled operation that has not completed yet",
+  "inboxReasonBalanceOnly": "A balance or limit notice only, with no transaction",
+  "inboxReasonPaymentReminder": "A payment reminder; nothing has been paid yet",
+  "inboxReasonOwnAccount": "A transfer between your own accounts; review it and record it if you want",
+  "inboxReasonNotFinancial": "This message is not about a money movement",
+  "inboxReasonUnclear": "The operation is not clear; please review it",
+  "inboxReasonDuplicate": "Looks like a duplicate of a recorded transaction",
+  "inboxReasonAmountMismatch": "The amount does not match the message; confirm it before recording",
+  "inboxReasonDirectionConflict": "Unclear whether this is spending or income; confirm before recording",
+  "inboxRecordAsExpense": "Record as expense {amount}",
+  "inboxRecordAsIncome": "Record as income {amount}",
+  "txnTransferToFriend": "Transfer to a friend",
+  "txnTransferFromFriend": "Transfer from a friend"
 }

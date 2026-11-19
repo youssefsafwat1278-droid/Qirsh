@@ -3908,7 +3908,13 @@
   "countryCurrencyChooseNext": "تختار العملة في الخطوة التالية",
   "currencyChoiceTitle": "اختر عملتك",
   "currencyChoiceUnsupportedBody": "لا يستطيع قِرش تسجيل المبالغ بعملة {currency} حتى الآن. اختر العملة التي تريد متابعة أموالك بها، ويمكنك تغييرها لاحقًا من الإعدادات.",
-  "@currencyChoiceUnsupportedBody": {"placeholders": {"currency": {"type": "String"}}},
+  "@currencyChoiceUnsupportedBody": {
+    "placeholders": {
+      "currency": {
+        "type": "String"
+      }
+    }
+  },
   "currencyChoiceNoCurrencyBody": "ليس لهذه المنطقة عملة خاصة بها. اختر العملة التي تريد متابعة أموالك بها، ويمكنك تغييرها لاحقًا من الإعدادات.",
   "coachPasteTitle": "اقرأ رسالة البنك",
   "coachPasteBody": "الصق رسالة البنك هنا، أو اختر «لصق رسالة» من قائمة الإضافة لكي يحلّلها قرش.",
@@ -4227,5 +4233,43 @@
         "type": "int"
       }
     }
+  },
+  "inboxReasonOtp": "رمز تحقق أو رسالة أمان، ولا تحتوي على عملية",
+  "inboxReasonPromo": "عرض أو رسالة تسويقية، ولا تحتوي على عملية",
+  "inboxReasonDeclined": "عملية مرفوضة أو لم تكتمل، ولم يتحرك أي مبلغ",
+  "inboxReasonPending": "عملية معلّقة أو مجدولة لم تكتمل بعد",
+  "inboxReasonBalanceOnly": "إشعار بالرصيد أو الحد فقط، ولا توجد عملية",
+  "inboxReasonPaymentReminder": "تذكير بدفعة مستحقة، ولم يتم الدفع بعد",
+  "inboxReasonOwnAccount": "تحويل بين حساباتك، راجعه وسجّله إن أردت",
+  "inboxReasonNotFinancial": "رسالة لا تخص عملية مالية",
+  "inboxReasonUnclear": "لم يتضح نوع العملية، راجعها",
+  "inboxReasonDuplicate": "تبدو مكررة لعملية مسجّلة",
+  "inboxReasonAmountMismatch": "المبلغ لا يطابق نص الرسالة، أكّده قبل التسجيل",
+  "inboxReasonDirectionConflict": "لم يتضح إن كانت مصروفًا أم دخلًا، أكّد قبل التسجيل",
+  "inboxRecordAsExpense": "سجّلها مصروفًا {amount}",
+  "@inboxRecordAsExpense": {
+    "description": "Smart Inbox one-tap confirmation: record the held capture as spending. amount is the formatted amount with its currency.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "inboxRecordAsIncome": "سجّلها دخلًا {amount}",
+  "@inboxRecordAsIncome": {
+    "description": "Smart Inbox one-tap confirmation: record the held capture as income. amount is the formatted amount with its currency.",
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "txnTransferToFriend": "تحويل لصديق",
+  "@txnTransferToFriend": {
+    "description": "Title of an outgoing transfer to a person; the person is never named."
+  },
+  "txnTransferFromFriend": "تحويل من صديق",
+  "@txnTransferFromFriend": {
+    "description": "Title of an incoming transfer from a person; the person is never named."
   }
 }
