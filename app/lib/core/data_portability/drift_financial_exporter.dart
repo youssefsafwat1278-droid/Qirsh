@@ -324,6 +324,7 @@ const _tableSpecs = <_ExportTableSpec>[
     'duplicate_status',
     'possible_duplicate_record_id',
     'duplicate_reason',
+    'transfer_group_id',
   ], '''
     SELECT t.id AS record_id, t.account_id AS account_record_id,
            t.amount, t.amount_minor, t.currency, t.raw_merchant AS merchant,
@@ -336,7 +337,7 @@ const _tableSpecs = <_ExportTableSpec>[
            t.comparison_timestamp, t.comparison_timestamp_source,
            t.duplicate_status,
            t.possible_duplicate_of_transaction_id AS possible_duplicate_record_id,
-           t.duplicate_reason
+           t.duplicate_reason, t.transfer_group_id
     FROM transactions t
     LEFT JOIN categories c ON c.id = t.category_id
     WHERE t.status != 'ignored'

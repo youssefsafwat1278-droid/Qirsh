@@ -100,7 +100,7 @@ void main() {
 
     await db.debugReinitialize();
 
-    expect(await scalar(db, 'PRAGMA user_version;'), 44);
+    expect(await scalar(db, 'PRAGMA user_version;'), 45);
     expect(await objects(db, 'table'), [
       'merchant_rule_history',
       'merchant_rule_restore_choices',
@@ -208,10 +208,10 @@ void main() {
 
   test(
       'a new install has the tables, no history marker (its history is '
-      'complete) and schema 44', () async {
+      'complete) and schema 45', () async {
     final db = await open();
     addTearDown(db.close);
-    expect(await scalar(db, 'PRAGMA user_version;'), 44);
+    expect(await scalar(db, 'PRAGMA user_version;'), 45);
     expect(await objects(db, 'table'), hasLength(3));
     expect(await count(db, 'merchant_rule_history'), 0);
     expect(await count(db, 'merchant_rule_tombstones'), 0);

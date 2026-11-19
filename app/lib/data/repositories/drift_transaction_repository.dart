@@ -294,7 +294,7 @@ class DriftTransactionRepository implements TransactionRepository {
           transaction_time_from_sms, sms_received_at, comparison_timestamp,
           comparison_timestamp_source, duplicate_status,
           possible_duplicate_of_transaction_id, duplicate_reason, category_source,
-          imported_from_file
+          imported_from_file, transfer_group_id
         ) VALUES (
           ${sqlString(transaction.id)},
           ${kMoneyCodec.sqlRealLiteral(transaction.amountMoney)},
@@ -328,7 +328,8 @@ class DriftTransactionRepository implements TransactionRepository {
           ${sqlNullableString(transaction.possibleDuplicateOfTransactionId)},
           ${sqlNullableString(transaction.duplicateReason)},
           ${sqlString(_provenanceForNew(transaction).name)},
-          ${transaction.importedFromFile ? 1 : 0}
+          ${transaction.importedFromFile ? 1 : 0},
+          ${sqlNullableString(transaction.transferGroupId)}
         );
       ''');
 

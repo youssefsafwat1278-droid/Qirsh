@@ -90,7 +90,7 @@ void main() {
     // current approved value, and the R4-specific claim is asserted directly
     // below, where it belongs.
     final db = _read('lib/data/db/app_database.dart');
-    expect(RegExp(r'_targetSchemaVersion\s*=\s*44').hasMatch(db), isTrue,
+    expect(RegExp(r'_targetSchemaVersion\s*=\s*45').hasMatch(db), isTrue,
         reason: 'unexpected schema version — a bump must be an approved, '
             'separately gated change');
   });

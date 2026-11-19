@@ -212,7 +212,7 @@ void main() {
       expect(
           (await db.customSelect('PRAGMA user_version;').getSingle())
               .read<int>('user_version'),
-          44);
+          45);
       await db.close();
 
       expect(snapshot(), files,
@@ -579,7 +579,7 @@ void main() {
     test('a schema this build does not run is unavailable, never migrated',
         () async {
       final id = await seed(_uid);
-      for (final version in [40, 45]) {
+      for (final version in [40, 46]) {
         await normalOpenSet(_uid, 'PRAGMA user_version = $version;');
         await expectDenied(_uid, id, LocalReadDenial.schema);
       }

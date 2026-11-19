@@ -67,7 +67,7 @@ void main() {
 
     final dbFramework = openUninit(newDbFile(), enableMigrations: true);
     addTearDown(dbFramework.close);
-    expect(await userVersion(dbFramework), 44,
+    expect(await userVersion(dbFramework), 45,
         reason: 'framework stamps schemaVersion (33) — the behavior the fix disables');
   });
 
@@ -75,7 +75,7 @@ void main() {
     final db = openUninit(newDbFile());
     addTearDown(db.close);
     await db.initialize();
-    expect(await userVersion(db), 44);
+    expect(await userVersion(db), 45);
     expect(await count(db, 'accounts'), 0,
         reason: 'A-7: a fresh database has no silent default account');
     expect(await count(db, 'categories'), greaterThan(0));
@@ -120,7 +120,7 @@ void main() {
 
     await db.initialize();
 
-    expect(await userVersion(db), 44);
+    expect(await userVersion(db), 45);
     expect(await columnExists(db, 'transactions', 'foreign_amount'), isTrue,
         reason: 'version<9 gate fired — real on-disk version (8) was observed');
     expect(await count(db, "transactions WHERE id='legacy_tx'"), 1,
@@ -141,11 +141,11 @@ void main() {
 
     final db2 = openUninit(f);
     addTearDown(db2.close);
-    expect(await userVersion(db2), 44,
+    expect(await userVersion(db2), 45,
         reason: 'the pipeline owns user_version and persisted the current '
             'target to disk; reopening observes it before initialize runs');
     await db2.initialize(); // idempotent no-op
-    expect(await userVersion(db2), 44);
+    expect(await userVersion(db2), 45);
     expect(await count(db2, "accounts WHERE id='marker'"), 1);
   });
 

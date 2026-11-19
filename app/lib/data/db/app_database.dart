@@ -22,7 +22,7 @@ import 'sql_value_codec.dart';
 
 // v28 (MALI-014 Batch-5 closure): adds the durable `restore_operations` journal
 // (created idempotently by _createSchema on both fresh install and upgrade).
-const int _targetSchemaVersion = 44;
+const int _targetSchemaVersion = 45;
 
 /// The notification preferences of the seeded default settings row. Shared so a
 /// recovery can tell the pristine seed from a row the user has edited.
@@ -898,7 +898,37 @@ class AppDatabase extends GeneratedDatabase {
       apply: _applyV44RuleHistory,
       postcondition: _verifyV44RuleHistory,
     ),
+    // Transfer between the user's own accounts: two ordinary transfer rows
+    // (debit on From, credit on To) sharing transactions.transfer_group_id.
+    // ADDITIVE: one nullable local column and its index; no row is rewritten.
+    _SchemaMigration(
+      from: 44,
+      to: 45,
+      apply: _applyV45TransferGroup,
+      postcondition: _verifyV45TransferGroup,
+    ),
   ];
+
+  static Future<void> _applyV45TransferGroup(AppDatabase db) async {
+    await db._ensureColumn('transactions', 'transfer_group_id', 'TEXT NULL');
+    await db.customStatement(
+      'CREATE INDEX IF NOT EXISTS idx_transactions_transfer_group '
+      'ON transactions(transfer_group_id);',
+    );
+  }
+
+  static Future<bool> _verifyV45TransferGroup(AppDatabase db) async {
+    final cols = (await db
+            .customSelect("SELECT name FROM pragma_table_info('transactions');")
+            .get())
+        .map((r) => r.read<String>('name'))
+        .toSet();
+    final index = await db
+        .customSelect("SELECT 1 FROM sqlite_master WHERE type='index' "
+            "AND name='idx_transactions_transfer_group';")
+        .getSingleOrNull();
+    return cols.contains('transfer_group_id') && index != null;
+  }
 
   static Future<void> _applyV44RuleHistory(AppDatabase db) async {
     await createMerchantRuleHistory(db);
@@ -2585,6 +2615,8 @@ class AppDatabase extends GeneratedDatabase {
     await _createMerchantAliasesTable();
     // v44: deletion history for saved category rules. Unconditional likewise.
     await createMerchantRuleHistory(this);
+    // v45: the own-account transfer link. Unconditional likewise.
+    await _applyV45TransferGroup(this);
 
     // v34 (COUPONS PHASE 1): the merchant catalog cache. Unconditional for the
     // same reason as the two above — a version gate would skip these on a
