@@ -82,7 +82,7 @@ class CompletionCertainty {
   /// ([DirectionSignal.localOf]) reads it. Server twin: `statedDirection` in
   /// process-ios-sms/completion_certainty.ts.
   static const String statedCreditPattern =
-      r"(?<![a-z])(?:added to your (?:account|wallet)|topped up with|(?:has been|was|been) topped up|you got (?:[a-z]{3} ?)?[0-9]|posted to (?:your )?account[^\n.]*? from )|(?<![ء-ي])(?:تم )?(?:قيد|اضيف|اضيفت)(?![ء-ي])(?:[^\n.]|\.(?=[0-9]))*?لحسابك";
+      r"(?<![a-z])(?:added to your (?:account|wallet)|topped up with|(?:has been|was|been) topped up|you got (?:[a-z]{3} ?)?[0-9]|sent you (?:[a-z]{3} ?)?[0-9]|posted to (?:your )?account[^\n.]*? from )|(?<![ء-ي])(?:تم )?(?:قيد|اضيف|اضيفت)(?![ء-ي])(?:[^\n.]|\.(?=[0-9]))*?لحسابك";
   static const String statedDebitPattern =
       r"(?<![a-z])recharge[a-z]*(?![a-z])[^\n]*?(?<![a-z])(?:via|using|with|by) (?:your )?card";
 
@@ -92,6 +92,15 @@ class CompletionCertainty {
   static const String statedCreditDebtPattern =
       r"(?<![a-z])(?:installments?|instalments?|fees?|charges?|interest charged)(?![a-z])|(?<![ء-ي])(?:ال)?(?:قسط|اقساط)(?![ء-ي])";
 
+  /// Gemini-first phase 1: a transfer's own flow ("sent", "to <someone>",
+  /// «إلى …» / "received", "from <someone>", «واردة», «من …»), not the
+  /// user's own account or card. Server twin: `transferFlowDirection` in
+  /// process-ios-sms/completion_certainty.ts.
+  static const String transferCreditPattern =
+      r"(?<![a-z])(?:received|incoming|transfer(?:red)? in|sent (?:to )?you)(?![a-z])|(?<![a-z])from (?!your?(?![a-z])|(?:the )?(?:account|card|acct)(?![a-z])|[0-9]|\*+ ?[0-9]|\[(?:account|card)\])\S|(?<![ء-ي])(?:وارده?|استلام|استلمت)(?![ء-ي])|(?<![ء-ي])من(?: ?: ?| )(?!حساب|بطاق|خلال|رصيد|قبل|[0-9٠-٩]|\*+ ?[0-9]|\[(?:account|card)\])\S";
+  static const String transferDebitPattern =
+      r"(?<![a-z])(?:sent(?! (?:to )?you(?![a-z]))|outgoing|transfer(?:red)? out)(?![a-z])|(?<![a-z])to (?!your?(?![a-z])|(?:the )?(?:account|card|acct)(?![a-z])|\*+ ?[0-9]|\[(?:account|card)\])\S|(?<![ء-ي])(?:صادره?|ارسلت)(?![ء-ي])|(?<![ء-ي])(?:الي|لصالح)(?: ?: ?| )(?!حساب|بطاق|\[(?:account|card)\])\S";
+
   static final Map<String, RegExp> _doubt = {
     for (final e in doubtPatterns.entries) e.key: RegExp(e.value),
   };
@@ -100,6 +109,8 @@ class CompletionCertainty {
   static final RegExp _statedCredit = RegExp(statedCreditPattern);
   static final RegExp _statedDebit = RegExp(statedDebitPattern);
   static final RegExp _statedCreditDebt = RegExp(statedCreditDebtPattern);
+  static final RegExp _transferCredit = RegExp(transferCreditPattern);
+  static final RegExp _transferDebit = RegExp(transferDebitPattern);
   static final RegExp _clauseEnd = RegExp(r'[\n!?؟;؛]|[.,،](?![0-9])| [-–—] ');
   static final RegExp _formWord = RegExp('(?<![a-zء-ي])(?:و|ف)?(?:${[
     ...MessageMeaning.doneVerbs,
@@ -149,6 +160,27 @@ class CompletionCertainty {
     final credit = _statedCredit.hasMatch(t), debit = _statedDebit.hasMatch(t);
     return credit == debit ? null : credit;
   }
+
+  /// Gemini-first phase 1: the direction a transfer's own flow states
+  /// ([transferCreditPattern] / [transferDebitPattern]), or null.
+  static bool? transferFlowCredit(String text) {
+    final t = TransactionStateCues.foldForCues(text);
+    final credit = _transferCredit.hasMatch(t), debit = _transferDebit.hasMatch(t);
+    return credit == debit ? null : credit;
+  }
+
+  /// Gemini-first phase 1: a transfer the model reads (after masking): its
+  /// own flow names the other side ([transferFlowCredit]) or it names a
+  /// payment channel (IPN / InstaPay, `CHANNEL_ALIASES` in
+  /// `_shared/analysis_reasons.ts`). One naming neither may be the user's own
+  /// move: read locally. Server twin: `transferForModel` in
+  /// process-ios-sms/parse.ts.
+  static bool transferForModel(String text) =>
+      transferFlowCredit(text) != null || _paymentChannel.hasMatch(text);
+
+  static final RegExp _paymentChannel = RegExp(
+      r'\bipn\b|insta ?pay|إنستا ?باي|انستا ?باي',
+      caseSensitive: false);
 
   /// Narrow check Z (N-M1b): a stated credit wording next to an installment,
   /// fee or charge noun ("Installment … added to your account").

@@ -19,11 +19,11 @@ import '../../engine/parser/bank_sender_filter.dart';
 import '../../data/db/ownership_guard.dart' show StaleOwnershipException;
 import '../../data/db/planning_cutover.dart';
 import '../../engine/parser/capture_money.dart';
-import '../../engine/parser/completion_certainty.dart';
 import '../../engine/parser/direction_signal.dart';
 import '../../engine/parser/local_validity.dart';
 import '../../engine/parser/message_meaning.dart';
 import '../capture/validated_capture.dart' show severalMovements;
+import '../../engine/parser/completion_certainty.dart';
 import '../../engine/parser/parser_engine.dart';
 import '../../engine/parser/parser_isolate.dart';
 import '../../engine/parser/parse_result.dart';
@@ -943,13 +943,15 @@ class AddTransactionUseCase {
         : parsedMeaning;
     final meaningHold =
         !wasIgnored && meaning.disposition != MessageDisposition.record;
-    // Round 5 (owner decision): a transfer to or from a person or between
-    // accounts never goes to the model; the device's own reading decides it
-    // (clearly completed: recorded; otherwise review). Round 5 (X-M5): so
-    // does a move between the user's own accounts (a card repayment, a
-    // wallet topped up from a card).
-    final localTransfer = CompletionCertainty.isTransfer(rawMessage) ||
-        ParserEngine.isOwnAccountMove(rawMessage);
+    // Round 5 (X-M5): a move between the user's own accounts (a card
+    // repayment, a wallet topped up from a card) never goes to the model; the
+    // device's own reading decides it. Gemini-first phase 1 (owner
+    // decision): a transfer to or from a person goes to the model, after
+    // masking, like any other message; one naming neither another side nor a
+    // payment channel may be the user's own move and stays local.
+    final localTransfer = ParserEngine.isOwnAccountMove(rawMessage) ||
+        (CompletionCertainty.isTransfer(rawMessage) &&
+            !CompletionCertainty.transferForModel(rawMessage));
     // Round 5 (owner decision): an uncertain message (no completed-event
     // form, or a doubt) is asked of the model when AI is allowed; the
     // validator records only a "completed" answer for a text with no doubt.

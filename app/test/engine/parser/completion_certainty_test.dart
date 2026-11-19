@@ -24,6 +24,34 @@ void main() {
     expect(server['statedCreditPattern'], CompletionCertainty.statedCreditPattern);
     expect(server['statedDebitPattern'], CompletionCertainty.statedDebitPattern);
     expect(server['statedCreditDebtPattern'], CompletionCertainty.statedCreditDebtPattern);
+    expect(server['transferCreditPattern'], CompletionCertainty.transferCreditPattern);
+    expect(server['transferDebitPattern'], CompletionCertainty.transferDebitPattern);
+  });
+
+  // Gemini-first phase 1: a transfer's own flow is the cue a model's
+  // direction must agree with; the user's own account or card is not one.
+  test('transfer flow direction', () {
+    const cases = <String, bool?>{
+      'Transfer SAR 148 to Fadi Nasser yesterday': false,
+      'تم تحويل 151 ريال إلى هاني عادل أمس': false,
+      'IPN transfer sent with amount of EGP 754.00 from 1938 on 18/11': false,
+      'You transferred EGP 1,500.00 from your Current account to Basma R.': false,
+      'Instant transfer in: SAR 750.00 from Ali': true,
+      'Transfer of SAR 750.00 from Ali posted to account *5678': true,
+      'IPN transfer received with amount of EGP 500.00 from [NAME]': true,
+      'حوالة واردة بمبلغ 750 ريال': true,
+      'Balance transfer SAR 3,000 to card *4521 completed': null,
+      'IPN EGP 300.00 18/11 08:36 PM': null,
+    };
+    cases.forEach((text, credit) =>
+        expect(CompletionCertainty.transferFlowCredit(text), credit, reason: text));
+  });
+
+  test('a transfer reaches the model only when it names the other side or a channel', () {
+    expect(CompletionCertainty.transferForModel('Transfer SAR 148 to Fadi Nasser'), isTrue);
+    expect(CompletionCertainty.transferForModel('IPN EGP 300.00 18/11 08:36 PM'), isTrue);
+    expect(CompletionCertainty.transferForModel('تم تحويل مبلغ 500 ريال لحسابك في بنك آخر'), isFalse);
+    expect(CompletionCertainty.transferForModel('تحويل بين حساباتك بمبلغ 500 ريال تم بنجاح'), isFalse);
   });
 
   // Review X (X-M1/X-M2/X-M4): the direction the rule parser reads — the

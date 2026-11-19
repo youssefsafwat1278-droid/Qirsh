@@ -44,6 +44,7 @@ import 'package:money_companion/domain/usecases/add_transaction_usecase.dart';
 import 'package:money_companion/domain/usecases/ingest_captured_message_usecase.dart';
 import 'package:money_companion/engine/ai/ai_parser_client.dart';
 import 'package:money_companion/engine/parser/completion_certainty.dart';
+import 'package:money_companion/engine/parser/parser_engine.dart';
 import 'package:money_companion/features/capture/services/capture_backend_client.dart';
 import 'package:money_companion/features/capture/services/capture_device_registration_service.dart';
 import 'package:money_companion/features/capture/services/capture_import_ports.dart';
@@ -219,14 +220,21 @@ ProcessedCaptureDto _rejected({bool ignored = false}) => ProcessedCaptureDto(
       notification: const {},
     );
 
-/// The right answer of a model for [r] (mode ai_correct). A transfer never
-/// reaches the model: the server decides it on its own reading (covered end
-/// to end by process-ios-sms/round5_money_acceptance_test.ts); here it is the
-/// conservative server outcome, a review row.
+/// Gemini-first phase 1: on the AI-primary server path a person transfer
+/// reaches the model like any other message; a move between the user's own
+/// accounts never does (the server decides it on its own reading, covered end
+/// to end by process-ios-sms/round5_money_acceptance_test.ts; here it is the
+/// conservative server outcome, a review row). On the rule-parse server path
+/// every transfer is still decided locally.
+bool _neverModel(Map<String, dynamic> r, {required bool ai}) => ai
+    ? r['truth'] == 't' || ParserEngine.isOwnAccountMove(r['text'] as String)
+    : CompletionCertainty.isTransfer(r['text'] as String);
+
+/// The right answer of a model for [r] (mode ai_correct).
 ProcessedCaptureDto _correct(Map<String, dynamic> r) {
   final e = r['expected']['ai_correct'] as Map<String, dynamic>;
   final f = r['forged'] as Map<String, dynamic>?;
-  if (CompletionCertainty.isTransfer(r['text'] as String)) {
+  if (_neverModel(r, ai: true)) {
     return _rejected();
   }
   if (e['outcome'] != 'recorded' || f == null) {
@@ -248,13 +256,13 @@ ProcessedCaptureDto _correct(Map<String, dynamic> r) {
 }
 
 /// The forged "completed" server row (mode ai_wrong_completed); null when the
-/// text has no figure to forge. A transfer never reaches the model, so the
-/// server holds it on its own reading (as in [_correct]).
+/// text has no figure to forge. A message that never reaches the model is
+/// held by the server on its own reading (as in [_correct]).
 CaptureServerFetch? _forged(Map<String, dynamic> r, {required bool ai}) {
   final f = r['forged'] as Map<String, dynamic>?;
   if (f == null) return null;
   return CaptureServerFetch(CaptureFetchStatus.ok, {
-    _id: CompletionCertainty.isTransfer(r['text'] as String)
+    _id: _neverModel(r, ai: ai)
         ? _rejected()
         : _row(r['text'] as String, f, ai: ai)
   });
@@ -262,13 +270,13 @@ CaptureServerFetch? _forged(Map<String, dynamic> r, {required bool ai}) {
 
 /// The forged server row with the direction flipped (mode ai_flipped); null
 /// when the row has no ai_flipped expectation (no figure, or not a debit or
-/// credit). A transfer never reaches the model (as in [_forged]).
+/// credit). As in [_forged].
 CaptureServerFetch? _flipped(Map<String, dynamic> r, {required bool ai}) {
   final f = r['forged'] as Map<String, dynamic>?;
   if (f == null || r['expected']['ai_flipped'] == null) return null;
   final credit = f['direction'] == 'credit';
   return CaptureServerFetch(CaptureFetchStatus.ok, {
-    _id: CompletionCertainty.isTransfer(r['text'] as String)
+    _id: _neverModel(r, ai: ai)
         ? _rejected()
         : _row(
             r['text'] as String,
@@ -412,10 +420,10 @@ void main() {
       }
       if (ownModel == null) {
         expect(ai.calls, 0, reason: 'the import path makes no AI request');
-      } else if (CompletionCertainty.isTransfer(r['text'] as String) ||
+      } else if (ParserEngine.isOwnAccountMove(r['text'] as String) ||
           r['truth'] == 't') {
         expect(ai.calls, 0,
-            reason: 'a transfer or own-account move never reaches the model');
+            reason: 'an own-account move never reaches the model');
       }
       final saved = (await txRepo.getAll())
           .where((t) => t.status == TransactionStatus.confirmed)

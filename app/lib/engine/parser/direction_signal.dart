@@ -239,18 +239,31 @@ class DirectionSignal {
         : TxnDirection.unknown;
   }
 
-  /// Round 5 (X-M1/X-M2): a model's [direction] for [text] is accepted only
-  /// when it is the one the rule parser reads ([localOf]). When the text
-  /// gives the rule parser no direction, only a message with no
-  /// completed-event form (`no_completed_form`, decided by the model) takes
-  /// the model's. Server twin: `modelDirectionRefused` in
-  /// `process-ios-sms/parse.ts`.
+  /// Gemini-first phase 1 (owner decision): the model decides direction. Its
+  /// [direction] for [text] is refused when it contradicts the one the rule
+  /// parser reads in the text itself ([localOf]: an explicit cue). With no
+  /// such cue the model's reading is accepted, except for a message the
+  /// parser holds for review whatever the direction (a cash deposit, own
+  /// accounts, several events …). For a transfer the cue is its own flow
+  /// ("sent", "to Ali", «من علي»); with no flow, a direction the clause's
+  /// own flow does not give (a purpose word) is not trusted either way
+  /// (refused). Server twin: `modelDirectionRefused` / `explicitDirection`
+  /// in `process-ios-sms/parse.ts`.
   static bool modelDirectionRefused(String text, TxnDirection direction) {
-    final local = localOf(text);
-    if (local != TxnDirection.unknown) return direction != local;
+    var local = localOf(text);
     final meaning = ParserEngine.meaningOf(text);
-    return !(meaning.kind == MessageKind.uncertain &&
-        meaning.reason == 'no_completed_form');
+    if (CompletionCertainty.isTransfer(text)) {
+      final flow = CompletionCertainty.transferFlowCredit(text);
+      if (flow != null) {
+        local = flow ? TxnDirection.credit : TxnDirection.debit;
+      } else if (local != TxnDirection.unknown && meaning.direction != local) {
+        return true;
+      }
+    }
+    if (local != TxnDirection.unknown) return direction != local;
+    return meaning.disposition != MessageDisposition.record &&
+        !(meaning.kind == MessageKind.uncertain &&
+            meaning.reason == 'no_completed_form');
   }
 
   /// Outgoing structure: a debit verb or "… to / from your account".

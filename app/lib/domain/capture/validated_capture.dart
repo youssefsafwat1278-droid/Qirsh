@@ -274,10 +274,9 @@ bool isModelRow(Map<String, dynamic>? parsed) =>
     parsed?['parserSource'] == 'ai_hybrid' || parsed?['parserSource'] == 'ai';
 
 /// Round 5: a server row whose figure is a model's validated answer (the
-/// rule parse + model or AI-primary path), not the rule parse alone, and not
-/// a transfer (transfers are decided on the device's own reading).
-bool isModelDecidedRow(Map<String, dynamic>? parsed) =>
-    isModelRow(parsed) && parsed?['type'] != 'transfer';
+/// rule parse + model or AI-primary path), not the rule parse alone.
+/// Gemini-first phase 1: a transfer is decided by the model like any other.
+bool isModelDecidedRow(Map<String, dynamic>? parsed) => isModelRow(parsed);
 
 final RegExp _sentenceCut = RegExp(r'[\n!?؟;؛]|\.(?![0-9])');
 

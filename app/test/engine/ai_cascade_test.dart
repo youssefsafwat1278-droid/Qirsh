@@ -594,9 +594,12 @@ void main() {
     );
     await useCase(rawMessage: rawTransferSms);
 
-    // Round 5 (owner decision): a transfer to or from a person never goes to
-    // the model; the device's own reading decides it (here none: review).
-    expect(capturedSanitized, isNull);
+    // Gemini-first phase 1 (owner decision): a transfer to or from a person
+    // goes to the model after masking (was: never; the device's own reading
+    // decided it). The person is never saved as the merchant.
+    expect(capturedSanitized, isNotNull);
+    expect(capturedSanitized, isNot(contains('سارة')));
+    expect(capturedSanitized, isNot(contains('العمري')));
   });
 
   test('AI fabricated amount is ignored while the local parse is saved',
@@ -723,11 +726,12 @@ void main() {
 
     final result = await useCase(rawMessage: rawSms, senderId: 'CIB');
 
-    // Round 5 (owner decision): a transfer to or from a person never goes to
-    // the model; the device's own reading decides it (here none: review).
-    expect(result.outcome, AddTransactionOutcome.notTransaction);
-    expect(saved, isNull);
-    expect(savedCategory, isNull);
+    // Gemini-first phase 1 (owner decision): a transfer to or from a person
+    // goes to the model after masking (was: never; the device's own reading
+    // decided it). The person is never saved as the merchant.
+    expect(result.outcome, AddTransactionOutcome.added);
+    expect(saved!.rawMerchant ?? '', isNot(contains('Ahmed')));
+    expect(savedCategory, isNot('shopping'));
     expect(mapsLookupCount, 0);
   });
 
@@ -767,11 +771,14 @@ void main() {
       smsReceivedAt: DateTime.utc(2026, 6, 15),
     );
 
-    // Round 5 (owner decision): a transfer to or from a person never goes to
-    // the model; the device's own reading decides it (here none: review).
-    expect(result.outcome, AddTransactionOutcome.notTransaction);
-    expect(saved, isNull);
-    expect(savedCategory, isNull);
+    // Gemini-first phase 1 (owner decision): a transfer to or from a person
+    // goes to the model after masking (was: never; the device's own reading
+    // decided it). The person is never saved as the merchant.
+    expect(result.outcome, AddTransactionOutcome.added);
+    expect(saved!.direction, TransactionDirectionEntity.credit);
+    expect(saved!.rawMerchant ?? '', isNot(contains('نبيل')));
+    expect(saved!.amount, 2000);
+    expect(savedCategory, isNot('shopping'));
   });
 
   test('same-amount transfers with different references are not duplicates',
@@ -1206,10 +1213,12 @@ void main() {
 
     final result = await useCase(rawMessage: rawSms);
 
-    // Round 5 (owner decision): a transfer to or from a person never goes to
-    // the model; the device's own reading decides it (here none: review).
-    expect(result.outcome, AddTransactionOutcome.notTransaction);
-    expect(saved, isNull);
+    // Gemini-first phase 1 (owner decision): a transfer to or from a person
+    // goes to the model after masking (was: never; the device's own reading
+    // decided it). The person is never saved as the merchant.
+    expect(result.outcome, AddTransactionOutcome.added);
+    expect(saved!.direction, TransactionDirectionEntity.debit);
+    expect(saved!.amount, 31.43);
   });
 
   test('AI failure reason is surfaced when parser also fails', () async {
@@ -1604,11 +1613,12 @@ void main() {
 
     final result = await useCase(rawMessage: rawSms);
 
-    // Round 5 (owner decision): a transfer to or from a person never goes to
-    // the model; the device's own reading decides it (here none: review).
-    expect(result.outcome, AddTransactionOutcome.notTransaction);
-    expect(seenInstallId, isNull);
-    expect(saved, isNull);
+    // Gemini-first phase 1 (owner decision): a transfer to or from a person
+    // goes to the model after masking (was: never; the device's own reading
+    // decided it). The person is never saved as the merchant.
+    expect(result.outcome, AddTransactionOutcome.added);
+    expect(seenInstallId, 'lazy-install-id');
+    expect(saved!.direction, TransactionDirectionEntity.credit);
   });
 
   test('AI rescue: without consent a dropped message stays notTransaction',
