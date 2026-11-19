@@ -39,7 +39,8 @@ void main() {
               find.descendant(of: field, matching: find.text(l.countryPickerChoose)),
               findsOneWidget,
               reason: 'no country may be preselected');
-          expect(find.text(l.countryCoverageNote), findsOneWidget);
+          expect(find.text(l.countryCoverageNote), findsNothing,
+              reason: 'the coverage note is shown in the country picker only');
           final background =
               tester.widget<Scaffold>(find.byType(Scaffold)).backgroundColor!;
           final ink = tester.widget<Ink>(

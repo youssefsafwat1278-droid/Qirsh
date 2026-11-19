@@ -746,12 +746,6 @@ class _CountryField extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: AppSpacing.s3),
-        Text(
-          l.countryCoverageNote,
-          textAlign: TextAlign.center,
-          style: AppTypography.caption(c.textSecondary).copyWith(height: 1.5),
-        ),
       ],
     );
   }
