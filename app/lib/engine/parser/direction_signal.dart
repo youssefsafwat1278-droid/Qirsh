@@ -1,4 +1,5 @@
 import '../models/transaction_type.dart';
+import 'completion_certainty.dart';
 import 'currency_table.dart';
 import 'message_meaning.dart';
 import 'parser_engine.dart';
@@ -224,6 +225,12 @@ class DirectionSignal {
         ? detect(ParserEngine.merchantMasked(text))
         : detect(text);
     if (words != TxnDirection.unknown) return words;
+    // Review Y (N-M1): else the direction the wording states ("topped up
+    // with", «قيد … لحسابك»), as the server's `localDirection`.
+    final stated = CompletionCertainty.statedCredit(text);
+    if (stated != null) {
+      return stated ? TxnDirection.credit : TxnDirection.debit;
+    }
     final type = const ParserEngine().parse(text).transaction?.type;
     if (type == null) return TxnDirection.unknown;
     if (type.isExpense) return TxnDirection.debit;

@@ -483,6 +483,7 @@ class SmsSanitizer {
     'txn',
     'successful',
     'successfully',
+    'added',
     'credit',
     'debit',
     'credited',
@@ -678,6 +679,7 @@ class SmsSanitizer {
     'لم',
     'تمت',
     'بنجاح',
+    'كمستفيد',
     'يرجى',
     'الرجاء',
     'إذا',
@@ -1185,11 +1187,32 @@ class SmsSanitizer {
   // PRIV-1: cues that only ever introduce a person (a payee, a beneficiary,
   // a sender), so they apply in any message. Server twin: PERSON_CUE_PATTERN.
   static final _personCue = RegExp(
-    r'((?<![\p{L}\p{M}])(?:beneficiary(?:[ \t]+(?:name|added))?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?'
+    r'((?<![\p{L}\p{M}])(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?'
     r'|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of'
-    r'|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد(?:[ \t]+الجديد)?|مستفيد(?:[ \t]+جديد)?|للمستفيد|المرسل|المستلم|للمستلم|المحول'
+    r'|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول'
     r'|لصالح|باسم|للسيدة|للسيد)'
     '\\.?(?![\\p{L}\\p{M}])$_labelSep)($_name)',
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  // N-P1: a beneficiary notice names a person wherever the name sits: after
+  // the cue and its status words, between commas, and before the role ("…
+  // was added as a beneficiary", «… كمستفيد»). The status words stay. Server
+  // twins: BENEFICIARY_NOTICE_PATTERN, NAME_ADDED_AS_PATTERN.
+  static final _beneficiaryNotice = RegExp(
+    r'((?<![\p{L}\p{M}])(?:beneficiary|beneficiaries|payee|المستفيد|مستفيد|للمستفيد)(?![\p{L}\p{M}])'
+    r'(?:[ \t]+(?:new|added|successfully|has|have|been|was|الجديد|جديد|بنجاح)(?![\p{L}\p{M}]))*'
+    r'(?:[ \t]*[:,،\-][ \t]*|[ \t]+))'
+    '($_name)',
+    caseSensitive: false,
+    unicode: true,
+  );
+  static final _nameAddedAs = RegExp(
+    r'((?:(?:^|(?<=[\n.!?؟;؛:,،]))[ \t]*|(?<![\p{L}\p{M}])(?:added|إضافة|اضافة|أضفت|اضفت)[ \t]+))'
+    '($_looseName)'
+    r'(?=[ \t]+(?:(?:was|has[ \t]+been|have[ \t]+been)[ \t]+(?:successfully[ \t]+)?added[ \t]+)?'
+    r'(?:as[ \t]+(?:an?[ \t]+)?(?:new[ \t]+)?(?:beneficiary|payee)|كمستفيد|إلى[ \t]+(?:قائمة[ \t]+)?المستفيدين)(?![\p{L}\p{M}]))',
     caseSensitive: false,
     unicode: true,
   );
@@ -1318,7 +1341,7 @@ class SmsSanitizer {
   // TRANSFER_WORDS.
   static final _transferContext = RegExp(
     r'transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|'
-    r'\bsent\b|payable\s+to|request(?:ed)?\s+from|money\s+request|request\s+to\s+pay|\brequested\b|حوال|تحويل|حول|وارد|وصلك|طلب\s+دفع|استلام|استلمت|إيداع|ايداع|أودع|اودع|'
+    r'\bsent\b|payable\s+to|request(?:ed)?\s+from|(?:payment|money|pay|transfer|fund)s?\s+requests?|requests?\s+(?:to\s+pay|for\s+(?:payment|money))|\brequested\b|حوال|تحويل|حول|وارد|وصلك|طلب\s+(?:دفع|تحويل|مبلغ|أموال|اموال)|استلام|استلمت|إيداع|ايداع|أودع|اودع|'
     r'مستفيد|المرسل|انستا|لصالح|standing\s+order|أمر\s+(?:مستديم|دائم)|'
     r'امر\s+(?:مستديم|دائم)',
     caseSensitive: false,
@@ -1341,8 +1364,8 @@ class SmsSanitizer {
   // twin: STRONG_TRANSFER_WORDS.
   static final _strongTransfer = RegExp(
     r'transfer|remit|beneficiary|\bipn\b|instapay|\bsent\b|payable\s+to|'
-    r'request(?:ed)?\s+from|money\s+request|request\s+to\s+pay|\brequested\b|standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|'
-    r'لصالح|وصلك|أرسل|ارسل|طلب\s+دفع|انستا|أمر\s+(?:مستديم|دائم)|'
+    r'request(?:ed)?\s+from|(?:payment|money|pay|transfer|fund)s?\s+requests?|requests?\s+(?:to\s+pay|for\s+(?:payment|money))|\brequested\b|standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|'
+    r'لصالح|وصلك|أرسل|ارسل|طلب\s+(?:دفع|تحويل|مبلغ|أموال|اموال)|انستا|أمر\s+(?:مستديم|دائم)|'
     r'امر\s+(?:مستديم|دائم)',
     caseSensitive: false,
     unicode: true,
@@ -1731,6 +1754,8 @@ class SmsSanitizer {
   static RegExp get salutationPattern => _salutation;
   static RegExp get counterpartyPattern => _counterparty;
   static RegExp get personCuePattern => _personCue;
+  static RegExp get beneficiaryNoticePattern => _beneficiaryNotice;
+  static RegExp get nameAddedAsPattern => _nameAddedAs;
   static RegExp get labelCuePattern => _labelCue;
   static RegExp get toHeadingPattern => _toHeading;
   static RegExp get personalLabelPattern => _personalLabel;
@@ -1798,6 +1823,8 @@ class SmsSanitizer {
     text = text.replaceAllMapped(_salutation, (m) => '${m.group(1)!}[NAME]');
     // PRIV-1: a person cue names a person in any message.
     text = text.replaceAllMapped(_personCue, maskPerson);
+    text = text.replaceAllMapped(_beneficiaryNotice, maskPerson);
+    text = text.replaceAllMapped(_nameAddedAs, maskPerson);
     text = text.replaceAllMapped(_personalLabel, maskPerson);
     text = text.replaceAllMapped(_accountOf, maskPerson);
     text = text.replaceAllMapped(_accountHolder, maskPerson);

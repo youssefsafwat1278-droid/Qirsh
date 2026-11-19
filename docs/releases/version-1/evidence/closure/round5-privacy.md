@@ -122,3 +122,24 @@ Results:
 - Deno `_shared` (`--no-check`; type check fails only in `process-ios-sms/parse.ts`, parser agent's in-flight file): **696 passed, 0 failed, 2 ignored**.
 - `flutter analyze lib/engine/privacy test/engine/privacy`: no issues. `flutter test test/engine/privacy test/data/catalog/shared_category_learning_client_test.dart`: **483 passed**. `test/engine/sms_sanitizer_test.dart test/engine/proof test/features/capture/{android_sms_permission,capture_sync_service}_test.dart`: **306 passed**.
 - Swift standalone (`swift_sanitize.sh`, `BackendCaptureClient.sanitize` compiled alone): **1,272 texts, 0 differences** from the server (504 acceptance, 400 parity, 314 labelled, 54 redaction cases). XCTest not run (disk).
+
+## Follow-up to re-review Y of c9dc4ca4 (N-P1)
+
+Worktree `v1-fix`; the three twins stay byte-identical. No commit.
+
+- **Money requests, the wording family.** The single phrases "money request" / "request to pay" became `(payment|money|pay|transfer|fund)(s) request(s)`, `request(s) to pay`, `request(s) for payment|money` (plus "requested", already in); «طلب دفع» became «طلب (دفع|تحويل|مبلغ|أموال)». They are transfer words and strong transfer words, so the counterparty after "from" / «من» is masked unconditionally; a name before "sent you a payment request" or "requested … from you" was already masked.
+- **Beneficiary notices, the wording family.** The two one-off extensions of the person cue ("beneficiary added", «مستفيد جديد») are replaced by one pattern: a beneficiary or payee cue (beneficiary, payee, «المستفيد», «مستفيد», «للمستفيد»), then any run of status words (new, added, successfully, has, been, was, «جديد», «الجديد», «بنجاح»), then a colon, comma, dash or space, then the name. A second pattern takes the name before the role: "X was / has been added as a (new) beneficiary", "added X as a beneficiary", «إضافة X كمستفيد», «إضافة X إلى قائمة المستفيدين». "added" and «كمستفيد» are now name stop words, so "Beneficiary Rami Fawzi added successfully" keeps "added successfully". The status words stay; for example, the X-P3 row now reads "Beneficiary added: [NAME], …" instead of "Beneficiary [NAME]: [NAME], …".
+- **Acceptance set.** 504 → **522 rows**. There are 18 `y_np1_*` rows:
+  - the 3 review texts;
+  - 13 siblings, 6 of them Arabic;
+  - 2 keep rows: "Your beneficiary is now active" is unchanged, and the Jarir Bookstore purchase keeps its merchant and date.
+  
+  Regenerated once: `privacy_acceptance_expected.json` has the 18 new rows, and one existing row changed (`x_p3_beneficiary_added`, which no longer loses "added"). Regenerating the labelled and parity fixtures changed nothing.
+- **Over-masking noted:** in «تم إضافة رامي فوزي إلى قائمة المستفيدين» the existing «إلى» rule also masks «قائمة المستفيدين» (`إلى: [REDACTED]`).
+- **Pre-existing, unchanged:** "request from X" was already a transfer word, so "Your order request from Amazon" masks Amazon.
+
+Results:
+- Deno `_shared` (`--no-check`; the parser agent's `process-ios-sms` files are in flight): **696 passed, 0 failed, 2 ignored**. `deno check` and `deno lint` on `sms_redaction.ts`: clean.
+- `flutter analyze lib/engine/privacy test/engine/privacy`: no issues. Whole-app `flutter analyze` shows 9 errors, all in `lib/core/i18n/country_catalog.dart`: the gitignored generated `countries.g.dart` is absent in this fresh worktree (build_runner not run). They are not from this change.
+- `flutter test -j 1 test/engine/privacy test/engine/sms_sanitizer_test.dart test/engine/proof test/data/catalog/shared_category_learning_client_test.dart`: **706 passed**. This covers the Dart privacy acceptance test, the edit-map and outbound-payload tests.
+- Swift standalone (`swift_sanitize.sh`, `BackendCaptureClient.sanitize` compiled alone): **1,290 texts, 0 differences** from the server (522 acceptance, 400 parity, 314 labelled, 54 redaction cases). XCTest not run (disk).

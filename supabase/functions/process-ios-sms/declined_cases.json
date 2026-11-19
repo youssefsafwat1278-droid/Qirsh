@@ -1343,7 +1343,7 @@
     { "src": "V1-RES10 Q Q024", "expect": "completed_payment", "amount": 25.0, "currency": "SAR", "device": "review", "server": "unresolved", "text": "Fee SAR 25.00 added to your account *5678" },
     { "src": "V1-RES10 Q Q025", "expect": "completed_payment", "amount": 250.0, "currency": "SAR", "device": "review", "text": "Annual fee SAR 250.00 posted to your account *5678" },
     { "src": "V1-RES10 Q Q026", "expect": "completed_payment", "amount": 100.0, "currency": "SAR", "device": "review", "server": "unresolved", "text": "Late payment fee SAR 100 added to your account *5678" },
-    { "src": "V1-RES10 Q Q027", "expect": "completed_payment", "amount": 32.4, "currency": "SAR", "device": "review", "server": "unresolved", "text": "Interest SAR 32.40 posted to your account *5678" },
+    { "src": "V1-RES10 Q Q027", "expect": "completed_income", "amount": 32.4, "currency": "SAR", "device": "review", "server": "unresolved", "text": "Interest SAR 32.40 posted to your account *5678" },
     { "src": "V1-RES10 Q Q028", "expect": "completed_payment", "amount": 50.0, "currency": "SAR", "device": "dropped", "text": "Recharge: your Mobily line topped up with SAR 50, paid from card *4521" },
     { "src": "V1-RES10 Q Q029", "expect": "completed_transfer_own", "amount": 100.0, "currency": "SAR", "device": "review", "server": "unresolved", "text": "Your STC Pay wallet was topped up with SAR 100 from Al Rajhi card *4521" },
     { "src": "V1-RES10 Q Q030", "expect": "completed_payment", "amount": 50.0, "currency": "SAR", "text": "وصلك إشعار: تم خصم 50 ريال من بطاقتك *4521 لدى متجر تجريبي" },

@@ -122,7 +122,7 @@ FIGURE = re.compile(rf'(?:(?<![A-Za-z])({CODES})\s?{FIG})|(?:{FIG}\s?(?:({CODES}
 CREDITISH = re.compile(r'refund|credited|cashback|deposit|received|reversal|استرداد|استرجاع|رد مبلغ|إيداع|ايداع|وارد|مرتجع', re.I)
 
 
-# Review X (round 5): X-M1/X-M2 direction wordings, X-M4 conflicting cues
+# Review X (round 5): X-M1/X-M2 direction wordings (and review Y's N-M1/N-M2), X-M4 conflicting cues
 # (with U R4M-10 and the two U §1 cashback texts), X-M5 own-account moves.
 # Added after every other source: a text already in the set keeps its id.
 X_ROWS = [
@@ -157,6 +157,13 @@ X_ROWS = [
      'Purchase SAR 20.00 at Jarir card *4521, cashback SAR 50.00 credited'),
     ('X-M5-wallet', 't', 100, 'SAR', 'X X-M5', 'Your STC Pay wallet was topped up with SAR 100 from Al Rajhi card *4521'),
     ('X-M5-card-to-current', 't', 300, 'SAR', 'X X-M5', 'تم تحويل 300 ريال من بطاقتك الائتمانية إلى حسابك الجاري'),
+    # Review Y (N-M1 / N-M2): a credit the wording states; received
+    # person-to-person transfers (local only).
+    ('Y-NM1-topped-up', 'c', 1800, 'SAR', 'Y N-M1', 'Your account *5678 was topped up with SAR 1,800.00 by Test Corp'),
+    ('Y-NM1-quyyid', 'c', 2000, 'SAR', 'Y N-M1', 'قُيّد مبلغ 2,000 ريال لحسابك *5678 من شركة الاختبار'),
+    ('Y-NM2-got', 'c', 750, 'SAR', 'Y N-M2', 'You got SAR 750.00 from Ali via Test Pay'),
+    ('Y-NM2-qayd-person', 'c', 2000, 'SAR', 'Y N-M2', 'قيد مبلغ 2,000 ريال لحسابك *5678 من علي'),
+    ('Y-NM2-received', 'c', 300, 'SAR', 'Y N-M2', 'You received SAR 300.00 from Sara Ahmed via Test Pay'),
 ]
 
 

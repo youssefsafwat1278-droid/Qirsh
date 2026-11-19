@@ -223,6 +223,8 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
   pass(SmsSanitizer.referencePattern, (m) => '${m.group(1)!}[REF]', '[REF]');
   pass(SmsSanitizer.salutationPattern, (m) => '${m.group(1)!}[NAME]', '[NAME]');
   names(SmsSanitizer.personCuePattern, SmsSanitizer.maskPerson);
+  names(SmsSanitizer.beneficiaryNoticePattern, SmsSanitizer.maskPerson);
+  names(SmsSanitizer.nameAddedAsPattern, SmsSanitizer.maskPerson);
   names(SmsSanitizer.personalLabelPattern, SmsSanitizer.maskPerson);
   names(SmsSanitizer.accountOfPattern, SmsSanitizer.maskPerson);
   names(SmsSanitizer.accountHolderPattern, SmsSanitizer.maskPerson);

@@ -2,7 +2,7 @@ import { checkPrimaryAmount, runPrimaryAi } from '../_shared/ai_primary.ts';
 import { geminiRequestBody } from '../_shared/gemini_request.ts';
 import rules from './parser_rules.json' with { type: 'json' };
 import { canonicalMoneyText } from '../_shared/money_text.ts';
-import { isTransfer, uncertaintyOf } from './completion_certainty.ts';
+import { isTransfer, statedDirection, uncertaintyOf } from './completion_certainty.ts';
 import {
   applyLocalForms,
   bounded,
@@ -240,7 +240,10 @@ export function localDirection(text: string): 'credit' | 'debit' | 'unknown' {
   // Cafe") names no direction.
   const core = clauseScope(normalized, CUE_DEPS).core.toLowerCase();
   const named = MERCHANT_MARK.test(core) ? outsideMerchant(core, extractMerchant(normalized)) : core;
-  return detectDirection(withoutSideCredits(named));
+  const words = detectDirection(withoutSideCredits(named));
+  // Review Y (N-M1): else the direction the wording states ("topped up
+  // with", «قيد … لحسابك»).
+  return words !== 'unknown' ? words : statedDirection(text);
 }
 
 /**

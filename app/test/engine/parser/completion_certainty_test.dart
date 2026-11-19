@@ -21,6 +21,8 @@ void main() {
     expect((server['completedFormWords'] as List).cast<String>(),
         CompletionCertainty.completedFormWords);
     expect(server['transferPattern'], CompletionCertainty.transferPattern);
+    expect(server['statedCreditPattern'], CompletionCertainty.statedCreditPattern);
+    expect(server['statedDebitPattern'], CompletionCertainty.statedDebitPattern);
   });
 
   // Review X (X-M1/X-M2/X-M4): the direction the rule parser reads — the
@@ -55,6 +57,20 @@ void main() {
           TxnDirection.unknown,
       'تم إيداع 50 ريال استرداد نقدي لبطاقتك 4521 عن عملية شراء بمبلغ 500 ريال':
           TxnDirection.unknown,
+      // Review Y (N-M1): the direction the wording states.
+      'Your account *5678 was topped up with SAR 1,800.00 by Test Corp': TxnDirection.credit,
+      'قُيّد مبلغ 2,000 ريال لحسابك *5678 من شركة الاختبار': TxnDirection.credit,
+      'SAR 500.00 added to your account *5678': TxnDirection.credit,
+      'Your account *5678 has been topped up with SAR 500.00': TxnDirection.credit,
+      'قُيّد لحسابك *5678 مبلغ 2,000 ريال': TxnDirection.credit,
+      'تم قيد مبلغ 2,000 ريال لحسابك *5678': TxnDirection.credit,
+      'SAR 300.00 posted to your account *5678 from Ali': TxnDirection.credit,
+      'Recharge balance SAR 100 for mobile via card *4521 successful': TxnDirection.debit,
+      'Balance recharge of SAR 100.00 completed using card *4521': TxnDirection.debit,
+      // «لحسابك» alone names no credit: a payment to the user's account
+      // with a company stays a debit.
+      'تم دفع 500 ريال لحسابك في شركة الكهرباء': TxnDirection.debit,
+      'Purchase SAR 45.00 at Topped Up Cafe card *4521': TxnDirection.debit,
     };
     for (final MapEntry(key: text, value: direction) in cases.entries) {
       test(text, () {
@@ -77,6 +93,26 @@ void main() {
       'تم إيداع 50 ريال استرداد نقدي لبطاقتك 4521 عن عملية شراء بمبلغ 500 ريال',
     ]) {
       expect(ParserEngine.meaningOf(text).reason, 'conflicting_cues', reason: text);
+    }
+  });
+
+  // Review Y (N-M2): a person-to-person transfer is read locally, never by
+  // the model; a sender with a business word is not a person.
+  test('received person-to-person transfers are transfers (N-M2)', () {
+    for (final text in [
+      'You got SAR 750.00 from Ali via Test Pay',
+      'قيد مبلغ 2,000 ريال لحسابك *5678 من علي',
+      'You received SAR 300.00 from Sara Ahmed via Test Pay',
+    ]) {
+      expect(CompletionCertainty.isTransfer(text), isTrue, reason: text);
+    }
+    for (final text in [
+      'You received SAR 2,500.00 from Test Corp Payroll',
+      'قُيّد مبلغ 2,000 ريال لحسابك *5678 من شركة الاختبار',
+      'You got SAR 120.00 cashback from Test Store',
+      'Your account *5678 was topped up with SAR 1,800.00 by Test Corp',
+    ]) {
+      expect(CompletionCertainty.isTransfer(text), isFalse, reason: text);
     }
   });
 

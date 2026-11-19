@@ -74,13 +74,25 @@ class CompletionCertainty {
   ];
 
   static const String transferPattern =
-      r"(?<![a-z])(?:transfer[a-z]*|remittance|ipn|instapay|wire|sent to|received from|credited by|debited by)(?![a-z])|(?<![ء-ي])(?:و|ف|ب|ل|ال|وال|بال)?(?:تحويل|تحويلات|حواله|حوالات|حولت|محول|محوله|انستاباي)(?![ء-ي])";
+      r"(?<![a-z])(?:transfer[a-z]*|remittance|ipn|instapay|wire|sent to|received from|credited by|debited by)(?![a-z])|(?<![ء-ي])(?:و|ف|ب|ل|ال|وال|بال)?(?:تحويل|تحويلات|حواله|حوالات|حولت|محول|محوله|انستاباي)(?![ء-ي])|(?<![a-z])you (?:have )?(?:got|received) (?:[a-z]{3} ?)?[0-9][0-9.,]*(?: ?[a-z]{3})? from (?!(?:your|the|a|an) |account|card|[^\n.,]*?(?<![a-z])(?:corp|corporation|company|co|ltd|limited|llc|inc|est|trading|group|bank|holding|ministry|university|payroll|salary|store|mart|shop|market)(?![a-z]))(?:[a-z]|\[name\])|لحسابك(?:[^\n.]|\.(?=[0-9]))*? من (?!حساب|بطاق|[^\n.,،]*?(?<![ء-ي])(?:ال)?(?:شركه|مؤسسه|مجموعه|بنك|مصرف|متجر|مطعم|محل|وزاره|هيئه|جامعه|راتب)(?![ء-ي]))(?:[ء-ي]|\[(?:name|redacted)\])";
+
+  /// Review Y (N-M1): the direction the wording states when no money word
+  /// names one ("topped up with", «قيد … لحسابك», "recharge … via card").
+  /// Only the local direction a model answer must agree with
+  /// ([DirectionSignal.localOf]) reads it. Server twin: `statedDirection` in
+  /// process-ios-sms/completion_certainty.ts.
+  static const String statedCreditPattern =
+      r"(?<![a-z])(?:added to your (?:account|card|wallet)|topped up with|(?:has been|was|been) topped up|you got (?:[a-z]{3} ?)?[0-9]|posted to (?:your )?account[^\n.]*? from )|(?<![ء-ي])(?:تم )?(?:قيد|اضيف|اضيفت)(?![ء-ي])(?:[^\n.]|\.(?=[0-9]))*?لحسابك";
+  static const String statedDebitPattern =
+      r"(?<![a-z])recharge[a-z]*(?![a-z])[^\n]*?(?<![a-z])(?:via|using|with|by) (?:your )?card";
 
   static final Map<String, RegExp> _doubt = {
     for (final e in doubtPatterns.entries) e.key: RegExp(e.value),
   };
   static final RegExp _advice = RegExp(adviceClause);
   static final RegExp _transfer = RegExp(transferPattern);
+  static final RegExp _statedCredit = RegExp(statedCreditPattern);
+  static final RegExp _statedDebit = RegExp(statedDebitPattern);
   static final RegExp _clauseEnd = RegExp(r'[\n!?؟;؛]|[.,،](?![0-9])| [-–—] ');
   static final RegExp _formWord = RegExp('(?<![a-zء-ي])(?:و|ف)?(?:${[
     ...MessageMeaning.doneVerbs,
@@ -122,6 +134,14 @@ class CompletionCertainty {
   /// A transfer to or from a person or between accounts.
   static bool isTransfer(String text) =>
       _transfer.hasMatch(TransactionStateCues.foldForCues(text));
+
+  /// Review Y (N-M1): the direction [statedCreditPattern] /
+  /// [statedDebitPattern] read in [text], or null.
+  static bool? statedCredit(String text) {
+    final t = TransactionStateCues.foldForCues(text);
+    final credit = _statedCredit.hasMatch(t), debit = _statedDebit.hasMatch(t);
+    return credit == debit ? null : credit;
+  }
 
   /// Why a meaning that would record [text] is uncertain instead, or null
   /// when the text is clearly completed. [hasFlow]: the clause's own verbs

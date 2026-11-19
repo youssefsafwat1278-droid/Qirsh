@@ -549,3 +549,142 @@ design: any further move to review fails until justified.
 - The 17 forged deterministic rows on the device rule-parse path (see X-M3).
 - `pre_round_not_completed.json` still lists pre_round/8 and pre_round/84.
 - No iOS build / Shortcut, no real model, no local Supabase stack.
+
+## Follow-up: independent re-review Y (money REJECT, narrow, at c9dc4ca4)
+
+Source: `docs/releases/version-1/evidence/audits/Y-round5-rereview.md`
+(N-M1..N-M3). No new mechanism. Two patterns join the existing
+`completionCertainty` patterns (`parser_rules.json`, mirrored in
+`CompletionCertainty`, drift-tested in `completion_certainty_test.dart`), and
+the transfer pattern grows. Nothing committed.
+
+### N-M1: a direction the wording states — fixed
+
+`statedCreditPattern` / `statedDebitPattern` (folded text, read by
+`statedDirection` in `completion_certainty.ts` and
+`CompletionCertainty.statedCredit` on the device):
+
+- credit: "added to your account/card/wallet", "topped up with", "has
+  been / was topped up", "you got <amount>", "posted to (your) account …
+  from", and «قيد / أضيف … لحسابك» (verb-bound only; bare «لحسابك» still
+  names no direction);
+- debit: "recharge … via / using / with / by card".
+
+Both are read only as the last step of the local direction a model answer
+must agree with (`localDirection`, `DirectionSignal.localOf`), so nothing
+newly records with the AI off. Controls unchanged: «تم دفع 500 ريال لحسابك في
+شركة الكهرباء» and «دفع 500 ريال لحسابك لدى Test Mart» stay debit, "Purchase
+… at Topped Up Cafe" stays debit, "Fee … added to your account" stays debit.
+
+| Reproduction | AI off | flipped model (both server paths) | right model |
+|---|---|---|---|
+| Your account *5678 was topped up with SAR 1,800.00 by Test Corp | review | review (direction_contradiction) | credit 1,800 |
+| «قُيّد مبلغ 2,000 ريال لحسابك *5678 من شركة الاختبار» | review | review (direction_contradiction) | credit 2,000 |
+| SAR 500.00 added to your account / has been topped up with SAR 500.00 / «قُيّد لحسابك … 2,000» / «تم قيد … لحسابك» | review | review (direction_contradiction) | credit |
+| SAR 300.00 posted to your account from Ali; Recharge … via/using card | review | review (direction_contradiction) | credit / debit |
+
+Device: the same texts are in `completion_certainty_test.dart` (local
+direction, model refused when flipped, accepted when right); the server twin
+is `review_x_direction_test.ts`.
+
+### N-M2: received person-to-person transfers — fixed (local only)
+
+`transferPattern` adds "you (have) got/received <amount> from <person>" and
+«… لحسابك … من <شخص>», where the sender is not "your/account/card" and has no
+business word (corp, company, ltd, llc, inc, est, trading, group, bank,
+holding, ministry, university, payroll, salary, store, mart, shop, market;
+«شركة، مؤسسة، مجموعة، بنك، مصرف، متجر، مطعم، محل، وزارة، هيئة، جامعة، راتب»).
+
+| Text | model requests (both server modes) | result |
+|---|---|---|
+| You got SAR 750.00 from Ali via Test Pay | 0 | review (no completed form), as with the AI off |
+| «قيد مبلغ 2,000 ريال لحسابك *5678 من علي» | 0 | review, as with the AI off |
+| You received SAR 300.00 from Sara Ahmed via Test Pay | 0 | credit 300, as with the AI off |
+| «قُيّد … من شركة الاختبار», "You received … from Test Corp Payroll" | not a transfer (business word) | as before |
+
+The server parses redacted text: a name the redaction already judged a
+person arrives as `[NAME]` (or «[REDACTED]»), and the pattern accepts that
+placeholder as the person. The redaction also turns "from Test Corp Payroll"
+into "[NAME]", so on the server that credit is read locally too (never the
+model; its own reading has the "received" credit flow). Not probed through
+the handler. The device reads the raw text and keeps the
+business-word check.
+
+### N-M3: label — corrected
+
+declined/1342 `Interest SAR 32.40 posted to your account *5678` was
+`completed_payment`; credited interest is the plain reading, as declined/1516
+(`Amount SAR 3,000 posted to your account`, credit). Now `completed_income` in
+`declined_cases.json`. Both sides keep it as review/unresolved (the pin is
+unchanged).
+
+### Frozen set and residual
+
+`build_money_cases.py` adds Y-NM1-topped-up, Y-NM1-quyyid and Y-NM2-received
+(the "You got … Ali" and «… من علي» texts were already declined/737 and
+declined/1014 and keep those ids). Regenerated once: 2,224 rows.
+
+`tools/acceptance/flipped_residual.json` after removing every row that is no
+longer wrong:
+
+| Path | before | now | what remains |
+|---|---|---|---|
+| server, rule parse + model | 22 | 15 | no stated direction: card/wallet + merchant + amount ("SAR 250.00 Test Cafe 14:02", "Mada *4521 SAR 89.50 Test Mart", "Apple Pay … Test Coffee", "Online: USD 12.99 Test Stream card", «بطاقة *4521 مبلغ 89.50 ريال Test Mart», "Repos Cafe / Posh Store / Positano Restaurant …") |
+| server, AI-primary | 22 | 15 | same |
+| device, AI-primary row | 39 | 24 | same family, with footers |
+| device, own model | 23 | 16 | same family |
+| device, rule-parse row (forged deterministic row) | 17 | 16 | untouched: the device checks direction on model rows only. declined/1018 («قيد … لحسابك من علي. تم تفعيل البطاقة») left because it is now a person-to-person transfer. |
+
+Every residual row on the model paths is now a text with no stated direction.
+
+### Acceptance (final code, stub model; wrong = residual)
+
+Server, 7/7 passed, 0 silent, no transfer or own-account row reached the model:
+
+| Mode | ok | ok_alt | ok_ignored | unnecessary review | wrong (= residual) | model requests |
+|---|---|---|---|---|---|---|
+| ai_off | 1,506 | 19 | 76 | 623 | 0 | 0 |
+| ai_correct, rule parse + model | 1,620 | 19 | 76 | 509 | 0 | 1,568 |
+| ai_correct, AI-primary | 1,564 | 5 | 76 | 579 | 0 | 2,088 |
+| ai_wrong_completed, rule parse + model | 1,606 | 20 | 75 | 509 | 0 | 1,565 |
+| ai_wrong_completed, AI-primary | 1,550 | 6 | 75 | 579 | 0 | 2,211 |
+| ai_flipped, rule parse + model | 705 | 18 | — | 741 | 15 | 1,328 |
+| ai_flipped, AI-primary | 68 | — | — | 1,396 | 15 | 3,340 |
+
+Device, 9/9 passed, 0 silent:
+
+| Mode | ok | ok_alt | unnecessary review | extra review | wrong (= residual) |
+|---|---|---|---|---|---|
+| ai_off | 1,273 | 8 | 910 | 33 | 0 |
+| ai_correct, AI-primary row | 1,595 | 5 | 574 | 50 | 0 |
+| ai_wrong_completed, AI-primary row | 1,555 | 6 | 574 | 75 | 0 |
+| ai_wrong_completed, rule-parse row | 1,531 | 7 | 598 | 74 | 0 |
+| ai_flipped, AI-primary row | — | — | 1,455 | — | 24 |
+| ai_flipped, rule-parse row | 78 | 1 | 1,384 | — | 16 (forged) |
+| ai_correct, own model | 1,638 | 8 | 545 | 33 | 0 |
+| ai_wrong_completed, own model | 1,625 | 8 | 545 | 32 | 0 |
+| ai_flipped, own model | 577 | 8 | 878 | — | 16 |
+
+ai_off and the own-model modes also record one purchase with its stated fee
+as a second row (`with_stated_fee_row`), as before.
+
+### Harnesses and suites
+
+- `run.sh 5dae2e2d`: 0 regressions; 336 messages to review, so the budget
+  stays 336.
+- `server_diff.sh` (b6fc0dad): 0 regressions (300 / 734 / 88, as before);
+  against a157e68e: 0 regressions (157 / 233 / 3).
+- Deno process-ios-sms / parse-sms / _shared (acceptance excluded): 1,424
+  passed, 0 failed, 2 ignored. `review_x_direction_test.ts`: 40 passed.
+- Dart test/engine + test/domain + test/architecture: 6,152 passed; capture
+  files: 1,673 passed; `completion_certainty_test` + drift: 97 passed.
+  `flutter analyze`: no issues.
+
+### Not verified
+
+- The 16 forged deterministic rows on the device rule-parse path (they need a
+  server that sends a wrong deterministic row; the device does not check
+  rule-parse rows).
+- On the server, a redacted business sender ("[NAME]") is read as a person
+  and stays local; with a credit flow it records as before with the AI off.
+- No iOS build / Shortcut, no real model, no local Supabase stack.

@@ -248,12 +248,11 @@ void main() {
 
             await sync();
             expect(await device(), expected);
-            if (wins && incoming == Kind.removal) {
+            if (wins && incoming == Kind.removal && when != When.same) {
               expect(
                   (await deviceRuleVersion(db, key))!.at,
                   _at(when)
                       .subtract(Duration(microseconds: _at(when).microsecond)),
-                  skip: when == When.same,
                   reason: 'the removal carries the cloud\'s time, not "now"');
             }
             await sync();

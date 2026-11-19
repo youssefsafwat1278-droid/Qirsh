@@ -51,41 +51,6 @@
    "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
   },
   {
-   "id": "declined/656",
-   "text": "قُيّد لحسابك *5678 مبلغ 2,000 ريال",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/659",
-   "text": "Your account *5678 has been topped up with SAR 500.00",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/660",
-   "text": "Your account *5678 has been topped up with SAR 500.00\nPIN-verified",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/662",
-   "text": "SAR 500.00 added to your account *5678",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/737",
-   "text": "You got SAR 750.00 from Ali via Test Pay",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/738",
-   "text": "You got SAR 750.00 from Ali via Test Pay\nStatement date 25/11/2026",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/1014",
-   "text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
    "id": "declined/1487",
    "text": "Mada *4521 SAR 45.00 Test Mart 17/11 14:22. Statement date 25/11",
    "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
@@ -160,41 +125,6 @@
   {
    "id": "declined/593",
    "text": "بطاقة *4521 مبلغ 89.50 ريال Test Mart",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/656",
-   "text": "قُيّد لحسابك *5678 مبلغ 2,000 ريال",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/659",
-   "text": "Your account *5678 has been topped up with SAR 500.00",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/660",
-   "text": "Your account *5678 has been topped up with SAR 500.00\nPIN-verified",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/662",
-   "text": "SAR 500.00 added to your account *5678",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/737",
-   "text": "You got SAR 750.00 from Ali via Test Pay",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/738",
-   "text": "You got SAR 750.00 from Ali via Test Pay\nStatement date 25/11/2026",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/1014",
-   "text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي",
    "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
   },
   {
@@ -315,81 +245,6 @@
    "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
   },
   {
-   "id": "declined/656",
-   "text": "قُيّد لحسابك *5678 مبلغ 2,000 ريال",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/658",
-   "text": "قُيّد لحسابك *5678 مبلغ 2,000 ريال\nكشف حسابك متاح في التطبيق",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/659",
-   "text": "Your account *5678 has been topped up with SAR 500.00",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/660",
-   "text": "Your account *5678 has been topped up with SAR 500.00\nPIN-verified",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/661",
-   "text": "Your account *5678 has been topped up with SAR 500.00. Credit limit: SAR 20,000",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/662",
-   "text": "SAR 500.00 added to your account *5678",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/663",
-   "text": "SAR 500.00 added to your account *5678. Card activated",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/664",
-   "text": "SAR 500.00 added to your account *5678. Available credit limit SAR 9,000.00",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/737",
-   "text": "You got SAR 750.00 from Ali via Test Pay",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/738",
-   "text": "You got SAR 750.00 from Ali via Test Pay\nStatement date 25/11/2026",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/739",
-   "text": "You got SAR 750.00 from Ali via Test Pay. Card activated",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/1014",
-   "text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/1016",
-   "text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي\nCard activated",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/1017",
-   "text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي\nYour e-statement is available in the app",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/1019",
-   "text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي. حد البطاقة 20,000 ريال",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
    "id": "declined/1487",
    "text": "Mada *4521 SAR 45.00 Test Mart 17/11 14:22. Statement date 25/11",
    "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
@@ -477,11 +332,6 @@
    "why": "a forged rule-parse (deterministic) server row with a flipped direction: the device's rule parser reads no direction, and the device checks only model rows against its own reading"
   },
   {
-   "id": "declined/1018",
-   "text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي. تم تفعيل البطاقة",
-   "why": "a forged rule-parse (deterministic) server row with a flipped direction: the device's rule parser reads no direction, and the device checks only model rows against its own reading"
-  },
-  {
    "id": "declined/1283",
    "text": "Recharge balance SAR 100 for mobile via card *4521 successful",
    "why": "a forged rule-parse (deterministic) server row with a flipped direction: the device's rule parser reads no direction, and the device checks only model rows against its own reading"
@@ -561,41 +411,6 @@
   {
    "id": "declined/596",
    "text": "مدى *4521 ٨٩٫٥٠ ر.س Test Mart",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/656",
-   "text": "قُيّد لحسابك *5678 مبلغ 2,000 ريال",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/659",
-   "text": "Your account *5678 has been topped up with SAR 500.00",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/660",
-   "text": "Your account *5678 has been topped up with SAR 500.00\nPIN-verified",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/662",
-   "text": "SAR 500.00 added to your account *5678",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/737",
-   "text": "You got SAR 750.00 from Ali via Test Pay",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/738",
-   "text": "You got SAR 750.00 from Ali via Test Pay\nStatement date 25/11/2026",
-   "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
-  },
-  {
-   "id": "declined/1014",
-   "text": "قيد مبلغ 2,000 ريال لحسابك *5678 من علي",
    "why": "no completed-event form (class a): the rule parser reads no direction and records nothing with the AI off; the model's direction is taken"
   },
   {

@@ -16,6 +16,8 @@ const C = rules.completionCertainty as {
   adviceClause: string;
   completedFormWords: string[];
   transferPattern: string;
+  statedCreditPattern: string;
+  statedDebitPattern: string;
 };
 
 // Same as TransactionStateCues.foldForCues / parse.ts foldForCues (kept here
@@ -37,6 +39,8 @@ function fold(input: string): string {
 const DOUBT = Object.entries(C.doubtPatterns).map(([k, v]) => [k, new RegExp(v)] as const);
 const ADVICE = new RegExp(C.adviceClause);
 const TRANSFER = new RegExp(C.transferPattern);
+const STATED_CREDIT = new RegExp(C.statedCreditPattern);
+const STATED_DEBIT = new RegExp(C.statedDebitPattern);
 const CLAUSE_END = /[\n!?؟;؛]|[.,،](?![0-9])| [-–—] /g;
 const FORM_WORD = new RegExp(
   `(?<![a-zء-ي])(?:و|ف)?(?:${
@@ -75,6 +79,17 @@ export function hasCompletedForm(text: string): boolean {
 /** A transfer to or from a person or between accounts: decided locally, never sent to the model. */
 export function isTransfer(text: string): boolean {
   return TRANSFER.test(fold(text));
+}
+
+/**
+ * Review Y (N-M1): the direction the wording states when no money word names
+ * one ("topped up with", «قيد … لحسابك», "recharge … via card"), or unknown.
+ * Only the local direction a model answer must agree with reads it.
+ */
+export function statedDirection(text: string): 'credit' | 'debit' | 'unknown' {
+  const t = fold(text);
+  const credit = STATED_CREDIT.test(t), debit = STATED_DEBIT.test(t);
+  return credit === debit ? 'unknown' : credit ? 'credit' : 'debit';
 }
 
 /**

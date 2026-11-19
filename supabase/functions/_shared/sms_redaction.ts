@@ -374,6 +374,7 @@ const NAME_STOPWORDS = [
   'txn',
   'successful',
   'successfully',
+  'added',
   'credit',
   'debit',
   'credited',
@@ -572,6 +573,7 @@ const NAME_STOPWORDS = [
   'لم',
   'تمت',
   'بنجاح',
+  'كمستفيد',
   'يرجى',
   'الرجاء',
   'إذا',
@@ -813,10 +815,29 @@ const COUNTERPARTY_PATTERN = new RegExp(
 /// PRIV-1: cues that only ever introduce a person (a payee, a beneficiary, a
 /// sender), so they apply in any message, transfer word or not.
 const PERSON_CUE_PATTERN = new RegExp(
-  `((?<![\\p{L}\\p{M}])(?:beneficiary(?:[ \\t]+(?:name|added))?|benef|payee(?:[ \\t]+name)?|sender(?:[ \\t]+name)?` +
+  `((?<![\\p{L}\\p{M}])(?:beneficiary(?:[ \\t]+name)?|benef|payee(?:[ \\t]+name)?|sender(?:[ \\t]+name)?` +
     `|remitter(?:[ \\t]+name)?|recipient(?:[ \\t]+name)?|payer(?:[ \\t]+name)?|on[ \\t]+behalf[ \\t]+of|in[ \\t]+favou?r[ \\t]+of` +
-    `|payable[ \\t]+to|(?:for[ \\t]+)?employee|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد(?:[ \\t]+الجديد)?|مستفيد(?:[ \\t]+جديد)?|للمستفيد|المرسل|المستلم|للمستلم|المحول` +
+    `|payable[ \\t]+to|(?:for[ \\t]+)?employee|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول` +
     `|لصالح|باسم|للسيدة|للسيد)\\.?(?![\\p{L}\\p{M}])${LABEL_SEP})(${NAME})`,
+  'giu',
+);
+
+/// N-P1: a beneficiary notice names a person wherever the name sits: after
+/// the cue and its status words ("Beneficiary added successfully: Rami
+/// Fawzi", «تمت إضافة المستفيد بنجاح: رامي فوزي»), between commas ("A new
+/// beneficiary, Sami Odeh, was added"), and before the role ("Sami Odeh was
+/// added as a beneficiary", «تمت إضافة رامي فوزي كمستفيد»). The status words
+/// stay.
+const BENEFICIARY_NOTICE_PATTERN = new RegExp(
+  `((?<![\\p{L}\\p{M}])(?:beneficiary|beneficiaries|payee|المستفيد|مستفيد|للمستفيد)(?![\\p{L}\\p{M}])` +
+    `(?:[ \\t]+(?:new|added|successfully|has|have|been|was|الجديد|جديد|بنجاح)(?![\\p{L}\\p{M}]))*` +
+    `(?:[ \\t]*[:,،\\-][ \\t]*|[ \\t]+))(${NAME})`,
+  'giu',
+);
+const NAME_ADDED_AS_PATTERN = new RegExp(
+  `((?:(?:^|(?<=[\\n.!?؟;؛:,،]))[ \\t]*|(?<![\\p{L}\\p{M}])(?:added|إضافة|اضافة|أضفت|اضفت)[ \\t]+))(${LOOSE_NAME})` +
+    `(?=[ \\t]+(?:(?:was|has[ \\t]+been|have[ \\t]+been)[ \\t]+(?:successfully[ \\t]+)?added[ \\t]+)?` +
+    `(?:as[ \\t]+(?:an?[ \\t]+)?(?:new[ \\t]+)?(?:beneficiary|payee)|كمستفيد|إلى[ \\t]+(?:قائمة[ \\t]+)?المستفيدين)(?![\\p{L}\\p{M}]))`,
   'giu',
 );
 
@@ -910,7 +931,7 @@ const CAPITALISED_RUN = /^[\p{Lu}\p{Lo}*][^ \t]*(?:[ \t]+[\p{Lu}\p{Lo}*][^ \t]*)
 
 /// The text reads as money moving between people.
 const TRANSFER_WORDS =
-  /transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|\bsent\b|payable\s+to|request(?:ed)?\s+from|money\s+request|request\s+to\s+pay|\brequested\b|standing\s+order|حوال|تحويل|حول|وارد|وصلك|طلب\s+دفع|استلام|استلمت|إيداع|ايداع|أودع|اودع|مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
+  /transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|\bsent\b|payable\s+to|request(?:ed)?\s+from|(?:payment|money|pay|transfer|fund)s?\s+requests?|requests?\s+(?:to\s+pay|for\s+(?:payment|money))|\brequested\b|standing\s+order|حوال|تحويل|حول|وارد|وصلك|طلب\s+(?:دفع|تحويل|مبلغ|أموال|اموال)|استلام|استلمت|إيداع|ايداع|أودع|اودع|مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
 // "merchant" / «تاجر» alone reads as a purchase only where nothing says
 // transfer («إلى محمد التاجر» is a surname in a transfer).
 const PURCHASE_WORDS =
@@ -922,7 +943,7 @@ const WEAK_PURCHASE_WORDS = /merchant|تاجر/iu;
 /// make it a purchase (privacy wins where the reading is mixed). "credited",
 /// "received" or «إيداع» alone are not here: a merchant's refund says them too.
 const STRONG_TRANSFER_WORDS =
-  /transfer|remit|beneficiary|\bipn\b|instapay|\bsent\b|payable\s+to|request(?:ed)?\s+from|money\s+request|request\s+to\s+pay|\brequested\b|standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|لصالح|وصلك|أرسل|ارسل|طلب\s+دفع|انستا|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
+  /transfer|remit|beneficiary|\bipn\b|instapay|\bsent\b|payable\s+to|request(?:ed)?\s+from|(?:payment|money|pay|transfer|fund)s?\s+requests?|requests?\s+(?:to\s+pay|for\s+(?:payment|money))|\brequested\b|standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|لصالح|وصلك|أرسل|ارسل|طلب\s+(?:دفع|تحويل|مبلغ|أموال|اموال)|انستا|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
 const PURCHASE_CONTEXT = {
   test: (text: string) =>
     !STRONG_TRANSFER_WORDS.test(text) &&
@@ -1159,6 +1180,8 @@ export function redactPersonNames(text: string): string {
   const greeted = text.replace(SALUTATION_PATTERN, '$1[NAME]')
     // PRIV-1: a person cue names a person in any message.
     .replace(PERSON_CUE_PATTERN, maskPerson)
+    .replace(BENEFICIARY_NOTICE_PATTERN, maskPerson)
+    .replace(NAME_ADDED_AS_PATTERN, maskPerson)
     .replace(PERSONAL_LABEL_PATTERN, maskPerson)
     .replace(ACCOUNT_OF_PATTERN, maskPerson)
     .replace(ACCOUNT_HOLDER_PATTERN, maskPerson);

@@ -31,6 +31,23 @@ const DIRECTION: Array<[string, 'credit' | 'debit', number]> = [
   ['Refund for your purchase at Noon: SAR 150.00 returned to card *4521', 'credit', 150],
   ['Standing order of SAR 1,000.00 to Ali executed today', 'debit', 1000],
   ['سداد فاتورة 300 ريال ببطاقتك الائتمانية 4521', 'debit', 300],
+  // Review Y (N-M1): the direction the wording states.
+  ['Your account *5678 was topped up with SAR 1,800.00 by Test Corp', 'credit', 1800],
+  ['قُيّد مبلغ 2,000 ريال لحسابك *5678 من شركة الاختبار', 'credit', 2000],
+  ['SAR 500.00 added to your account *5678', 'credit', 500],
+  ['Your account *5678 has been topped up with SAR 500.00', 'credit', 500],
+  ['قُيّد لحسابك *5678 مبلغ 2,000 ريال', 'credit', 2000],
+  ['تم قيد مبلغ 2,000 ريال لحسابك *5678', 'credit', 2000],
+  ['SAR 300.00 posted to your account *5678 from Ali', 'credit', 300],
+  ['Recharge balance SAR 100 for mobile via card *4521 successful', 'debit', 100],
+  ['Balance recharge of SAR 100.00 completed using card *4521', 'debit', 100],
+];
+
+// Review Y (N-M2): received person-to-person transfers never reach the model.
+const PERSON_TRANSFER: Array<[string, number]> = [
+  ['You got SAR 750.00 from Ali via Test Pay', 750],
+  ['قيد مبلغ 2,000 ريال لحسابك *5678 من علي', 2000],
+  ['You received SAR 300.00 from Sara Ahmed via Test Pay', 300],
 ];
 
 const CONFLICTING: Array<[string, number]> = [
@@ -110,6 +127,18 @@ for (const [text, amount] of CONFLICTING) {
           assertEquals((await parse(text, primary)).accepted, false, `primary ${primary} ${direction}`);
         });
       }
+    }
+  });
+}
+
+for (const [text, amount] of PERSON_TRANSFER) {
+  Deno.test(`N-M2: a person-to-person transfer never reaches the model — ${text}`, async () => {
+    for (const primary of [false, true]) {
+      const calls = await withModel('debit', amount, text, async () => {
+        const o = await parse(text, primary);
+        assertEquals(o.accepted && o.parsed.direction === 'debit', false);
+      });
+      assertEquals(calls, 0);
     }
   });
 }
