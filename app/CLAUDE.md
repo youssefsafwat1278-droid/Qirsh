@@ -299,7 +299,7 @@ lib/
 5. **Category keys are stable strings.**
    `'restaurants'`, `'subscriptions'`, etc. Parser rules reference categories by `key`, not UUID.
 
-6. **DB schema version is `_targetSchemaVersion` in `app_database.dart` (currently 44).**
+6. **DB schema version is `_targetSchemaVersion` in `app_database.dart` (currently 45).**
    Bump it and add a migration case for every schema change.
 
 7. **No HMAC secret in the binary.** HTTPS + Edge Function filtering is the MVP security model.

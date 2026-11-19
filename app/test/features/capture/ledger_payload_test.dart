@@ -123,5 +123,34 @@ void main() {
         TransactionDirectionEntity.unknown,
       );
     });
+
+    test('a transfer without canonical direction takes the server direction '
+        'column; other types ignore it', () {
+      TransactionDirectionEntity pull(
+              TransactionTypeEntity type, String? serverDirection,
+              [String? canonical]) =>
+          LedgerPayloadCodec.directionFromPull(
+              canonicalDirection: canonical,
+              type: type,
+              serverDirection: serverDirection);
+      const t = TransactionTypeEntity.transfer;
+      expect(pull(t, 'credit'), TransactionDirectionEntity.credit);
+      expect(pull(t, 'debit'), TransactionDirectionEntity.debit);
+      expect(pull(t, 'unknown'), TransactionDirectionEntity.unknown);
+      expect(pull(t, null), TransactionDirectionEntity.unknown);
+      expect(pull(t, 'credit', 'debit'), TransactionDirectionEntity.debit,
+          reason: 'canonical metadata still wins');
+      for (final (type, expected) in [
+        (TransactionTypeEntity.payment, TransactionDirectionEntity.debit),
+        (TransactionTypeEntity.withdrawal, TransactionDirectionEntity.debit),
+        (TransactionTypeEntity.income, TransactionDirectionEntity.credit),
+        (TransactionTypeEntity.refund, TransactionDirectionEntity.credit),
+        (TransactionTypeEntity.unknown, TransactionDirectionEntity.unknown),
+      ]) {
+        for (final server in ['credit', 'debit', 'unknown', null]) {
+          expect(pull(type, server), expected, reason: '$type / $server');
+        }
+      }
+    });
   });
 }

@@ -9,11 +9,19 @@ import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/money_v30_backfill.dart';
 import 'package:money_companion/data/db/sql_value_codec.dart';
 import 'package:money_companion/data/repositories/drift_transaction_repository.dart';
+import 'package:money_companion/data/repositories/transfer_pair_service.dart';
 import 'package:money_companion/core/sync/outbox_failure.dart';
+import 'package:money_companion/domain/finance/money.dart';
+import 'package:money_companion/domain/repositories/bill_repository.dart';
 import 'package:money_companion/features/capture/services/ledger_outbox_queue.dart';
 import 'package:money_companion/features/capture/services/ledger_push_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+class _Bills implements BillRepository {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
+}
 
 Future<void> _insertTx(AppDatabase db, {String id = 'tx-001'}) async {
   final now = dateTimeToSql(DateTime.now().toUtc());
@@ -235,6 +243,112 @@ void main() {
     expect(sent?['balance_after'], 900.5);
     expect(sent?['foreign_amount'], 10.0);
     expect(sent?['foreign_currency'], 'USD');
+    // No transfer link: the key is absent, not null.
+    expect((sent?['metadata'] as Map).containsKey('transfer_group_id'),
+        isFalse);
+  });
+
+  test('each transfer leg pushes its own account, direction and the shared '
+      'metadata.transfer_group_id; an updatePair rewrite pushes the same',
+      () async {
+    final now = dateTimeToSql(DateTime.now().toUtc());
+    for (final (id, order) in [('acc-a', 0), ('acc-b', 1)]) {
+      await db.customStatement('''
+        INSERT INTO accounts(
+          id, name, currency, type, is_default, sort_order,
+          created_at, updated_at, initial_balance, current_balance, server_id
+        ) VALUES (
+          '$id', '$id', 'SAR', 'bank', 0, $order,
+          '$now', '$now', 0, 0, 'srv-$id'
+        );
+      ''');
+    }
+    await backfillNonPlanningMoneyV30(db);
+    final queue = _queue(db);
+    final service = TransferPairService(
+      db: db,
+      transactions: DriftTransactionRepository(db, outboxQueue: queue),
+      bills: _Bills(),
+    );
+    final pair = await service.savePair(
+      fromAccountId: 'acc-a',
+      toAccountId: 'acc-b',
+      amountOut: Money.parse('300', 'SAR'),
+      amountIn: Money.parse('300', 'SAR'),
+      currencyOut: 'SAR',
+      currencyIn: 'SAR',
+      occurredAt: DateTime.utc(2026, 7, 15, 10),
+    );
+    final group = pair.debit.transferGroupId!;
+
+    final sent = <Map<String, dynamic>>[];
+    final client = LedgerAdmissionFixture.trackClient(SupabaseClient(
+      'https://example.supabase.co',
+      'public-anon-key',
+      accessToken: () async => 'qa-access-token',
+      httpClient: MockClient((request) async {
+        final decoded = jsonDecode(request.body);
+        final row = Map<String, dynamic>.from(
+          decoded is List ? decoded.single as Map : decoded as Map,
+        );
+        sent.add(row);
+        return http.Response(
+          jsonEncode(request.method == 'PATCH'
+              ? [
+                  {'updated_at': now}
+                ]
+              : {'id': 'srv-${row['client_request_id']}', 'updated_at': now}),
+          200,
+          headers: const {'content-type': 'application/json'},
+          request: request,
+        );
+      }),
+    ));
+    LedgerPushService push() => LedgerPushService(
+          db: db,
+          queue: queue,
+          isPushEnabled: () => true,
+          getAuthUserId: () async => 'user-123',
+          getClient: () => client,
+          mayEgress: () async => true,
+        );
+
+    expect((await push().push()).pushed, 2);
+    Map<String, dynamic> leg(String accountId) =>
+        sent.lastWhere((r) => r['local_account_id'] == accountId);
+    for (final (accountId, direction) in [
+      ('acc-a', 'debit'),
+      ('acc-b', 'credit'),
+    ]) {
+      final row = leg(accountId);
+      expect(row['transaction_type'], 'transfer');
+      expect(row['direction'], direction);
+      expect(row['server_account_id'], 'srv-$accountId');
+      expect((row['metadata'] as Map)['transfer_group_id'], group);
+    }
+
+    // Swap the direction: the direct UPDATE of direction/transfer_group_id in
+    // updatePair must reach the pushed row (payload built from the re-read row).
+    sent.clear();
+    await service.updatePair(
+      pair.debit,
+      fromAccountId: 'acc-b',
+      toAccountId: 'acc-a',
+      amountOut: Money.parse('300', 'SAR'),
+      amountIn: Money.parse('300', 'SAR'),
+      currencyOut: 'SAR',
+      currencyIn: 'SAR',
+      occurredAt: DateTime.utc(2026, 7, 15, 10),
+    );
+    expect((await push().push()).pushed, 2);
+    for (final (accountId, direction) in [
+      ('acc-b', 'debit'),
+      ('acc-a', 'credit'),
+    ]) {
+      final row = leg(accountId);
+      expect(row['direction'], direction);
+      expect((row['metadata'] as Map)['transfer_group_id'], group);
+    }
   });
 
   test('delete operation stores local_id and omits amount', () async {

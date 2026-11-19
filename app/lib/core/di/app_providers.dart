@@ -79,6 +79,7 @@ import '../../data/repositories/drift_sender_bank_mapping_repository.dart';
 import '../../data/repositories/drift_smart_inbox_repository.dart';
 import '../../data/repositories/drift_transaction_repository.dart';
 import '../../data/repositories/drift_user_settings_repository.dart';
+import '../../data/repositories/transfer_pair_service.dart';
 import '../../data/sync/exact_transport_capability.dart';
 import '../../data/sync/sender_bank_mapping_sync_service.dart';
 import '../../domain/entities/account_entity.dart';
@@ -1107,6 +1108,15 @@ final billRepositoryProvider = writerProvider<BillRepository>((ref) {
   return DriftBillRepository(
     db,
     outboxQueue: ref.watch(planningOutboxQueueProvider),
+  );
+});
+
+/// Transfers between the user's own accounts (two linked transfer legs).
+final transferPairServiceProvider = writerProvider<TransferPairService>((ref) {
+  return TransferPairService(
+    db: ref.watch(appDatabaseProvider),
+    transactions: ref.watch(transactionRepositoryProvider),
+    bills: ref.watch(billRepositoryProvider),
   );
 });
 

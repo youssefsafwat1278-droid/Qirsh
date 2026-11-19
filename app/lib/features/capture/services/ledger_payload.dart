@@ -122,10 +122,14 @@ class LedgerPayloadCodec {
     };
   }
 
-  /// Recover the client direction on pull (canonical first, else derived).
+  /// Recover the client direction on pull (canonical first, else derived). A
+  /// transfer has no direction implied by its type, so without canonical
+  /// metadata it takes the server `direction` column (debit/credit) — the
+  /// backfill and older pushes wrote the explicit direction there.
   static TransactionDirectionEntity directionFromPull({
     String? canonicalDirection,
     required TransactionTypeEntity type,
+    String? serverDirection,
   }) {
     final canon = _parseDirection(canonicalDirection);
     if (canon != null) return canon;
@@ -134,6 +138,11 @@ class LedgerPayloadCodec {
       TransactionTypeEntity.refund => TransactionDirectionEntity.credit,
       TransactionTypeEntity.payment => TransactionDirectionEntity.debit,
       TransactionTypeEntity.withdrawal => TransactionDirectionEntity.debit,
+      TransactionTypeEntity.transfer => switch (serverDirection) {
+          'debit' => TransactionDirectionEntity.debit,
+          'credit' => TransactionDirectionEntity.credit,
+          _ => TransactionDirectionEntity.unknown,
+        },
       _ => TransactionDirectionEntity.unknown,
     };
   }

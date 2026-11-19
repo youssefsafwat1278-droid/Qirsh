@@ -9,7 +9,9 @@ import 'package:money_companion/data/db/money_v30_backfill.dart';
 import 'package:money_companion/data/db/sql_value_codec.dart';
 import 'package:money_companion/data/repositories/drift_dedup_store.dart';
 import 'package:money_companion/data/repositories/drift_transaction_repository.dart';
+import 'package:money_companion/data/repositories/transfer_pair_service.dart';
 import 'package:money_companion/data/sync/sync_cursor.dart';
+import 'package:money_companion/domain/repositories/bill_repository.dart';
 import 'package:money_companion/features/capture/services/ledger_sync_service.dart';
 import 'package:money_companion/domain/finance/money.dart';
 import '../../harness/seed_test_account.dart';
@@ -1013,4 +1015,158 @@ void main() {
         .read<String>('kind'), 'tombstone');
     expect(await db.count('ledger_sync_outbox'), 1);
   });
+
+  group('transfer between own accounts', () {
+    setUp(() async {
+      for (final id in ['acc-a', 'acc-b']) {
+        await db.customStatement(
+          "INSERT INTO accounts(id, name, currency, type, created_at, "
+          "updated_at, server_id) VALUES ('$id', '$id', 'SAR', 'bank', "
+          "'2026-01-01', '2026-01-01', 'srv-$id');",
+        );
+      }
+      await backfillNonPlanningMoneyV30(db);
+    });
+
+    Map<String, dynamic> leg(String account, String direction,
+            {String? group, String updatedAt = '2026-01-01T10:00:00.000Z'}) =>
+        {
+          ..._serverRow(
+              id: 'srv-$direction', type: 'transfer', updatedAt: updatedAt),
+          'direction': direction,
+          'source': 'manual',
+          'client_request_id': 'leg-$direction',
+          'server_account_id': 'srv-$account',
+          'metadata': {
+            'payload_version': 2,
+            'canonical_type': 'transfer',
+            'canonical_source': 'unknown',
+            'canonical_direction': direction,
+            if (group != null) 'transfer_group_id': group,
+          },
+        };
+
+    Future<List<Map<String, Object?>>> legs() async => [
+          for (final r in await db
+              .customSelect('SELECT id, account_id, direction, type, '
+                  'transfer_group_id FROM transactions ORDER BY direction;')
+              .get())
+            r.data,
+        ];
+
+    test('a pulled pair lands linked on an empty device', () async {
+      remote.activeRows = [
+        leg('acc-a', 'debit', group: 'grp-1'),
+        leg('acc-b', 'credit', group: 'grp-1'),
+      ];
+      expect((await _makeSvc(db, remote).pull()).imported, 2);
+
+      expect(await legs(), [
+        {
+          'id': 'leg-credit',
+          'account_id': 'acc-b',
+          'direction': 'credit',
+          'type': 'transfer',
+          'transfer_group_id': 'grp-1',
+        },
+        {
+          'id': 'leg-debit',
+          'account_id': 'acc-a',
+          'direction': 'debit',
+          'type': 'transfer',
+          'transfer_group_id': 'grp-1',
+        },
+      ]);
+      final repo = DriftTransactionRepository(db);
+      final service =
+          TransferPairService(db: db, transactions: repo, bills: _Bills());
+      final debit = (await repo.getById('leg-debit'))!;
+      final credit = (await repo.getById('leg-credit'))!;
+      expect((await service.sibling(debit))?.id, 'leg-credit');
+      expect((await service.sibling(credit))?.id, 'leg-debit');
+    });
+
+    test('a later write without the key (older build) keeps the local link',
+        () async {
+      remote.activeRows = [leg('acc-a', 'debit', group: 'grp-1')];
+      await _makeSvc(db, remote).pull();
+      remote.activeRows = [
+        leg('acc-a', 'debit', updatedAt: '2026-01-02T10:00:00.000Z')
+          ..['amount_text'] = '250.0',
+      ];
+      expect((await _makeSvc(db, remote).pull()).updated, 1);
+
+      final row = (await legs()).single;
+      expect(row['transfer_group_id'], 'grp-1');
+      expect(row['direction'], 'debit');
+    });
+
+    test('a legacy transfer row with no canonical metadata takes the server '
+        'direction column', () async {
+      remote.activeRows = [
+        leg('acc-b', 'credit')..remove('metadata'),
+      ];
+      await _makeSvc(db, remote).pull();
+      expect((await legs()).single['direction'], 'credit');
+    });
+
+    test('a later legacy write with no usable direction keeps a known local '
+        'transfer direction', () async {
+      remote.activeRows = [leg('acc-a', 'debit')];
+      await _makeSvc(db, remote).pull();
+      remote.activeRows = [
+        leg('acc-a', 'unknown', updatedAt: '2026-01-02T10:00:00.000Z')
+          ..['id'] = 'srv-debit'
+          ..['client_request_id'] = 'leg-debit'
+          ..remove('metadata'),
+      ];
+      expect((await _makeSvc(db, remote).pull()).updated, 1);
+      expect((await legs()).single['direction'], 'debit');
+    });
+
+    test('a pair without the key pulls as two correct unlinked transfers',
+        () async {
+      remote.activeRows = [
+        leg('acc-a', 'debit'),
+        leg('acc-b', 'credit'),
+      ];
+      await _makeSvc(db, remote).pull();
+
+      expect(await legs(), [
+        {
+          'id': 'leg-credit',
+          'account_id': 'acc-b',
+          'direction': 'credit',
+          'type': 'transfer',
+          'transfer_group_id': null,
+        },
+        {
+          'id': 'leg-debit',
+          'account_id': 'acc-a',
+          'direction': 'debit',
+          'type': 'transfer',
+          'transfer_group_id': null,
+        },
+      ]);
+      final repo = DriftTransactionRepository(db);
+      final from = DateTime.utc(2025, 12, 1);
+      final to = DateTime.utc(2026, 2, 1);
+      for (final account in [null, 'acc-a', 'acc-b']) {
+        expect(
+            await repo.expenseTotalBetween(
+                from: from, to: to, currency: 'SAR', accountId: account),
+            Money.parse('0', 'SAR'));
+        expect(
+            await repo.incomeTotalBetween(
+                from: from, to: to, currency: 'SAR', accountId: account),
+            Money.parse('0', 'SAR'));
+      }
+    });
+  });
+}
+
+class _Bills implements BillRepository {
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      super.noSuchMethod(invocation);
 }

@@ -55,7 +55,7 @@ void main() {
     // contract asserted above is unchanged by later additive bumps (v31 added
     // only the refetchable coupon catalog cache).
     final v = await db.customSelect('PRAGMA user_version;').getSingle();
-    expect(v.read<int>('user_version'), 44);
+    expect(v.read<int>('user_version'), 45);
   });
 
   // ── §2 deterministic migration repeatability ──────────────────────────────

@@ -41,6 +41,14 @@ import '../common/repo_error_messages.dart';
 import '../../core/theme/widgets/glass_dialog.dart';
 import '../../core/theme/widgets/qirsh_visuals.dart';
 
+/// The other leg of a transfer between the user's own accounts, or null.
+final _transferSiblingProvider = FutureProvider.autoDispose
+    .family<TransactionEntity?, String>((ref, id) async {
+  final tx = await ref.watch(transactionByIdProvider(id).future);
+  if (tx == null || tx.transferGroupId == null) return null;
+  return ref.watch(transferPairServiceProvider).sibling(tx);
+});
+
 class TransactionDetailsScreen extends ConsumerWidget {
   const TransactionDetailsScreen({super.key, required this.transactionId});
 
@@ -146,6 +154,8 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
         final category = catalog?.byId(tx.categoryId);
         final largeText = MediaQuery.textScalerOf(context).scale(16) > 20;
         final isDebit = transactionIsDebit(tx);
+        final sibling =
+            ref.watch(_transferSiblingProvider(tx.id)).valueOrNull;
         final amountColor = isDebit ? c.textPrimary : c.success;
         final merchantTitle = tx.rawMerchant?.trim().isNotEmpty == true
             ? tx.rawMerchant!.trim()
@@ -394,7 +404,14 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
                     _buildDetailRow(
                       context,
                       context.l10n.commonAccountDefinite,
-                      _accountName(ref, tx.accountId),
+                      sibling == null
+                          ? _accountName(ref, tx.accountId)
+                          : context.l10n.txdTransferFromTo(
+                              _accountName(ref,
+                                  isDebit ? tx.accountId : sibling.accountId),
+                              _accountName(ref,
+                                  isDebit ? sibling.accountId : tx.accountId),
+                            ),
                     ),
                     _divider(c),
                     _buildDetailRow(
@@ -526,7 +543,9 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
               // Destructive = plain danger text, well away from the primary
               // (which now lives in the sticky dock).
               TextButton.icon(
-                onPressed: _busy ? null : () => _confirmDelete(context, ref, tx.id),
+                onPressed: _busy
+                    ? null
+                    : () => _confirmDelete(context, ref, tx, sibling != null),
                 style: TextButton.styleFrom(foregroundColor: c.danger),
                 icon: const Icon(AppLucideIcons.trash2),
                 label: Text(context.l10n.txdDeleteTx,
@@ -717,8 +736,9 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
     }
   }
 
-  Future<void> _confirmDelete(
-      BuildContext context, WidgetRef ref, String id) async {
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref,
+      TransactionEntity tx, bool paired) async {
+    final id = tx.id;
     if (_busy) return;
     setState(() => _deleting = true);
     try {
@@ -733,7 +753,11 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
               Text(context.l10n.txdDeleteTitle, textAlign: TextAlign.center),
             ],
           ),
-          content: Text(context.l10n.txdDeleteBody, textAlign: TextAlign.center),
+          content: Text(
+              paired
+                  ? context.l10n.txdDeletePairBody
+                  : context.l10n.txdDeleteBody,
+              textAlign: TextAlign.center),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
@@ -751,12 +775,14 @@ class _TransactionDetailsContentState extends ConsumerState<_TransactionDetailsC
       try {
         final transactionRepository = ref.read(transactionRepositoryProvider);
         final billRepository = ref.read(billRepositoryProvider);
-        affectedBillIds = await ref.read(appDatabaseProvider).transaction(
-          () async {
-            await transactionRepository.deleteTransaction(id);
-            return billRepository.deletePaymentForTransaction(id);
-          },
-        );
+        affectedBillIds = paired
+            ? await ref.read(transferPairServiceProvider).deletePair(tx)
+            : await ref.read(appDatabaseProvider).transaction(
+                () async {
+                  await transactionRepository.deleteTransaction(id);
+                  return billRepository.deletePaymentForTransaction(id);
+                },
+              );
       } on RepoException catch (e) {
         if (!context.mounted) return;
         AppToast.showError(context, repoErrorMessage(context, e));

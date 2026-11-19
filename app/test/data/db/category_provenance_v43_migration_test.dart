@@ -133,7 +133,7 @@ void main() {
 
     await db.debugReinitialize();
 
-    expect(await userVersion(db), 44);
+    expect(await userVersion(db), 45);
     expect(await money(db), before, reason: 'no row or amount may change');
     final r = await rows(db);
 
@@ -198,7 +198,7 @@ void main() {
     await db.debugReinitialize();
 
     final second = await rows(db);
-    expect(await userVersion(db), 44);
+    expect(await userVersion(db), 45);
     expect(second['bank-1']!['category_source'], 'auto');
     second['bank-1'] = {...second['bank-1']!, 'category_source': 'unknown'};
     expect(second, first);

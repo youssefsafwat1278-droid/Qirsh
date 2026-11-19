@@ -148,7 +148,7 @@ void main() {
     final columns = await fresh.customSelect('PRAGMA table_info(consent_version_watermark)').get();
     expect(columns.any((r) => r.read<String>('name') == 'seed_source_fingerprint'), isTrue);
     expect(await fresh.customSelect('SELECT * FROM consent_version_watermark').get(), isEmpty);
-    expect((await fresh.customSelect('PRAGMA user_version').getSingle()).read<int>('user_version'), 44);
+    expect((await fresh.customSelect('PRAGMA user_version').getSingle()).read<int>('user_version'), 45);
   });
 
   test('seed provenance is excluded from backup and cleared by wipe, frontier retained', () async {

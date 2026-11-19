@@ -457,8 +457,8 @@ class DriftFinancialImporter {
             foreign_amount,foreign_amount_minor,foreign_currency,direction,transaction_time_from_sms,
             sms_received_at,comparison_timestamp,comparison_timestamp_source,
             duplicate_status,possible_duplicate_of_transaction_id,duplicate_reason,
-            category_source,imported_from_file)
-          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?, '',1,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'unknown',1)
+            category_source,imported_from_file,transfer_group_id)
+          VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?, '',1,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'unknown',1,?)
           ON CONFLICT(id) DO UPDATE SET account_id=excluded.account_id,
             amount=excluded.amount,amount_minor=excluded.amount_minor,currency=excluded.currency,
             raw_merchant=excluded.raw_merchant,
@@ -482,6 +482,7 @@ class DriftFinancialImporter {
             duplicate_status=excluded.duplicate_status,
             possible_duplicate_of_transaction_id=excluded.possible_duplicate_of_transaction_id,
             duplicate_reason=excluded.duplicate_reason,
+            transfer_group_id=excluded.transfer_group_id,
             sync_status=CASE WHEN transactions.server_id IS NOT NULL THEN 'pending' ELSE transactions.sync_status END;
         ''', [
           _required(row, 'record_id'),
@@ -516,6 +517,7 @@ class DriftFinancialImporter {
           _or(row['duplicate_status'], 'normal'),
           _nullable(row['possible_duplicate_record_id']),
           _nullable(row['duplicate_reason']),
+          _nullable(row['transfer_group_id']),
         ]);
       case 'budgets':
         final categoryId = await _categoryId(row) ?? await _fallbackCategory();

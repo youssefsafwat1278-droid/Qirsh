@@ -2264,6 +2264,24 @@
   "mtSaveEdits": "حفظ التعديلات",
   "mtAddTransaction": "إضافة العملية",
   "mtTxConfirmed": "العملية مؤكدة",
+  "mtFromAccount": "من حساب",
+  "mtToAccount": "إلى حساب",
+  "mtSomeoneElse": "شخص آخر (خارج حساباتي)",
+  "mtSwapAccounts": "تبديل الحسابين",
+  "mtTransferHint": "التحويل ينقل المال بين حساباتك فقط، ولا يؤثر في مصروفات الشهر أو دخله.",
+  "mtTransferTypeLocked": "لتغيير النوع، احذف التحويل ثم أضفه من جديد.",
+  "txdDeletePairBody": "سيُحذف طرفا التحويل من الحسابين معًا. لا يمكن التراجع عن ذلك.",
+  "txdTransferFromTo": "من {from} إلى {to}",
+  "@txdTransferFromTo": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
   "cfEnterValidLast4": "أدخل آخر 4 أرقام صحيحة",
   "cfDuplicateCard": "توجد بطاقة بنفس الأرقام في هذا الحساب",
   "cfSaveFailed": "تعذّر حفظ البطاقة — حاول مجددًا.",

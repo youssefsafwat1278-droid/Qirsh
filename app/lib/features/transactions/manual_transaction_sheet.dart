@@ -28,6 +28,7 @@ import '../capture/services/captured_message_processor.dart';
 import '../common/app_sheet_scaffold.dart';
 import '../common/app_error_state.dart';
 import '../common/category_catalog.dart';
+import '../common/transaction_direction.dart';
 import '../dashboard/dashboard_providers.dart';
 import '../subscriptions/subscriptions_providers.dart';
 import 'transactions_providers.dart';
@@ -89,7 +90,15 @@ class _ManualTransactionSheetState
   DateTime _occurredAt = DateTime.now();
   bool _busy = false;
 
+  /// Transfer To: an own account id, [_outside], or null for the default.
+  static const _outside = '__outside__';
+  String? _toAccountId;
+
+  /// The other leg when editing one side of a transfer between own accounts.
+  TransactionEntity? _sibling;
+
   bool get _isEditing => widget.transaction != null;
+  bool get _isPairEdit => _sibling != null;
 
   @override
   void initState() {
@@ -104,6 +113,27 @@ class _ManualTransactionSheetState
       _type = tx.type;
       _categoryId = tx.categoryId;
       _occurredAt = tx.occurredAt.toLocal();
+      // Editing never invents a second leg: To starts outside unless the
+      // row already has a sibling (the debit leg's account is From).
+      _toAccountId = _outside;
+      if (tx.transferGroupId != null) {
+        _busy = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          try {
+            final other =
+                await ref.read(transferPairServiceProvider).sibling(tx);
+            if (!mounted || other == null) return;
+            setState(() {
+              _sibling = other;
+              final txIsDebit = transactionIsDebit(tx);
+              _accountId = txIsDebit ? tx.accountId : other.accountId;
+              _toAccountId = txIsDebit ? other.accountId : tx.accountId;
+            });
+          } finally {
+            if (mounted) setState(() => _busy = false);
+          }
+        });
+      }
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         // الحساب الافتراضي يحدّد العملة المبدئية.
@@ -151,6 +181,28 @@ class _ManualTransactionSheetState
     });
   }
 
+  /// From, the same-currency own accounts To may be, and the resolved To.
+  ({AccountEntity from, List<AccountEntity> choices, String to})?
+      _transferEnds(List<AccountEntity> accounts) {
+    if (accounts.isEmpty) return null;
+    final from = accounts.firstWhere((a) => a.id == _accountId,
+        orElse: () => accounts.first);
+    final choices = [
+      for (final a in accounts)
+        if (a.id != from.id && a.currency == from.currency) a,
+    ];
+    final picked = _toAccountId;
+    final String to;
+    if (picked == _outside && !_isPairEdit) {
+      to = _outside;
+    } else if (choices.any((a) => a.id == picked)) {
+      to = picked!;
+    } else {
+      to = choices.isEmpty ? _outside : choices.first.id;
+    }
+    return (from: from, choices: choices, to: to);
+  }
+
   Future<void> _save(CategoryCatalog catalog) async {
     if (_busy) return;
     final normalizedCurrency = _currency.text.trim().toUpperCase();
@@ -167,17 +219,62 @@ class _ManualTransactionSheetState
     }
     final categoryKey = _categoryKey ?? catalog.byId(_categoryId)?.key;
     final categoryId = _categoryId ?? catalog.byKey(_categoryKey)?.id;
-    if (categoryKey == null && !_isEditing) {
+    final isTransfer = _type == TransactionTypeEntity.transfer;
+    if (categoryKey == null && !_isEditing && !isTransfer) {
       _error(context.l10n.mtPickCategory);
+      return;
+    }
+    final ends = isTransfer
+        ? _transferEnds(ref.read(accountsProvider).valueOrNull ?? const [])
+        : null;
+    // A pair cannot lose its other leg here (e.g. a cross-currency pair).
+    if (_isPairEdit && ends?.to == _outside) {
+      _error(context.l10n.mtSaveFailed);
       return;
     }
 
     setState(() => _busy = true);
     try {
-      final TransactionEntity committedTransaction;
-      if (_isEditing) {
-        committedTransaction =
-            await ref.read(transactionRepositoryProvider).updateTransaction(
+      final List<TransactionEntity> committedTransactions;
+      if (ends != null && ends.to != _outside) {
+        final pairs = ref.read(transferPairServiceProvider);
+        final pair = _isEditing
+            ? await pairs.updatePair(
+                widget.transaction!,
+                fromAccountId: ends.from.id,
+                toAccountId: ends.to,
+                amountOut: amount,
+                amountIn: amount,
+                currencyOut: normalizedCurrency,
+                currencyIn: normalizedCurrency,
+                occurredAt: _occurredAt,
+                note: _note.text,
+              )
+            : await pairs.savePair(
+                fromAccountId: ends.from.id,
+                toAccountId: ends.to,
+                amountOut: amount,
+                amountIn: amount,
+                currencyOut: normalizedCurrency,
+                currencyIn: normalizedCurrency,
+                occurredAt: _occurredAt,
+                note: _note.text,
+              );
+        committedTransactions = [pair.debit, pair.credit];
+      } else if (ends != null && !_isEditing) {
+        committedTransactions = [
+          await ref.read(transferPairServiceProvider).saveOutside(
+                accountId: ends.from.id,
+                amount: amount,
+                currency: normalizedCurrency,
+                direction: TransactionDirectionEntity.debit,
+                occurredAt: _occurredAt,
+                note: _note.text,
+              ),
+        ];
+      } else if (_isEditing) {
+        committedTransactions = [
+          await ref.read(transactionRepositoryProvider).updateTransaction(
               transactionId: widget.transaction!.id,
               amount: amount,
               currency: normalizedCurrency,
@@ -187,24 +284,30 @@ class _ManualTransactionSheetState
               categoryId: categoryId,
               note: _note.text,
               accountId: _accountId,
-            );
+            ),
+        ];
       } else {
-        committedTransaction =
-            await ref.read(saveManualTransactionUseCaseProvider)(
-          amount: amount,
-          currency: normalizedCurrency,
-          type: _type,
-          occurredAt: _occurredAt,
-          categoryKey: categoryKey!,
-          merchant: _merchant.text,
-          note: _note.text,
-          accountId: _accountId,
-          cardLast4: widget.initialCardLast4,
-        );
+        committedTransactions = [
+          await ref.read(saveManualTransactionUseCaseProvider)(
+            amount: amount,
+            currency: normalizedCurrency,
+            type: _type,
+            occurredAt: _occurredAt,
+            // Transfer with no accounts at all: the service's category.
+            categoryKey: categoryKey ?? 'transfers',
+            merchant: _merchant.text,
+            note: _note.text,
+            accountId: _accountId,
+            cardLast4: widget.initialCardLast4,
+          ),
+        ];
       }
       if (!mounted) return;
       if (_isEditing) {
         ref.invalidate(transactionByIdProvider(widget.transaction!.id));
+      }
+      if (_sibling != null) {
+        ref.invalidate(transactionByIdProvider(_sibling!.id));
       }
       refreshTransactions(ref);
       refreshBudgets(ref);
@@ -217,7 +320,7 @@ class _ManualTransactionSheetState
       await CapturedMessageProcessor.checkBudgetAlert(
         ref.read(appDatabaseProvider),
         prefs,
-        committedTransactions: [committedTransaction],
+        committedTransactions: committedTransactions,
         lang: LocalNotificationService.instance.notificationLanguage,
       );
       if (!mounted) return;
@@ -238,7 +341,9 @@ class _ManualTransactionSheetState
       context: context,
       builder: (context) => GlassAlertDialog(
         title: Text(context.l10n.txdDeleteTitle),
-        content: Text(context.l10n.mtDeleteBody),
+        content: Text(_isPairEdit
+            ? context.l10n.txdDeletePairBody
+            : context.l10n.mtDeleteBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -257,12 +362,14 @@ class _ManualTransactionSheetState
     try {
       final transactionRepository = ref.read(transactionRepositoryProvider);
       final billRepository = ref.read(billRepositoryProvider);
-      final affectedBillIds = await ref.read(appDatabaseProvider).transaction(
-        () async {
-          await transactionRepository.deleteTransaction(tx.id);
-          return billRepository.deletePaymentForTransaction(tx.id);
-        },
-      );
+      final affectedBillIds = _isPairEdit
+          ? await ref.read(transferPairServiceProvider).deletePair(tx)
+          : await ref.read(appDatabaseProvider).transaction(
+              () async {
+                await transactionRepository.deleteTransaction(tx.id);
+                return billRepository.deletePaymentForTransaction(tx.id);
+              },
+            );
       if (!mounted) return;
       for (final billId in affectedBillIds) {
         ref.invalidate(billPaymentsProvider(billId));
@@ -359,6 +466,113 @@ class _ManualTransactionSheetState
     );
   }
 
+  /// The account picker; [extra] items follow the accounts.
+  Widget _accountField(
+    BuildContext context,
+    String label, {
+    Key? key,
+    required List<AccountEntity> accounts,
+    required String? value,
+    required ValueChanged<String?> onChanged,
+    List<DropdownMenuItem<String>> extra = const [],
+  }) {
+    return _labelled(context, label,
+        (labelText) => GlassDropdownField<String>(
+      key: key,
+      value: value,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: labelText,
+        prefixIcon: const Icon(AppLucideIcons.wallet),
+      ),
+      items: [
+        for (final account in accounts)
+          DropdownMenuItem(
+            value: account.id,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // بنك/بطاقة بيتمثّلوا ببطاقة مصغّرة حقيقية بدل
+                // نص مجرد — نفس لغة صفوف البطاقات.
+                if (account.type == AccountType.bank ||
+                    account.type == AccountType.card) ...[
+                  MiniCardArt(
+                    width: 36,
+                    themeKey: account.type == AccountType.bank
+                        ? 'navy'
+                        : 'graphite',
+                  ),
+                  const SizedBox(width: 10),
+                ],
+                Flexible(
+                  child: Text(
+                    '${account.name} · ${Currency.label(context, account.currency)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ...extra,
+      ],
+      onChanged: onChanged,
+    ));
+  }
+
+  /// Transfer mode: From, a swap, and To — the user's other accounts in the
+  /// same currency, then someone outside them (not offered for a pair).
+  Widget _transferFields(BuildContext context, List<AccountEntity> accounts) {
+    final ends = _transferEnds(accounts)!;
+    // Editing a pair keeps both legs in its currency.
+    final fromAccounts = _isPairEdit
+        ? [
+            for (final a in accounts)
+              if (a.currency == widget.transaction!.currency) a,
+          ]
+        : accounts;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _accountField(context, context.l10n.mtFromAccount,
+            key: const ValueKey('manual-transfer-from'),
+            accounts: fromAccounts,
+            value: ends.from.id, onChanged: (id) {
+          if (id == null) return;
+          final account = accounts.firstWhere((a) => a.id == id);
+          setState(() {
+            _accountId = id;
+            _currency.text = account.currency;
+          });
+        }),
+        IconButton(
+          tooltip: context.l10n.mtSwapAccounts,
+          onPressed: ends.to == _outside
+              ? null
+              : () => setState(() {
+                    _accountId = ends.to;
+                    _toAccountId = ends.from.id;
+                  }),
+          icon: const Icon(AppLucideIcons.arrowUpDown),
+        ),
+        _accountField(context, context.l10n.mtToAccount,
+            key: const ValueKey('manual-transfer-to'),
+            accounts: ends.choices,
+            value: ends.to,
+            onChanged: (id) => setState(() => _toAccountId = id),
+            extra: [
+              if (!_isPairEdit)
+                DropdownMenuItem(
+                  value: _outside,
+                  child: Text(context.l10n.mtSomeoneElse,
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
+            ]),
+      ],
+    );
+  }
+
   Widget _buildForm(BuildContext context, CategoryCatalog catalog) {
     final c = context.colors;
     // The budget-scope sentinel is not a transaction category (same filter
@@ -375,6 +589,7 @@ class _ManualTransactionSheetState
       }
       return !category.entity.isIncome;
     }).toList();
+    final isTransfer = _type == TransactionTypeEntity.transfer;
 
     return ListView(
       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
@@ -385,7 +600,12 @@ class _ManualTransactionSheetState
       ),
       children: [
         const SizedBox(height: AppSpacing.s4),
-        SegmentedControl<TransactionTypeEntity>(
+        // A pair cannot change type in place: it is two rows.
+        IgnorePointer(
+          ignoring: _isPairEdit,
+          child: Opacity(
+            opacity: _isPairEdit ? 0.5 : 1,
+            child: SegmentedControl<TransactionTypeEntity>(
           value: _type,
           accent: true,
           onChanged: (value) {
@@ -409,7 +629,15 @@ class _ManualTransactionSheetState
                 label: context.l10n.txdTypeTransfer,
                 icon: AppLucideIcons.arrowLeftRight),
           ],
+            ),
+          ),
         ),
+        if (_isPairEdit) ...[
+          const SizedBox(height: AppSpacing.s2),
+          Text(context.l10n.mtTransferTypeLocked,
+              textAlign: TextAlign.center,
+              style: AppTypography.caption(c.textSecondary)),
+        ],
         const SizedBox(height: AppSpacing.s4),
         // Big centered amount entry (mockup `.amountfield`), tinted by kind.
         _AmountField(
@@ -429,59 +657,23 @@ class _ManualTransactionSheetState
         ref.watch(accountsProvider).dataOrWhen(
               data: (accounts) {
                 if (accounts.isEmpty) return const SizedBox.shrink();
+                if (isTransfer) return _transferFields(context, accounts);
                 final value = accounts.any((a) => a.id == _accountId)
                     ? _accountId
                     : accounts.first.id;
-                return _labelled(context, context.l10n.commonAccountDefinite,
-                    (labelText) => GlassDropdownField<String>(
-                  value: value,
-                  isExpanded: true,
-                  decoration: InputDecoration(
-                    labelText: labelText,
-                    prefixIcon: const Icon(AppLucideIcons.wallet),
-                  ),
-                  items: [
-                    for (final account in accounts)
-                      DropdownMenuItem(
-                        value: account.id,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // بنك/بطاقة بيتمثّلوا ببطاقة مصغّرة حقيقية بدل
-                            // نص مجرد — نفس لغة صفوف البطاقات.
-                            if (account.type == AccountType.bank ||
-                                account.type == AccountType.card) ...[
-                              MiniCardArt(
-                                width: 36,
-                                themeKey: account.type == AccountType.bank
-                                    ? 'navy'
-                                    : 'graphite',
-                              ),
-                              const SizedBox(width: 10),
-                            ],
-                            Flexible(
-                              child: Text(
-                                '${account.name} · ${Currency.label(context, account.currency)}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                  onChanged: (id) {
-                    if (id == null) return;
-                    final account = accounts.firstWhere((a) => a.id == id);
-                    setState(() {
-                      _accountId = id;
-                      _currency.text = account.currency;
-                    });
-                  },
-                ));
+                return _accountField(context, context.l10n.commonAccountDefinite,
+                    accounts: accounts, value: value, onChanged: (id) {
+                  if (id == null) return;
+                  final account = accounts.firstWhere((a) => a.id == id);
+                  setState(() {
+                    _accountId = id;
+                    _currency.text = account.currency;
+                  });
+                });
               },
               orElse: () => const SizedBox.shrink(),
             ),
+        if (!isTransfer) ...[
         const SizedBox(height: AppSpacing.s3),
         _labelled(context, context.l10n.txnCategory,
             (labelText) => GlassDropdownField<String>(
@@ -512,6 +704,7 @@ class _ManualTransactionSheetState
             _categoryId = catalog.byKey(value)?.id;
           }),
         )),
+        // Transfer saves keep no merchant, so the field is not offered.
         const SizedBox(height: AppSpacing.s3),
         _labelled(context, context.l10n.mtMerchantOptional,
             (labelText) => TextField(
@@ -521,6 +714,7 @@ class _ManualTransactionSheetState
             prefixIcon: const Icon(AppLucideIcons.store),
           ),
         )),
+        ],
         const SizedBox(height: AppSpacing.s3),
         OutlinedButton.icon(
           onPressed: _pickDateTime,
@@ -540,6 +734,11 @@ class _ManualTransactionSheetState
             prefixIcon: const Icon(AppLucideIcons.fileText),
           ),
         )),
+        if (isTransfer) ...[
+          const SizedBox(height: AppSpacing.s3),
+          Text(context.l10n.mtTransferHint,
+              style: AppTypography.caption(c.textSecondary)),
+        ],
         const SizedBox(height: AppSpacing.s4),
         FilledButton.icon(
           onPressed: _busy ? null : () => _save(catalog),

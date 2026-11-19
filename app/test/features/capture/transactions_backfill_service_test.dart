@@ -10,9 +10,25 @@ import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
 import 'package:money_companion/data/db/money_v30_backfill.dart';
 import 'package:money_companion/data/db/planning_cutover.dart';
+import 'package:money_companion/data/repositories/drift_dedup_store.dart';
+import 'package:money_companion/data/repositories/drift_transaction_repository.dart';
+import 'package:money_companion/data/sync/sync_cursor.dart';
 import 'package:money_companion/domain/errors/repo_exceptions.dart';
+import 'package:money_companion/features/capture/services/ledger_sync_service.dart';
 import 'package:money_companion/features/capture/services/transactions_backfill_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// Serves a fixed set of server rows once (one page).
+class _Rows implements LedgerRemoteSource {
+  _Rows(this.rows);
+  final List<Map<String, dynamic>> rows;
+  @override
+  Future<List<Map<String, dynamic>>> fetchRows({
+    required SyncCursor after,
+    int limit = 200,
+  }) async =>
+      after.id.isEmpty ? rows : const [];
+}
 
 /// Builds a real (network-mocked) [SupabaseClient] so a valid session can be
 /// recovered for it — used to exercise AppSession's actual session
@@ -278,6 +294,154 @@ void main() {
     expect(row.readNullable<String>('server_id'), isNull,
         reason: 'a rejected write must not stamp a server_id (fail-closed)');
     expect(row.readNullable<String>('sync_status'), isNot('synced'));
+  });
+
+  test('backfill metadata carries transfer_group_id only when the row has one',
+      () async {
+    final db = await _openDb();
+    addTearDown(db.close);
+    await db.customStatement("UPDATE accounts SET server_id = 'srv-acct';");
+    await _seedOneTransaction(db, id: 'linked');
+    await _seedOneTransaction(db, id: 'plain');
+    await db.customStatement("UPDATE transactions SET type = 'transfer', "
+        "direction = 'debit', transfer_group_id = 'grp-1' WHERE id = 'linked';");
+
+    final inserted = <String, Map<String, dynamic>>{};
+    SupabaseClient capturingClient() {
+      final http = MockClient((request) async {
+        if (request.method == 'GET') {
+          return Response('null', 200,
+              headers: const {'content-type': 'application/json'},
+              request: request);
+        }
+        final body = jsonDecode(request.body);
+        final row = ((body is List ? body.single : body) as Map)
+            .cast<String, dynamic>();
+        inserted[row['client_request_id'] as String] = row;
+        return Response(jsonEncode({...row, 'id': 'srv-${inserted.length}'}),
+            201,
+            headers: const {'content-type': 'application/json'},
+            request: request);
+      });
+      return SupabaseClient('https://example.supabase.co', 'public-anon-key',
+          httpClient: http);
+    }
+
+    await TransactionsBackfillService(
+      db: db,
+      getAuthUserId: () async => 'user-a',
+      getLocalDataOwnerUid: () async => 'user-a',
+      getClient: capturingClient,
+    ).run();
+
+    expect(
+        inserted['backfill_transaction_linked']!['metadata']
+            ['transfer_group_id'],
+        'grp-1');
+    expect(
+        (inserted['backfill_transaction_plain']!['metadata'] as Map)
+            .containsKey('transfer_group_id'),
+        isFalse);
+  });
+
+  test('a backfilled transfer pair pulls onto an empty device as debit on '
+      'From, credit on To, linked', () async {
+    Future<AppDatabase> withAccounts() async {
+      final db = await _openDb();
+      addTearDown(db.close);
+      await db.customStatement('DELETE FROM accounts;');
+      for (final id in ['acc-a', 'acc-b']) {
+        await db.customStatement(
+          "INSERT INTO accounts(id, name, currency, type, created_at, "
+          "updated_at, server_id) VALUES ('$id', '$id', 'SAR', 'bank', "
+          "'2026-01-01', '2026-01-01', 'srv-$id');",
+        );
+      }
+      await backfillNonPlanningMoneyV30(db);
+      return db;
+    }
+
+    // A manual pair: the text carries no direction signal, so only the
+    // stored direction can tell the legs apart.
+    final source = await withAccounts();
+    for (final (id, account, direction) in [
+      ('leg-out', 'acc-a', 'debit'),
+      ('leg-in', 'acc-b', 'credit'),
+    ]) {
+      await source.customStatement(
+        "INSERT INTO transactions(id, amount, currency, type, source, "
+        "direction, account_id, transfer_group_id, occurred_at, raw_message, "
+        "parse_confidence, status, created_at, updated_at) VALUES ('$id', "
+        "300, 'SAR', 'transfer', 'unknown', '$direction', '$account', "
+        "'grp-1', '2026-07-15T10:00:00.000Z', 'Manual transaction', 1.0, "
+        "'confirmed', '2026-07-15T10:00:00.000Z', '2026-07-15T10:00:00.000Z');",
+      );
+    }
+    await backfillNonPlanningMoneyV30(source);
+
+    final uploaded = <Map<String, dynamic>>[];
+    await TransactionsBackfillService(
+      db: source,
+      getAuthUserId: () async => 'user-a',
+      getLocalDataOwnerUid: () async => 'user-a',
+      getClient: () => SupabaseClient(
+        'https://example.supabase.co',
+        'public-anon-key',
+        httpClient: MockClient((request) async {
+          if (request.method == 'GET') {
+            return Response('null', 200,
+                headers: const {'content-type': 'application/json'},
+                request: request);
+          }
+          final body = jsonDecode(request.body);
+          final row = {
+            ...((body is List ? body.single : body) as Map)
+                .cast<String, dynamic>(),
+            'id': 'srv-${uploaded.length}',
+            'amount_text': '300.0',
+            'balance_after_text': null,
+            'foreign_amount_text': null,
+            'updated_at': '2026-07-15T10:00:0${uploaded.length}.000Z',
+          };
+          uploaded.add(row);
+          return Response(jsonEncode(row), 201,
+              headers: const {'content-type': 'application/json'},
+              request: request);
+        }),
+      ),
+    ).run();
+    expect(uploaded, hasLength(2));
+
+    final device = await withAccounts();
+    await LedgerSyncService(
+      db: device,
+      transactionRepository: DriftTransactionRepository(device),
+      dedupStore: DriftDedupStore(device),
+      isPullEnabled: () => true,
+      remoteSource: _Rows(uploaded),
+      getAuthUserId: () async => 'user-a',
+      mayEgress: () async => true,
+    ).pull();
+
+    final legs = [
+      for (final r in await device
+          .customSelect('SELECT account_id, direction, transfer_group_id '
+              'FROM transactions ORDER BY account_id;')
+          .get())
+        r.data,
+    ];
+    expect(legs, [
+      {
+        'account_id': 'acc-a',
+        'direction': 'debit',
+        'transfer_group_id': 'grp-1'
+      },
+      {
+        'account_id': 'acc-b',
+        'direction': 'credit',
+        'transfer_group_id': 'grp-1'
+      },
+    ]);
   });
 
   group('H-2 exact monetary reconciliation', () {

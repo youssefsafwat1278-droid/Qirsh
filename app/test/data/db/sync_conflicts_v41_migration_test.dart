@@ -29,7 +29,7 @@ void main() {
   test('a fresh database has the v41 shape', () async {
     final db = await open();
     addTearDown(db.close);
-    expect(await version(db), 44);
+    expect(await version(db), 45);
     for (final t in ['ledger_sync_outbox', 'planning_sync_outbox']) {
       expect(await cols(db, t), containsAll(['operation_id', 'base_revision']));
     }
@@ -64,7 +64,7 @@ void main() {
 
     for (var replay = 0; replay < 2; replay++) {
       await db.debugReinitialize();
-      expect(await version(db), 44);
+      expect(await version(db), 45);
       for (final t in ['ledger_sync_outbox', 'planning_sync_outbox']) {
         expect(await cols(db, t), containsAll(['operation_id', 'base_revision']));
       }

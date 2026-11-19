@@ -171,6 +171,6 @@ void main() {
         .readNullable<String>('c');
     expect(cur, isNull);
     // The non-planning backfill still ran (the account exists with a currency).
-    expect(await db.customSelect('PRAGMA user_version;').getSingle().then((r) => r.read<int>('user_version')), 44);
+    expect(await db.customSelect('PRAGMA user_version;').getSingle().then((r) => r.read<int>('user_version')), 45);
   });
 }

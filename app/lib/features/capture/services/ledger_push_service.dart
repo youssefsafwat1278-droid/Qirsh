@@ -935,6 +935,12 @@ class LedgerPushService implements LedgerPushAdapter {
       metadata['canonical_source'] = payload['canonical_source'];
       metadata['canonical_direction'] = payload['canonical_direction'];
     }
+    // The link between the two legs of a transfer between own accounts. The
+    // server stores metadata as written; an older build's write drops the key,
+    // which the pull treats as "no news", never as an unlink.
+    if (payload['transfer_group_id'] != null) {
+      metadata['transfer_group_id'] = payload['transfer_group_id'];
+    }
     // Category provenance has its own server column. The server trusts it only
     // from a write that carries a FRESH `cs_op` token in metadata: an older app
     // version replaces metadata without one (or leaves it untouched), so its

@@ -582,7 +582,12 @@ class LedgerSyncService implements LedgerPullAdapter {
       final mappedDirection = LedgerPayloadCodec.directionFromPull(
         canonicalDirection: _canonicalMeta(metadata, 'canonical_direction'),
         type: mappedType,
+        serverDirection: row['direction'] as String?,
       );
+      // A transfer row that says nothing about its direction keeps the local
+      // one: unknown is never better than a known debit/credit.
+      final keepLocalDirection = mappedType == TransactionTypeEntity.transfer &&
+          mappedDirection == TransactionDirectionEntity.unknown;
       // Category provenance travels in its own column. A server that predates
       // it sends no key: then a changed category could have been anyone's
       // choice, so it becomes 'unknown'; an unchanged one keeps its provenance.
@@ -626,7 +631,7 @@ class LedgerSyncService implements LedgerPullAdapter {
             note = ${sqlNullableString(row['description'] as String?)},
             type = ${sqlString(mappedType.name)},
             source = ${sqlString(mappedSource.name)},
-            direction = ${sqlString(mappedDirection.name)},
+            direction = ${keepLocalDirection ? 'direction' : sqlString(mappedDirection.name)},
             status = ${sqlString(mappedStatus)},
             ${occurredAt != null ? 'occurred_at = ${sqlString(dateTimeToSql(DateTime.tryParse(occurredAt)?.toUtc() ?? DateTime.now().toUtc()))},' : ''}
             category_id = ${sqlNullableString(localCategoryId)},
@@ -637,6 +642,8 @@ class LedgerSyncService implements LedgerPullAdapter {
             foreign_amount_minor = ${kMoneyCodec.sqlNullableMinorLiteral(pulledMoney.foreignMoney)},
             foreign_currency = ${sqlNullableString(row['foreign_currency'] as String?)},
             account_id = ${sqlNullableString(resolvedAccountId)},
+            -- A write from an older build drops the key: keep the local link.
+            transfer_group_id = COALESCE(${sqlNullableString(_canonicalMeta(metadata, 'transfer_group_id'))}, transfer_group_id),
             updated_at = ${sqlString(now)},
             server_id = ${sqlString(serverId)},
             synced_at = ${sqlString(now)},
@@ -937,6 +944,7 @@ class LedgerSyncService implements LedgerPullAdapter {
       direction: LedgerPayloadCodec.directionFromPull(
         canonicalDirection: _canonicalMeta(metadata, 'canonical_direction'),
         type: canonicalType,
+        serverDirection: row['direction'] as String?,
       ),
       accountId: accountId,
       // Who chose the category, from its own server column. Absent (an older
@@ -947,6 +955,7 @@ class LedgerSyncService implements LedgerPullAdapter {
       // Card linkage lives in metadata.last4 on the server (no dedicated
       // column); restore it so pulled transactions stay linked to their card.
       cardLast4: _last4FromMetadata(row['metadata']),
+      transferGroupId: _canonicalMeta(metadata, 'transfer_group_id'),
       balanceAfterMoney: pulledMoney.balanceAfterMoney,
       foreignMoney: pulledMoney.foreignMoney,
       foreignCurrency: row['foreign_currency'] as String?,

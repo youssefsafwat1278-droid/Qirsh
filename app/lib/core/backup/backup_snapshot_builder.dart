@@ -99,6 +99,9 @@ class BackupSnapshotBuilder {
       // so a restored hand-picked category is never treated as automatic.
       'category_source',
       'imported_from_file',
+      // Links the two legs of a transfer between the user's own accounts. An
+      // older backup has no such key: its rows restore unlinked (NULL).
+      'transfer_group_id',
       // MALI-026 (B8-3 §2): v4 exact minor units (decimal-int STRINGS on the
       // wire). Currency authority: `currency` (own) / `foreign_currency`.
       'amount_minor',

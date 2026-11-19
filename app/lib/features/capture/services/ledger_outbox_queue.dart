@@ -729,6 +729,9 @@ class LedgerOutboxQueue {
       'category_source': tx.categoryProvenance?.name,
       // Came in through a file import (sticky; separate from source).
       'imported_from_file': tx.importedFromFile,
+      // Links the two legs of a transfer between own accounts (server
+      // metadata; see LedgerPushService._toServerRow).
+      'transfer_group_id': tx.transferGroupId,
     };
 
     // Include source only for create operations.

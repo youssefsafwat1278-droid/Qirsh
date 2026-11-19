@@ -84,6 +84,7 @@ class TransactionEntity {
     this.syncStatus = SyncStatus.localOnly,
     this.categoryProvenance,
     this.importedFromFile = false,
+    this.transferGroupId,
   })  : assert((foreignMoney == null) == (foreignCurrency == null)),
         assert(foreignMoney == null ||
             foreignMoney.currency == foreignCurrency!.trim().toUpperCase());
@@ -130,6 +131,10 @@ class TransactionEntity {
   /// [categoryProvenance]; once set it is never cleared. Imported rows are
   /// excluded from bulk category updates unless the user opts in to them.
   final bool importedFromFile;
+
+  /// Shared by the two legs of a transfer between the user's own accounts
+  /// (debit on From, credit on To). Local only; null for every other row.
+  final String? transferGroupId;
 
   /// DISPLAY-ONLY compatibility getters. Never use these as a persistence,
   /// calculation, comparison, validation, dedup-input, or transport source.
@@ -179,6 +184,7 @@ class TransactionEntity {
     SyncStatus? syncStatus,
     CategoryProvenance? categoryProvenance,
     bool? importedFromFile,
+    String? transferGroupId,
   }) {
     return TransactionEntity(
       id: id ?? this.id,
@@ -218,6 +224,7 @@ class TransactionEntity {
       syncStatus: syncStatus ?? this.syncStatus,
       categoryProvenance: categoryProvenance ?? this.categoryProvenance,
       importedFromFile: importedFromFile ?? this.importedFromFile,
+      transferGroupId: transferGroupId ?? this.transferGroupId,
     );
   }
 }

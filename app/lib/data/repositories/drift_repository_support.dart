@@ -248,6 +248,9 @@ TransactionEntity transactionFromRow(QueryRow row) {
   return TransactionEntity(
     categoryProvenance: categoryProvenance,
     importedFromFile: importedFromFile,
+    transferGroupId: row.data.containsKey('transfer_group_id')
+        ? row.readNullable<String>('transfer_group_id')
+        : null,
     id: row.read<String>('id'),
     amountMoney: kMoneyCodec.readColumn(row, 'amount', currency),
     currency: currency,
