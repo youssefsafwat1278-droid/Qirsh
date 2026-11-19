@@ -192,7 +192,7 @@ test('C2 touches no closed contract and bumps no client schema', () => {
   // from the server migration under test. Assertion unchanged, value current.
   // Pinned to the current client schema. v44 (2026-11) is the device-only rule
   // deletion history for merge restore; this server feature still bumps nothing.
-  assert.match(read('app/lib/data/db/app_database.dart'), /const int _targetSchemaVersion = 44;/);
+  assert.match(read('app/lib/data/db/app_database.dart'), /const int _targetSchemaVersion = 45;/);
   assert.doesNotMatch(sql, /_targetSchemaVersion|drift/i);
 });
 
