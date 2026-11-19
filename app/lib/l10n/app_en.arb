@@ -2139,6 +2139,24 @@
   "mtSaveEdits": "Save changes",
   "mtAddTransaction": "Add transaction",
   "mtTxConfirmed": "Transaction confirmed",
+  "mtFromAccount": "From account",
+  "mtToAccount": "To account",
+  "mtSomeoneElse": "Someone else (outside my accounts)",
+  "mtSwapAccounts": "Swap accounts",
+  "mtTransferHint": "Transfers only move money between your accounts and do not affect monthly spending or income.",
+  "mtTransferTypeLocked": "To change the type, delete it and add it again.",
+  "txdDeletePairBody": "Both sides of this transfer will be removed, from both accounts. This cannot be undone.",
+  "txdTransferFromTo": "From {from} → To {to}",
+  "@txdTransferFromTo": {
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
   "cfEnterValidLast4": "Enter a valid last 4 digits",
   "cfDuplicateCard": "A card with the same digits already exists on this account",
   "cfSaveFailed": "The card could not be saved — please try again.",

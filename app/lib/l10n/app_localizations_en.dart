@@ -4295,6 +4295,35 @@ class AppL10nEn extends AppL10n {
   String get mtTxConfirmed => 'Transaction confirmed';
 
   @override
+  String get mtFromAccount => 'From account';
+
+  @override
+  String get mtToAccount => 'To account';
+
+  @override
+  String get mtSomeoneElse => 'Someone else (outside my accounts)';
+
+  @override
+  String get mtSwapAccounts => 'Swap accounts';
+
+  @override
+  String get mtTransferHint =>
+      'Transfers only move money between your accounts and do not affect monthly spending or income.';
+
+  @override
+  String get mtTransferTypeLocked =>
+      'To change the type, delete it and add it again.';
+
+  @override
+  String get txdDeletePairBody =>
+      'Both sides of this transfer will be removed, from both accounts. This cannot be undone.';
+
+  @override
+  String txdTransferFromTo(String from, String to) {
+    return 'From $from → To $to';
+  }
+
+  @override
   String get cfEnterValidLast4 => 'Enter a valid last 4 digits';
 
   @override

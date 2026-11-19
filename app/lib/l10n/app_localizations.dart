@@ -7183,6 +7183,54 @@ abstract class AppL10n {
   /// **'العملية مؤكدة'**
   String get mtTxConfirmed;
 
+  /// No description provided for @mtFromAccount.
+  ///
+  /// In ar, this message translates to:
+  /// **'من حساب'**
+  String get mtFromAccount;
+
+  /// No description provided for @mtToAccount.
+  ///
+  /// In ar, this message translates to:
+  /// **'إلى حساب'**
+  String get mtToAccount;
+
+  /// No description provided for @mtSomeoneElse.
+  ///
+  /// In ar, this message translates to:
+  /// **'شخص آخر (خارج حساباتي)'**
+  String get mtSomeoneElse;
+
+  /// No description provided for @mtSwapAccounts.
+  ///
+  /// In ar, this message translates to:
+  /// **'تبديل الحسابين'**
+  String get mtSwapAccounts;
+
+  /// No description provided for @mtTransferHint.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحويل ينقل المال بين حساباتك فقط، ولا يؤثر في مصروفات الشهر أو دخله.'**
+  String get mtTransferHint;
+
+  /// No description provided for @mtTransferTypeLocked.
+  ///
+  /// In ar, this message translates to:
+  /// **'لتغيير النوع، احذف التحويل ثم أضفه من جديد.'**
+  String get mtTransferTypeLocked;
+
+  /// No description provided for @txdDeletePairBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'سيُحذف طرفا التحويل من الحسابين معًا. لا يمكن التراجع عن ذلك.'**
+  String get txdDeletePairBody;
+
+  /// No description provided for @txdTransferFromTo.
+  ///
+  /// In ar, this message translates to:
+  /// **'من {from} إلى {to}'**
+  String txdTransferFromTo(String from, String to);
+
   /// No description provided for @cfEnterValidLast4.
   ///
   /// In ar, this message translates to:

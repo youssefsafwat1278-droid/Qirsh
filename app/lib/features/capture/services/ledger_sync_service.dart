@@ -637,6 +637,8 @@ class LedgerSyncService implements LedgerPullAdapter {
             foreign_amount_minor = ${kMoneyCodec.sqlNullableMinorLiteral(pulledMoney.foreignMoney)},
             foreign_currency = ${sqlNullableString(row['foreign_currency'] as String?)},
             account_id = ${sqlNullableString(resolvedAccountId)},
+            -- A write from an older build drops the key: keep the local link.
+            transfer_group_id = COALESCE(${sqlNullableString(_canonicalMeta(metadata, 'transfer_group_id'))}, transfer_group_id),
             updated_at = ${sqlString(now)},
             server_id = ${sqlString(serverId)},
             synced_at = ${sqlString(now)},
@@ -947,6 +949,7 @@ class LedgerSyncService implements LedgerPullAdapter {
       // Card linkage lives in metadata.last4 on the server (no dedicated
       // column); restore it so pulled transactions stay linked to their card.
       cardLast4: _last4FromMetadata(row['metadata']),
+      transferGroupId: _canonicalMeta(metadata, 'transfer_group_id'),
       balanceAfterMoney: pulledMoney.balanceAfterMoney,
       foreignMoney: pulledMoney.foreignMoney,
       foreignCurrency: row['foreign_currency'] as String?,

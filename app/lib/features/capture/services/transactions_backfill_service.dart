@@ -305,6 +305,8 @@ class TransactionsBackfillService {
           'metadata': {
             'transaction_source': local.read<String>('source'),
             if (cardLast4 != null) 'last4': cardLast4,
+            if (local.readNullable<String>('transfer_group_id') != null)
+              'transfer_group_id': local.read<String>('transfer_group_id'),
             if (local.readNullable<String>('transaction_time_from_sms') != null)
               'transaction_time_from_sms':
                   local.read<String>('transaction_time_from_sms'),

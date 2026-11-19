@@ -4334,6 +4334,35 @@ class AppL10nAr extends AppL10n {
   String get mtTxConfirmed => 'العملية مؤكدة';
 
   @override
+  String get mtFromAccount => 'من حساب';
+
+  @override
+  String get mtToAccount => 'إلى حساب';
+
+  @override
+  String get mtSomeoneElse => 'شخص آخر (خارج حساباتي)';
+
+  @override
+  String get mtSwapAccounts => 'تبديل الحسابين';
+
+  @override
+  String get mtTransferHint =>
+      'التحويل ينقل المال بين حساباتك فقط، ولا يؤثر في مصروفات الشهر أو دخله.';
+
+  @override
+  String get mtTransferTypeLocked =>
+      'لتغيير النوع، احذف التحويل ثم أضفه من جديد.';
+
+  @override
+  String get txdDeletePairBody =>
+      'سيُحذف طرفا التحويل من الحسابين معًا. لا يمكن التراجع عن ذلك.';
+
+  @override
+  String txdTransferFromTo(String from, String to) {
+    return 'من $from إلى $to';
+  }
+
+  @override
   String get cfEnterValidLast4 => 'أدخل آخر 4 أرقام صحيحة';
 
   @override

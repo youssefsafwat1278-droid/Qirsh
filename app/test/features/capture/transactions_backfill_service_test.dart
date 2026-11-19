@@ -280,6 +280,54 @@ void main() {
     expect(row.readNullable<String>('sync_status'), isNot('synced'));
   });
 
+  test('backfill metadata carries transfer_group_id only when the row has one',
+      () async {
+    final db = await _openDb();
+    addTearDown(db.close);
+    await db.customStatement("UPDATE accounts SET server_id = 'srv-acct';");
+    await _seedOneTransaction(db, id: 'linked');
+    await _seedOneTransaction(db, id: 'plain');
+    await db.customStatement("UPDATE transactions SET type = 'transfer', "
+        "direction = 'debit', transfer_group_id = 'grp-1' WHERE id = 'linked';");
+
+    final inserted = <String, Map<String, dynamic>>{};
+    SupabaseClient capturingClient() {
+      final http = MockClient((request) async {
+        if (request.method == 'GET') {
+          return Response('null', 200,
+              headers: const {'content-type': 'application/json'},
+              request: request);
+        }
+        final body = jsonDecode(request.body);
+        final row = ((body is List ? body.single : body) as Map)
+            .cast<String, dynamic>();
+        inserted[row['client_request_id'] as String] = row;
+        return Response(jsonEncode({...row, 'id': 'srv-${inserted.length}'}),
+            201,
+            headers: const {'content-type': 'application/json'},
+            request: request);
+      });
+      return SupabaseClient('https://example.supabase.co', 'public-anon-key',
+          httpClient: http);
+    }
+
+    await TransactionsBackfillService(
+      db: db,
+      getAuthUserId: () async => 'user-a',
+      getLocalDataOwnerUid: () async => 'user-a',
+      getClient: capturingClient,
+    ).run();
+
+    expect(
+        inserted['backfill_transaction_linked']!['metadata']
+            ['transfer_group_id'],
+        'grp-1');
+    expect(
+        (inserted['backfill_transaction_plain']!['metadata'] as Map)
+            .containsKey('transfer_group_id'),
+        isFalse);
+  });
+
   group('H-2 exact monetary reconciliation', () {
     Future<({TransactionBackfillReport report, Map<String, Object?> local})>
         run(
