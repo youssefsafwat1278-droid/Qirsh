@@ -1,6 +1,6 @@
 // Round 4 (requirements C and D): the request bodies the app sends, built by
-// the production code from the shared labelled set
-// (`supabase/functions/_shared/fixtures/sms_leak_labelled_cases.json`), and
+// the production code from the privacy acceptance set (round 5:
+// `tools/acceptance/privacy_cases.jsonl`, which includes the labelled set), and
 // the merchant key a redacted message yields. No tagged third-party name,
 // number or one-time code may be in any string field. Synthetic data only.
 import 'dart:convert';
@@ -18,7 +18,10 @@ import 'package:money_companion/domain/finance/money.dart';
 import 'package:money_companion/domain/services/learned_rule_precedence.dart';
 import 'package:money_companion/domain/services/shared_category_learning.dart';
 import 'package:money_companion/engine/ai/ai_parser_client.dart';
+import 'package:money_companion/engine/ai/bank_discovery_client.dart';
+import 'package:money_companion/domain/entities/bank_discovery_models.dart';
 import 'package:money_companion/engine/models/transaction_type.dart';
+import 'package:money_companion/engine/parser/bank_sender_filter.dart';
 import 'package:money_companion/engine/parser/parser_engine.dart';
 import 'package:money_companion/engine/privacy/sms_sanitizer.dart';
 import 'package:money_companion/features/capture/services/capture_backend_client.dart';
@@ -48,10 +51,17 @@ List<(String, String)> _strings(Object? value, [String path = '']) {
 }
 
 void main() {
-  final rows = (jsonDecode(File(
-              '../supabase/functions/_shared/fixtures/sms_leak_labelled_cases.json')
-          .readAsStringSync()) as List)
-      .cast<Map<String, dynamic>>();
+  // Round 5: the frozen privacy acceptance set, which carries every labelled
+  // row plus every text the reviews quote, with the server's expected text.
+  final expectedText = jsonDecode(
+      File('../tools/acceptance/privacy_acceptance_expected.json')
+          .readAsStringSync()) as Map<String, dynamic>;
+  final rows = [
+    for (final line
+        in File('../tools/acceptance/privacy_cases.jsonl').readAsLinesSync())
+      if (line.trim().isNotEmpty)
+        _asRow(jsonDecode(line) as Map<String, dynamic>, expectedText),
+  ];
   List<String> secretsOf(Map<String, dynamic> row) =>
       (row['secrets'] as List).cast<String>();
   final people = rows.where((r) => secretsOf(r).isNotEmpty).toList();
@@ -134,6 +144,88 @@ void main() {
         // The stub refuses; only the request matters here.
       }
       expect(body, isNotNull, reason: '${row['id']}: no request was built');
+      expect(body!['sanitized_sms'], row['expected']);
+      for (final (path, value) in _strings(body)) {
+        for (final s in secretsOf(row)) {
+          if (value.contains(s)) leaks.add('${row['id']}: "$s" in $path');
+        }
+      }
+    }
+    expect(leaks, isEmpty);
+  });
+
+  // R4P-09: the sender. The upload carries it as received; the text fields
+  // are redacted whatever the sender is. A sender that is a phone number is
+  // not a bank: the capture and discovery gates refuse it unless the text
+  // itself matches a known bank profile.
+  test('process-ios-sms upload with a brand, a short code and a phone sender',
+      () async {
+    const senders = ['AlExampleBank', '900', '0551234567', '+966 55 123 4567'];
+    final leaks = <String>[];
+    for (final sender in senders) {
+      for (final row in people.take(40)) {
+        Map<String, dynamic>? body;
+        final client = CaptureBackendClient(
+          supabaseUrl: 'https://example.supabase.co',
+          anonKey: 'anon',
+          httpClient: MockClient((request) async {
+            body = jsonDecode(request.body) as Map<String, dynamic>;
+            return Response('{}', 200);
+          }),
+        );
+        await client.processIosSms(
+          installId: 'install',
+          deviceSecret: 'secret',
+          payloadId: 'payload',
+          smsText: SmsSanitizer.sanitize(row['raw'] as String),
+          sender: sender,
+          receivedAt: DateTime.utc(2026, 11, 17, 10),
+          allowAi: true,
+          ownerUid: 'owner',
+          ownerGeneration: 1,
+        );
+        expect(body!['sender'], sender, reason: 'sent as received');
+        for (final (path, value) in _strings(body)) {
+          if (path == 'sender') continue;
+          for (final s in secretsOf(row)) {
+            if (value.contains(s)) leaks.add('${row['id']}: "$s" in $path');
+          }
+        }
+      }
+    }
+    expect(leaks, isEmpty);
+    expect(BankSenderFilter.isLikelyBank('AlExampleBank', text: 'x'), isTrue);
+    expect(BankSenderFilter.isLikelyBank('0551234567', text: 'x'), isFalse);
+    expect(BankSenderFilter.isLikelyBank('+966 55 123 4567', text: 'x'),
+        isFalse);
+  });
+
+  test('bank-discovery request: no tagged token in any string field',
+      () async {
+    final leaks = <String>[];
+    for (final row in rows) {
+      Map<String, dynamic>? body;
+      final client = GeminiBankDiscoveryClient(
+        edgeFunctionUrl:
+            'https://example.supabase.co/functions/v1/bank-discovery',
+        getAnonJwt: () async => 'jwt',
+        loadDeviceSecret: () async => 'secret',
+        httpClient: MockClient((request) async {
+          body = jsonDecode(request.body) as Map<String, dynamic>;
+          return Response('{}', 400);
+        }),
+      );
+      final raw = row['raw'] as String;
+      await client.detectBank(BankDiscoveryRequest(
+        senderId: 'AlExampleBank',
+        // What bank_discovery_service.dart sends.
+        sanitizedSms:
+            SmsSanitizer.sanitize(raw, detectedType: TransactionType.payment),
+        detectedCurrency: 'SAR',
+        localeHint: 'ar',
+        installId: 'install',
+      ));
+      expect(body, isNotNull, reason: '${row['id']}');
       expect(body!['sanitized_sms'], row['expected']);
       for (final (path, value) in _strings(body)) {
         for (final s in secretsOf(row)) {
@@ -253,8 +345,36 @@ void main() {
         }
       }
       expect(failures, isEmpty);
-      expect(matched, greaterThan(merchants.length ~/ 3),
-          reason: 'the device parser reads a merchant from most rows');
+      // Many acceptance merchant rows are not-completed shapes (AR-04..06)
+      // the device parser does not record at all.
+      expect(matched, greaterThan(merchants.length ~/ 4),
+          reason: 'the device parser reads a merchant from many rows');
+    });
+
+    // R4P-03 under the round-5 decision: payment wording with no purchase,
+    // card or transfer cue is unclear, so the payee is masked, even a one-word
+    // brand. The saved rule still matches on the device, which reads the raw
+    // message; in purchase or card-payment wording the merchant survives and
+    // the rule matches from the redacted text as well.
+    test('payment wording masks the payee; purchase wording keeps its rule',
+        () async {
+      const unclear = 'Payment of SAR 85.00 to Careem';
+      expect(SmsSanitizer.sanitize(unclear), 'Payment of SAR 85.00 to [NAME]');
+      await rules.confirmMerchantCategory(
+          rawMerchant: 'Careem', categoryKey: 'transport', isUserConfirmed: true);
+      expect((await learnedRuleCategoryFor(rules, 'Careem'))?.categoryKey,
+          'transport');
+      const carded = 'Payment of SAR 85.00 to Careem with card *4521';
+      expect(SmsSanitizer.sanitize(carded), carded);
+      expect(SmsSanitizer.masksPartOf(carded, 'Careem'), isFalse);
+      final fromRedacted = merchantOf(SmsSanitizer.sanitize(carded));
+      if (fromRedacted != null) {
+        final hit = await learnedRuleCategoryFor(rules, fromRedacted);
+        expect(hit?.categoryKey, 'transport');
+      }
+      const person = 'Payment of SAR 85.00 to Omar Farooq';
+      expect(SmsSanitizer.sanitize(person), 'Payment of SAR 85.00 to [NAME]');
+      expect(SmsSanitizer.masksPartOf(person, 'Omar Farooq'), isTrue);
     });
 
     test('no person name is a merchant of the redacted text', () {
@@ -273,3 +393,15 @@ void main() {
     });
   });
 }
+
+/// An acceptance case in the shape of a labelled row.
+Map<String, dynamic> _asRow(
+        Map<String, dynamic> c, Map<String, dynamic> expected) =>
+    {
+      'id': c['id'],
+      'raw': c['text'],
+      'expected': expected[c['id']],
+      'secrets': c['must_not'],
+      'mustKeep': c['must_keep'],
+      if (c['merchant'] != null) 'merchant': c['merchant'],
+    };

@@ -127,26 +127,25 @@ void main() {
       expect(find.text(l10n.lrRestoreExplanation), findsOneWidget);
       expect(find.text(_english), findsOneWidget);
       expect(find.text(_arabic), findsOneWidget);
-      expect(await tester.runAsync(() => rules.getUserConfirmedRules()),
-          isEmpty,
+      expect(
+          await tester.runAsync(() => rules.getUserConfirmedRules()), isEmpty,
           reason: 'an undecided rule is not a rule');
 
       // Add the first, leave the second out.
-      final englishRow = find.byKey(ValueKey(
-          'restore-rule-${AppDatabase.normalizeMerchant(_english)}'));
+      final englishRow = find.byKey(
+          ValueKey('restore-rule-${AppDatabase.normalizeMerchant(_english)}'));
       await tap(
           tester,
           find.descendant(
               of: englishRow, matching: find.text(l10n.lrRestoreAdd)));
       expect(englishRow, findsNothing);
       expect(
-          await tester
-              .runAsync(() => rules.userConfirmedCategoryFor(_english)),
+          await tester.runAsync(() => rules.userConfirmedCategoryFor(_english)),
           'restaurants');
       expect(await tester.runAsync(() => MerchantRuleRestore(db).pending()),
           hasLength(1));
-      expect(find.byKey(const ValueKey('learned-rule-$_english')),
-          findsOneWidget,
+      expect(
+          find.byKey(const ValueKey('learned-rule-$_english')), findsOneWidget,
           reason: 'the added rule is now in the ordinary list');
 
       final arabicRow = find.byKey(
@@ -163,7 +162,8 @@ void main() {
           isEmpty);
       expect(
           await tester.runAsync(() => db
-              .customSelect('SELECT merchant_key FROM merchant_rule_tombstones;')
+              .customSelect(
+                  'SELECT merchant_key FROM merchant_rule_tombstones;')
               .get()),
           hasLength(1),
           reason: 'leaving a rule out is recorded');
@@ -177,6 +177,25 @@ void main() {
       expect(find.text(l10n.lrRestoreExplanation), findsNothing);
       expect(await tester.runAsync(() => rules.getUserConfirmedRules()),
           hasLength(2));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets(
+        '"Leave all out" does nothing until it is confirmed; cancelling keeps '
+        'every rule waiting ($language)', (tester) async {
+      final l10n = await open(tester, language);
+      await tap(tester, find.byKey(const ValueKey('restore-rules-leave-all')));
+      expect(find.text(l10n.lrRestoreLeaveAllTitle(2)), findsOneWidget);
+      expect(await tester.runAsync(() => MerchantRuleRestore(db).pending()),
+          hasLength(2),
+          reason: 'one tap removes nothing');
+      await tap(tester, find.text(l10n.rpCancel));
+      expect(await tester.runAsync(() => MerchantRuleRestore(db).pending()),
+          hasLength(2));
+      expect(
+          await tester.runAsync(() =>
+              db.customSelect('SELECT 1 FROM merchant_rule_tombstones;').get()),
+          isEmpty);
       expect(tester.takeException(), isNull);
     });
 
@@ -196,10 +215,17 @@ void main() {
             find.byType(Scrollable).first, const Offset(0, -120));
         expect(tester.takeException(), isNull, reason: 'layout at "$text"');
       }
-      await tap(tester, find.text(l10n.lrRestoreLeaveAll));
-      expect(find.text(l10n.lrRestoreExplanation), findsNothing);
-      expect(await tester.runAsync(() => rules.getUserConfirmedRules()),
+      // "Leave all out" asks first (review R4R-03), also at this size.
+      await tap(tester, find.byKey(const ValueKey('restore-rules-leave-all')));
+      expect(find.text(l10n.lrRestoreLeaveAllTitle(2)), findsOneWidget);
+      expect(find.text(l10n.lrRestoreLeaveAllBody), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tap(tester,
+          find.byKey(const ValueKey('restore-rules-leave-all-confirm')));
+      expect(await tester.runAsync(() => MerchantRuleRestore(db).pending()),
           isEmpty);
+      expect(
+          await tester.runAsync(() => rules.getUserConfirmedRules()), isEmpty);
       expect(tester.takeException(), isNull);
     });
   }

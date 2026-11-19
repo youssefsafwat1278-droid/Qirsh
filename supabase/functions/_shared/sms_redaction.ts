@@ -62,14 +62,25 @@ const OTP_CURRENCY =
 // A purchase's approval, reference or promo code is not a one-time code.
 const OTP_NOT_A_CODE =
   'approval|auth|authorization|authorisation|reference|transaction|receipt|pickup|promo|discount|coupon|voucher|order|branch|swift|bank|area|postal';
-const OTP_CUE = `(?:otp|one[- ]?time[ \\t]+(?:password|passcode|pin|code)` +
+const OTP_CUE = `(?:otp|one[- ]?time[ \\t]+(?:password|passcode|pin|code)|pin|tac|mtoken|token|secure[ \\t]+code` +
+  // "Your authorization code is …" is a verification code; "Authorization code
+  // 771234" after a purchase is the approval.
+  `|(?<=your[ \\t])(?:authorization|authorisation|auth|approval)[ \\t]+code` +
   `|(?:verification|security|activation|confirmation|authentication|access|login|secret)[ \\t]+code` +
   `|passcode|password|(?<!(?:${OTP_NOT_A_CODE})[ \\t])code|كلمة[ \\t]+المرور(?:[ \\t]+لمرة[ \\t]+واحدة)?|كلمة[ \\t]+السر` +
   `|(?:رمز|كود)[ \\t]+(?:التحقق|الدخول|التفعيل|الأمان|الامان|التأكيد|التاكيد)|الرمز[ \\t]+السري|رمز[ \\t]+سري|الرقم[ \\t]+السري` +
   `|رمزك|الرمز|رمز|كودك|الكود|كود)`;
 const OTP_NUMBER = `(?<![0-9\u0660-\u0669\u06F0-\u06F9*•#]|${D}[.,\u066B\u066C/:\\-]|(?<![\\p{L}\\p{M}])(?:${OTP_CURRENCY})[ \\t]{0,3}` +
   `|(?<![\\p{L}\\p{M}])(?:card|account|acct|ending|بطاقة|البطاقة|حساب|الحساب)[ \\t]{1,3})` +
-  `${D}{4,8}(?!${D}|[.,\u066B\u066C/:\\-]${D}|[ \\t]*(?:${OTP_CURRENCY})(?![\\p{L}\\p{M}]))`;
+  // Four to eight digits, also written "482-913" or "4 8 2 9 1 3". A currency
+  // after it makes it an amount, unless another figure follows the currency
+  // ("code is 482913 SAR 250.00").
+  `(?:${D}{4,8}|${D}{3}[\\- ]${D}{3}|${D}(?:[ ]${D}){3,7})` +
+  `(?!${D}|[.,\u066B\u066C/:\\-]${D}|[ \\t]*(?:${OTP_CURRENCY})(?![\\p{L}\\p{M}])(?![ \\t]*${D}))`;
+/// Words that may sit between the cue and the code («كلمة المرور المؤقتة 4829»,
+/// «الرقم السري لمرة واحدة 482913», «الرمز التالي 482913»).
+const OTP_QUALIFIER =
+  `(?:[ \\t]+(?:المؤقتة|المؤقت|مؤقتة|مؤقت|لمرة[ \\t]+واحدة|التالي|التالية|الخاص[ \\t]+بك|الخاصة[ \\t]+بك|الجديد|الجديدة|below|following)(?![\\p{L}\\p{M}]))*`;
 /// Each rule keeps its group 1 and masks the code after it. `cue` rules carry
 /// the cue word in group 2; a `weak` rule has no verification wording at all.
 const OTP_RULES: [RegExp, 'cue' | 'weak' | 'strong'][] = [
@@ -77,7 +88,24 @@ const OTP_RULES: [RegExp, 'cue' | 'weak' | 'strong'][] = [
   // share: "… 482913. Do not share it."
   [
     new RegExp(
-      `()${OTP_NUMBER}(?=[ \\t]*[.,،;]?[ \\t]*(?:(?:please|الرجاء|يرجى)[ \\t]+)?(?:do[ \\t]+not[ \\t]+share|don['’]?t[ \\t]+share|never[ \\t]+share|لا[ \\t]+تشارك|عدم[ \\t]+مشارك|لا[ \\t]+تفصح))`,
+      `()${OTP_NUMBER}(?=[ \\t]*[.,،;]?\\s*(?:(?:please|الرجاء|يرجى)[ \\t]+)?(?:do[ \\t]+not[ \\t]+share|don['’]?t[ \\t]+share|never[ \\t]+share|لا[ \\t]+تشارك|عدم[ \\t]+مشارك|لا[ \\t]+تفصح))`,
+      'giu',
+    ),
+    'strong',
+  ],
+  // A code alone on its line, the next line saying what to use it for:
+  // "482913\nUse this to log in …".
+  [
+    new RegExp(
+      `((?:^|(?<=\n))[ \t]*)${OTP_NUMBER}(?=[ \t]*[.:]?[ \t]*\n[ \t]*(?:use|enter|استخدم|أدخل|ادخل)(?![\p{L}\p{M}]))`,
+      'giu',
+    ),
+    'strong',
+  ],
+  // "Never share this: 482913", «لا تشارك هذا الرمز: 482913».
+  [
+    new RegExp(
+      `((?<![\\p{L}\\p{M}])(?:never[ \\t]+share|do[ \\t]+not[ \\t]+share|don['’]?t[ \\t]+share|لا[ \\t]+تشارك[\\p{L}\\p{M}]*)(?:[ \\t]+(?:this|it|the[ \\t]+code|هذا[ \\t]+الرمز|الرمز))?[ \\t]*[:\\-]?[ \\t]*)${OTP_NUMBER}`,
       'giu',
     ),
     'strong',
@@ -85,7 +113,7 @@ const OTP_RULES: [RegExp, 'cue' | 'weak' | 'strong'][] = [
   // The cue, an optional "is" / «هو» / "no.", then the code.
   [
     new RegExp(
-      `((?<![\\p{L}\\p{M}])(${OTP_CUE})(?![\\p{L}\\p{M}])(?:[ \\t]*(?:is|are|was|no\\.?|number|هو|هي|رقم)(?![\\p{L}\\p{M}]))?[ \\t]*[:#=\\-]?[ \\t]*)${OTP_NUMBER}`,
+      `((?<![\\p{L}\\p{M}])(${OTP_CUE})(?![\\p{L}\\p{M}])${OTP_QUALIFIER}(?:[ \\t]*(?:is|are|was|no\\.?|number|هو|هي|رقم)(?![\\p{L}\\p{M}]))?[ \\t]*[:#=\\-]?[ \\t]*)${OTP_NUMBER}`,
       'giu',
     ),
     'cue',
@@ -150,6 +178,16 @@ const EGYPT_PHONE_PATTERN = new RegExp(
   'g',
 );
 const INTL_PHONE_PATTERN = new RegExp(`\\+${D}{7,15}${NB_END}`, 'g');
+/// R4P-07: the same numbers written in groups ("055 123 4567", "055-123-4567",
+/// "+966 55 123 4567"). Run before the unspaced rules.
+const SPACED_PHONE_PATTERNS = [
+  new RegExp(`${NB}[0\u0660\u06F0][5\u0665\u06F5]${D}[ \\-]${D}{3}[ \\-]${D}{4}${NB_END}`, 'g'),
+  new RegExp(
+    `${NB}[0\u0660\u06F0][1\u0661\u06F1][0125\u0660\u0661\u0662\u0665\u06F0\u06F1\u06F2\u06F5][ \\-]${D}{4}[ \\-]${D}{4}${NB_END}`,
+    'g',
+  ),
+  new RegExp(`\\+${D}{1,3}(?:[ \\-]${D}{1,4}){2,4}${NB_END}`, 'g'),
+];
 const IBAN_PATTERN = new RegExp(IBAN_DETECT_PATTERN.source, 'g');
 const ACCOUNT_PATTERN = new RegExp(`${NB}${D}{10,20}${NB_END}`, 'g');
 
@@ -214,6 +252,9 @@ export function redactPii(text: string): string {
       .replace(EMAIL_PATTERN, '[EMAIL]')
       .replace(SPACED_IBAN_PATTERN, '[IBAN]')
       .replace(CARD_PATTERN, '[CARD]')
+      .replace(SPACED_PHONE_PATTERNS[0], '[PHONE]')
+      .replace(SPACED_PHONE_PATTERNS[1], '[PHONE]')
+      .replace(SPACED_PHONE_PATTERNS[2], '[PHONE]')
       .replace(SAUDI_PHONE_PATTERN, '[PHONE]')
       .replace(EGYPT_PHONE_PATTERN, '[PHONE]')
       .replace(INTL_PHONE_PATTERN, '[PHONE]')
@@ -562,17 +603,59 @@ const NAME_STOPWORDS = [
   'الادخار',
   'ادخار',
   'الجاري',
-  // Words that open a label, a notice or a sentence without being a name.
-  'payment', 'payments', 'purchase', 'refund', 'bill', 'pos', 'attn', 'attention', 'cardholder', 'service', 'care',
-  'support', 'we', 'it', 'he', 'she', 'they', 'this', 'that', 'money', 'sum', 'total', 'fee', 'fees', 'charge',
-  'charges', 'loan', 'installment', 'instalment', 'invoice', 'tax', 'vat', 'cashback', 'order', 'standing',
-  'incoming', 'outgoing', 'local', 'international', 'domestic', 'instant', 'internal', 'external', 'own', 'between',
-  'confirmation', 'alert', 'notification', 'notice', 'details', 'update', 'status', 'advice', 'merchant', 'id',
-  'now', 'here', 'then',
-  'الاسم', 'اسم', 'عناية', 'شراء', 'سداد', 'عملية', 'العملية', 'التاجر', 'المتجر', 'الكريم', 'العزيز', 'خدمة', 'ناجح',
-  'ناجحة', 'داخلي', 'داخلية', 'دولي', 'دولية', 'محلي', 'محلية', 'فوري', 'فورية', 'سريعة', 'بنكي', 'بنكية', 'مالية',
-  'جديد', 'جديدة', 'صادر', 'وارد', 'إشعار', 'اشعار', 'تنبيه', 'تأكيد', 'تفاصيل', 'لك', 'إليك', 'اليك', 'حامل', 'صاحب',
-  'بين',
+  // Words that open a label or a sentence without being a name.
+  'payment', 'payments', 'purchase', 'refund', 'bill', 'pos', 'attn', 'attention', 'cardholder', 'merchant', 'we', 'it',
+  'he', 'she', 'they', 'this', 'that', 'now', 'here', 'then',
+  'الاسم', 'اسم', 'عناية', 'شراء', 'سداد', 'عملية', 'العملية', 'الجهة', 'المفوتر', 'المستفيد',
+  'مستفيد', 'المرسل', 'المستلم', 'المحول', 'ناجح', 'ناجحة', 'داخلي', 'داخلية', 'دولي', 'دولية', 'محلي', 'محلية', 'فوري',
+  'فورية', 'سريعة', 'بنكي', 'بنكية', 'مالية', 'جديد', 'جديدة', 'صادر', 'وارد', 'إشعار', 'اشعار', 'تنبيه', 'تأكيد',
+  'تفاصيل', 'لك', 'إليك', 'اليك', 'حامل', 'صاحب', 'بين',
+  // AR-02: the first word of every not-completed, pending, future, negation
+  // and hypothetical cue of the parser (`parser_rules.json`: declinedKeywords,
+  // stateCueAwaitedWords, stateCue*Markers, messageMeaning.*), so a name never
+  // runs into what the message says happened. `sms_redaction_cue_test.ts`
+  // fails when the parser gains a cue this list does not stop at.
+  'are', 'attempted', 'authorization', 'being', 'blocked', 'bounced', 'call', 'can', 'cannot', 'contact', 'could',
+  'denied', 'did', 'didn', 'exceeded', 'exceeds', 'expired', 'going', 'hold', 'may', 'might', 'minimum', 'pre',
+  'preauthorisation', 'preauthorization', 'refused', 'remind', 'reminder', 'report', 'should', 'stopped', 'timed',
+  'unable', 'unauthorised', 'unauthorized', 'unless', 'void', 'voided', 'withdrawal',
+  'إبلاغ', 'اتصل', 'اعتراض', 'المتوقع', 'انتهت', 'بانتظار', 'تجاوز', 'تجاوزت', 'تخطي', 'تذكير', 'تستحق', 'تعذر', 'تعذرت',
+  'تواصل', 'رفضت', 'ستتلقى', 'ستحصل', 'ستستلم', 'سيصلك', 'طلب', 'عدم', 'غير', 'فاشلة', 'قد', 'لا', 'لعدم', 'لن', 'لو',
+  'متوقع', 'محاولة', 'ملغاة', 'ملغية', 'موعد', 'موقوفة', 'يستحق', 'يمكن', 'يمكنك', 'انتظار', 'التأكيد', 'الموافقة',
+  'المعالجة', 'التنفيذ', 'الانتظار',
+  // … and every other word of those cue phrases.
+  'approval', 'attempt', 'authorised', 'authorized', 'confirmation', "didn't", 'didn’t', "couldn't", 'couldn’t',
+  "wasn't", 'wasn’t', "can't", 'can’t', "won't", 'won’t', "hasn't", 'hasn’t', "isn't", 'isn’t', "doesn't", 'doesn’t',
+  'dispensed', 'out', 'pre-auth', 'pre-authorisation', 'pre-authorization', 'process', 'processing', 'review',
+  'reviewed', 'run',
+  'أن', 'إتمام', 'إلغاء', 'إيقاف', 'استرداد', 'الإلغاء', 'الاسترداد', 'الحد', 'الخصم', 'الدفع', 'الرفض', 'السحب',
+  'السداد', 'بنا', 'تتم', 'تعليق', 'تكتمل', 'تنجح', 'تنفذ', 'تنفيذ', 'حال', 'حجز', 'حد', 'خصم', 'صرف', 'صلاحية', 'كاف',
+  'كافي', 'كفاية', 'محجوز', 'مصرح', 'معالجة', 'معنا', 'مقبول', 'مقبولة', 'يتم', 'ينجح',
+  // Verbs and auxiliaries: what follows "to" / "by" / a name is an action.
+  'were', 'be', 'does', 'do', 'done', 'must', 'went', 'go', 'goes', 'gone', 'through', 'got', 'get', 'gets', 'confirm',
+  'confirmed', 'verify', 'verified', 'complete', 'proceed', 'activate', 'avoid', 'view', 'check', 'receive', 'pay',
+  'use', 'visit', 'click', 'reply', 'send', 'make', 'see', 'authorise', 'authorize', 'approve', 'cancel', 'stop', 'try',
+  'tried', 'arrive', 'arrived', 'reach', 'reached', 'remain', 'remains', 'returned', 'refunded', 'posted', 'booked',
+  'placed', 'issued', 'released', 'held', 'settle', 'settled',
+  // AR-07: date and time words survive.
+  'yesterday', 'tonight', 'morning', 'evening', 'afternoon', 'noon', 'midnight', 'earlier', 'later', 'ago', 'recently',
+  'currently', 'already', 'just', 'still', 'again', 'soon', 'immediately', 'instantly', 'last', 'next', 'week', 'month',
+  'year', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
+  'أمس', 'امس', 'البارحة', 'الآن', 'الان', 'صباحا', 'صباحاً', 'مساء', 'مساءً', 'ظهرا', 'ظهراً', 'ليلا', 'ليلاً', 'الماضي',
+  'الماضية', 'القادم', 'القادمة', 'المقبل', 'المقبلة', 'هذا', 'هذه', 'الشهر', 'الأسبوع', 'الاسبوع', 'السنة', 'العام',
+  'لاحقا', 'لاحقاً', 'سابقا', 'سابقاً', 'حاليا', 'حالياً', 'مؤخرا', 'مؤخراً', 'الأحد', 'الاحد', 'الاثنين', 'الإثنين',
+  'الثلاثاء', 'الأربعاء', 'الاربعاء', 'الخميس', 'الجمعة', 'السبت',
+];
+
+/// More words that are not a name, used only where there is no cue at all or
+/// after a field label ("Customer service", "Transfer fee SAR 5"). They are
+/// kept out of the main list because they are also (parts of) names after a
+/// real cue: "from Mark Order" (R4P-04).
+const LOOSE_STOPWORDS = [
+  'service', 'care', 'support', 'money', 'sum', 'total', 'fee', 'fees', 'charge', 'charges', 'loan', 'installment',
+  'instalment', 'invoice', 'tax', 'vat', 'cashback', 'order', 'standing', 'incoming', 'outgoing', 'local',
+  'international', 'domestic', 'instant', 'internal', 'external', 'own', 'between', 'alert',
+  'notification', 'notice', 'details', 'update', 'status', 'advice', 'id', 'خدمة',
 ];
 
 /// Words the beneficiary rule may consume with the name: the account or card
@@ -618,11 +701,27 @@ const BENEFICIARY_OBJECT_WORDS = new Set([
 // initial or title keeps its period ("A. Ali", "Mr. Ali") so the name after
 // it is still masked.
 const SENTENCE_END = `(?:(?<!(?<![\\p{L}\\p{M}])(?:\\p{L}|mrs|mr|ms|dr))\\.(?=\\s|$)|[\\n!?؟;؛])`;
-// A one-letter stopword before ". Name" is an initial («A. Ali Hassan»).
-const NAME_TOKEN = `(?!(?:${NAME_STOPWORDS.join('|')})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]|(?<=(?<![\\p{L}\\p{M}])\\p{L})\\.[ \\t]+\\p{L}))` +
+// R4P-01: after an Arabic name particle the next word is part of the name
+// whatever it is («عبد العزيز», «أبو بكر», «بن سعود», «آل سعود»).
+const AFTER_PARTICLE = `(?<=(?<![\\p{L}\\p{M}])(?:عبد|أبو|ابو|أبي|ابي|بن|ابن|بنت|آل|أم|ام)[ \\t]{1,3})`;
+/// The veto of a name token: a stop word (with an optional Arabic «و» / «ف»
+/// prefix), as a whole token. Not a veto: after a name particle; a one-letter
+/// stop word before ". Name" («A. Ali Hassan») or before another name word
+/// (R4P-05, a middle initial without a dot: "NOURA A ALHARBI").
+const stopAt = (words: string[]) => {
+  const stop = words.join('|');
+  return `(?!(?!${AFTER_PARTICLE})(?:[وف](?=[\\u0621-\\u064A]{2}))?(?:${stop})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]` +
+    `|(?<=(?<![\\p{L}\\p{M}])\\p{L})\\.[ \\t]+\\p{L}` +
+    `|(?<=(?<![\\p{L}\\p{M}])\\p{L})[ \\t]+(?!(?:${stop})(?![\\p{L}\\p{M}]))\\p{L}))`;
+};
+const nameToken = (words: string[]) =>
+  stopAt(words) +
   // A lone star before digits is a masked number, not a masked name.
   `(?!\\*+${D})[\\p{L}\\p{M}*](?:[\\p{L}\\p{M}*'’\\-]|(?!${SENTENCE_END})\\.)*(?![\\p{L}\\p{M}*'’\\-]|${D})`;
+const NAME_TOKEN = nameToken(NAME_STOPWORDS);
 const NAME = `${NAME_TOKEN}(?:[ \\t]+${NAME_TOKEN}){0,5}`;
+const LOOSE_NAME_TOKEN = nameToken([...NAME_STOPWORDS, ...LOOSE_STOPWORDS]);
+const LOOSE_NAME = `${LOOSE_NAME_TOKEN}(?:[ \\t]+${LOOSE_NAME_TOKEN}){0,5}`;
 
 // The beneficiary after «إلى»/«الى»/"To:": the letter tokens of the name (and
 // the account or card object before it), never a tense, status, amount,
@@ -630,7 +729,7 @@ const NAME = `${NAME_TOKEN}(?:[ \\t]+${NAME_TOKEN}){0,5}`;
 // «إلى حساب 7788 سينفذ غدا» keeps «سينفذ غدا»). An initial or title keeps its
 // period so the rest of the name is still masked.
 const BENEFICIARY_STOP = NAME_STOPWORDS.filter((w) => !BENEFICIARY_OBJECT_WORDS.has(w));
-const BENEFICIARY_TOKEN = `(?!(?:${BENEFICIARY_STOP.join('|')})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]))` +
+const BENEFICIARY_TOKEN = `(?!(?!${AFTER_PARTICLE})(?:[وف](?=[\\u0621-\\u064A]{2}))?(?:${BENEFICIARY_STOP.join('|')})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]))` +
   `[\\p{L}\\p{M}][\\p{L}\\p{M}*'’\\-]*(?:\\.[\\p{L}\\p{M}][\\p{L}\\p{M}*'’\\-]*)*` +
   `(?:(?<=(?<![\\p{L}\\p{M}])(?:\\p{L}|mrs|mr|ms|dr))\\.)?`;
 // A name already masked as [NAME] is part of the run, so the beneficiary
@@ -646,8 +745,8 @@ const CURRENCY_AFTER = [
 ];
 const BENEFICIARY_ID = `(?:\\[(?:ACCOUNT|IBAN|CARD|PHONE|REF)\\]|[A-Z]{2}${D}{2}(?:[ ]?[0-9A-Z]{4})*(?:[ ]?[0-9A-Z]{1,3})?|[*xX•#]*${D}+(?:-${D}+)*)` +
   `(?![0-9A-Za-z]|[.,\u066B\u066C/:]${D}|${D}|[ \\t]*(?:${CURRENCY_AFTER.join('|')})(?![\\p{L}\\p{M}])(?![ \\t]*${D}))`;
-const BENEFICIARY_PART = `(?:${BENEFICIARY_ID}|${BENEFICIARY_TOKEN})`;
-const BENEFICIARY_RUN = `(?:\\[NAME\\]|${BENEFICIARY_PART})(?:[ \\t]+${BENEFICIARY_PART})*`;
+const BENEFICIARY_PART = `(?:\\[NAME\\]|${BENEFICIARY_ID}|${BENEFICIARY_TOKEN})`;
+const BENEFICIARY_RUN = `${BENEFICIARY_PART}(?:[ \\t]+${BENEFICIARY_PART})*`;
 const BENEFICIARY_AR = new RegExp(`(إلى|الى)\\s*:?\\s*${BENEFICIARY_RUN}`, 'giu');
 const BENEFICIARY_EN = new RegExp(`\\bTo(?:[ \\t]+name)?\\s*:\\s*${BENEFICIARY_RUN}`, 'giu');
 
@@ -686,12 +785,14 @@ const NUMBER_IN_BENEFICIARY_SENTENCE = new RegExp(
   'giu',
 );
 const CUE_SEP = `(?:[ \\t]*:[ \\t]*|[ \\t]+)`;
+// After a field label a dash separates too ("Recipient - Dana Yousef - …").
+const LABEL_SEP = `(?:[ \\t]*[:\\-][ \\t]*|[ \\t]+)`;
 
 /// Salutations — a name follows by definition, in any kind of message.
 /// English greetings only at the start of the text or of a sentence, so a
 /// merchant such as "DEAR DIARY CAFE" after "Purchase at" is not one.
 const SALUTATION_PATTERN = new RegExp(
-  `((?:(?<![\\p{L}\\p{M}])(?:عزيزي|عزيزتي|السيدة|السيد|الأستاذة|الاستاذة|الأستاذ|الاستاذ)` +
+  `((?:(?<![\\p{L}\\p{M}])(?:عزيزي|عزيزتي|السيدة|السيد|الأستاذة|الاستاذة|الأستاذ|الاستاذ|(?:عميلنا|عميلتنا)[ \\t]+(?:العزيز|العزيزة|الكريم|الكريمة)[ \\t]*[\\/:\\-])` +
     `|(?:^|(?<=[\\n.!?؟؛;:،,]))[ \\t]*(?:dear|hi|hello))(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
   'giu',
 );
@@ -704,7 +805,7 @@ const SALUTATION_PATTERN = new RegExp(
 const COUNTERPARTY_PATTERN = new RegExp(
   `((?<![\\p{L}\\p{M}])(?:from|to(?:[ \\t]+name)?|by|beneficiary(?:[ \\t]+name)?|sender(?:[ \\t]+name)?|remitter(?:[ \\t]+name)?` +
     `|recipient(?:[ \\t]+name)?|payer(?:[ \\t]+name)?|on[ \\t]+behalf[ \\t]+of|in[ \\t]+favou?r[ \\t]+of|mrs|mr|ms|dr` +
-    `|من[ \\t]+قبل|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي)` +
+    `|من[ \\t]+قبل|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي|لـ)` +
     `\\.?(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
   'giu',
 );
@@ -714,15 +815,15 @@ const COUNTERPARTY_PATTERN = new RegExp(
 const PERSON_CUE_PATTERN = new RegExp(
   `((?<![\\p{L}\\p{M}])(?:beneficiary(?:[ \\t]+name)?|benef|payee(?:[ \\t]+name)?|sender(?:[ \\t]+name)?` +
     `|remitter(?:[ \\t]+name)?|recipient(?:[ \\t]+name)?|payer(?:[ \\t]+name)?|on[ \\t]+behalf[ \\t]+of|in[ \\t]+favou?r[ \\t]+of` +
-    `|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم)` +
-    `\\.?(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
+    `|payable[ \\t]+to|(?:for[ \\t]+)?employee|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول` +
+    `|لصالح|باسم|للسيدة|للسيد)\\.?(?![\\p{L}\\p{M}])${LABEL_SEP})(${NAME})`,
   'giu',
 );
 
 /// PRIV-1: a "From:" field label and "paid to" — a person unless the message
 /// reads as a purchase, refund or bill (then a merchant).
 const LABEL_CUE_PATTERN = new RegExp(
-  `((?<![\\p{L}\\p{M}])(?:from[ \\t]*:|paid[ \\t]+to(?![\\p{L}\\p{M}]))[ \\t]*)(${NAME})`,
+  `((?<![\\p{L}\\p{M}])(?:from[ \\t]*:|من[ \\t]*:|request(?:ed)?[ \\t]+from(?![\\p{L}\\p{M}])|paid[ \\t]+to(?![\\p{L}\\p{M}]))[ \\t]*)(${NAME})`,
   'giu',
 );
 
@@ -739,15 +840,30 @@ const TO_HEADING_PATTERN = new RegExp(
 /// "Cardholder …"), in any message. "Merchant name: …" names a business.
 const PERSONAL_LABEL_PATTERN = new RegExp(
   `((?<![\\p{L}\\p{M}])(?:attn|attention|(?<!merchant[ \\t]|store[ \\t]|shop[ \\t]|bank[ \\t]|company[ \\t])name|customer(?:[ \\t]+name)?` +
-    `|card[ \\t]?holder(?:[ \\t]+name)?|account[ \\t]+holder(?:[ \\t]+name)?|عناية|الاسم|اسم|العميل|حامل[ \\t]+البطاقة|صاحب[ \\t]+الحساب)` +
-    `\\.?(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
+    `|card[ \\t]?holder(?:[ \\t]+name)?|account[ \\t]+holder(?:[ \\t]+name)?|عناية|الاسم|اسم(?=[ \\t]*:)|العميل|العميلة|حامل[ \\t]+البطاقة|صاحب[ \\t]+الحساب)` +
+    `\\.?(?![\\p{L}\\p{M}])${LABEL_SEP})(${LOOSE_NAME})`,
   'giu',
 );
 
 /// SP-16: "to account of Mohammed Abdullah", «حساب باسم محمد» — the holder of
 /// an account, in any message.
 const ACCOUNT_OF_PATTERN = new RegExp(
-  `((?<![\\p{L}\\p{M}])(?:(?:account|acct|acc|a\\/c|ac|card|wallet)[ \\t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \\t]+باسم)(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
+  `((?<![\\p{L}\\p{M}])(?:(?:account|acct|acc|a\\/c|ac|card|wallet)(?:[ \\t]+(?:no\\.?[ \\t]*)?(?:[*xX•#]*${D}{1,9}|\\[ACCOUNT\\]))?[ \\t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \\t]+باسم)(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
+  'giu',
+);
+
+/// AR-01: «من حساب هاني عادل 7788» — the holder named right after the account
+/// word, in any message. («إلى حساب <name>» is the beneficiary rule's.)
+const ACCOUNT_HOLDER_PATTERN = new RegExp(
+  `((?<![\\p{L}\\p{M}])(?:من|في)[ \\t]+(?:حساب|الحساب)[ \\t]+)(${NAME})`,
+  'giu',
+);
+
+/// AR-01: a number right after a masked name is that person's account or card
+/// number, whatever its length — unless it is an amount, a date or a time.
+const NUMBER_AFTER_NAME = new RegExp(
+  `((?:\\[NAME\\]|\\[REDACTED\\])[ \\t]+(?:(?:رقم|no\\.?|number|account|acct|حساب)[ \\t]*[:#]?[ \\t]*)?)[*xX•#]*${D}{1,9}[*•]*` +
+    `(?!${D}|[.,\u066B\u066C/:\\-]${D}|[ \\t]*(?:${CURRENCY_AFTER.join('|')})(?![\\p{L}\\p{M}]))`,
   'giu',
 );
 
@@ -762,10 +878,11 @@ const PAREN_NAME_PATTERN = new RegExp(
 /// opens a sentence before a transfer verb aimed at the user ("Sara Ali sent
 /// you SAR 500"), the Arabic verb-first forms («أرسل لك محمد أحمد», «قام محمد
 /// أحمد بتحويل») and a full name right after the transfer word before the
-/// amount ("Transfer Sara Ali SAR 500", «حوالة محمد أحمد 500 ريال»). The
-/// Latin forms take only capitalised words (see [maskCapitalisedName]).
+/// amount ("Transfer Sara Ali SAR 500", «حوالة محمد أحمد 500 ريال»). The last
+/// form takes only capitalised Latin words (see [maskCapitalisedName]); the
+/// others take a name in any letter case.
 const NAME_BEFORE_VERB_PATTERN = new RegExp(
-  `((?:^|(?<=[\\n.!?؟;؛:]))[ \\t]*)(${NAME})(?=[ \\t]+(?:has[ \\t]+|have[ \\t]+)?(?:sent|transferred|paid|remitted)[ \\t]+` +
+  `((?:^|(?<=[\\n.!?؟;؛:]))[ \\t]*)(${LOOSE_NAME})(?=[ \\t]+(?:has[ \\t]+|have[ \\t]+)?(?:sent|transferred|paid|remitted)[ \\t]+` +
     `(?:you(?![\\p{L}\\p{M}])|(?:[^.\\n]|\\.(?=${D})){0,30}?(?<![\\p{L}\\p{M}])(?:to|into)[ \\t]+you))`,
   'giu',
 );
@@ -775,14 +892,14 @@ const NAME_AFTER_VERB_AR_PATTERN = new RegExp(
 );
 const NAME_AFTER_TRANSFER_PATTERN = new RegExp(
   `((?<![\\p{L}\\p{M}])(?:transfer|transferred|remittance|حوالة|حواله|تحويل)(?![\\p{L}\\p{M}])(?:[ \\t]*[:\\-][ \\t]*|[ \\t]+))` +
-    `(${NAME_TOKEN}(?:[ \\t]+${NAME_TOKEN}){1,5})` +
+    `(${LOOSE_NAME_TOKEN}(?:[ \\t]+${LOOSE_NAME_TOKEN}){1,5})` +
     `(?=[ \\t]*(?:[\\-,،]|${D}|$|\\n|(?:${CURRENCY_AFTER.join('|')})(?![\\p{L}\\p{M}])))`,
   'giu',
 );
 
 /// SP-16: "Payment of SAR 99 to Omar Farooq via Mada" — the payee of a
-/// payment, unless the text reads as a purchase. Capitalised words only, so
-/// "payment to STC did not go through" keeps what happened.
+/// payment, unless the text reads as a purchase. Any letter case (AR-01); the
+/// stop list keeps what happened ("payment to STC did not go through").
 const PAYMENT_TO_PATTERN = new RegExp(
   `((?<![\\p{L}\\p{M}])(?:payment|payments|paid|pay)(?![\\p{L}\\p{M}])(?:[^.\\n;؛!?؟]|\\.(?=${D})){0,40}?(?<![\\p{L}\\p{M}])to[ \\t]+)(${NAME})`,
   'giu',
@@ -793,19 +910,34 @@ const CAPITALISED_RUN = /^[\p{Lu}\p{Lo}*][^ \t]*(?:[ \t]+[\p{Lu}\p{Lo}*][^ \t]*)
 
 /// The text reads as money moving between people.
 const TRANSFER_WORDS =
-  /transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|\bsent\b|standing\s+order|حوال|تحويل|حول|وارد|استلام|استلمت|إيداع|ايداع|أودع|اودع|مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
-const PURCHASE_CONTEXT =
-  /purchase|\bpos\b|point of sale|paid at|spent|refund|revers|e-?commerce|\bbill|merchant|شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد|تاجر/iu;
+  /transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|\bsent\b|payable\s+to|request(?:ed)?\s+from|standing\s+order|حوال|تحويل|حول|وارد|وصلك|طلب\s+دفع|استلام|استلمت|إيداع|ايداع|أودع|اودع|مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
+// "merchant" / «تاجر» alone reads as a purchase only where nothing says
+// transfer («إلى محمد التاجر» is a surname in a transfer).
+const PURCHASE_WORDS =
+  /purchase|\bpos\b|point of sale|paid at|spent|refund|revers|e-?commerce|\bbill|شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد/iu;
+const WEAK_PURCHASE_WORDS = /merchant|تاجر/iu;
+/// A transfer or remittance by its own wording, whatever else the text says.
+/// THE TRANSFER RULE: in such a text every counterparty is masked whole, with
+/// no person-or-merchant judgement, and a purchase or refund word does not
+/// make it a purchase (privacy wins where the reading is mixed). "credited",
+/// "received" or «إيداع» alone are not here: a merchant's refund says them too.
+const STRONG_TRANSFER_WORDS =
+  /transfer|remit|beneficiary|\bipn\b|instapay|\bsent\b|payable\s+to|request(?:ed)?\s+from|standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|لصالح|وصلك|أرسل|ارسل|طلب\s+دفع|انستا|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)/iu;
+const PURCHASE_CONTEXT = {
+  test: (text: string) =>
+    !STRONG_TRANSFER_WORDS.test(text) &&
+    (PURCHASE_WORDS.test(text) || (WEAK_PURCHASE_WORDS.test(text) && !TRANSFER_WORDS.test(text))),
+};
 
 /// A business, by the words a business name carries (a shop, company or
-/// service marker), never by a list of specific names. A counterparty whose
-/// name carries one is a merchant and is kept, whatever the cue.
+/// service marker), never by a list of specific names. Merchant evidence only
+/// where the text has no person evidence: see THE DECISION RULE below.
 const COMPANY_MARKERS = [
   'shop', 'shops', 'store', 'stores', 'bookstore', 'market', 'markets', 'supermarket', 'hypermarket', 'mart', 'mall',
   'cafe', 'café', 'coffee', 'restaurant', 'restaurants', 'kitchen', 'bakery', 'pharmacy', 'pharmacies', 'clinic',
   'clinics', 'hospital', 'company', 'co', 'corp', 'corporation', 'ltd', 'llc', 'inc', 'est', 'establishment',
   'trading', 'group', 'holding', 'services', 'solutions', 'hotel', 'hotels', 'station', 'petrol', 'fuel', 'telecom',
-  'electricity', 'water', 'insurance', 'school', 'university', 'academy', 'airlines', 'airways', 'pay', 'com', 'net',
+  'electricity', 'water', 'insurance', 'takaful', 'school', 'university', 'academy', 'airlines', 'airways', 'pay', 'com', 'net',
   'شركة', 'شركه', 'مؤسسة', 'مؤسسه', 'مكتبة', 'مكتبه', 'متجر', 'متاجر', 'محل', 'محلات', 'مطعم', 'مطاعم', 'مقهى', 'كافيه',
   'كوفي', 'صيدلية', 'صيدليات', 'مستشفى', 'عيادة', 'عيادات', 'فندق', 'سوبرماركت', 'هايبر', 'هايبرماركت', 'أسواق', 'اسواق',
   'سوق', 'مركز', 'محطة', 'مخبز', 'مخابز', 'بقالة', 'تموينات', 'للتجارة', 'التجارية', 'للخدمات', 'مدرسة', 'جامعة',
@@ -943,7 +1075,9 @@ function scanSuffixes(text: string, purchase: boolean): Suffix[] {
       ) own = false;
       else if (POSSESSIVE.test(phrase) || POSSESSIVE_BEFORE.test(before)) own = true;
       else if (DESTINATION_BEFORE.test(before) || DESTINATION_LABEL.test(phrase)) {
-        own = CREDIT_VERB_BEFORE.test(before) && !outgoing;
+        // "debited from your account … and credited to account *7788": the
+        // other side of a debit is a third party (R4P-07).
+        own = CREDIT_VERB_BEFORE.test(before) && !outgoing && !DEBIT_VERB_BEFORE.test(before);
       } else if (card || purchase) own = !sender;
       else {
         const instrument = labelled && !incoming &&
@@ -975,27 +1109,49 @@ export function isCounterpartyContext(text: string): boolean {
   return TRANSFER_WORDS.test(text) && !PURCHASE_CONTEXT.test(text);
 }
 
-/// After the bare prepositions "to" and "by" a single lower-case Latin word
-/// is a verb or a common word, not a name ("Use the code to confirm your
-/// transfer", "by clicking"): a one-word name there starts with a capital, a
-/// star or a non-Latin letter. Two or more words are still a name, and a
-/// field label ("To:") is not bare.
-const BARE_PREPOSITION = /(?<![\p{L}\p{M}])(?:to|by)[ \t]+$/iu;
-const ORDINARY_WORD = /^\p{Ll}[^ \t]*$/u;
+// ── Person or merchant: THE DECISION RULE ──────────────────────────────────
+//
+// 1. A transfer or remittance (STRONG_TRANSFER_WORDS, or a credit word with no
+//    purchase, refund or bill word): every counterparty is masked whole, up
+//    to the next amount, date, status word, account or reference cue or
+//    sentence end. No name lists, no business-word exception (R4P-02).
+// 2. A purchase, refund or bill (PURCHASE_CONTEXT), or a card payment (the
+//    user's own card and no transfer word): the merchant is kept.
+// 3. Payment wording with neither ("Payment of SAR 85 to …", "paid to …",
+//    «دفع … إلى …»): the type is unclear, so privacy wins: the payee is
+//    masked unless it carries a business-form word (COMPANY_MARKERS), even a
+//    one-word brand ("Careem").
+// A person cue (beneficiary, sender, «المستفيد», Name:, account of …) masks in
+// every message. The device reads the merchant from the raw message, so a
+// saved category rule still matches there without the name leaving it.
 
-/// The cue and `[NAME]`, or the match unchanged when the name is a business's
-/// or (after a bare preposition) an ordinary word.
-function maskName(whole: string, cue: string, name: string): string {
-  return COMPANY_MARKER.test(name) || (BARE_PREPOSITION.test(cue) && ORDINARY_WORD.test(name))
-    ? whole
-    : `${cue}[NAME]`;
+/// After the bare prepositions "to" and "by", a single lower-case Latin word
+/// followed by a determiner is a verb, not a name ("to settle your bill",
+/// "by clicking the link"). A name in lower case is still masked ("to fadi
+/// via Mada", "to nadir zaki"); a field label ("To:") is not bare.
+const BARE_PREPOSITION = /(?<![\p{L}\p{M}])(?:to|by)[ \t]+$/iu;
+const LOWER_CASE_WORD = /^\p{Ll}[^ \t]*$/u;
+const DETERMINER_AFTER = /^[ \t]+(?:your|the|this|that|these|those|a|an|it|my|our|all|any)(?![\p{L}\p{M}])/iu;
+function isOrdinaryWord(cue: string, name: string, after: string): boolean {
+  return BARE_PREPOSITION.test(cue) && LOWER_CASE_WORD.test(name) && DETERMINER_AFTER.test(after);
 }
 
-/// As [maskName], for the Latin forms that have no cue of their own: only the
+/// The cue and `[NAME]`: a person, whatever words the name carries.
+function maskPerson(whole: string, cue: string, name: string, offset: number, text: string): string {
+  return isOrdinaryWord(cue, name, text.slice(offset + whole.length)) ? whole : `${cue}[NAME]`;
+}
+
+/// As [maskPerson], where the text has no transfer word (case 3 of THE
+/// DECISION RULE): a name carrying a business-form word is kept.
+function maskPayee(whole: string, cue: string, name: string, offset: number, text: string): string {
+  return COMPANY_MARKER.test(name) ? whole : maskPerson(whole, cue, name, offset, text);
+}
+
+/// As [maskPerson], for the one Latin form with no cue and no verb: only the
 /// leading capitalised words are the name, and what follows them stays.
 function maskCapitalisedName(whole: string, cue: string, name: string): string {
   const run = name.match(CAPITALISED_RUN)?.[0];
-  return !run || COMPANY_MARKER.test(run) ? whole : `${cue}[NAME]${name.slice(run.length)}`;
+  return run ? `${cue}[NAME]${name.slice(run.length)}` : whole;
 }
 
 /// Masks personal names with `[NAME]`, keeping the cue. Salutations and
@@ -1004,24 +1160,26 @@ function maskCapitalisedName(whole: string, cue: string, name: string): string {
 export function redactPersonNames(text: string): string {
   const greeted = text.replace(SALUTATION_PATTERN, '$1[NAME]')
     // PRIV-1: a person cue names a person in any message.
-    .replace(PERSON_CUE_PATTERN, maskName)
-    .replace(PERSONAL_LABEL_PATTERN, maskName)
-    .replace(ACCOUNT_OF_PATTERN, maskName);
+    .replace(PERSON_CUE_PATTERN, maskPerson)
+    .replace(PERSONAL_LABEL_PATTERN, maskPerson)
+    .replace(ACCOUNT_OF_PATTERN, maskPerson)
+    .replace(ACCOUNT_HOLDER_PATTERN, maskPerson);
   if (isMerchantContext(greeted)) return greeted;
   // PRIV-1: with no purchase, refund, bill or card-payment reading, a "From:"
   // label, "paid to" and a "To <Name>:" heading name a person too.
   const cued = TRANSFER_WORDS.test(greeted)
-    ? greeted.replace(COUNTERPARTY_PATTERN, maskName)
-    : greeted.replace(LABEL_CUE_PATTERN, maskName).replace(TO_HEADING_PATTERN, maskName)
-      .replace(PAYMENT_TO_PATTERN, maskCapitalisedName);
-  return cued.replace(PAREN_NAME_PATTERN, maskName)
-    .replace(NAME_BEFORE_VERB_PATTERN, maskCapitalisedName)
-    .replace(NAME_AFTER_VERB_AR_PATTERN, maskName)
+    ? greeted.replace(COUNTERPARTY_PATTERN, maskPerson)
+    : greeted.replace(LABEL_CUE_PATTERN, maskPayee).replace(TO_HEADING_PATTERN, maskPayee)
+      .replace(PAYMENT_TO_PATTERN, maskPayee);
+  return cued.replace(PAREN_NAME_PATTERN, maskPerson)
+    .replace(NAME_BEFORE_VERB_PATTERN, maskPerson)
+    .replace(NAME_AFTER_VERB_AR_PATTERN, maskPerson)
     .replace(NAME_AFTER_TRANSFER_PATTERN, maskCapitalisedName);
 }
 
-// MASK-0: the run after «إلى»/"To:" is a merchant, and stays, when the text
-// reads as a purchase or the run carries a business marker — unless the run
+// MASK-0: the run after «إلى»/"To:" is a merchant, and stays, under THE
+// DECISION RULE (a purchase reading, or a business word in a text with no
+// transfer word) — unless the run
 // is an account or card object, starts with a number, or carries a long
 // number or a masked name (then it is a person's account whatever the
 // message says).
@@ -1032,9 +1190,9 @@ const BENEFICIARY_ACCOUNT_OBJECT = new RegExp(
     `|\\[(?:NAME|ACCOUNT|IBAN|CARD|PHONE|REF)\\]|^[*xX•#]*${D}|${D}{5}|[A-Z]{2}${D}{2}`,
   'iu',
 );
-function keepsBeneficiary(match: string, merchantContext: boolean): boolean {
+function keepsBeneficiary(match: string, merchantContext: boolean, transfer: boolean): boolean {
   const run = match.replace(BENEFICIARY_CUE, '');
-  return !BENEFICIARY_ACCOUNT_OBJECT.test(run) && (merchantContext || COMPANY_MARKER.test(run));
+  return !BENEFICIARY_ACCOUNT_OBJECT.test(run) && (merchantContext || (!transfer && COMPANY_MARKER.test(run)));
 }
 
 function replaceAt(text: string, spans: { start: number; end: number }[], replacement: string): string {
@@ -1061,11 +1219,14 @@ function replaceAt(text: string, spans: { start: number; end: number }[], replac
 export function redactThirdPartyNames(text: string): string {
   const named = redactPersonNames(text);
   const merchantContext = isMerchantContext(named);
+  const transfer = TRANSFER_WORDS.test(named);
+  const keeps = (whole: string) => keepsBeneficiary(whole, merchantContext, transfer);
   const stripped = named
     // The name only, never the words after it (SM-07, Vso4).
-    .replace(BENEFICIARY_AR, (whole, cue) => keepsBeneficiary(whole, merchantContext) ? whole : `${cue}: [REDACTED]`)
-    .replace(BENEFICIARY_EN, (whole) => keepsBeneficiary(whole, merchantContext) ? whole : 'To: [REDACTED]')
-    .replace(OWN_DESTINATION_NUMBER, '$1[ACCOUNT]');
+    .replace(BENEFICIARY_AR, (whole, cue) => keeps(whole) ? whole : `${cue}: [REDACTED]`)
+    .replace(BENEFICIARY_EN, (whole) => keeps(whole) ? whole : 'To: [REDACTED]')
+    .replace(OWN_DESTINATION_NUMBER, '$1[ACCOUNT]')
+    .replace(NUMBER_AFTER_NAME, '$1[ACCOUNT]');
   const purchase = PURCHASE_CONTEXT.test(stripped);
   const suffixed = replaceAt(stripped, scanSuffixes(stripped, purchase).filter((s) => !s.own), '[ACCOUNT]');
   const own = new Set(scanSuffixes(suffixed, purchase).filter((s) => s.own).map((s) => s.start));

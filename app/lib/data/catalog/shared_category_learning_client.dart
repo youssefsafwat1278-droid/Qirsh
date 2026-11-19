@@ -47,6 +47,10 @@ class SharedCategoryLearningClient {
   final Future<bool> Function() _mayEgress;
   final Future<void> Function(Map<String, String> body) _send;
   final _queue = <(String, SharedCategoryContribution)>[];
+
+  /// Keys this account offered since the app started: each passed
+  /// [sharedContributionFor], so it is a merchant, not a person.
+  final _offered = <(String, String)>{};
   bool _flushing = false;
 
   int get queuedCount => _queue.length;
@@ -64,6 +68,7 @@ class SharedCategoryLearningClient {
     if (contribution == null) return;
     final uid = _accountUid();
     if (uid == null || uid.isEmpty || !await _allowedFor(uid)) return;
+    _offered.add((uid, contribution.merchantKey));
     _queue
       ..removeWhere((c) => c.$2.merchantKey == contribution.merchantKey)
       ..add((uid, contribution));
@@ -73,14 +78,23 @@ class SharedCategoryLearningClient {
   /// Takes back this account's vote for [rawMerchant] — called when the user
   /// deletes a learned rule. Sent only under the same conditions as [offer]
   /// (so nothing about the merchant leaves a device that would not have shared
-  /// it), drops any queued offer for it, and is best effort: a failure leaves
-  /// one stale vote, which an admin can still review before it is published.
+  /// it) and only for a key that is known to be a merchant, drops any queued
+  /// offer for it, and is best effort: a failure or a refusal leaves one stale
+  /// vote, which an admin can still review before it is published.
   Future<void> withdraw(String rawMerchant) async {
     final key = sharedMerchantKeyFor(rawMerchant);
     if (key == null) return;
     _queue.removeWhere((c) => c.$2.merchantKey == key);
     final uid = _accountUid();
     if (uid == null || uid.isEmpty || !await _allowedFor(uid)) return;
+    // R4P-08: a rule saved for a person's name must not be sent on deletion.
+    // There is no message to test here, so the key goes out only when this
+    // account offered it since the app started, or when the name is a
+    // business by its own words ([looksLikeBusiness]). Otherwise the vote, if
+    // there was one, stays until an admin reviews it.
+    if (!_offered.contains((uid, key)) && !looksLikeBusiness(rawMerchant)) {
+      return;
+    }
     try {
       await _send({'merchant_key': key, 'action': 'withdraw'});
     } catch (_) {}

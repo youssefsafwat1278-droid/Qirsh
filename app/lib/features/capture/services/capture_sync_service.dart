@@ -961,7 +961,8 @@ class CaptureSyncService {
     final heldAmount = parsed['amount'];
     if (meaningHoldReason(
             _string(parsed['rawMessage']) ?? capture.sanitizedText ?? '',
-            amount: heldAmount is num ? heldAmount : null) !=
+            amount: heldAmount is num ? heldAmount : null,
+            modelDecided: isModelDecidedRow(parsed)) !=
         null) {
       await _persistBackendUnprocessableCapture(
           capture, requireCurrentAdmission, committed);

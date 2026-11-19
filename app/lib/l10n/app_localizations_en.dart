@@ -1338,7 +1338,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get lrRestoreExplanation =>
-      'These rules were in the backup you restored but are not on this device. Qirsh cannot tell whether they were deleted here on purpose, so it did not add them and did not discard them. They are not used to categorise anything until you choose. Add puts the rule back. Leave out keeps it off this device, and later restores will not ask again.';
+      'These rules were in the backup you restored but are not on this device. Qirsh cannot tell whether they were deleted here on purpose, so it did not add them and did not discard them. They are not used to categorise anything until you choose. Add puts the rule back. Leave out deletes it: it stays off this device, it is removed from your other devices when Cloud is on, and Qirsh asks again only if the rule is changed later, for example on another device.';
 
   @override
   String get lrRestoreAdd => 'Add';
@@ -1351,6 +1351,21 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get lrRestoreLeaveAll => 'Leave all out';
+
+  @override
+  String lrRestoreLeaveAllTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Leave out all $count rules?',
+      one: 'Leave out this rule?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get lrRestoreLeaveAllBody =>
+      'None of them will be added. They are deleted on this device and, when Cloud is on, on your other devices. Qirsh asks again only about a rule that is changed later, for example on another device.';
 
   @override
   String get lrRestoreMissingCategory =>
@@ -5943,7 +5958,7 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get rpConfirmBodyMerge =>
-      'This device already has your records, so the backup will be merged into them. Records missing here are added. Everything you added, changed or deleted on this device stays as it is now: a transaction you deleted is not brought back, and when a record exists in both, the more recently edited copy is kept. Saved category rules work the same way: a rule missing here is added, a rule you deleted here stays deleted, and when a merchant has a rule in both, the more recently changed one is kept. If Qirsh cannot tell whether a rule in the backup was deleted here on purpose, it neither adds nor discards it: you choose afterwards in Settings, under Learned rules. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?';
+      'This device already has your records, so the backup will be merged into them. Records missing here are added. Everything you added, changed or deleted on this device stays as it is now: a transaction you deleted is not brought back, and when a record exists in both, the more recently edited copy is kept. Saved category rules work the same way: a rule missing here is added, a rule you deleted here stays deleted, a rule the backup shows you deleted after it was last changed here is deleted, and when a merchant has a rule in both, the more recently changed one is kept. If Qirsh cannot tell whether a rule in the backup was deleted here on purpose, it neither adds nor discards it: you choose afterwards in Settings, under Learned rules. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?';
 
   @override
   String get rpConfirmBodyFull =>

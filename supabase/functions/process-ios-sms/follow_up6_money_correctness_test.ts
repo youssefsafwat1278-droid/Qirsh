@@ -26,6 +26,7 @@ async function server(text: string) {
 
 type Case = {
   id: string; kind: string; text: string; amount?: number; currency?: string; answer: number; server?: string;
+  round5?: string;
 };
 
 for (const c of cases.cases as Case[]) {
@@ -33,6 +34,15 @@ for (const c of cases.cases as Case[]) {
   Deno.test(`${c.id} [${c.kind}${c.server ? ` server=${c.server}` : ''}] ${label}`, async () => {
     const o = await server(c.text);
     const gate = meaningRejectionOf(c.text, c.answer, gatedMeaning(c.text, messageMeaning(c.text), c.answer));
+    if (c.round5) {
+      // Round 5 (owner decision): a movement that is not clearly completed
+      // (a doubt word anywhere, or no completed-event form) is a visible
+      // review row, and no model answer of "completed" is accepted for it.
+      assertEquals(o.recorded, false);
+      assertEquals(o.meaning.disposition, 'review');
+      assert(gate !== null, `gate accepted ${c.answer}`);
+      return;
+    }
     if (c.kind === 'n' || c.kind === 'r') {
       assertEquals(o.recorded, false);
       // No answer is accepted for it, from any model.

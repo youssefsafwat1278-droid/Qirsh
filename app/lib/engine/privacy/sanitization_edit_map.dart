@@ -205,6 +205,9 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
   pass(SmsSanitizer.emailPattern, (_) => '[EMAIL]', '[EMAIL]');
   pass(SmsSanitizer.spacedIbanPattern, (_) => '[IBAN]', '[IBAN]');
   pass(SmsSanitizer.cardNumberPattern, (_) => '[CARD]', '[CARD]');
+  for (final pattern in SmsSanitizer.spacedPhonePatterns) {
+    pass(pattern, (_) => '[PHONE]', '[PHONE]');
+  }
   pass(SmsSanitizer.saudiPhonePattern, (_) => '[PHONE]', '[PHONE]');
   pass(SmsSanitizer.egyptPhonePattern, (_) => '[PHONE]', '[PHONE]');
   pass(SmsSanitizer.intlPhonePattern, (_) => '[PHONE]', '[PHONE]');
@@ -218,35 +221,38 @@ SanitizedSms sanitizeWithMap(String rawSms, {TransactionType? detectedType}) {
   pass(SmsSanitizer.labelledAccountPattern, (m) => '${m.group(1)!}[ACCOUNT]',
       '[ACCOUNT]');
   pass(SmsSanitizer.referencePattern, (m) => '${m.group(1)!}[REF]', '[REF]');
-  pass(SmsSanitizer.salutationPattern, (m) => '${m.group(1)!}[NAME]',
-      '[NAME]');
-  names(SmsSanitizer.personCuePattern, SmsSanitizer.maskName);
-  names(SmsSanitizer.personalLabelPattern, SmsSanitizer.maskName);
-  names(SmsSanitizer.accountOfPattern, SmsSanitizer.maskName);
+  pass(SmsSanitizer.salutationPattern, (m) => '${m.group(1)!}[NAME]', '[NAME]');
+  names(SmsSanitizer.personCuePattern, SmsSanitizer.maskPerson);
+  names(SmsSanitizer.personalLabelPattern, SmsSanitizer.maskPerson);
+  names(SmsSanitizer.accountOfPattern, SmsSanitizer.maskPerson);
+  names(SmsSanitizer.accountHolderPattern, SmsSanitizer.maskPerson);
   if (!SmsSanitizer.isMerchantContext(current)) {
     if (SmsSanitizer.hasTransferWord(current)) {
-      names(SmsSanitizer.counterpartyPattern, SmsSanitizer.maskName);
+      names(SmsSanitizer.counterpartyPattern, SmsSanitizer.maskPerson);
     } else {
-      names(SmsSanitizer.labelCuePattern, SmsSanitizer.maskName);
-      names(SmsSanitizer.toHeadingPattern, SmsSanitizer.maskName);
-      names(SmsSanitizer.paymentToPattern, SmsSanitizer.maskCapitalisedName);
+      names(SmsSanitizer.labelCuePattern, SmsSanitizer.maskPayee);
+      names(SmsSanitizer.toHeadingPattern, SmsSanitizer.maskPayee);
+      names(SmsSanitizer.paymentToPattern, SmsSanitizer.maskPayee);
     }
-    names(SmsSanitizer.parenNamePattern, SmsSanitizer.maskName);
-    names(SmsSanitizer.nameBeforeVerbPattern, SmsSanitizer.maskCapitalisedName);
-    names(SmsSanitizer.nameAfterVerbArPattern, SmsSanitizer.maskName);
-    names(
-        SmsSanitizer.nameAfterTransferPattern, SmsSanitizer.maskCapitalisedName);
+    names(SmsSanitizer.parenNamePattern, SmsSanitizer.maskPerson);
+    names(SmsSanitizer.nameBeforeVerbPattern, SmsSanitizer.maskPerson);
+    names(SmsSanitizer.nameAfterVerbArPattern, SmsSanitizer.maskPerson);
+    names(SmsSanitizer.nameAfterTransferPattern,
+        SmsSanitizer.maskCapitalisedName);
   }
 
   final merchantContext = SmsSanitizer.isMerchantContext(current);
+  final transfer = SmsSanitizer.hasTransferWord(current);
   bool strips(Match m) => !SmsSanitizer.keepsBeneficiary(m.group(0)!,
-      merchantContext: merchantContext);
+      merchantContext: merchantContext, transfer: transfer);
   pass(SmsSanitizer.beneficiaryArPattern, (m) => '${m.group(1)!}: [REDACTED]',
       '[REDACTED]', strips);
   pass(SmsSanitizer.beneficiaryEnPattern, (_) => 'To: [REDACTED]',
       '[REDACTED]', strips);
   pass(SmsSanitizer.ownDestinationNumberPattern,
       (m) => '${m.group(1)!}[ACCOUNT]', '[ACCOUNT]');
+  pass(SmsSanitizer.numberAfterNamePattern, (m) => '${m.group(1)!}[ACCOUNT]',
+      '[ACCOUNT]');
   final purchase = SmsSanitizer.isPurchaseContext(current);
   apply([
     for (final s in SmsSanitizer.scanSuffixes(current, purchase: purchase))

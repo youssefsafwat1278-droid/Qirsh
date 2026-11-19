@@ -436,7 +436,9 @@ At:19/04/26 11:07''',
     expectedLast4: '9221',
     expectedBalance: 14379.13,
     expectedOccurredAt: DateTime(2026, 6, 14, 20, 12),
-    expectedStatus: ExpectedSmsStatus.pending,
+    // Round 5 (owner decision): the text carries a due/doubt word
+    // ("المستحق"), so it is kept for review (was pending).
+    expectedStatus: ExpectedSmsStatus.review,
   ),
   BankSmsGoldenFixture(
     id: 'sa_stc_bank_income_sar_glued',

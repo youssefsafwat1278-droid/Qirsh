@@ -1,5 +1,5 @@
 // Round 4 (requirements C and D): what the server stores, returns and sends
-// to the model for the labelled leak set, and which merchant key a redacted
+// to the model for the privacy acceptance set (round 5), and which merchant key a redacted
 // message yields. Synthetic data only; the model and the database are stubs.
 //
 // The upload is the WORST case: a client that redacted nothing puts the raw
@@ -24,6 +24,14 @@ interface Row {
 const ROWS: Row[] = JSON.parse(
   Deno.readTextFileSync(new URL('./fixtures/sms_leak_labelled_cases.json', import.meta.url)),
 );
+// Round 5: the frozen acceptance set (tools/acceptance/privacy_cases.jsonl),
+// which carries every labelled row above plus every text the reviews quote.
+const ACCEPTANCE: Row[] = Deno.readTextFileSync(
+  new URL('../../../tools/acceptance/privacy_cases.jsonl', import.meta.url),
+).split('\n').filter((l) => l.trim()).map((l) => {
+  const c = JSON.parse(l);
+  return { id: c.id, raw: c.text, expected: '', secrets: c.must_not, mustKeep: c.must_keep, merchant: c.merchant };
+});
 const sanitize = (t: string) => redactThirdPartyNames(redactPii(t)).trim();
 // Letters only, so a tagged number can never collide with it.
 const OWNER = 'abcdefab-cdef-4abc-8def-abcdefabcdef';
@@ -98,7 +106,7 @@ for (const mode of ['ai_primary', 'legacy'] as const) {
     const leaks: string[] = [];
     let modelCalls = 0;
     let storedRows = 0;
-    for (const row of ROWS) {
+    for (const row of ACCEPTANCE) {
       const sent = await upload(row, mode);
       assert(sent.status < 500, `${row.id}: ${sent.status}`);
       modelCalls += sent.modelRequests.length;
@@ -118,14 +126,16 @@ for (const mode of ['ai_primary', 'legacy'] as const) {
       }
     }
     assertEquals(leaks, []);
-    // The run did reach the model and the store.
-    assert(modelCalls > ROWS.length / 2, `${modelCalls} model requests`);
-    assert(storedRows >= ROWS.length, `${storedRows} stored rows`);
+    assert(ACCEPTANCE.length > ROWS.length, `${ACCEPTANCE.length} acceptance rows`);
+    // The run did reach the model for many texts (transfers, one-time codes
+    // and not-completed texts are kept from it by the parser).
+    assert(modelCalls > ACCEPTANCE.length / 4, `${modelCalls} model requests`);
+    assert(storedRows >= ACCEPTANCE.length, `${storedRows} stored rows`);
   });
 }
 
 Deno.test('rule key: a merchant that must survive gives the same merchant key from the redacted text as from the raw text', async () => {
-  const merchants = ROWS.filter((r) => r.merchant);
+  const merchants = ACCEPTANCE.filter((r) => r.merchant);
   assert(merchants.length >= 20);
   const failures: string[] = [];
   let keyed = 0;
@@ -145,7 +155,7 @@ Deno.test('rule key: a merchant that must survive gives the same merchant key fr
 });
 
 Deno.test('rule key: no person name becomes a merchant, a merchant key or a duplicate fingerprint input', async () => {
-  const people = ROWS.filter((r) => r.secrets.length);
+  const people = ACCEPTANCE.filter((r) => r.secrets.length);
   assert(people.length >= 100);
   const failures: string[] = [];
   for (const row of people) {
@@ -166,7 +176,7 @@ Deno.test('rule key: no person name becomes a merchant, a merchant key or a dupl
 Deno.test('pairs: every person row has a merchant twin and the reverse', () => {
   const byId = new Map(ROWS.map((r) => [r.id, r]));
   const paired = ROWS.filter((r) => r.pair && r.id.startsWith('r4_pair_'));
-  assert(paired.length >= 36);
+  assert(paired.length >= 28);
   for (const r of paired) {
     const twin = byId.get(r.pair!);
     assert(twin, `${r.id}: twin ${r.pair} is missing`);

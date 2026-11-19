@@ -174,3 +174,87 @@ I ran those five test files: every failure is on exactly the pinned line (11 ass
 - The whole Flutter suite was not run (shared machine); only the suites named above.
 - `test/architecture/head_completeness_test.dart` fails on another implementer's uncommitted Deno fixture (`sms_redaction_head_diff_test.ts`); unrelated to this work.
 - A replica rebootstrap (WP-7) starts a new database, whose history is "complete" from its creation; removals made on the old replica reach it only through the cloud.
+
+---
+
+# Review fixes (after `a86298fc`; reviews V Part B and W)
+
+Working tree on `2f9931cb`, nothing committed. This section **replaces** the "Merge rule", "Cloud" and "Limits that remain" parts above where they differ.
+
+## Which claims are real
+
+| Claim | Verdict | Fix |
+|---|---|---|
+| R4R-01 failed pull, then the backfill pushes the restored rule over an unread removal | Real | The backfill runs only after a pull that completed. Every restore deletes the rule pull cursor and the backfill markers (rows in `sync_cursors`), so the precondition survives restarts and failed syncs |
+| R4R-02 / AR-08 "Leave out", imported and signed-out removals are undone by a pull; a backup removal is ignored when the device holds the old rule | Real | The pull compares times. An older cloud rule does not bring a removed rule back, and the removal is queued. A backup removal newer than the device rule removes it. "Leave out" is now a removal like "Delete rule" and is queued for the cloud; the copy says so |
+| AR-09 an older unread cloud change overwrites a restored newer edit | Real | Same rule: the device's newer rule stands and is queued |
+| AR-10 same-category pull keeps the old time; a pulled removal is stamped "now" | Real, both | A same-category pull takes the cloud's time. A pulled removal is recorded with the cloud's time |
+| R4R-03 "Leave all out" on one tap | Real | Confirmation dialog (count, consequence, Cancel / Leave all out) |
+| R4R-04 no widget test for the result dialog | Real | Added, with a real restore behind the real screen |
+| R4R-05 clock skew | Inherent; narrowed | See "Clocks" |
+| R4R-06 postcondition checks tables only; `IF NOT EXISTS` freezes trigger bodies | Real | The postcondition checks the six triggers; triggers are dropped and created at every open |
+| R4R-07 full apply keeps a stale rule cursor | Reproduced | The cursor is reset on every restore (test: a removal the device read without recording it, then a full apply) |
+
+Mutation check: with the pull gate and the cursor reset taken out, 5 of the new tests fail (R4R-01 twice, A3, R4R-07, one table row); with them back, all pass.
+
+## The precedence rule (one function: `ruleVersionSupersedes`, `merchant_rule_history.dart`)
+
+Per merchant, each side (device, backup, cloud) holds a **rule** or a **removal**, with a time. An incoming version (backup or cloud) replaces the device's **only when it is strictly newer, in whole milliseconds**. Otherwise the device's stands (a tie keeps the device), and where it then differs from the cloud row it is queued for the cloud. With nothing on the device the incoming version is taken, except a backup rule whose removal here cannot be ruled out (legacy backup, or history not reaching back), which waits for the user.
+
+Times used:
+
+| Side | Rule | Removal |
+|---|---|---|
+| Device | `merchant_category_map.updated_at` | `merchant_rule_tombstones.deleted_at` |
+| Backup | the same two columns as written by its source | |
+| Cloud | the row's server `updated_at` (when the cloud received it) | the row's server `updated_at` |
+
+| Incoming ↓ / device holds → | Rule | Removal | Nothing |
+|---|---|---|---|
+| **Backup rule**, newer | backup's rule (device rule kept if the backup's category is deleted here) | restored | restored, or the user's choice if a removal cannot be ruled out |
+| **Backup rule**, same ms or older | device unchanged | stays removed | n/a |
+| **Backup removal**, newer | rule removed; removal keeps the backup's time | removal time moves to the backup's | recorded |
+| **Backup removal**, same ms or older | device unchanged | unchanged | n/a |
+| **Cloud rule**, newer | cloud's rule and time (same category: time only) | rule applied | rule applied |
+| **Cloud rule**, same ms or older | device rule kept; queued if the category differs | stays removed; removal queued | n/a |
+| **Cloud removal**, newer | rule removed; removal keeps the cloud's time | removal time moves to the cloud's | recorded |
+| **Cloud removal**, same ms or older | device rule kept and queued | unchanged | n/a |
+
+Other pairs:
+
+- **Backup rule and backup removal** for one merchant: the newer; the removal on a tie.
+- **Backup against cloud**: the backup meets the device first, then the cloud meets the result; the newer of the two ends on both.
+- **Device rule and device removal** never coexist. A change made on the device is stamped later than the version it replaces.
+- **Queued local change** (outbox row): the pull skips that merchant; the change is pushed and wins, as before.
+- **Backfill**: after a completed pull, every device rule with no cloud row and no queued change is pushed.
+
+## Clocks (R4R-05)
+
+- The cloud's time is the server's. After a push or a pull the device copy carries that time, so synced rules on different devices are compared on one clock.
+- A change the user makes on a device is stamped `max(now, previous + 1 ms)`. A removal or edit is therefore always newer than what it replaced, even when that was stamped by a clock running ahead. The fake cloud in the tests runs six weeks ahead of the device.
+- What remains: an unsynced device change is stamped by the device clock. A backup from a device whose clock was ahead can beat a later change made elsewhere, as for every other table.
+
+## Leave out
+
+"Leave out" records a removal now and queues it, exactly like "Delete rule". With Cloud on, the rule is removed on the user's other devices. Signed out, nothing can be queued; the removal is sent by the first pull that meets the older cloud rule. Copy (EN/AR): "Leave out deletes it: it stays off this device, it is removed from your other devices when Cloud is on, and later restores will not ask again."
+
+## Server
+
+No server change. The pushed removal still uses `deleted_at`; ordering uses the server-owned `updated_at`.
+
+## Tests
+
+- `test/core/backup/merchant_rule_precedence_test.dart` (68): the function for every pair and order; backup × device, cloud × device and backup × cloud through the real restore and sync (each with repeated restore or second sync, ending with device and cloud equal); the reviewers' reproductions (R4R-01 twice, A2, A3, A4, AR-09, AR-10 twice, R4R-07, second device still holding the rule).
+- `test/core/backup/restore_result_rule_review_test.dart` (2): result dialog, EN and AR.
+- `test/core/backup/rule_restore_review_screen_test.dart` (8): adds the "Leave all out" confirmation and cancel.
+- `test/data/db/merchant_rule_history_v44_migration_test.dart` (11): adds trigger refresh and removal-after-rule.
+- `test/core/backup/merchant_rule_restore_test.dart`: one expectation changed (a newer backup removal now removes the device rule; an older one does not). `fake_rule_cloud.dart` is shared.
+- Local stack (`qirsh_v1_round4`, ports 56321–56330, dart-defines): `restore_then_sync_local_supabase_test.dart` `+16: All tests passed!` (adds RR4 = R4R-01 with a failing first fetch, RR5 = R4R-02 Leave out, RR6 = AR-09); `sync_e2e_local_supabase_test.dart` `+14 ~2`. Stack stopped with `--no-backup`; no container or volume left; other stacks untouched.
+
+Final runs, the "Leave out" against a newer rule change, and the before/after evidence: see [round5-restore.md](round5-restore.md), which supersedes this section where they differ.
+
+## Not verified
+
+- No device or simulator run; the whole Flutter suite was not run.
+- The reviewers' own attack tests were not available to me; the cases above are my reproductions of their descriptions.
+- A device still on build 147 pulls with the old rule (the cloud always wins) and records no removals.

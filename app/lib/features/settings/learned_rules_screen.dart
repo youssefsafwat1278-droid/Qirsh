@@ -7,6 +7,7 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/widgets/app_toast.dart';
+import '../../core/theme/widgets/glass_dialog.dart';
 import '../../core/utils/app_lucide_icons.dart';
 import '../../core/utils/l10n_ext.dart';
 import '../../domain/repositories/merchant_category_repository.dart';
@@ -89,6 +90,8 @@ class LearnedRulesScreen extends ConsumerWidget {
           add: add,
           save: (merchant, categoryKey) => useCase.restore(LearnedMerchantRule(
               rawMerchant: merchant, categoryKey: categoryKey)),
+          // "Leave out" is a removal like "Delete rule": sent to the cloud.
+          queue: ref.read(planningOutboxQueueProvider),
         );
       }
     } catch (_) {
@@ -96,6 +99,36 @@ class LearnedRulesScreen extends ConsumerWidget {
     }
     ref.invalidate(ruleRestoreChoicesProvider);
     ref.invalidate(learnedRulesProvider);
+  }
+
+  /// "Leave all out" removes every listed rule for good, so it asks first.
+  Future<void> _leaveAllOut(BuildContext context, WidgetRef ref,
+      List<RuleRestoreChoice> choices) async {
+    final l10n = context.l10n;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => GlassAlertDialog(
+        title: Text(l10n.lrRestoreLeaveAllTitle(choices.length)),
+        content:
+            SingleChildScrollView(child: Text(l10n.lrRestoreLeaveAllBody)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(l10n.rpCancel),
+          ),
+          TextButton(
+            key: const ValueKey('restore-rules-leave-all-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            style: TextButton.styleFrom(
+                foregroundColor: dialogContext.colors.danger),
+            child: Text(l10n.lrRestoreLeaveAll),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      await _decide(context, ref, choices, add: false);
+    }
   }
 
   @override
@@ -135,7 +168,7 @@ class LearnedRulesScreen extends ConsumerWidget {
                 ),
                 TextButton(
                   key: const ValueKey('restore-rules-leave-all'),
-                  onPressed: () => _decide(context, ref, pending, add: false),
+                  onPressed: () => _leaveAllOut(context, ref, pending),
                   child: Text(l10n.lrRestoreLeaveAll),
                 ),
               ],

@@ -187,15 +187,20 @@ void main() {
   // SM-04: a completed movement with a notice tail is never "no movement";
   // a notice with no completed movement still is.
   test('a notice tail never hides a completed movement', () {
+    expect(
+        _device('Purchase SAR 230.00 at Jarir with card *4521, eligible for installments')
+            .recorded,
+        isTrue);
+    // Round 5 (owner decision): a tail with a hedge ("till", «مستحق») makes
+    // the movement not clearly completed: a visible review row, never dropped.
     for (final text in [
-      'Purchase SAR 230.00 at Jarir with card *4521, eligible for installments',
       'Purchase SAR 120.00 at Jarir card *4521, offer valid till 30 Nov',
       'يرجى العلم بأنه تم خصم 500 ريال لقسط مستحق',
     ]) {
       expect(ParserEngine.meaningOf(text).disposition,
-          isNot(MessageDisposition.noMovement),
+          MessageDisposition.review,
           reason: text);
-      expect(_device(text).recorded, isTrue, reason: text);
+      expect(_device(text).recorded, isFalse, reason: text);
     }
     for (final text in [
       'Your card bill of SAR 1,200.00 is due on 25 Nov',
@@ -210,13 +215,17 @@ void main() {
   // SM-05/06: a balance total, a cashback line or a previous purchase is not a
   // second movement; two purchases stay in review.
   test('side figures are not second movements; two purchases are review', () {
-    for (final text in [
-      'Purchase SAR 80.00 at Danube card *4521. Cashback SAR 4.00 credited',
-      'Purchase SAR 120.00 at Jarir card *4521. Previous purchase SAR 80.00 at Panda',
-    ]) {
-      expect(ParserEngine.meaningOf(text).kind, MessageKind.completedMovement,
-          reason: text);
-    }
+    expect(
+        ParserEngine.meaningOf(
+                'Purchase SAR 80.00 at Danube card *4521. Cashback SAR 4.00 credited')
+            .kind,
+        MessageKind.completedMovement);
+    // Round 5: a reference to an earlier operation is a doubt (review).
+    expect(
+        ParserEngine.meaningOf('Purchase SAR 120.00 at Jarir card *4521. '
+                'Previous purchase SAR 80.00 at Panda')
+            .kind,
+        MessageKind.uncertain);
     expect(
         ParserEngine.meaningOf('Purchase SAR 80.00 at Danube card *4521. '
                 'Purchase SAR 45.00 at Kudu card *4521')

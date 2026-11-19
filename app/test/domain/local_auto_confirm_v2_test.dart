@@ -137,7 +137,8 @@ void main() {
             amountText: '99', amount: 99, currency: 'USD', confidence: 0.95)),
         accounts: SingleAccountRepo(homeAccount('SAR')),
         flag: () => false,
-      )(rawMessage: 'مبلغ:99 USD\nالرسوم/الضريبة:SAR 7.44\nمن:APPLE');
+      // (Round 5: a completed-event form, else the text is review.)
+      )(rawMessage: 'شراء انترنت\nمبلغ:99 USD\nالرسوم/الضريبة:SAR 7.44\nمن:APPLE');
       expect(foreign.transaction!.status, TransactionStatus.pending);
     });
   });
@@ -259,7 +260,8 @@ void main() {
       'unknown type': (ParseResult.success(_txn(), typeUndetected: true), _raw),
       'direction contradiction': (
         ParseResult.success(_txn()),
-        'Deposit SAR 42.00 salary'
+        // (Round 5: a completed-event form, else the meaning holds it.)
+        'Salary SAR 42.00 deposited'
       ),
       'uncorroborated catalog amount': (
         ParseResult.success(_txn(), catalogAmountCorroborated: false),

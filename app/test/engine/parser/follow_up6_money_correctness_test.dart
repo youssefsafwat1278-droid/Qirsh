@@ -79,6 +79,16 @@ void main() {
           () {
         final o = _device(text);
         final meaning = ParserEngine.meaningOf(text);
+        if (c['round5'] != null) {
+          // Round 5 (owner decision): a movement that is not clearly
+          // completed is a visible review row, and no answer of "completed"
+          // is accepted for it.
+          expect(o.recorded, isFalse);
+          expect(meaning.disposition, MessageDisposition.review);
+          expect(AiCandidateValidator.meaningRejectionOf(text, amount: answer),
+              isNotNull);
+          return;
+        }
         if (kind == 'n' || kind == 'r') {
           expect(o.recorded, isFalse);
           // No answer is accepted for it: not by the hold every import path

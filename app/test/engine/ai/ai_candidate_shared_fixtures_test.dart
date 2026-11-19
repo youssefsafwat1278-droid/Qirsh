@@ -40,7 +40,9 @@ void main() {
     test('shared AI candidate fixture: ${c['name']}', () {
       final ai = c['ai'] as Map<String, dynamic>;
       final local = c['local'] as Map<String, dynamic>?;
-      final expected = c['expected'] as Map<String, dynamic>;
+      // Round 5: a device-only verdict where the meaning gate differs.
+      final expected =
+          (c['expected_device'] ?? c['expected']) as Map<String, dynamic>;
       final aiDate = ai['occurred_at'] is String
           ? DateTime.tryParse(ai['occurred_at'] as String)
           : null;

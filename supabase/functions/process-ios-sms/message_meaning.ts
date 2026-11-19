@@ -525,8 +525,10 @@ export function isOwnAccountMove(core: string): boolean {
   const both = (hasDebitFlow(core) && hasCreditFlow(core)) ||
     (SOURCE_OF_FUNDS.some((w) => core.includes(w)) && OWN_DESTINATION.some((w) => core.includes(w)));
   if (!both) return false;
-  // (On the server a masked reference may arrive redacted: "[NAME]1111".)
-  const refs = new Set([...core.matchAll(/(?:\*+\s?|\[(?:name|card|account)\])([0-9]{4})/gi)].map((m) => m[1]));
+  // (On the server a masked reference may arrive redacted: "[NAME]1111", or
+  // with no digits left: "[ACCOUNT]" — round 5, a reference of its own.)
+  const refs = new Set([...core.matchAll(/(?:\*+\s?|\[(?:name|card|account)\])([0-9]{4})|\[account\](?![0-9])/gi)]
+    .map((m) => m[1] ?? '[account]'));
   return refs.size >= 2 || hasAnyWord(core, OWN_ACCOUNT_MARKERS);
 }
 
@@ -582,7 +584,7 @@ const TIP_FIGURE = new RegExp(
 // Round 4 (real-model run): a fee or penalty for a late payment is a charge
 // on the card; the card is not what is being paid.
 const CARD_REPAYMENT = new RegExp(
-  '(?<![a-z])credit card (?:re)?payment(?! fees?| charges?| penalt)(?![a-z])[^\\n]{0,60}?(?<![a-z])received(?![a-z])' +
+  '(?<![a-z])credit card(?: [*x•]*[0-9]{4})? (?:re)?payment(?! fees?| charges?| penalt)(?![a-z])[^\\n]{0,60}?(?<![a-z])received(?![a-z])' +
     '|(?<![a-z])(?<!late )(?<!missed )(?<!overdue )(?:re)?payment(?! fees?| charges?| penalt)(?![a-z])[^\\n]{0,60}?(?<![a-z])(?:for|to|towards) (?:your )?credit card(?![a-z])' +
     '|(?<![a-z])(?:transfer(?:red)?|paid)(?![a-z])[^\\n]{0,60}?(?<![a-z])to (?:your )?credit card(?![a-z])' +
     // Follow-up 5: the card is what is repaid, not the instrument a bill is paid with.
@@ -710,7 +712,9 @@ const NAMED_ACCOUNTS = new RegExp(
   `(?<![a-z])${ACCT_TYPE}(?: account| acct| a/c)?${ACCT_REF} to (?:your |the |my )?${ACCT_TYPE}(?![a-z])${OTHER_OWNER}` +
     `|(?<![a-z])to (?:your |the |my )?${ACCT_TYPE}(?: account| acct| a/c)? from (?:your |the |my )?${ACCT_TYPE}(?![a-z])` +
     '|من\\s+(?:(?:ال)?حسابك?\\s+)?(?:ال)?(?:توفير|ادخار|جاري)[^\\n]{0,30}?(?:إلى|الى):?\\s+(?:\\[(?:redacted|name)\\]\\s+)?(?:(?:ال)?حسابك?\\s+)?(?:ال)?(?:جاري|توفير|ادخار)' +
-    '(?!ي?\\s+(?:الخاص ب|باسم|للمستفيد|للسيد|العائد))',
+    '(?!ي?\\s+(?:الخاص ب|باسم|للمستفيد|للسيد|العائد))' +
+    // Round 5 (R4M-09): the same in the other order, «إلى حسابك الادخاري … من حسابك الجاري».
+    '|(?:إلى|الى)\\s+حسابك\\s+(?:ال)?(?:توفير|ادخار|جاري)[^\\n]{0,30}?من\\s+حسابك\\s+(?:ال)?(?:جاري|توفير|ادخار)',
 );
 // Follow-up 6 (PRE-AT008): both ends named as the user's own in one clause,
 // with only an account reference between them.

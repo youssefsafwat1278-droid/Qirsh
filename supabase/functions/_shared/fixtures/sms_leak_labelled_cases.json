@@ -1446,7 +1446,7 @@
  {
   "id": "r4_account_of_ar",
   "raw": "سداد 150.00 ريال إلى حساب باسم نادر زكي",
-  "expected": "سداد 150.00 ريال إلى: [REDACTED] [NAME]",
+  "expected": "سداد 150.00 ريال إلى: [REDACTED]",
   "secrets": [
    "نادر",
    "زكي"
@@ -1609,7 +1609,7 @@
  {
   "id": "r4_suffix_beneficiary_ar",
   "raw": "تم تحويل 85.00 ريال إلى حساب المستفيد *9876",
-  "expected": "تم تحويل 85.00 ريال إلى: [REDACTED]",
+  "expected": "تم تحويل 85.00 ريال إلى: [REDACTED] المستفيد [ACCOUNT]",
   "secrets": [
    "9876"
   ],
@@ -2323,7 +2323,6 @@
   "id": "r4_pair_beneficiary_person",
   "raw": "SAR 75.00 sent. Beneficiary: Nadir Zaki",
   "expected": "SAR 75.00 sent. Beneficiary: [NAME]",
-  "pair": "r4_pair_beneficiary_merchant",
   "secrets": [
    "Nadir",
    "Zaki"
@@ -2335,23 +2334,22 @@
   ]
  },
  {
-  "id": "r4_pair_beneficiary_merchant",
-  "raw": "SAR 75.00 sent. Beneficiary: Example Trading LLC",
-  "expected": "SAR 75.00 sent. Beneficiary: Example Trading LLC",
-  "pair": "r4_pair_beneficiary_person",
-  "secrets": [],
+  "id": "r4_biz_beneficiary",
+  "raw": "SAR 75.00 sent. Beneficiary: Zenith Trading LLC",
+  "expected": "SAR 75.00 sent. Beneficiary: [NAME]",
+  "secrets": [
+   "Zenith",
+   "Trading"
+  ],
   "mustKeep": [
    "75.00",
-   "sent",
-   "Example Trading LLC"
-  ],
-  "merchant": "Example Trading LLC"
+   "sent"
+  ]
  },
  {
   "id": "r4_pair_lisalih_person",
   "raw": "تم خصم 75 ريال لصالح نادر زكي",
   "expected": "تم خصم 75 ريال لصالح [NAME]",
-  "pair": "r4_pair_lisalih_merchant",
   "secrets": [
    "نادر",
    "زكي"
@@ -2364,24 +2362,22 @@
   ]
  },
  {
-  "id": "r4_pair_lisalih_merchant",
-  "raw": "تم خصم 75 ريال لصالح شركة المثال",
-  "expected": "تم خصم 75 ريال لصالح شركة المثال",
-  "pair": "r4_pair_lisalih_person",
-  "secrets": [],
+  "id": "r4_biz_lisalih",
+  "raw": "تم خصم 75 ريال لصالح شركة الزهراء",
+  "expected": "تم خصم 75 ريال لصالح [NAME]",
+  "secrets": [
+   "الزهراء"
+  ],
   "mustKeep": [
    "75",
    "ريال",
-   "تم خصم",
-   "شركة المثال"
-  ],
-  "merchant": "شركة المثال"
+   "تم خصم"
+  ]
  },
  {
   "id": "r4_pair_transfer_to_person",
   "raw": "Transfer of SAR 75.00 to Nadir Zaki completed",
   "expected": "Transfer of SAR 75.00 to [NAME] completed",
-  "pair": "r4_pair_transfer_to_merchant",
   "secrets": [
    "Nadir",
    "Zaki"
@@ -2393,23 +2389,22 @@
   ]
  },
  {
-  "id": "r4_pair_transfer_to_merchant",
-  "raw": "Transfer of SAR 75.00 to Example Markets completed",
-  "expected": "Transfer of SAR 75.00 to Example Markets completed",
-  "pair": "r4_pair_transfer_to_person",
-  "secrets": [],
+  "id": "r4_biz_transfer_to",
+  "raw": "Transfer of SAR 75.00 to Zenith Markets completed",
+  "expected": "Transfer of SAR 75.00 to [NAME] completed",
+  "secrets": [
+   "Zenith",
+   "Markets"
+  ],
   "mustKeep": [
    "75.00",
-   "completed",
-   "Example Markets"
-  ],
-  "merchant": "Example Markets"
+   "completed"
+  ]
  },
  {
   "id": "r4_pair_transfer_to_person_ar",
   "raw": "تم تحويل 75 ريال إلى نادر زكي بنجاح",
   "expected": "تم تحويل 75 ريال إلى: [REDACTED] بنجاح",
-  "pair": "r4_pair_transfer_to_merchant_ar",
   "secrets": [
    "نادر",
    "زكي"
@@ -2422,25 +2417,24 @@
   ]
  },
  {
-  "id": "r4_pair_transfer_to_merchant_ar",
-  "raw": "تم تحويل 75 ريال إلى أسواق المثال بنجاح",
-  "expected": "تم تحويل 75 ريال إلى أسواق المثال بنجاح",
-  "pair": "r4_pair_transfer_to_person_ar",
-  "secrets": [],
+  "id": "r4_biz_transfer_to_ar",
+  "raw": "تم تحويل 75 ريال إلى أسواق الزهراء بنجاح",
+  "expected": "تم تحويل 75 ريال إلى: [REDACTED] بنجاح",
+  "secrets": [
+   "أسواق",
+   "الزهراء"
+  ],
   "mustKeep": [
    "75",
    "ريال",
    "تم تحويل",
-   "بنجاح",
-   "أسواق المثال"
-  ],
-  "merchant": "أسواق المثال"
+   "بنجاح"
+  ]
  },
  {
   "id": "r4_pair_salary_person",
   "raw": "SAR 9,000.00 credited to your account from Nadir Zaki on 27/10",
   "expected": "SAR 9,000.00 credited to your account from [NAME] on 27/10",
-  "pair": "r4_pair_salary_merchant",
   "secrets": [
    "Nadir",
    "Zaki"
@@ -2452,19 +2446,19 @@
   ]
  },
  {
-  "id": "r4_pair_salary_merchant",
-  "raw": "Salary SAR 9,000.00 credited to your account from Example Trading LLC on 27/10",
-  "expected": "Salary SAR 9,000.00 credited to your account from Example Trading LLC on 27/10",
-  "pair": "r4_pair_salary_person",
-  "secrets": [],
+  "id": "r4_biz_salary",
+  "raw": "Salary SAR 9,000.00 credited to your account from Zenith Trading LLC on 27/10",
+  "expected": "Salary SAR 9,000.00 credited to your account from [NAME] on 27/10",
+  "secrets": [
+   "Zenith",
+   "Trading"
+  ],
   "mustKeep": [
    "9,000.00",
    "27/10",
    "credited",
-   "Example Trading LLC",
    "Salary"
-  ],
-  "merchant": "Example Trading LLC"
+  ]
  },
  {
   "id": "r4_otp_is",
@@ -2886,5 +2880,1317 @@
    "[OTP]"
   ],
   "pair": "r4_code_promo_after_purchase_ar"
+ },
+ {
+  "id": "r4_pair_dafa_person",
+  "raw": "دفع 75 ريال إلى نادر زكي",
+  "expected": "دفع 75 ريال إلى: [REDACTED]",
+  "secrets": [
+   "نادر",
+   "زكي"
+  ],
+  "mustKeep": [
+   "75",
+   "ريال",
+   "دفع"
+  ],
+  "pair": "r4_pair_dafa_merchant"
+ },
+ {
+  "id": "r4_pair_dafa_merchant",
+  "raw": "دفع 75 ريال إلى أسواق المثال",
+  "expected": "دفع 75 ريال إلى أسواق المثال",
+  "secrets": [],
+  "mustKeep": [
+   "75",
+   "ريال",
+   "دفع",
+   "أسواق المثال"
+  ],
+  "pair": "r4_pair_dafa_person",
+  "merchant": "أسواق المثال"
+ },
+ {
+  "id": "r5_compound_min_0",
+  "raw": "حوالة واردة 75 ريال من عبد العزيز القحطاني",
+  "expected": "حوالة واردة 75 ريال من [NAME]",
+  "secrets": [
+   "عبد",
+   "العزيز",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_min_1",
+  "raw": "حوالة واردة 75 ريال من عبد الكريم القحطاني",
+  "expected": "حوالة واردة 75 ريال من [NAME]",
+  "secrets": [
+   "عبد",
+   "الكريم",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_min_2",
+  "raw": "حوالة واردة 75 ريال من عبدالعزيز القحطاني",
+  "expected": "حوالة واردة 75 ريال من [NAME]",
+  "secrets": [
+   "عبدالعزيز",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_min_3",
+  "raw": "حوالة واردة 75 ريال من عبد الله القحطاني",
+  "expected": "حوالة واردة 75 ريال من [NAME]",
+  "secrets": [
+   "عبد",
+   "الله",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_min_4",
+  "raw": "حوالة واردة 75 ريال من عبدالله القحطاني",
+  "expected": "حوالة واردة 75 ريال من [NAME]",
+  "secrets": [
+   "عبدالله",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_min_6",
+  "raw": "حوالة واردة 75 ريال من ابن سعود القحطاني",
+  "expected": "حوالة واردة 75 ريال من [NAME]",
+  "secrets": [
+   "ابن",
+   "سعود",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_mustafid_0",
+  "raw": "المستفيد: عبد العزيز القحطاني المبلغ 75.50 ريال",
+  "expected": "المستفيد: [NAME] المبلغ 75.50 ريال",
+  "secrets": [
+   "عبد",
+   "العزيز",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "75.50",
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_mustafid_1",
+  "raw": "المستفيد: عبد الكريم القحطاني المبلغ 75.50 ريال",
+  "expected": "المستفيد: [NAME] المبلغ 75.50 ريال",
+  "secrets": [
+   "عبد",
+   "الكريم",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "75.50",
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_mustafid_2",
+  "raw": "المستفيد: عبدالعزيز القحطاني المبلغ 75.50 ريال",
+  "expected": "المستفيد: [NAME] المبلغ 75.50 ريال",
+  "secrets": [
+   "عبدالعزيز",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "75.50",
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_mustafid_3",
+  "raw": "المستفيد: عبد الله القحطاني المبلغ 75.50 ريال",
+  "expected": "المستفيد: [NAME] المبلغ 75.50 ريال",
+  "secrets": [
+   "عبد",
+   "الله",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "75.50",
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_mustafid_4",
+  "raw": "المستفيد: عبدالله القحطاني المبلغ 75.50 ريال",
+  "expected": "المستفيد: [NAME] المبلغ 75.50 ريال",
+  "secrets": [
+   "عبدالله",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "75.50",
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_mustafid_5",
+  "raw": "المستفيد: أبو بكر القحطاني المبلغ 75.50 ريال",
+  "expected": "المستفيد: [NAME] المبلغ 75.50 ريال",
+  "secrets": [
+   "أبو",
+   "بكر",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "75.50",
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_mustafid_7",
+  "raw": "المستفيد: آل سعود القحطاني المبلغ 75.50 ريال",
+  "expected": "المستفيد: [NAME] المبلغ 75.50 ريال",
+  "secrets": [
+   "آل",
+   "سعود",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "75.50",
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_lisalih_0",
+  "raw": "تم تحويل 75 ريال لصالح عبد العزيز ناصر بنجاح",
+  "expected": "تم تحويل 75 ريال لصالح [NAME] بنجاح",
+  "secrets": [
+   "عبد",
+   "العزيز",
+   "ناصر"
+  ],
+  "mustKeep": [
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "r5_compound_lisalih_1",
+  "raw": "تم تحويل 75 ريال لصالح عبد الكريم ناصر بنجاح",
+  "expected": "تم تحويل 75 ريال لصالح [NAME] بنجاح",
+  "secrets": [
+   "عبد",
+   "الكريم",
+   "ناصر"
+  ],
+  "mustKeep": [
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "r5_compound_lisalih_2",
+  "raw": "تم تحويل 75 ريال لصالح عبدالعزيز ناصر بنجاح",
+  "expected": "تم تحويل 75 ريال لصالح [NAME] بنجاح",
+  "secrets": [
+   "عبدالعزيز",
+   "ناصر"
+  ],
+  "mustKeep": [
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "r5_compound_lisalih_3",
+  "raw": "تم تحويل 75 ريال لصالح عبد الله ناصر بنجاح",
+  "expected": "تم تحويل 75 ريال لصالح [NAME] بنجاح",
+  "secrets": [
+   "عبد",
+   "الله",
+   "ناصر"
+  ],
+  "mustKeep": [
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "r5_compound_lisalih_4",
+  "raw": "تم تحويل 75 ريال لصالح عبدالله ناصر بنجاح",
+  "expected": "تم تحويل 75 ريال لصالح [NAME] بنجاح",
+  "secrets": [
+   "عبدالله",
+   "ناصر"
+  ],
+  "mustKeep": [
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "r5_compound_lisalih_6",
+  "raw": "تم تحويل 75 ريال لصالح ابن سعود ناصر بنجاح",
+  "expected": "تم تحويل 75 ريال لصالح [NAME] بنجاح",
+  "secrets": [
+   "ابن",
+   "سعود",
+   "ناصر"
+  ],
+  "mustKeep": [
+   "بنجاح"
+  ]
+ },
+ {
+  "id": "r5_compound_arsala_0",
+  "raw": "أرسل لك عبد العزيز محمد 40 ريال",
+  "expected": "أرسل لك [NAME] 40 ريال",
+  "secrets": [
+   "عبد",
+   "العزيز",
+   "محمد"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_arsala_1",
+  "raw": "أرسل لك عبد الكريم محمد 40 ريال",
+  "expected": "أرسل لك [NAME] 40 ريال",
+  "secrets": [
+   "عبد",
+   "الكريم",
+   "محمد"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_arsala_2",
+  "raw": "أرسل لك عبدالعزيز محمد 40 ريال",
+  "expected": "أرسل لك [NAME] 40 ريال",
+  "secrets": [
+   "عبدالعزيز",
+   "محمد"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_arsala_3",
+  "raw": "أرسل لك عبد الله محمد 40 ريال",
+  "expected": "أرسل لك [NAME] 40 ريال",
+  "secrets": [
+   "عبد",
+   "الله",
+   "محمد"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_arsala_4",
+  "raw": "أرسل لك عبدالله محمد 40 ريال",
+  "expected": "أرسل لك [NAME] 40 ريال",
+  "secrets": [
+   "عبدالله",
+   "محمد"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_arsala_5",
+  "raw": "أرسل لك أبو بكر محمد 40 ريال",
+  "expected": "أرسل لك [NAME] 40 ريال",
+  "secrets": [
+   "أبو",
+   "بكر",
+   "محمد"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_arsala_7",
+  "raw": "أرسل لك آل سعود محمد 40 ريال",
+  "expected": "أرسل لك [NAME] 40 ريال",
+  "secrets": [
+   "آل",
+   "سعود",
+   "محمد"
+  ],
+  "mustKeep": [
+   "ريال"
+  ]
+ },
+ {
+  "id": "r5_compound_ila_0",
+  "raw": "تم تحويل 75 ريال إلى عبد العزيز القحطاني أمس",
+  "expected": "تم تحويل 75 ريال إلى: [REDACTED] أمس",
+  "secrets": [
+   "عبد",
+   "العزيز",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "أمس"
+  ]
+ },
+ {
+  "id": "r5_compound_ila_1",
+  "raw": "تم تحويل 75 ريال إلى عبد الكريم القحطاني أمس",
+  "expected": "تم تحويل 75 ريال إلى: [REDACTED] أمس",
+  "secrets": [
+   "عبد",
+   "الكريم",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "أمس"
+  ]
+ },
+ {
+  "id": "r5_compound_ila_2",
+  "raw": "تم تحويل 75 ريال إلى عبدالعزيز القحطاني أمس",
+  "expected": "تم تحويل 75 ريال إلى: [REDACTED] أمس",
+  "secrets": [
+   "عبدالعزيز",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "أمس"
+  ]
+ },
+ {
+  "id": "r5_compound_ila_3",
+  "raw": "تم تحويل 75 ريال إلى عبد الله القحطاني أمس",
+  "expected": "تم تحويل 75 ريال إلى: [REDACTED] أمس",
+  "secrets": [
+   "عبد",
+   "الله",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "أمس"
+  ]
+ },
+ {
+  "id": "r5_compound_ila_4",
+  "raw": "تم تحويل 75 ريال إلى عبدالله القحطاني أمس",
+  "expected": "تم تحويل 75 ريال إلى: [REDACTED] أمس",
+  "secrets": [
+   "عبدالله",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "أمس"
+  ]
+ },
+ {
+  "id": "r5_compound_ila_6",
+  "raw": "تم تحويل 75 ريال إلى ابن سعود القحطاني أمس",
+  "expected": "تم تحويل 75 ريال إلى: [REDACTED] أمس",
+  "secrets": [
+   "ابن",
+   "سعود",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "أمس"
+  ]
+ },
+ {
+  "id": "r5_compound_ism_0",
+  "raw": "اسم المستفيد عبد العزيز محمد المبلغ 120 ريال",
+  "expected": "اسم المستفيد [NAME] المبلغ 120 ريال",
+  "secrets": [
+   "عبد",
+   "العزيز",
+   "محمد"
+  ],
+  "mustKeep": [
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_ism_1",
+  "raw": "اسم المستفيد عبد الكريم محمد المبلغ 120 ريال",
+  "expected": "اسم المستفيد [NAME] المبلغ 120 ريال",
+  "secrets": [
+   "عبد",
+   "الكريم",
+   "محمد"
+  ],
+  "mustKeep": [
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_ism_2",
+  "raw": "اسم المستفيد عبدالعزيز محمد المبلغ 120 ريال",
+  "expected": "اسم المستفيد [NAME] المبلغ 120 ريال",
+  "secrets": [
+   "عبدالعزيز",
+   "محمد"
+  ],
+  "mustKeep": [
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_ism_3",
+  "raw": "اسم المستفيد عبد الله محمد المبلغ 120 ريال",
+  "expected": "اسم المستفيد [NAME] المبلغ 120 ريال",
+  "secrets": [
+   "عبد",
+   "الله",
+   "محمد"
+  ],
+  "mustKeep": [
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_ism_4",
+  "raw": "اسم المستفيد عبدالله محمد المبلغ 120 ريال",
+  "expected": "اسم المستفيد [NAME] المبلغ 120 ريال",
+  "secrets": [
+   "عبدالله",
+   "محمد"
+  ],
+  "mustKeep": [
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_ism_5",
+  "raw": "اسم المستفيد أبو بكر محمد المبلغ 120 ريال",
+  "expected": "اسم المستفيد [NAME] المبلغ 120 ريال",
+  "secrets": [
+   "أبو",
+   "بكر",
+   "محمد"
+  ],
+  "mustKeep": [
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_ism_7",
+  "raw": "اسم المستفيد آل سعود محمد المبلغ 120 ريال",
+  "expected": "اسم المستفيد [NAME] المبلغ 120 ريال",
+  "secrets": [
+   "آل",
+   "سعود",
+   "محمد"
+  ],
+  "mustKeep": [
+   "المبلغ"
+  ]
+ },
+ {
+  "id": "r5_compound_karim_alaziz",
+  "raw": "المستفيد: كريم العزيز المبلغ 75 ريال",
+  "expected": "المستفيد: [NAME] المبلغ 75 ريال",
+  "secrets": [
+   "كريم",
+   "العزيز"
+  ],
+  "mustKeep": [
+   "المبلغ",
+   "75"
+  ]
+ },
+ {
+  "id": "r5_dear_customer_kept",
+  "raw": "عميلنا العزيز تم خصم 50 ريال من حسابك *1234",
+  "expected": "عميلنا العزيز تم خصم 50 ريال من حسابك *1234",
+  "secrets": [],
+  "mustKeep": [
+   "عميلنا العزيز",
+   "تم خصم",
+   "50",
+   "*1234"
+  ]
+ },
+ {
+  "id": "r5_dear_customer_name",
+  "raw": "عميلنا العزيز/ سلمى راشد تم إيداع 50 ريال",
+  "expected": "عميلنا العزيز/ [NAME] تم إيداع 50 ريال",
+  "secrets": [
+   "سلمى",
+   "راشد"
+  ],
+  "mustKeep": [
+   "تم إيداع",
+   "50"
+  ]
+ },
+ {
+  "id": "r5_status_0",
+  "raw": "حوالة 152 ريال إلى هاني عادل بانتظار التأكيد",
+  "expected": "حوالة 152 ريال إلى: [REDACTED] بانتظار التأكيد",
+  "secrets": [
+   "هاني",
+   "عادل"
+  ],
+  "mustKeep": [
+   "بانتظار التأكيد",
+   "152"
+  ]
+ },
+ {
+  "id": "r5_status_1",
+  "raw": "حوالة 152 ريال إلى هاني عادل قيد المعالجة",
+  "expected": "حوالة 152 ريال إلى: [REDACTED] قيد المعالجة",
+  "secrets": [
+   "هاني",
+   "عادل"
+  ],
+  "mustKeep": [
+   "قيد المعالجة"
+  ]
+ },
+ {
+  "id": "r5_status_2",
+  "raw": "حوالة 152 ريال إلى هاني عادل لم تتم",
+  "expected": "حوالة 152 ريال إلى: [REDACTED] لم تتم",
+  "secrets": [
+   "هاني",
+   "عادل"
+  ],
+  "mustKeep": [
+   "لم تتم"
+  ]
+ },
+ {
+  "id": "r5_status_3",
+  "raw": "حوالة 152 ريال إلى هاني عادل غير ناجحة",
+  "expected": "حوالة 152 ريال إلى: [REDACTED] غير ناجحة",
+  "secrets": [
+   "هاني",
+   "عادل"
+  ],
+  "mustKeep": [
+   "غير ناجحة"
+  ]
+ },
+ {
+  "id": "r5_status_4",
+  "raw": "حوالة 152 ريال إلى هاني عادل ملغاة",
+  "expected": "حوالة 152 ريال إلى: [REDACTED] ملغاة",
+  "secrets": [
+   "هاني",
+   "عادل"
+  ],
+  "mustKeep": [
+   "ملغاة"
+  ]
+ },
+ {
+  "id": "r5_status_5",
+  "raw": "تم تحويل 151 ريال إلى هاني عادل أمس",
+  "expected": "تم تحويل 151 ريال إلى: [REDACTED] أمس",
+  "secrets": [
+   "هاني",
+   "عادل"
+  ],
+  "mustKeep": [
+   "أمس",
+   "151"
+  ]
+ },
+ {
+  "id": "r5_status_6",
+  "raw": "Transfer SAR 148 to Fadi Nasser yesterday",
+  "expected": "Transfer SAR 148 to [NAME] yesterday",
+  "secrets": [
+   "Fadi",
+   "Nasser"
+  ],
+  "mustKeep": [
+   "yesterday",
+   "148"
+  ]
+ },
+ {
+  "id": "r5_status_7",
+  "raw": "Transfer of SAR 148 to Fadi Nasser awaiting confirmation",
+  "expected": "Transfer of SAR 148 to [NAME] awaiting confirmation",
+  "secrets": [
+   "Fadi",
+   "Nasser"
+  ],
+  "mustKeep": [
+   "awaiting confirmation"
+  ]
+ },
+ {
+  "id": "r5_status_8",
+  "raw": "Transfer of SAR 148 to Fadi Nasser could not be completed",
+  "expected": "Transfer of SAR 148 to [NAME] could not be completed",
+  "secrets": [
+   "Fadi",
+   "Nasser"
+  ],
+  "mustKeep": [
+   "could not be completed"
+  ]
+ },
+ {
+  "id": "r5_status_9",
+  "raw": "Transfer of SAR 148 to Fadi Nasser is on hold",
+  "expected": "Transfer of SAR 148 to [NAME] is on hold",
+  "secrets": [
+   "Fadi",
+   "Nasser"
+  ],
+  "mustKeep": [
+   "is on hold"
+  ]
+ },
+ {
+  "id": "r5_status_10",
+  "raw": "Transfer SAR 148 To: Fadi Nasser bounced last Monday",
+  "expected": "Transfer SAR 148 To: [REDACTED] bounced last Monday",
+  "secrets": [
+   "Fadi",
+   "Nasser"
+  ],
+  "mustKeep": [
+   "bounced last Monday"
+  ]
+ },
+ {
+  "id": "r5_status_11",
+  "raw": "Payment of SAR 100.00 to Fadi Nasser did not go through",
+  "expected": "Payment of SAR 100.00 to [NAME] did not go through",
+  "secrets": [
+   "Fadi",
+   "Nasser"
+  ],
+  "mustKeep": [
+   "did not go through"
+  ]
+ },
+ {
+  "id": "r5_account_holder_ar",
+  "raw": "حوالة واردة 123 ريال من حساب هاني عادل 7788",
+  "expected": "حوالة واردة 123 ريال من حساب [NAME] [ACCOUNT]",
+  "secrets": [
+   "هاني",
+   "عادل",
+   "7788"
+  ],
+  "mustKeep": [
+   "123",
+   "واردة"
+  ]
+ },
+ {
+  "id": "r5_account_holder_ar_amount_kept",
+  "raw": "حوالة واردة من حساب هاني عادل 500 ريال",
+  "expected": "حوالة واردة من حساب [NAME] 500 ريال",
+  "secrets": [
+   "هاني",
+   "عادل"
+  ],
+  "mustKeep": [
+   "500 ريال"
+  ]
+ },
+ {
+  "id": "r5_lower_payment_to",
+  "raw": "Payment of SAR 109 to fadi nasser via Mada",
+  "expected": "Payment of SAR 109 to [NAME] via Mada",
+  "secrets": [
+   "fadi",
+   "nasser"
+  ],
+  "mustKeep": [
+   "109",
+   "via Mada"
+  ]
+ },
+ {
+  "id": "r5_lower_transfer_to",
+  "raw": "transfer of SAR 109 to fadi nasser completed",
+  "expected": "transfer of SAR 109 to [NAME] completed",
+  "secrets": [
+   "fadi",
+   "nasser"
+  ],
+  "mustKeep": [
+   "109",
+   "completed"
+  ]
+ },
+ {
+  "id": "r5_lower_single_to",
+  "raw": "Payment of SAR 109 to fadi via Mada",
+  "expected": "Payment of SAR 109 to [NAME] via Mada",
+  "secrets": [
+   "fadi"
+  ],
+  "mustKeep": [
+   "109",
+   "via Mada"
+  ]
+ },
+ {
+  "id": "r5_lower_sent_you",
+  "raw": "fadi nasser sent you SAR 109",
+  "expected": "[NAME] sent you SAR 109",
+  "secrets": [
+   "fadi",
+   "nasser"
+  ],
+  "mustKeep": [
+   "109",
+   "sent you"
+  ]
+ },
+ {
+  "id": "r5_acct_of",
+  "raw": "SAR 5.00 transferred to acct 7788 of Faisal Qahtani",
+  "expected": "SAR 5.00 transferred to acct [ACCOUNT] of [NAME]",
+  "secrets": [
+   "7788",
+   "Faisal",
+   "Qahtani"
+  ],
+  "mustKeep": [
+   "5.00",
+   "transferred"
+  ]
+ },
+ {
+  "id": "r5_biz_transfer_en",
+  "raw": "Transfer of SAR 100.00 to Ahmed Trading completed",
+  "expected": "Transfer of SAR 100.00 to [NAME] completed",
+  "secrets": [
+   "Ahmed",
+   "Trading"
+  ],
+  "mustKeep": [
+   "100.00",
+   "completed"
+  ]
+ },
+ {
+  "id": "r5_biz_transfer_est",
+  "raw": "SAR 900.00 transferred to Faisal Qahtani Est.",
+  "expected": "SAR 900.00 transferred to [NAME].",
+  "secrets": [
+   "Faisal",
+   "Qahtani"
+  ],
+  "mustKeep": [
+   "900.00",
+   "transferred"
+  ]
+ },
+ {
+  "id": "r5_biz_transfer_ar",
+  "raw": "تم تحويل 900 ريال إلى مؤسسة فيصل القحطاني",
+  "expected": "تم تحويل 900 ريال إلى: [REDACTED]",
+  "secrets": [
+   "فيصل",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "900",
+   "تم تحويل"
+  ]
+ },
+ {
+  "id": "r5_biz_transfer_tajir",
+  "raw": "تم تحويل 900 ريال إلى محمد التاجر",
+  "expected": "تم تحويل 900 ريال إلى: [REDACTED]",
+  "secrets": [
+   "محمد",
+   "التاجر"
+  ],
+  "mustKeep": [
+   "900",
+   "تم تحويل"
+  ]
+ },
+ {
+  "id": "r5_decision_payment_no_evidence",
+  "raw": "Payment of SAR 85.00 to Careem",
+  "expected": "Payment of SAR 85.00 to [NAME]",
+  "secrets": [
+   "Careem"
+  ],
+  "mustKeep": [
+   "85.00",
+   "to [NAME]"
+  ],
+  "pair": "r5_decision_payment_card"
+ },
+ {
+  "id": "r5_decision_payment_card",
+  "raw": "Payment of SAR 85.00 to Careem with card *4521",
+  "expected": "Payment of SAR 85.00 to Careem with card *4521",
+  "secrets": [],
+  "mustKeep": [
+   "85.00",
+   "Careem",
+   "*4521"
+  ],
+  "pair": "r5_decision_payment_no_evidence",
+  "merchant": "Careem"
+ },
+ {
+  "id": "r5_decision_paid_rail",
+  "raw": "You paid SAR 85.00 to Kudu using mada",
+  "expected": "You paid SAR 85.00 to [NAME] using mada",
+  "secrets": [
+   "Kudu"
+  ],
+  "mustKeep": [
+   "85.00",
+   "to [NAME]",
+   "using mada"
+  ],
+  "pair": "r5_decision_paid_purchase"
+ },
+ {
+  "id": "r5_decision_paid_purchase",
+  "raw": "POS purchase: you paid SAR 85.00 to Kudu using mada",
+  "expected": "POS purchase: you paid SAR 85.00 to Kudu using mada",
+  "secrets": [],
+  "mustKeep": [
+   "85.00",
+   "Kudu",
+   "using mada"
+  ],
+  "pair": "r5_decision_paid_rail",
+  "merchant": "Kudu"
+ },
+ {
+  "id": "r5_decision_paid_marker",
+  "raw": "Paid SAR 85.00 to Example Pharmacy",
+  "expected": "Paid SAR 85.00 to Example Pharmacy",
+  "secrets": [],
+  "mustKeep": [
+   "85.00",
+   "Example Pharmacy"
+  ],
+  "merchant": "Example Pharmacy"
+ },
+ {
+  "id": "r5_ism_label",
+  "raw": "اسم المستفيد: فيصل القحطاني المبلغ 120 ريال",
+  "expected": "اسم المستفيد: [NAME] المبلغ 120 ريال",
+  "secrets": [
+   "فيصل",
+   "القحطاني"
+  ],
+  "mustKeep": [
+   "اسم المستفيد",
+   "المبلغ",
+   "120"
+  ]
+ },
+ {
+  "id": "r5_ism_biller",
+  "raw": "اسم الجهة: شركة المثال. سداد 120 ريال",
+  "expected": "اسم الجهة: شركة المثال. سداد 120 ريال",
+  "secrets": [],
+  "mustKeep": [
+   "اسم الجهة",
+   "شركة المثال",
+   "سداد",
+   "120"
+  ]
+ },
+ {
+  "id": "r5_name_with_stop_word",
+  "raw": "SAR 100.00 received from Mark Order",
+  "expected": "SAR 100.00 received from [NAME]",
+  "secrets": [
+   "Mark",
+   "Order"
+  ],
+  "mustKeep": [
+   "100.00",
+   "received"
+  ]
+ },
+ {
+  "id": "r5_name_with_stop_word_first",
+  "raw": "SAR 100.00 received from Local Hero",
+  "expected": "SAR 100.00 received from [NAME]",
+  "secrets": [
+   "Local",
+   "Hero"
+  ],
+  "mustKeep": [
+   "100.00",
+   "received"
+  ]
+ },
+ {
+  "id": "r5_initial_no_dot",
+  "raw": "Cardholder: NOURA A ALHARBI. SAR 85.00 withdrawn",
+  "expected": "Cardholder: [NAME]. SAR 85.00 withdrawn",
+  "secrets": [
+   "NOURA",
+   "ALHARBI"
+  ],
+  "mustKeep": [
+   "85.00",
+   "withdrawn"
+  ]
+ },
+ {
+  "id": "r5_initial_no_dot_to",
+  "raw": "Transfer of SAR 45.00 to Noura A Alharbi completed",
+  "expected": "Transfer of SAR 45.00 to [NAME] completed",
+  "secrets": [
+   "Noura",
+   "Alharbi"
+  ],
+  "mustKeep": [
+   "45.00",
+   "completed"
+  ]
+ },
+ {
+  "id": "r5_initials_two",
+  "raw": "SAR 10.00 received from MOHAMMED A M ALQAHTANI",
+  "expected": "SAR 10.00 received from [NAME]",
+  "secrets": [
+   "MOHAMMED",
+   "ALQAHTANI"
+  ],
+  "mustKeep": [
+   "10.00",
+   "received"
+  ]
+ },
+ {
+  "id": "r5_code_0",
+  "raw": "Your authorization code is 482913",
+  "expected": "Your authorization code is [OTP]",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "authorization code",
+   "[OTP]"
+  ]
+ },
+ {
+  "id": "r5_code_1",
+  "raw": "PIN: 482913 valid for 5 minutes",
+  "expected": "PIN: [OTP] valid for 5 minutes",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "PIN",
+   "valid for 5 minutes"
+  ]
+ },
+ {
+  "id": "r5_code_2",
+  "raw": "Your TAC is 482913 for transfer of SAR 250.00",
+  "expected": "Your TAC is [OTP] for transfer of SAR 250.00",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "TAC",
+   "SAR 250.00"
+  ]
+ },
+ {
+  "id": "r5_code_3",
+  "raw": "كلمة المرور المؤقتة 7712 صالحة لمدة 5 دقائق",
+  "expected": "كلمة المرور المؤقتة [OTP] صالحة لمدة 5 دقائق",
+  "secrets": [
+   "7712"
+  ],
+  "mustKeep": [
+   "كلمة المرور المؤقتة",
+   "5 دقائق"
+  ]
+ },
+ {
+  "id": "r5_code_4",
+  "raw": "الرقم السري لمرة واحدة 482913",
+  "expected": "الرقم السري لمرة واحدة [OTP]",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "الرقم السري لمرة واحدة"
+  ]
+ },
+ {
+  "id": "r5_code_5",
+  "raw": "الرمز المؤقت: 482913",
+  "expected": "الرمز المؤقت: [OTP]",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "الرمز المؤقت"
+  ]
+ },
+ {
+  "id": "r5_code_6",
+  "raw": "لإتمام العملية أدخل الرمز التالي 482913",
+  "expected": "لإتمام العملية أدخل الرمز التالي [OTP]",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "الرمز التالي"
+  ]
+ },
+ {
+  "id": "r5_code_7",
+  "raw": "Your code is 482913 SAR 250.00 at Example Store",
+  "expected": "Your code is [OTP] SAR 250.00 at Example Store",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "SAR 250.00",
+   "Example Store"
+  ]
+ },
+ {
+  "id": "r5_code_8",
+  "raw": "Never share this: 482913.",
+  "expected": "Never share this: [OTP].",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "Never share this"
+  ]
+ },
+ {
+  "id": "r5_code_9",
+  "raw": "Code 482-913 to authorise SAR 250.00",
+  "expected": "Code [OTP] to authorise SAR 250.00",
+  "secrets": [
+   "482-913",
+   "482",
+   "913"
+  ],
+  "mustKeep": [
+   "SAR 250.00",
+   "Code"
+  ]
+ },
+ {
+  "id": "r5_code_10",
+  "raw": "Code 4 8 2 9 1 3",
+  "expected": "Code [OTP]",
+  "secrets": [
+   "4 8 2 9 1 3"
+  ],
+  "mustKeep": [
+   "Code"
+  ]
+ },
+ {
+  "id": "r5_code_11",
+  "raw": "Purchase SAR 250.00 at Example Store.\nCode: 482913\nDo not share",
+  "expected": "Purchase SAR 250.00 at Example Store.\nCode: [OTP]\nDo not share",
+  "secrets": [
+   "482913"
+  ],
+  "mustKeep": [
+   "SAR 250.00",
+   "Example Store",
+   "[OTP]",
+   "Do not share"
+  ]
+ },
+ {
+  "id": "r5_code_12",
+  "raw": "Purchase SAR 100.00 at Example Store. Authorization code 771234",
+  "expected": "Purchase SAR 100.00 at Example Store. Authorization code 771234",
+  "secrets": [],
+  "mustKeep": [
+   "771234",
+   "SAR 100.00",
+   "Example Store"
+  ]
+ },
+ {
+  "id": "r5_cue_0",
+  "raw": "Recipient - Dana Yousef - SAR 61.00 sent",
+  "expected": "Recipient - [NAME] - SAR 61.00 sent",
+  "secrets": [
+   "Dana",
+   "Yousef"
+  ],
+  "mustKeep": [
+   "61.00",
+   "sent"
+  ]
+ },
+ {
+  "id": "r5_cue_1",
+  "raw": "Request from Zainab Kareem: pay SAR 95.00",
+  "expected": "Request from [NAME]: pay SAR 95.00",
+  "secrets": [
+   "Zainab",
+   "Kareem"
+  ],
+  "mustKeep": [
+   "95.00",
+   "pay"
+  ]
+ },
+ {
+  "id": "r5_cue_2",
+  "raw": "Salary transfer SAR 5.00 for employee Majed Sultan credited",
+  "expected": "Salary transfer SAR 5.00 for employee [NAME] credited",
+  "secrets": [
+   "Majed",
+   "Sultan"
+  ],
+  "mustKeep": [
+   "5.00",
+   "credited"
+  ]
+ },
+ {
+  "id": "r5_cue_3",
+  "raw": "Cheque SAR 5.00 payable to Walid Jaber",
+  "expected": "Cheque SAR 5.00 payable to [NAME]",
+  "secrets": [
+   "Walid",
+   "Jaber"
+  ],
+  "mustKeep": [
+   "5.00",
+   "payable to"
+  ]
+ },
+ {
+  "id": "r5_cue_4",
+  "raw": "حوالة صادرة 60 ريال للمستفيد رامي نصار",
+  "expected": "حوالة صادرة 60 ريال للمستفيد [NAME]",
+  "secrets": [
+   "رامي",
+   "نصار"
+  ],
+  "mustKeep": [
+   "60",
+   "صادرة"
+  ]
+ },
+ {
+  "id": "r5_cue_5",
+  "raw": "تحويل 60 ريال لـ رامي نصار",
+  "expected": "تحويل 60 ريال لـ [NAME]",
+  "secrets": [
+   "رامي",
+   "نصار"
+  ],
+  "mustKeep": [
+   "60",
+   "تحويل"
+  ]
+ },
+ {
+  "id": "r5_cue_6",
+  "raw": "تم تحويل 60 ريال للسيد حاتم صبري",
+  "expected": "تم تحويل 60 ريال للسيد [NAME]",
+  "secrets": [
+   "حاتم",
+   "صبري"
+  ],
+  "mustKeep": [
+   "60",
+   "تم تحويل"
+  ]
+ },
+ {
+  "id": "r5_cue_7",
+  "raw": "من: أبو بكر الصديق\nمبلغ: 40 ريال",
+  "expected": "من: [NAME]\nمبلغ: 40 ريال",
+  "secrets": [
+   "أبو",
+   "بكر",
+   "الصديق"
+  ],
+  "mustKeep": [
+   "مبلغ: 40 ريال"
+  ]
+ },
+ {
+  "id": "r5_cue_8",
+  "raw": "وصلك 40 ريال من عبدالله",
+  "expected": "وصلك 40 ريال من [NAME]",
+  "secrets": [
+   "عبدالله"
+  ],
+  "mustKeep": [
+   "40",
+   "وصلك"
+  ]
+ },
+ {
+  "id": "r5_cue_9",
+  "raw": "طلب دفع 95 ريال من زينب كريم",
+  "expected": "طلب دفع 95 ريال من [NAME]",
+  "secrets": [
+   "زينب",
+   "كريم"
+  ],
+  "mustKeep": [
+   "95",
+   "طلب دفع"
+  ]
+ },
+ {
+  "id": "r5_cue_10",
+  "raw": "Transfer failed. Call 055 123 4567 or 055-123-4567 or +966 55 123 4567",
+  "expected": "Transfer failed. Call [PHONE] or [PHONE] or [PHONE]",
+  "secrets": [
+   "055 123 4567",
+   "055-123-4567",
+   "55 123 4567",
+   "4567"
+  ],
+  "mustKeep": [
+   "Transfer failed",
+   "Call"
+  ]
  }
 ]

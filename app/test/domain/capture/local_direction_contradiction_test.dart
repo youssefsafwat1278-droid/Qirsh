@@ -9,8 +9,9 @@ import 'package:money_companion/engine/parser/parser_engine.dart';
 /// transfer, keeps today's import. Synthetic messages only.
 void main() {
   const credit = 'تم استرجاع مبلغ 100.00 ريال إلى حسابك';
-  const debit = 'Purchase of SAR 100.00 at CAFE ONE card **1234. '
-      'Disputed purchases may be reversed';
+  // (Round 5: a hedged reversal footer made it not clearly completed, so the
+  // device no longer reads it; the plain purchase is used.)
+  const debit = 'Purchase of SAR 100.00 at CAFE ONE card **1234.';
 
   test('the opposite direction is flagged; the same direction is not', () {
     expect(localParseOpposesDirection(text: credit, direction: 'debit'), isTrue);

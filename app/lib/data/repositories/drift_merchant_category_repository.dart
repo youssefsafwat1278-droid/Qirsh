@@ -5,6 +5,7 @@ import '../../domain/repositories/merchant_category_repository.dart';
 import '../../features/planning_sync/services/planning_outbox_queue.dart';
 import '../db/app_database.dart';
 import '../db/database_seed.dart';
+import '../db/merchant_rule_history.dart';
 import '../db/sql_value_codec.dart';
 
 class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
@@ -68,6 +69,10 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
     if (categoryId == null) {
       throw StateError('Unknown category key: $categoryKey');
     }
+    // Later than the rule or removal this replaces (see nextMerchantRuleTime).
+    // Read before the write: saving the rule clears the recorded removal.
+    final changedAt = dateTimeToSql(await nextMerchantRuleTime(
+        _db, AppDatabase.normalizeMerchant(rawMerchant)));
 
     final existing = await _db.customSelect(
       'SELECT id FROM merchant_category_map WHERE merchant_id = ? LIMIT 1;',
@@ -87,7 +92,7 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
           Variable.withString(categoryId),
           Variable.withInt(boolToSql(isUserConfirmed)),
           Variable.withReal(confidence),
-          Variable.withString(dateTimeToSql(DateTime.now().toUtc())),
+          Variable.withString(changedAt),
         ],
       );
       return;
@@ -103,7 +108,7 @@ class DriftMerchantCategoryRepository implements MerchantCategoryRepository {
         Variable.withString(categoryId),
         Variable.withInt(boolToSql(isUserConfirmed)),
         Variable.withReal(confidence),
-        Variable.withString(dateTimeToSql(DateTime.now().toUtc())),
+        Variable.withString(changedAt),
         Variable.withString(merchantId),
       ],
     );

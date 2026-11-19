@@ -4,7 +4,8 @@
 // in app/lib/domain/capture/validated_capture.dart.
 import { separateMovementAmounts, statedTotal } from '../_shared/ai_candidate_validator.ts';
 import { dispositionOf, type MessageMeaning } from './message_meaning.ts';
-import { hasStatusCue, isDeclinedText, messageMeaning } from './parse.ts';
+import { hasStatusCue, isDeclinedText, messageMeaning, normalizedLower } from './parse.ts';
+import { uncertaintyOf } from './completion_certainty.ts';
 
 /**
  * Follow-up 13 — why an answer [amount] for [text] is never accepted from the
@@ -26,7 +27,10 @@ export function meaningRejectionOf(
   // word («عملية معكوسة: …», "… Transaction reversed") is never released at
   // its total.
   if ((meaning.reason === 'tip_component' || meaning.reason === 'total_with_parts') && typeof amount === 'number' &&
-    !hasStatusCue(text)) {
+    !hasStatusCue(text) &&
+    // Round 5: and only a clearly completed one (no doubt, a completed form):
+    // "total SAR 230 can be paid" is not a payment.
+    uncertaintyOf(normalizedLower(text), meaning.direction !== 'unknown') == null) {
     const total = statedTotal(text);
     if (total != null && Math.abs(total - amount) < 0.005) return null;
   }

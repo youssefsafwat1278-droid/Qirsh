@@ -913,15 +913,21 @@ class AppDatabase extends GeneratedDatabase {
     }
   }
 
-  static Future<bool> _verifyV44RuleHistory(AppDatabase db) async =>
-      (await db
-              .customSelect("SELECT COUNT(*) AS n FROM sqlite_master "
-                  "WHERE type = 'table' AND name IN ('merchant_rule_history', "
-                  "'merchant_rule_tombstones', "
-                  "'merchant_rule_restore_choices');")
-              .getSingle())
-          .read<int>('n') ==
-      3;
+  static Future<bool> _verifyV44RuleHistory(AppDatabase db) async {
+    final names = {
+      for (final r in await db
+          .customSelect("SELECT name FROM sqlite_master "
+              "WHERE type IN ('table', 'trigger');")
+          .get())
+        r.read<String>('name'),
+    };
+    return names.containsAll(const {
+          'merchant_rule_history',
+          'merchant_rule_tombstones',
+          'merchant_rule_restore_choices',
+        }) &&
+        names.containsAll(merchantRuleHistoryTriggers);
+  }
 
   Future<void> _ensureCategoryProvenanceColumn() => _ensureColumn(
         'transactions',

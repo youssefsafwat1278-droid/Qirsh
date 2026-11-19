@@ -47,6 +47,12 @@ class LocalValidity {
       return const LocalValidityResult.invalid(
           LocalInvalidReason.notTransaction);
     }
+    // Round 5: a reading of no money ("POS45.00" read as "00") is never a
+    // confirmed movement; the capture stays a visible review row.
+    if (txn.amount <= 0) {
+      return const LocalValidityResult.invalid(
+          LocalInvalidReason.nonExactMoney);
+    }
     if (txn.currency.trim().isEmpty) {
       return const LocalValidityResult.invalid(
           LocalInvalidReason.missingCurrency);

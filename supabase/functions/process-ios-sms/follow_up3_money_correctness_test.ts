@@ -124,13 +124,15 @@ Deno.test('no entry point throws (fuzz)', async () => {
 // SM-04: a notice tail never hides a completed movement; the server does not
 // drop it.
 Deno.test('a notice tail never hides a completed movement', async () => {
+  assert((await server('Purchase SAR 230.00 at Jarir with card *4521, eligible for installments')).recorded);
+  // Round 5 (owner decision): a tail with a hedge ("till", «مستحق») makes the
+  // movement not clearly completed: a visible review row, never dropped.
   for (const text of [
-    'Purchase SAR 230.00 at Jarir with card *4521, eligible for installments',
     'Purchase SAR 120.00 at Jarir card *4521, offer valid till 30 Nov',
     'يرجى العلم بأنه تم خصم 500 ريال لقسط مستحق',
   ]) {
-    assertNotEquals(messageMeaning(text).disposition, 'no_movement', text);
-    assert((await server(text)).recorded, text);
+    assertEquals(messageMeaning(text).disposition, 'review', text);
+    assertEquals((await server(text)).recorded, false, text);
   }
   for (const text of [
     'Your card bill of SAR 1,200.00 is due on 25 Nov',
@@ -141,10 +143,11 @@ Deno.test('a notice tail never hides a completed movement', async () => {
 // SM-05/06: a balance total, a cashback line or a previous purchase is not a
 // second movement; two purchases stay in review.
 Deno.test('side figures are not second movements; two purchases are review', () => {
-  for (const text of [
-    'Purchase SAR 80.00 at Danube card *4521. Cashback SAR 4.00 credited',
-    'Purchase SAR 120.00 at Jarir card *4521. Previous purchase SAR 80.00 at Panda',
-  ]) assertEquals(messageMeaning(text).kind, 'completed_movement', text);
+  assertEquals(messageMeaning('Purchase SAR 80.00 at Danube card *4521. Cashback SAR 4.00 credited').kind,
+    'completed_movement');
+  // Round 5: a reference to an earlier operation is a doubt (review).
+  assertEquals(messageMeaning('Purchase SAR 120.00 at Jarir card *4521. Previous purchase SAR 80.00 at Panda').kind,
+    'uncertain');
   assertEquals(messageMeaning('Purchase SAR 80.00 at Danube card *4521. Purchase SAR 45.00 at Kudu card *4521').kind,
     'multiple_events');
 });

@@ -1,5 +1,5 @@
 {
- "_readme": "Follow-up 6 (round 4): the independent reviewer's open reproductions at a157e68e (CUE-1, HOLD-1, FT-1, NEW-2r, PRE-AT008, PRE-RF009, the VAL-1 leftovers) and the three classes of the real-model run (a bare operation, a late-payment fee, a refund of a cancelled operation), in English and Arabic, with hand truth. Synthetic messages only. kind: d = a completed debit of amount/currency; c = a completed credit; t = an explicitly named move between the user's own accounts (neutral on the device, unresolved on the server); n = no completed movement (never recorded); r = must be a review row (never recorded, never silent). answer = the amount a model or an older server would give: for n and r rows no gate accepts it; for d and c rows every gate does. device / server = that side's rule-parse outcome where it knowingly differs from kind (review = not recorded); pin says why. The same rows are in tools/parser_diff/cases/fu6.json. Read by app/test/engine/parser/follow_up6_money_correctness_test.dart, app/test/domain/usecases/follow_up6_final_effect_test.dart and process-ios-sms/follow_up6_money_correctness_test.ts.",
+ "_readme": "Follow-up 6 (round 4): the independent reviewer's open reproductions at a157e68e (CUE-1, HOLD-1, FT-1, NEW-2r, PRE-AT008, PRE-RF009, the VAL-1 leftovers) and the three classes of the real-model run (a bare operation, a late-payment fee, a refund of a cancelled operation), in English and Arabic, with hand truth. Synthetic messages only. kind: d = a completed debit of amount/currency; c = a completed credit; t = an explicitly named move between the user's own accounts (neutral on the device, unresolved on the server); n = no completed movement (never recorded); r = must be a review row (never recorded, never silent). answer = the amount a model or an older server would give: for n and r rows no gate accepts it; for d and c rows every gate does. device / server = that side's rule-parse outcome where it knowingly differs from kind (review = not recorded); pin says why. The same rows are in tools/parser_diff/cases/fu6.json. Read by app/test/engine/parser/follow_up6_money_correctness_test.dart, app/test/domain/usecases/follow_up6_final_effect_test.dart and process-ios-sms/follow_up6_money_correctness_test.ts. Round 5 (owner decision, completion certainty): a row with \"round5\" is a movement that is not clearly completed (a doubt word anywhere outside security advice, or no completed-event form); both sides keep it as a visible review row (server/device = review) and no model answer of completed is accepted for it.",
  "cases": [
   {
    "id": "CUE1a",
@@ -79,7 +79,10 @@
    "text": "Purchase SAR 45.00 at Attempt Cafe card *4521",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: cancelled"
   },
   {
    "id": "CUE1n",
@@ -169,7 +172,10 @@
    "text": "Purchase SAR 45.00 at Jarir card *4521. Your statement will be issued tomorrow",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "FUT2m",
@@ -177,7 +183,10 @@
    "text": "Purchase SAR 45.00 at Jarir card *4521. Your new card will be delivered within 5 days",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "FUT2n",
@@ -185,7 +194,10 @@
    "text": "شراء 45 ريال لدى جرير بطاقة 4521. سيتم إصدار كشف الحساب غدا",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "FUT2o",
@@ -193,7 +205,10 @@
    "text": "تم خصم 45 ريال من حسابك 4521 لدى جرير. سوف تصلك بطاقتك الجديدة خلال 5 أيام",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "NEW2a",
@@ -201,7 +216,10 @@
    "text": "دفع فاتورة 300 ريال من حسابك 4521، تذكير: موعد السداد القادم 1/12",
    "amount": 300,
    "currency": "SAR",
-   "answer": 300
+   "answer": 300,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "NEW2b",
@@ -219,7 +237,9 @@
    "currency": "SAR",
    "answer": 1000,
    "server": "review",
-   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "NEW2d",
@@ -227,7 +247,10 @@
    "text": "As per your request SAR 750.00 has been transferred to Sara as scheduled",
    "amount": 750,
    "currency": "SAR",
-   "answer": 750
+   "answer": 750,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "NEW2e",
@@ -235,7 +258,10 @@
    "text": "خصم 99 ريال اشتراك شاهد من بطاقتك 4521، تذكير بالتجديد الشهر القادم",
    "amount": 99,
    "currency": "SAR",
-   "answer": 99
+   "answer": 99,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "NEW2f",
@@ -243,7 +269,10 @@
    "text": "شراء 150 ريال لدى نون بطاقة 4521 سيتم إضافة النقاط لحسابك",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "NEW2g",
@@ -251,7 +280,10 @@
    "text": "Bill payment SAR 300.00 from account *4521 done, reminder: next bill due 1/12",
    "amount": 300,
    "currency": "SAR",
-   "answer": 300
+   "answer": 300,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "NEW2h",
@@ -269,7 +301,9 @@
    "currency": "SAR",
    "answer": 1000,
    "server": "review",
-   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "NEW2j",
@@ -279,7 +313,9 @@
    "currency": "SAR",
    "answer": 750,
    "server": "review",
-   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer",
+   "device": "review",
+   "round5": "not clearly completed: pending"
   },
   {
    "id": "FT1a",
@@ -287,7 +323,10 @@
    "text": "Purchase SAR 45.00 at Jarir card *4521. Standing orders will be executed on the due date",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "FT1b",
@@ -295,7 +334,10 @@
    "text": "شراء 45 ريال لدى جرير بطاقة 4521. سيتم تنفيذ الأوامر المستديمة في تاريخ الاستحقاق",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "FT1c",
@@ -303,7 +345,10 @@
    "text": "Purchase SAR 45.00 at Jarir card *4521. Standing instructions are executed on their due dates",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "FT1d",
@@ -319,7 +364,10 @@
    "text": "Purchase SAR 45.00 at Jarir card *4521. Refund requests are processed within 7 days",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "HOLD1b2",
@@ -327,7 +375,10 @@
    "text": "Purchase SAR 45.00 at Jarir card *4521. For refund requests contact the merchant",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: pending"
   },
   {
    "id": "HOLD1b3",
@@ -343,7 +394,10 @@
    "text": "Purchase SAR 45.00 at Jarir card *4521. Refund requests will be processed within 7 days",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "HOLD1b5",
@@ -351,7 +405,10 @@
    "text": "شراء 45 ريال لدى جرير بطاقة 4521. طلبات الاسترداد تعالج خلال 7 أيام",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "HOLD1b6",
@@ -375,7 +432,10 @@
    "text": "شراء 45 ريال لدى جرير بطاقة 4521. سيتم معالجة طلبات الاسترداد خلال 7 أيام",
    "amount": 45,
    "currency": "SAR",
-   "answer": 45
+   "answer": 45,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "FT1e",
@@ -413,7 +473,10 @@
    "text": "Your expected refund of SAR 150.00 from Noon has been credited to your card *4521",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "HOLD1a2",
@@ -421,7 +484,10 @@
    "text": "Your pending refund of SAR 150.00 has been credited to your account *4521",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: pending"
   },
   {
    "id": "HOLD1a3",
@@ -429,7 +495,10 @@
    "text": "تم إضافة مبلغ الاسترداد المتوقع 150 ريال إلى بطاقتك *4521",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "HOLD1a4",
@@ -437,7 +506,10 @@
    "text": "تم إيداع مبلغ الاسترداد المعلق 150 ريال في حسابك *4521",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: pending"
   },
   {
    "id": "RF009a",
@@ -445,7 +517,10 @@
    "text": "تم عكس العملية بمبلغ 150 ريال وتم إضافة المبلغ إلى حسابك *4521",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: cancelled"
   },
   {
    "id": "RF009b",
@@ -509,7 +584,10 @@
    "text": "شراء 150 ريال لدى نون بطاقة *4521. لا يمكن الاسترجاع بعد 7 أيام",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: hedged"
   },
   {
    "id": "RF009j",
@@ -533,7 +611,10 @@
    "text": "Reversal of your completed purchase of SAR 150.00 at Noon has been credited to your card *4521",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: cancelled"
   },
   {
    "id": "RF4c",
@@ -819,7 +900,9 @@
    "currency": "EGP",
    "answer": 500,
    "server": "review",
-   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer"
+   "pin": "safe: the server rule parse leaves the direction to the model (never silent, never no-movement); the meaning gate accepts the answer",
+   "device": "review",
+   "round5": "no completed-event form"
   },
   {
    "id": "FEE9a",
@@ -829,7 +912,9 @@
    "currency": "SAR",
    "answer": 100,
    "device": "review",
-   "pin": "safe: the device alone sets a fee figure aside (review); with a server or model answer it is recorded (the meaning gate accepts it)"
+   "pin": "safe: the device alone sets a fee figure aside (review); with a server or model answer it is recorded (the meaning gate accepts it)",
+   "server": "review",
+   "round5": "not clearly completed: late"
   },
   {
    "id": "FEE9b",
@@ -839,7 +924,9 @@
    "currency": "SAR",
    "answer": 100,
    "device": "review",
-   "pin": "safe: the device alone sets a fee figure aside (review); with a server or model answer it is recorded (the meaning gate accepts it)"
+   "pin": "safe: the device alone sets a fee figure aside (review); with a server or model answer it is recorded (the meaning gate accepts it)",
+   "server": "review",
+   "round5": "not clearly completed: late"
   },
   {
    "id": "FEE9c",
@@ -847,7 +934,10 @@
    "text": "تم خصم رسوم تأخير سداد بطاقتك الائتمانية *4521 بمبلغ 100 ريال",
    "amount": 100,
    "currency": "SAR",
-   "answer": 100
+   "answer": 100,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: late"
   },
   {
    "id": "FEE9d",
@@ -855,7 +945,10 @@
    "text": "غرامة تأخر سداد البطاقة الائتمانية 100 ريال تم خصمها من حسابك *4521",
    "amount": 100,
    "currency": "SAR",
-   "answer": 100
+   "answer": 100,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: late"
   },
   {
    "id": "FEE9e",
@@ -875,7 +968,10 @@
    "text": "Refund of SAR 150.00 for the cancelled transaction has been credited to your card *4521",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: cancelled"
   },
   {
    "id": "CAN10b",
@@ -883,7 +979,10 @@
    "text": "Your order was cancelled. Refund of SAR 150.00 has been credited to your card *4521",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: cancelled"
   },
   {
    "id": "CAN10c",
@@ -891,7 +990,10 @@
    "text": "تم إيداع مبلغ الاسترداد 150 ريال للعملية الملغاة في بطاقتك *4521",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: cancelled"
   },
   {
    "id": "CAN10d",
@@ -899,7 +1001,10 @@
    "text": "تم إلغاء العملية وتم إضافة مبلغ الاسترداد 150 ريال إلى بطاقتك *4521",
    "amount": 150,
    "currency": "SAR",
-   "answer": 150
+   "answer": 150,
+   "server": "review",
+   "device": "review",
+   "round5": "not clearly completed: cancelled"
   },
   {
    "id": "CAN10e",

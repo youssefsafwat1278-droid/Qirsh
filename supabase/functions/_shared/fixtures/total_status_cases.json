@@ -1,5 +1,5 @@
 {
- "_comment": "Follow-up 15 (VAL-1): tip / VAT / service-fee total forms x status, English and Arabic. A not-completed form is never recorded at its stated total; a completed one is. Synthetic. Used by process-ios-sms/meaning_gate_test.ts and app/test/engine/ai/movement_amounts_test.dart.",
+ "_comment": "Follow-up 15 (VAL-1): tip / VAT / service-fee total forms x status, English and Arabic. A not-completed form is never recorded at its stated total; a completed one is. Synthetic. Used by process-ios-sms/meaning_gate_test.ts and app/test/engine/ai/movement_amounts_test.dart. Round 5 (owner decision): a total form with no completed-event form (\"Bill ..., total ... at Test Store\") is not clearly completed: review = true, kept for review (never recorded at any figure, never 'transaction_not_completed').",
  "cases": [
   {
    "id": "tip_en_completed",
@@ -35,7 +35,8 @@
    "id": "vat_en_completed",
    "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 at Test Store",
    "amount": 230,
-   "held": false
+   "held": false,
+   "review": true
   },
   {
    "id": "vat_en_declined",
@@ -65,7 +66,8 @@
    "id": "fee_en_completed",
    "text": "Order SAR 100.00 + service fee SAR 10.00, total SAR 110.00 at Test Shop",
    "amount": 110,
-   "held": false
+   "held": false,
+   "review": true
   },
   {
    "id": "fee_en_declined",
@@ -125,7 +127,8 @@
    "id": "vat_ar_completed",
    "text": "فاتورة 200 ريال، ضريبة 30 ريال، الإجمالي 230 ريال لدى متجر تجريبي",
    "amount": 230,
-   "held": false
+   "held": false,
+   "review": true
   },
   {
    "id": "vat_ar_declined",
@@ -155,7 +158,8 @@
    "id": "fee_ar_completed",
    "text": "طلب 100 ريال + رسوم خدمة 10 ريال، الإجمالي 110 ريال لدى متجر تجريبي",
    "amount": 110,
-   "held": false
+   "held": false,
+   "review": true
   },
   {
    "id": "fee_ar_declined",

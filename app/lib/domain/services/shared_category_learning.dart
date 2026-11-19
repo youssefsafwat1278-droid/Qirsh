@@ -70,6 +70,11 @@ SharedCategoryContribution? sharedContributionFor(
   return key == null ? null : SharedCategoryContribution(key, categoryKey);
 }
 
+/// True when [raw] is a business by its own words: it carries a business-form
+/// word such as shop, store, company, «شركة», «متجر». A person's name, and a
+/// business name with no such word (even a one-word brand), is not.
+bool looksLikeBusiness(String raw) => SmsSanitizer.hasBusinessWord(raw);
+
 /// The shared-catalog key for [raw], or null when that merchant text could
 /// carry an identifier and must never leave the device.
 String? sharedMerchantKeyFor(String raw) {

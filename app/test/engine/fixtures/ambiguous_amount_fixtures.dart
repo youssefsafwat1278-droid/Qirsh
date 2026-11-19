@@ -33,7 +33,9 @@ final ambiguousAmountFixtures = [
     expectedType: TransactionType.payment,
     expectedAmount: 150.00,
     expectedCurrency: 'SAR',
-    expectedStatus: ExpectedSmsStatus.pending,
+    // Round 5 (owner decision): the text carries a due/doubt word
+    // ("المستحق"), so it is kept for review (was pending).
+    expectedStatus: ExpectedSmsStatus.review,
   ),
   const BankSmsGoldenFixture(
     id: 'ambiguous_d360_intl_fee_balance',

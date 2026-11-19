@@ -1036,6 +1036,11 @@ struct BackendCaptureClient {
         #"(?:[ \-](?=\#(alnum){0,3}\#(d))\#(alnum){1,3})?\#(nbEnd)"#,
       "[IBAN]", ci: false)
     try replace(#"\#(nb)\#(d){4}[\s-]?\#(d){4}[\s-]?\#(d){4}[\s-]?\#(d){4}\#(nbEnd)"#, "[CARD]", ci: false)
+    // R4P-07: phone numbers written in groups, before the unspaced rules.
+    try replace(#"\#(nb)[0٠۰][5٥۵]\#(d)[ \-]\#(d){3}[ \-]\#(d){4}\#(nbEnd)"#, "[PHONE]", ci: false)
+    try replace(
+      #"\#(nb)[0٠۰][1١۱][0125٠١٢٥۰۱۲۵][ \-]\#(d){4}[ \-]\#(d){4}\#(nbEnd)"#, "[PHONE]", ci: false)
+    try replace(#"\+\#(d){1,3}(?:[ \-]\#(d){1,4}){2,4}\#(nbEnd)"#, "[PHONE]", ci: false)
     // The leading 0 and 5 may themselves be Arabic-Indic, so they are classes.
     try replace(#"\#(nb)[0٠۰][5٥۵]\#(d){8}\#(nbEnd)"#, "[PHONE]", ci: false)
     try replace(
@@ -1056,7 +1061,9 @@ struct BackendCaptureClient {
     let otpCurrency =
       #"sar|egp|aed|usd|eur|gbp|kwd|qar|bhd|omr|jod|le|sr|riyals?|pounds?|dirhams?|dinars?|dollars?|ريال|جنيه|جم|درهم|دينار|دولار|يورو|ر\.س"#
     let otpCue =
-      #"(?:otp|one[- ]?time[ \t]+(?:password|passcode|pin|code)"# +
+      #"(?:otp|one[- ]?time[ \t]+(?:password|passcode|pin|code)|pin|tac|mtoken|token|secure[ \t]+code"# +
+      // "Your authorization code is …" is a verification code.
+      #"|(?<=your[ \t])(?:authorization|authorisation|auth|approval)[ \t]+code"# +
       #"|(?:verification|security|activation|confirmation|authentication|access|login|secret)[ \t]+code"# +
       // A purchase's approval, reference or promo code is not a one-time code.
       #"|passcode|password|(?<!(?:approval|auth|authorization|authorisation|reference|transaction|receipt|pickup|promo|discount|coupon|voucher|order|branch|swift|bank|area|postal)[ \t])code|كلمة[ \t]+المرور(?:[ \t]+لمرة[ \t]+واحدة)?|كلمة[ \t]+السر"# +
@@ -1065,7 +1072,13 @@ struct BackendCaptureClient {
     let otpNumber =
       #"(?<![0-9٠-٩۰-۹*•#]|\#(d)[.,٫٬/:\-]|\#(noLetterBefore)(?:\#(otpCurrency))[ \t]{0,3}"# +
       #"|\#(noLetterBefore)(?:card|account|acct|ending|بطاقة|البطاقة|حساب|الحساب)[ \t]{1,3})"# +
-      #"\#(d){4,8}(?!\#(d)|[.,٫٬/:\-]\#(d)|[ \t]*(?:\#(otpCurrency))\#(notLetter))"#
+      // Also "482-913" and "4 8 2 9 1 3"; a currency after it makes it an
+      // amount unless another figure follows the currency.
+      #"(?:\#(d){4,8}|\#(d){3}[\- ]\#(d){3}|\#(d)(?:[ ]\#(d)){3,7})"# +
+      #"(?!\#(d)|[.,٫٬/:\-]\#(d)|[ \t]*(?:\#(otpCurrency))\#(notLetter)(?![ \t]*\#(d)))"#
+    // Words that may sit between the cue and the code.
+    let otpQualifier =
+      #"(?:[ \t]+(?:المؤقتة|المؤقت|مؤقتة|مؤقت|لمرة[ \t]+واحدة|التالي|التالية|الخاص[ \t]+بك|الخاصة[ \t]+بك|الجديد|الجديدة|below|following)\#(notLetter))*"#
     // The placeholder: `[OTP]` under verification wording. Under a bare cue
     // ("code 4829", "Use 4829 …") it is `[OTP]` too, unless an earlier
     // sentence already states an amount — a promo, pickup or receipt code
@@ -1106,10 +1119,18 @@ struct BackendCaptureClient {
     }
     // First, so the wording decides: a code is what a message says not to share.
     try maskCodes(
-      #"()\#(otpNumber)(?=[ \t]*[.,،;]?[ \t]*(?:(?:please|الرجاء|يرجى)[ \t]+)?(?:do[ \t]+not[ \t]+share|don['’]?t[ \t]+share|never[ \t]+share|لا[ \t]+تشارك|عدم[ \t]+مشارك|لا[ \t]+تفصح))"#,
+      #"()\#(otpNumber)(?=[ \t]*[.,،;]?\s*(?:(?:please|الرجاء|يرجى)[ \t]+)?(?:do[ \t]+not[ \t]+share|don['’]?t[ \t]+share|never[ \t]+share|لا[ \t]+تشارك|عدم[ \t]+مشارك|لا[ \t]+تفصح))"#,
+      "strong")
+    // A code alone on its line, the next line saying what to use it for.
+    try maskCodes(
+      #"((?:^|(?<=\n))[ \t]*)\#(otpNumber)(?=[ \t]*[.:]?[ \t]*\n[ \t]*(?:use|enter|استخدم|أدخل|ادخل)\#(notLetter))"#,
+      "strong")
+    // "Never share this: 482913", «لا تشارك هذا الرمز: 482913».
+    try maskCodes(
+      #"(\#(noLetterBefore)(?:never[ \t]+share|do[ \t]+not[ \t]+share|don['’]?t[ \t]+share|لا[ \t]+تشارك[\p{L}\p{M}]*)(?:[ \t]+(?:this|it|the[ \t]+code|هذا[ \t]+الرمز|الرمز))?[ \t]*[:\-]?[ \t]*)\#(otpNumber)"#,
       "strong")
     try maskCodes(
-      #"(\#(noLetterBefore)(\#(otpCue))\#(notLetter)(?:[ \t]*(?:is|are|was|no\.?|number|هو|هي|رقم)\#(notLetter))?[ \t]*[:#=\-]?[ \t]*)\#(otpNumber)"#,
+      #"(\#(noLetterBefore)(\#(otpCue))\#(notLetter)\#(otpQualifier)(?:[ \t]*(?:is|are|was|no\.?|number|هو|هي|رقم)\#(notLetter))?[ \t]*[:#=\-]?[ \t]*)\#(otpNumber)"#,
       "cue")
     try maskCodes(
       #"(\#(noLetterBefore)(\#(otpCue))\#(notLetter)(?:[^\n.!?؟]|\.(?=\#(d))){0,80}?\#(noLetterBefore)(?:is|are|هو|هي)\#(notLetter)[ \t]*:?[ \t]*)\#(otpNumber)"#,
@@ -1142,15 +1163,30 @@ struct BackendCaptureClient {
     // initial or title keeps its period.
     let sentenceEnd =
       #"(?:(?<!(?<![\p{L}\p{M}])(?:\p{L}|mrs|mr|ms|dr))\.(?=\s|$)|[\n!?؟;؛])"#
-    let stop = alternation(Self.nameStopwords)
-    let nameToken =
-      #"(?!(?:\#(stop))(?![\p{L}\p{M}*'’\-]|\.[\p{L}\p{M}]|(?<=(?<![\p{L}\p{M}])\p{L})\.[ \t]+\p{L}))"# +
-      #"(?!\*+\#(d))[\p{L}\p{M}*](?:[\p{L}\p{M}*'’\-]|(?!\#(sentenceEnd))\.)*(?![\p{L}\p{M}*'’\-]|\#(d))"#
+    // R4P-01: after an Arabic name particle the next word is part of the name
+    // whatever it is («عبد العزيز», «أبو بكر», «بن سعود», «آل سعود»).
+    let afterParticle =
+      #"(?<=(?<![\p{L}\p{M}])(?:عبد|أبو|ابو|أبي|ابي|بن|ابن|بنت|آل|أم|ام)[ \t]{1,3})"#
+    let arabicPrefix = #"(?:[وف](?=[ء-ي]{2}))?"#
+    // The veto of a name token (server twin: stopAt): a stop word as a whole
+    // token; not after a name particle; a one-letter stop word before
+    // ". Name" or before another name word is an initial (R4P-05).
+    func nameTokenOf(_ words: [String]) -> String {
+      let stop = alternation(words)
+      return #"(?!(?!\#(afterParticle))\#(arabicPrefix)(?:\#(stop))(?![\p{L}\p{M}*'’\-]|\.[\p{L}\p{M}]"# +
+        #"|(?<=(?<![\p{L}\p{M}])\p{L})\.[ \t]+\p{L}"# +
+        #"|(?<=(?<![\p{L}\p{M}])\p{L})[ \t]+(?!(?:\#(stop))(?![\p{L}\p{M}]))\p{L}))"# +
+        #"(?!\*+\#(d))[\p{L}\p{M}*](?:[\p{L}\p{M}*'’\-]|(?!\#(sentenceEnd))\.)*(?![\p{L}\p{M}*'’\-]|\#(d))"#
+    }
+    let nameToken = nameTokenOf(Self.nameStopwords)
+    let looseNameToken = nameTokenOf(Self.nameStopwords + Self.looseStopwords)
+    let looseName = #"\#(looseNameToken)(?:[ \t]+\#(looseNameToken)){0,5}"#
+    let labelSep = #"(?:[ \t]*[:\-][ \t]*|[ \t]+)"#
     let name = #"\#(nameToken)(?:[ \t]+\#(nameToken)){0,5}"#
     let cueSep = #"(?:[ \t]*:[ \t]*|[ \t]+)"#
     // Salutations: Arabic anywhere; English only at a text or sentence start.
     try replace(
-      #"((?:\#(noLetterBefore)(?:عزيزي|عزيزتي|السيدة|السيد|الأستاذة|الاستاذة|الأستاذ|الاستاذ)"# +
+      #"((?:\#(noLetterBefore)(?:عزيزي|عزيزتي|السيدة|السيد|الأستاذة|الاستاذة|الأستاذ|الاستاذ|(?:عميلنا|عميلتنا)[ \t]+(?:العزيز|العزيزة|الكريم|الكريمة)[ \t]*[\/:\-])"# +
         #"|(?:^|(?<=[\n.!?؟؛;:،,]))[ \t]*(?:dear|hi|hello))\#(notLetter)\#(cueSep))(\#(name))"#,
       "$1[NAME]")
     // Text-decided helpers shared by the passes below (server twins: maskName,
@@ -1180,25 +1216,32 @@ struct BackendCaptureClient {
       #"\#(noLetterBefore)(?:\#(alternation(Self.companyMarkers)))\#(notLetter)"#, true)
     // The leading capitalised (or Arabic, or star-masked) words of a match.
     let capitalisedRun = try regex(#"^[\p{Lu}\p{Lo}*][^ \t]*(?:[ \t]+[\p{Lu}\p{Lo}*][^ \t]*)*"#, false)
-    // After the bare prepositions "to" and "by" a single lower-case Latin word
-    // is a verb or a common word, not a name ("to confirm", "by clicking").
+    // THE DECISION RULE for person or merchant is stated once, in
+    // `sms_redaction.ts`. After the bare prepositions "to" and "by", a single
+    // lower-case Latin word followed by a determiner is a verb, not a name.
     let barePreposition = try regex(#"\#(noLetterBefore)(?:to|by)[ \t]+\z"#, true)
-    let ordinaryWord = try regex(#"^\p{Ll}[^ \t]*\z"#, false)
-    func maskName(_ pattern: String) throws {
+    let lowerCaseWord = try regex(#"^\p{Ll}[^ \t]*\z"#, false)
+    let determinerAfter = try regex(
+      #"^[ \t]+(?:your|the|this|that|these|those|a|an|it|my|our|all|any)\#(notLetter)"#, true)
+    // A person, whatever words the name carries (server twin: maskPerson); with
+    // `payee`, a name carrying a business-form word is kept (maskPayee).
+    func maskPerson(_ pattern: String, payee: Bool = false) throws {
       try replaceEach(pattern) { m, s in
         let cue = s.substring(with: m.range(at: 1))
         let name = s.substring(with: m.range(at: 2))
-        return has(companyMarker, name) || (has(barePreposition, cue) && has(ordinaryWord, name))
+        if payee && has(companyMarker, name) { return nil }
+        let after = s.substring(from: m.range.location + m.range.length)
+        return has(barePreposition, cue) && has(lowerCaseWord, name) && has(determinerAfter, after)
           ? nil : cue + "[NAME]"
       }
     }
+    func maskPayee(_ pattern: String) throws { try maskPerson(pattern, payee: true) }
     func maskCapitalisedName(_ pattern: String) throws {
       try replaceEach(pattern) { m, s in
         let name = s.substring(with: m.range(at: 2)) as NSString
         guard let run = capitalisedRun.firstMatch(
           in: name as String, range: NSRange(location: 0, length: name.length)
         ) else { return nil }
-        if has(companyMarker, name.substring(with: run.range)) { return nil }
         return s.substring(with: m.range(at: 1)) + "[NAME]" + name.substring(from: run.range.length)
       }
     }
@@ -1248,12 +1291,25 @@ struct BackendCaptureClient {
       #"\#(noLetterBefore)(?:card|mada|visa|mastercard|apple[ \t]+pay|بطاقة|البطاقة|ببطاقة|بالبطاقة|لبطاقة|للبطاقة|بطاقه|مدى)\#(notLetter)"#,
       true)
     let transferWords = try regex(
-      #"transfer|remit|received|credited|deposit|\#(w)ipn\#(wEnd)|instapay|beneficiary|"# +
-        #"\#(w)sent\#(wEnd)|standing\s+order|حوال|تحويل|حول|وارد|استلام|استلمت|إيداع|ايداع|أودع|اودع|"# +
+      #"transfer|remit|received|credited|deposit|\#(w)ipn\#(wEnd)|instapay|beneficiary|payable\s+to|request(?:ed)?\s+from|"# +
+        #"\#(w)sent\#(wEnd)|standing\s+order|حوال|تحويل|حول|وارد|وصلك|طلب\s+دفع|استلام|استلمت|إيداع|ايداع|أودع|اودع|"# +
         #"مستفيد|المرسل|انستا|لصالح|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)"#, true)
+    // "merchant" / «تاجر» alone reads as a purchase only where nothing says
+    // transfer («إلى محمد التاجر» is a surname in a transfer).
     let purchaseWords = try regex(
-      #"purchase|\#(w)pos\#(wEnd)|point of sale|paid at|spent|refund|revers|e-?commerce|\#(w)bill|merchant|"# +
-        #"شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد|تاجر"#, true)
+      #"purchase|\#(w)pos\#(wEnd)|point of sale|paid at|spent|refund|revers|e-?commerce|\#(w)bill|"# +
+        #"شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|مرتجع|إرجاع|ارجاع|فاتور|سداد"#, true)
+    let weakPurchaseWords = try regex(#"merchant|تاجر"#, true)
+    // A transfer or remittance by its own wording: its counterparty is masked
+    // whole and a purchase or refund word does not make it a purchase (server
+    // twin: STRONG_TRANSFER_WORDS).
+    let strongTransferWords = try regex(
+      #"transfer|remit|beneficiary|\#(w)ipn\#(wEnd)|instapay|\#(w)sent\#(wEnd)|payable\s+to|request(?:ed)?\s+from|"# +
+        #"standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|لصالح|وصلك|أرسل|ارسل|طلب\s+دفع|انستا|أمر\s+(?:مستديم|دائم)|امر\s+(?:مستديم|دائم)"#, true)
+    func readsAsPurchase(_ s: String) -> Bool {
+      !has(strongTransferWords, s) &&
+        (has(purchaseWords, s) || (has(weakPurchaseWords, s) && !has(transferWords, s)))
+    }
     let paymentWords = try regex(#"payment|\#(w)paid\#(wEnd)|\#(w)pay\#(wEnd)|دفع"#, true)
     let maskedPerson = try regex(#"\[NAME\]|\[REDACTED\]"#, false)
     let nameInParensAfter = try regex(#"^[ \t]*\([ \t]*\[NAME\]"#, false)
@@ -1292,7 +1348,8 @@ struct BackendCaptureClient {
           } else if has(possessive, phrase) || has(possessiveBefore, before) {
             own = true
           } else if has(destinationBefore, before) || has(destinationLabel, phrase) {
-            own = has(creditVerbBefore, before) && !outgoing
+            // The other side of a debit is a third party (R4P-07).
+            own = has(creditVerbBefore, before) && !outgoing && !has(debitVerbBefore, before)
           } else if card || purchase {
             own = !sender
           } else {
@@ -1310,60 +1367,63 @@ struct BackendCaptureClient {
     // A purchase, refund or bill, or a card payment (the user's own card and
     // no transfer word): the counterparty is a merchant (MASK-1).
     func isMerchantContext() -> Bool {
-      has(purchaseWords, value) ||
+      readsAsPurchase(value) ||
         (!has(transferWords, value) && scanSuffixes(value, purchase: false).contains { $0.card && $0.own })
     }
 
     // PRIV-1: cues that only ever introduce a person (payee, beneficiary,
     // sender …) apply in any message, transfer word or not.
-    try maskName(
+    try maskPerson(
       #"(\#(noLetterBefore)(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?"# +
         #"|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of"# +
-        #"|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم)"# +
-        #"\.?\#(notLetter)\#(cueSep))(\#(name))"#)
+        #"|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول"# +
+        #"|لصالح|باسم|للسيدة|للسيد)\.?\#(notLetter)\#(labelSep))(\#(name))"#)
     // PRIV-1r: field labels that only ever introduce a person; "Merchant
     // name: …" names a business.
-    try maskName(
+    try maskPerson(
       #"(\#(noLetterBefore)(?:attn|attention|(?<!merchant[ \t]|store[ \t]|shop[ \t]|bank[ \t]|company[ \t])name|customer(?:[ \t]+name)?"# +
-        #"|card[ \t]?holder(?:[ \t]+name)?|account[ \t]+holder(?:[ \t]+name)?|عناية|الاسم|اسم|العميل|حامل[ \t]+البطاقة|صاحب[ \t]+الحساب)"# +
-        #"\.?\#(notLetter)\#(cueSep))(\#(name))"#)
-    // SP-16: the holder of an account ("to account of …", «حساب باسم …»).
-    try maskName(
-      #"(\#(noLetterBefore)(?:(?:account|acct|acc|a\/c|ac|card|wallet)[ \t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \t]+باسم)\#(notLetter)\#(cueSep))(\#(name))"#)
+        #"|card[ \t]?holder(?:[ \t]+name)?|account[ \t]+holder(?:[ \t]+name)?|عناية|الاسم|اسم(?=[ \t]*:)|العميل|العميلة|حامل[ \t]+البطاقة|صاحب[ \t]+الحساب)"# +
+        #"\.?\#(notLetter)\#(labelSep))(\#(looseName))"#)
+    // SP-16: the holder of an account ("to account of …", «حساب باسم …»); a
+    // number may sit between ("acct 7788 of …").
+    try maskPerson(
+      #"(\#(noLetterBefore)(?:(?:account|acct|acc|a\/c|ac|card|wallet)(?:[ \t]+(?:no\.?[ \t]*)?(?:[*xX•#]*\#(d){1,9}|\[ACCOUNT\]))?[ \t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \t]+باسم)\#(notLetter)\#(cueSep))(\#(name))"#)
+    // AR-01: «من حساب هاني عادل 7788» — the holder right after the account word.
+    try maskPerson(#"(\#(noLetterBefore)(?:من|في)[ \t]+(?:حساب|الحساب)[ \t]+)(\#(name))"#)
     if !isMerchantContext() {
       if has(transferWords, value) {
         // Counterparty cues only when the text reads as a transfer/credit and
         // NOT as a purchase/refund/bill, so "Purchase from AMAZON" keeps its
         // merchant.
-        try maskName(
+        try maskPerson(
           #"(\#(noLetterBefore)(?:from|to(?:[ \t]+name)?|by|beneficiary(?:[ \t]+name)?|sender(?:[ \t]+name)?|"# +
             #"remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|"# +
             #"in[ \t]+favou?r[ \t]+of|mrs|mr|ms|dr|من[ \t]+قبل|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|"# +
-            #"مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي)\.?\#(notLetter)\#(cueSep))(\#(name))"#)
+            #"مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي|لـ)\.?\#(notLetter)\#(cueSep))(\#(name))"#)
       } else {
         // PRIV-1: with no purchase, refund, bill or card-payment reading, a
         // "From:" label, "paid to", a "To/From <Name>:" heading and the payee
-        // of a payment name a person too.
-        try maskName(
-          #"(\#(noLetterBefore)(?:from[ \t]*:|paid[ \t]+to\#(notLetter))[ \t]*)(\#(name))"#)
-        try maskName(
+        // of a payment name a person too (a business-form word keeps it).
+        try maskPayee(
+          #"(\#(noLetterBefore)(?:from[ \t]*:|من[ \t]*:|request(?:ed)?[ \t]+from\#(notLetter)|paid[ \t]+to\#(notLetter))[ \t]*)(\#(name))"#)
+        try maskPayee(
           #"((?:^|(?<=[\n.!?؟;؛]))[ \t]*(?:to|from|من)[ \t]+)(\#(name))(?=[ \t]*:)"#)
-        try maskCapitalisedName(
+        try maskPayee(
           #"(\#(noLetterBefore)(?:payment|payments|paid|pay)\#(notLetter)(?:[^.\n;؛!?؟]|\.(?=\#(d))){0,40}?\#(noLetterBefore)to[ \t]+)(\#(name))"#)
       }
       // SP-16: a name in parentheses right after an account or card number.
-      try maskName(
+      try maskPerson(
         #"((?:\[(?:ACCOUNT|CARD|IBAN|PHONE)\]|[*xX•#]\#(d){1,9}|\#(noLetterBefore)(?:account|acct|acc|a\/c|ac|card|wallet|حساب|الحساب|لحساب|للحساب|بطاقة|البطاقة|محفظة)[ \t]*[:#]?[ \t]*\#(d){1,9})[ \t]*\([ \t]*)(\#(name))(?=[ \t]*\))"#)
       // Names with no cue: before a transfer verb aimed at the user, after the
       // Arabic verb, and a full name right after the transfer word.
-      try maskCapitalisedName(
-        #"((?:^|(?<=[\n.!?؟;؛:]))[ \t]*)(\#(name))(?=[ \t]+(?:has[ \t]+|have[ \t]+)?(?:sent|transferred|paid|remitted)[ \t]+"# +
+      try maskPerson(
+        #"((?:^|(?<=[\n.!?؟;؛:]))[ \t]*)(\#(looseName))(?=[ \t]+(?:has[ \t]+|have[ \t]+)?(?:sent|transferred|paid|remitted)[ \t]+"# +
           #"(?:you\#(notLetter)|(?:[^.\n]|\.(?=\#(d))){0,30}?\#(noLetterBefore)(?:to|into)[ \t]+you))"#)
-      try maskName(
+      try maskPerson(
         #"(\#(noLetterBefore)(?:(?:أرسل|ارسل|حول|حوّل|أودع|اودع)ت?[ \t]+(?:لك|إليك|اليك)|قام|قامت)[ \t]+)(\#(name))"#)
       try maskCapitalisedName(
         #"(\#(noLetterBefore)(?:transfer|transferred|remittance|حوالة|حواله|تحويل)\#(notLetter)(?:[ \t]*[:\-][ \t]*|[ \t]+))"# +
-          #"(\#(nameToken)(?:[ \t]+\#(nameToken)){1,5})"# +
+          #"(\#(looseNameToken)(?:[ \t]+\#(looseNameToken)){1,5})"# +
           #"(?=[ \t]*(?:[\-,،]|\#(d)|\z|\n|(?:\#(currency))\#(notLetter)))"#)
     }
     // The beneficiary after «إلى»/«الى»/"To:": the name's letter tokens, the
@@ -1372,19 +1432,20 @@ struct BackendCaptureClient {
     // next sentence (Vso4). The user's own «حسابك»/"your card" is not consumed.
     let beneficiaryStop = alternation(Self.nameStopwords.filter { !Self.beneficiaryObjectWords.contains($0) })
     let beneficiaryToken =
-      #"(?!(?:\#(beneficiaryStop))(?![\p{L}\p{M}*'’\-]|\.[\p{L}\p{M}]))"# +
+      #"(?!(?!\#(afterParticle))\#(arabicPrefix)(?:\#(beneficiaryStop))(?![\p{L}\p{M}*'’\-]|\.[\p{L}\p{M}]))"# +
       #"[\p{L}\p{M}][\p{L}\p{M}*'’\-]*(?:\.[\p{L}\p{M}][\p{L}\p{M}*'’\-]*)*"# +
       #"(?:(?<=(?<![\p{L}\p{M}])(?:\p{L}|mrs|mr|ms|dr))\.)?"#
     let beneficiaryID =
       #"(?:\[(?:ACCOUNT|IBAN|CARD|PHONE|REF)\]|[A-Z]{2}\#(d){2}(?:[ ]?[0-9A-Z]{4})*(?:[ ]?[0-9A-Z]{1,3})?|"# +
       #"[*xX•#]*\#(d)+(?:-\#(d)+)*)"# +
       #"(?![0-9A-Za-z]|[.,٫٬/:]\#(d)|\#(d)|[ \t]*(?:\#(currency))\#(notLetter)(?![ \t]*\#(d)))"#
-    let beneficiaryPart = #"(?:\#(beneficiaryID)|\#(beneficiaryToken))"#
-    let beneficiaryRun = #"(?:\[NAME\]|\#(beneficiaryPart))(?:[ \t]+\#(beneficiaryPart))*"#
+    let beneficiaryPart = #"(?:\[NAME\]|\#(beneficiaryID)|\#(beneficiaryToken))"#
+    let beneficiaryRun = #"\#(beneficiaryPart)(?:[ \t]+\#(beneficiaryPart))*"#
     // MASK-0: the run is a merchant, and stays, when the text reads as a
     // purchase or the run carries a business marker — unless it is an account
     // or card object, or carries a number or a masked name.
     let merchantContext = isMerchantContext()
+    let transfer = has(transferWords, value)
     let beneficiaryCue = try regex(#"^(?:إلى|الى|to(?:[ \t]+name)?)\s*:?\s*"#, true)
     let beneficiaryAccountObject = try regex(
       #"\#(noLetterBefore)(?:account|accounts|acct|acc|ac|wallet|mobile|phone|number|no|name|حساب|الحساب|حسابات|لحساب|للحساب|محفظة|المحفظة|رقم)\#(notLetter)"# +
@@ -1393,7 +1454,8 @@ struct BackendCaptureClient {
     func keepsBeneficiary(_ match: String) -> Bool {
       let run = beneficiaryCue.stringByReplacingMatches(
         in: match, range: NSRange(location: 0, length: (match as NSString).length), withTemplate: "")
-      return !has(beneficiaryAccountObject, run) && (merchantContext || has(companyMarker, run))
+      return !has(beneficiaryAccountObject, run) &&
+        (merchantContext || (!transfer && has(companyMarker, run)))
     }
     try replaceEach(#"(إلى|الى)\s*:?\s*\#(beneficiaryRun)"#) { m, s in
       keepsBeneficiary(s.substring(with: m.range)) ? nil : s.substring(with: m.range(at: 1)) + ": [REDACTED]"
@@ -1408,8 +1470,14 @@ struct BackendCaptureClient {
       #"((?:إلى|الى|\#(w)to)\s*:?\s*\#(ownWord)(?:[ \t]+(?:account|card|wallet|رقم|no\.?|number))?[ \t]+)"# +
         #"[*xX•#]*\#(d){5,}(?![.,٫٬/:]?\#(d)|[ \t]*(?:\#(currency))\#(notLetter)(?![ \t]*\#(d)))"#,
       "$1[ACCOUNT]")
+    // AR-01: a number right after a masked name is that person's account or
+    // card number, unless it is an amount, a date or a time.
+    try replace(
+      #"((?:\[NAME\]|\[REDACTED\])[ \t]+(?:(?:رقم|no\.?|number|account|acct|حساب)[ \t]*[:#]?[ \t]*)?)[*xX•#]*\#(d){1,9}[*•]*"# +
+        #"(?!\#(d)|[.,٫٬/:\-]\#(d)|[ \t]*(?:\#(currency))\#(notLetter))"#,
+      "$1[ACCOUNT]")
     // Account and card suffixes the text does not mark as the user's own.
-    let purchase = has(purchaseWords, value)
+    let purchase = readsAsPurchase(value)
     let suffixed = NSMutableString(string: value)
     for s in scanSuffixes(value, purchase: purchase).reversed() where !s.own {
       suffixed.replaceCharacters(in: s.range, with: "[ACCOUNT]")
@@ -1438,49 +1506,82 @@ struct BackendCaptureClient {
   // Word lists copied verbatim from `_shared/sms_redaction.ts` (NAME_STOPWORDS,
   // BENEFICIARY_OBJECT_WORDS, CURRENCY_AFTER, MONTH).
   private static let nameStopwords: [String] = [
-    "your", "yours", "you", "our", "us", "the", "a", "an", "account", "accounts",
-    "acct", "acc", "ac", "card", "cards", "wallet", "mobile", "phone", "number", "no",
-    "on", "at", "in", "into", "via", "using", "with", "for", "of", "to",
-    "from", "by", "beneficiary", "benef", "payee", "sender", "remitter", "recipient", "payer", "ref",
-    "reference", "rrn", "amount", "amt", "is", "was", "has", "have", "been", "and",
-    "or", "date", "time", "balance", "bal", "avl", "available", "avail", "customer", "customers",
-    "client", "cardholder", "holder", "valued", "sir", "madam", "member", "there", "team", "atm",
-    "branch", "bank", "app", "online", "internet", "instapay", "ipn", "sarie", "mada", "swift",
-    "transfer", "transaction", "trx", "txn", "successful", "successfully", "credit", "debit", "credited", "debited",
-    "cash", "deposit", "salary", "sar", "egp", "aed", "usd", "eur", "gbp", "kwd",
-    "qar", "bhd", "omr", "jod", "le", "sr", "riyal", "riyals", "pound", "pounds",
-    "dirham", "dirhams", "dinar", "dinars", "dollar", "dollars", "transferred", "sent", "received", "paid",
-    "made", "requested", "deposited", "withdrew", "initiated", "will", "would", "name", "حسابك", "حسابكم",
-    "حساب", "الحساب", "حسابات", "لحسابك", "لحساب", "للحساب", "بطاقتك", "بطاقتكم", "بطاقة", "البطاقة",
-    "بطاقه", "رصيدك", "رصيد", "الرصيد", "خلال", "قبل", "في", "على", "عن", "إلى",
-    "الى", "الي", "من", "بمبلغ", "مبلغ", "المبلغ", "بقيمة", "قيمة", "بتاريخ", "تاريخ",
-    "يوم", "اليوم", "الساعة", "الساعه", "ساعة", "وقت", "رقم", "عبر", "بواسطة", "محفظة",
-    "محفظتك", "المحفظة", "ريال", "جنيه", "جم", "درهم", "دينار", "دولار", "يورو", "العميل",
-    "عميلنا", "عملائنا", "عزيزي", "تطبيق", "الصراف", "صراف", "جهاز", "مدى", "سريع", "انستاباي",
-    "حوالة", "حواله", "تحويل", "التحويل", "الحوالة", "واردة", "وارده", "صادرة", "صادره", "البنك",
-    "بنك", "فرع", "عند", "لدى", "و", "تم", "المتاح", "متاح", "المرجع", "مرجع",
-    "رسوم", "عمولة", "قام", "حول", "حوّل", "أرسل", "ارسل", "إرسال", "ارسال", "بتحويل",
-    "بإرسال", "استلم", "أودع", "اودع", "سحب", "دفع", "shall", "tomorrow", "today", "scheduled",
-    "executes", "executed", "execution", "pending", "declined", "rejected", "failed", "unsuccessful", "completed", "approved",
-    "processed", "awaiting", "expected", "upcoming", "reversed", "cancelled", "canceled", "not", "please", "if",
-    "once", "when", "every", "under", "due", "سينفذ", "ستنفذ", "سيتم", "ستتم", "سوف",
-    "غدا", "غداً", "مجدول", "مجدولة", "سيخصم", "سيُخصم", "سيضاف", "سيودع", "جاري", "جارٍ",
-    "قيد", "معلق", "معلقة", "مرفوضة", "مرفوض", "رفض", "فشلت", "فشل", "لم", "تمت",
-    "بنجاح", "يرجى", "الرجاء", "إذا", "اذا", "مستحق", "مستحقة", "savings", "saving", "current",
-    "checking", "chequing", "iban", "insufficient", "funds", "limit", "reason", "technical", "error", "request",
-    "lack", "الآيبان", "الايبان", "آيبان", "ايبان", "التوفير", "توفير", "الادخار", "ادخار", "الجاري",
-    // Words that open a label, a notice or a sentence without being a name.
-    "payment", "payments", "purchase", "refund", "bill", "pos", "attn", "attention", "cardholder",
-    "service", "care", "support", "we", "it", "he", "she", "they", "this", "that", "money", "sum",
-    "total", "fee", "fees", "charge", "charges", "loan", "installment", "instalment", "invoice",
-    "tax", "vat", "cashback", "order", "standing", "incoming", "outgoing", "local",
-    "international", "domestic", "instant", "internal", "external", "own", "between",
-    "confirmation", "alert", "notification", "notice", "details", "update", "status", "advice",
-    "merchant", "id", "now", "here", "then", "الاسم", "اسم", "عناية", "شراء", "سداد", "عملية", "العملية", "التاجر",
-    "المتجر", "الكريم", "العزيز", "خدمة", "ناجح", "ناجحة", "داخلي", "داخلية", "دولي", "دولية",
-    "محلي", "محلية", "فوري", "فورية", "سريعة", "بنكي", "بنكية", "مالية", "جديد", "جديدة", "صادر",
-    "وارد", "إشعار", "اشعار", "تنبيه", "تأكيد", "تفاصيل", "لك", "إليك", "اليك", "حامل", "صاحب",
-    "بين"
+    "your", "yours", "you", "our", "us", "the", "a", "an", "account", "accounts", "acct", "acc",
+    "ac", "card", "cards", "wallet", "mobile", "phone", "number", "no", "on", "at", "in", "into",
+    "via", "using", "with", "for", "of", "to", "from", "by", "beneficiary", "benef", "payee",
+    "sender", "remitter", "recipient", "payer", "ref", "reference", "rrn", "amount", "amt", "is",
+    "was", "has", "have", "been", "and", "or", "date", "time", "balance", "bal", "avl",
+    "available", "avail", "customer", "customers", "client", "cardholder", "holder", "valued",
+    "sir", "madam", "member", "there", "team", "atm", "branch", "bank", "app", "online",
+    "internet", "instapay", "ipn", "sarie", "mada", "swift", "transfer", "transaction", "trx",
+    "txn", "successful", "successfully", "credit", "debit", "credited", "debited", "cash",
+    "deposit", "salary", "sar", "egp", "aed", "usd", "eur", "gbp", "kwd", "qar", "bhd", "omr",
+    "jod", "le", "sr", "riyal", "riyals", "pound", "pounds", "dirham", "dirhams", "dinar",
+    "dinars", "dollar", "dollars", "transferred", "sent", "received", "paid", "made", "requested",
+    "deposited", "withdrew", "initiated", "will", "would", "name", "حسابك", "حسابكم", "حساب",
+    "الحساب", "حسابات", "لحسابك", "لحساب", "للحساب", "بطاقتك", "بطاقتكم", "بطاقة", "البطاقة",
+    "بطاقه", "رصيدك", "رصيد", "الرصيد", "خلال", "قبل", "في", "على", "عن", "إلى", "الى", "الي",
+    "من", "بمبلغ", "مبلغ", "المبلغ", "بقيمة", "قيمة", "بتاريخ", "تاريخ", "يوم", "اليوم", "الساعة",
+    "الساعه", "ساعة", "وقت", "رقم", "عبر", "بواسطة", "محفظة", "محفظتك", "المحفظة", "ريال", "جنيه",
+    "جم", "درهم", "دينار", "دولار", "يورو", "العميل", "عميلنا", "عملائنا", "عزيزي", "تطبيق",
+    "الصراف", "صراف", "جهاز", "مدى", "سريع", "انستاباي", "حوالة", "حواله", "تحويل", "التحويل",
+    "الحوالة", "واردة", "وارده", "صادرة", "صادره", "البنك", "بنك", "فرع", "عند", "لدى", "و", "تم",
+    "المتاح", "متاح", "المرجع", "مرجع", "رسوم", "عمولة", "قام", "حول", "حوّل", "أرسل", "ارسل",
+    "إرسال", "ارسال", "بتحويل", "بإرسال", "استلم", "أودع", "اودع", "سحب", "دفع", "shall",
+    "tomorrow", "today", "scheduled", "executes", "executed", "execution", "pending", "declined",
+    "rejected", "failed", "unsuccessful", "completed", "approved", "processed", "awaiting",
+    "expected", "upcoming", "reversed", "cancelled", "canceled", "not", "please", "if", "once",
+    "when", "every", "under", "due", "سينفذ", "ستنفذ", "سيتم", "ستتم", "سوف", "غدا", "غداً",
+    "مجدول", "مجدولة", "سيخصم", "سيُخصم", "سيضاف", "سيودع", "جاري", "جارٍ", "قيد", "معلق", "معلقة",
+    "مرفوضة", "مرفوض", "رفض", "فشلت", "فشل", "لم", "تمت", "بنجاح", "يرجى", "الرجاء", "إذا", "اذا",
+    "مستحق", "مستحقة", "savings", "saving", "current", "checking", "chequing", "iban", "due to",
+    "insufficient", "funds", "limit", "reason", "technical", "error", "request", "lack", "الآيبان",
+    "الايبان", "آيبان", "ايبان", "التوفير", "توفير", "الادخار", "ادخار", "الجاري", "payment",
+    "payments", "purchase", "refund", "bill", "pos", "attn", "attention", "cardholder", "merchant",
+    "we", "it", "he", "she", "they", "this", "that", "now", "here", "then", "الاسم", "اسم",
+    "عناية", "شراء", "سداد", "عملية", "العملية", "الجهة", "المفوتر", "المستفيد", "مستفيد",
+    "المرسل", "المستلم", "المحول", "ناجح", "ناجحة", "داخلي", "داخلية", "دولي", "دولية", "محلي",
+    "محلية", "فوري", "فورية", "سريعة", "بنكي", "بنكية", "مالية", "جديد", "جديدة", "صادر", "وارد",
+    "إشعار", "اشعار", "تنبيه", "تأكيد", "تفاصيل", "لك", "إليك", "اليك", "حامل", "صاحب", "بين",
+    "are", "attempted", "authorization", "being", "blocked", "bounced", "call", "can", "cannot",
+    "contact", "could", "denied", "did", "didn", "exceeded", "exceeds", "expired", "going", "hold",
+    "may", "might", "minimum", "pre", "preauthorisation", "preauthorization", "refused", "remind",
+    "reminder", "report", "should", "stopped", "timed", "unable", "unauthorised", "unauthorized",
+    "unless", "void", "voided", "withdrawal", "إبلاغ", "اتصل", "اعتراض", "المتوقع", "انتهت",
+    "بانتظار", "تجاوز", "تجاوزت", "تخطي", "تذكير", "تستحق", "تعذر", "تعذرت", "تواصل", "رفضت",
+    "ستتلقى", "ستحصل", "ستستلم", "سيصلك", "طلب", "عدم", "غير", "فاشلة", "قد", "لا", "لعدم", "لن",
+    "لو", "متوقع", "محاولة", "ملغاة", "ملغية", "موعد", "موقوفة", "يستحق", "يمكن", "يمكنك",
+    "انتظار", "التأكيد", "الموافقة", "المعالجة", "التنفيذ", "الانتظار", "approval", "attempt",
+    "authorised", "authorized", "confirmation", "didn't", "didn’t", "couldn't", "couldn’t",
+    "wasn't", "wasn’t", "can't", "can’t", "won't", "won’t", "hasn't", "hasn’t", "isn't", "isn’t",
+    "doesn't", "doesn’t", "dispensed", "out", "pre-auth", "pre-authorisation", "pre-authorization",
+    "process", "processing", "review", "reviewed", "run", "أن", "إتمام", "إلغاء", "إيقاف",
+    "استرداد", "الإلغاء", "الاسترداد", "الحد", "الخصم", "الدفع", "الرفض", "السحب", "السداد", "بنا",
+    "تتم", "تعليق", "تكتمل", "تنجح", "تنفذ", "تنفيذ", "حال", "حجز", "حد", "خصم", "صرف", "صلاحية",
+    "كاف", "كافي", "كفاية", "محجوز", "مصرح", "معالجة", "معنا", "مقبول", "مقبولة", "يتم", "ينجح",
+    "to", "by", "were", "be", "does", "do", "done", "must", "went", "go", "goes", "gone",
+    "through", "got", "get", "gets", "confirm", "confirmed", "verify", "verified", "complete",
+    "proceed", "activate", "avoid", "view", "check", "receive", "pay", "use", "visit", "click",
+    "reply", "send", "make", "see", "authorise", "authorize", "approve", "cancel", "stop", "try",
+    "tried", "arrive", "arrived", "reach", "reached", "remain", "remains", "returned", "refunded",
+    "posted", "booked", "placed", "issued", "released", "held", "settle", "settled", "yesterday",
+    "tonight", "morning", "evening", "afternoon", "noon", "midnight", "earlier", "later", "ago",
+    "recently", "currently", "already", "just", "still", "again", "soon", "immediately",
+    "instantly", "last", "next", "week", "month", "year", "monday", "tuesday", "wednesday",
+    "thursday", "friday", "saturday", "sunday", "أمس", "امس", "البارحة", "الآن", "الان", "صباحا",
+    "صباحاً", "مساء", "مساءً", "ظهرا", "ظهراً", "ليلا", "ليلاً", "الماضي", "الماضية", "القادم",
+    "القادمة", "المقبل", "المقبلة", "هذا", "هذه", "الشهر", "الأسبوع", "الاسبوع", "السنة", "العام",
+    "لاحقا", "لاحقاً", "سابقا", "سابقاً", "حاليا", "حالياً", "مؤخرا", "مؤخراً", "الأحد", "الاحد",
+    "الاثنين", "الإثنين", "الثلاثاء", "الأربعاء", "الاربعاء", "الخميس", "الجمعة", "السبت"
+  ]
+  // LOOSE_STOPWORDS, verbatim: not a name only where there is no cue at all or
+  // after a field label.
+  private static let looseStopwords: [String] = [
+    "service", "care", "support", "money", "sum", "total", "fee", "fees", "charge", "charges",
+    "loan", "installment", "instalment", "invoice", "tax", "vat", "cashback", "order", "standing",
+    "incoming", "outgoing", "local", "international", "domestic", "instant", "internal",
+    "external", "own", "between", "alert", "notification", "notice", "details", "update", "status",
+    "advice", "id", "خدمة"
   ]
   private static let beneficiaryObjectWords: Set<String> = [
     "you", "us", "the", "a", "an", "account", "accounts", "acct", "acc", "ac",
@@ -1494,7 +1595,7 @@ struct BackendCaptureClient {
     "kitchen", "bakery", "pharmacy", "pharmacies", "clinic", "clinics", "hospital", "company",
     "co", "corp", "corporation", "ltd", "llc", "inc", "est", "establishment", "trading", "group",
     "holding", "services", "solutions", "hotel", "hotels", "station", "petrol", "fuel", "telecom",
-    "electricity", "water", "insurance", "school", "university", "academy", "airlines", "airways",
+    "electricity", "water", "insurance", "takaful", "school", "university", "academy", "airlines", "airways",
     "pay", "com", "net", "شركة", "شركه", "مؤسسة", "مؤسسه", "مكتبة", "مكتبه", "متجر", "متاجر",
     "محل", "محلات", "مطعم", "مطاعم", "مقهى", "كافيه", "كوفي", "صيدلية", "صيدليات", "مستشفى",
     "عيادة", "عيادات", "فندق", "سوبرماركت", "هايبر", "هايبرماركت", "أسواق", "اسواق", "سوق", "مركز",

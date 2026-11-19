@@ -13,11 +13,12 @@ row (a booking or silence is wrong). `amt`/`cur` (and `alt` = an accepted
 [amount, currency]) check the booked value.
 
 Exit status 1 on a regression (right at base -> wrong or silent, a throw, a
-base not-completed message now recorded — unless the row is hand-labelled a
-completed movement with its amount and every recording path books it exactly
-as labelled: those are listed separately on every run) or when the messages that moved
+base not-completed message now recorded — unless its id is on the explicit
+VERIFIED_COMPLETED list and every recording path books it exactly as
+labelled; the list is printed on every run) or when the messages that moved
 from right (labelled) or recorded (unlabelled) to a review row exceed the
-review budget: PARSER_DIFF_REVIEW_BUDGET (default 38 messages: the 35 justified at Follow-up 4
+review budget: PARSER_DIFF_REVIEW_BUDGET (default 331 messages since Round 5, the owner's
+completion-certainty rule — see REVIEW_BUDGET; it was 38: the 35 justified at Follow-up 4
 plus the 3 ACCEPTED review moves below). Each such move is listed and must be
 justified in the closure record. The ACCEPTED list (coordinator decision,
 Follow-up 5) is printed on every run; anything not on it still fails.
@@ -29,7 +30,14 @@ WRONG = {'WDIR', 'WAMT', 'WCUR', 'WREC', 'WOWN', 'WNEU', 'THROW'}
 TEXP = {'completed_payment': 'd', 'completed_withdrawal': 'd', 'completed_income': 'c',
         'completed_credit': 'c', 'completed_transfer_in': 'c', 'completed_transfer_own': 't',
         'not_completed': 'n', 'ignored': 'n'}
-REVIEW_BUDGET = int(os.environ.get('PARSER_DIFF_REVIEW_BUDGET', '38'))
+# Round 5 (owner decision, completion certainty): 331 — a consequence of the
+# owner's rule, not a tolerance for regressions. Against 5dae2e2d this
+# harness (AI off on every path) moves 331 messages to review: 197 carry a
+# doubt (never recorded on any reading), 89 have no completed-event form (75
+# decided by the model when AI is on; 14 transfers, local only), 28 cash
+# deposits and 17 other holds. With AI on and a right model, 256 would stay
+# review. It was 38 (35 justified at Follow-up 4 + 3 ACCEPTED).
+REVIEW_BUDGET = int(os.environ.get('PARSER_DIFF_REVIEW_BUDGET', '331'))
 # Accepted moves (coordinator decision, Follow-up 5), each with its reason.
 # ACCEPTED_REVIEW: right/recorded -> review moves counted inside the budget.
 # ACCEPTED_SERVER: server rows right at base and rejected now; only a
@@ -43,6 +51,23 @@ ACCEPTED_SERVER = {
     'fu5/DEV084': 'policy-held completed reversal: device reviews, server rejects (known review cost)',
     'fu5/DEV085': 'policy-held completed reversal: device reviews, server rejects (known review cost)',
     'fu5/DEV090': 'policy-held completed reversal: device reviews, server rejects (known review cost)',
+}
+
+
+# Newly recorded, verified completed (round 4). Messages the base (5dae2e2d)
+# read as not completed that the round-4 brief requires to be recorded, each
+# confirmed a completed movement by the independent review W. Only these ids,
+# and only while every recording path books them exactly as labelled.
+VERIFIED_COMPLETED = {
+    'fu6/FT1b': 'a completed purchase; the Arabic standing-order sentence is general advice (FT-1)',
+    'fu6/HOLD1b4': 'a completed purchase; "Refund requests will be processed within 7 days" is general advice (HOLD-1)',
+    'fu6/HOLD1a2': 'a refund whose clause states the credit happened; "pending" qualifies the refund noun (HOLD-1)',
+    'fu6/HOLD1a4': 'the Arabic twin of HOLD1a2 (HOLD-1)',
+    'fu6/RF4b': 'a reversal the message says returns a completed purchase, credited (requirement 4)',
+    'fu6/CAN10a': 'a credited refund of a cancelled transaction (real-model run, class 3)',
+    'fu6/CAN10b': 'a credited refund after "Your order was cancelled" (real-model run, class 3)',
+    'fu6/CAN10c': 'the Arabic twin of CAN10a (real-model run, class 3)',
+    'fu6/CAN10d': 'the Arabic twin of CAN10b (real-model run, class 3)',
 }
 
 
@@ -180,28 +205,28 @@ def compare(cases, base, work):
             for c in ch: print('    ' + c)
     # The invariant: a message the base read as not completed is never
     # recorded as a completed movement on any path.
-    # Follow-up 6: a row hand-labelled as a completed movement (d / c / k)
-    # that every recording path now books exactly as labelled is a required
-    # fix of the base's reading, not a declined message recorded. It is still
-    # listed, on every run, and each one must be justified in the closure
-    # record; an unlabelled row, a row labelled n / r / t, or a wrong booking
-    # stays a regression.
-    nc_recorded, nc_required = [], []
+    # Review fixes (Astra): a base not-completed message that is now recorded
+    # passes only when its id is on VERIFIED_COMPLETED below AND every
+    # recording path books it exactly as its hand label says. Nothing passes
+    # by label alone; the list is printed on every run.
+    nc_recorded, nc_verified = [], []
     for r in uniq:
         if B[r['id']].get('nc') is not True: continue
         hits = [s for s in SIDES if W[r['id']][s]['c'] in ('IN', 'OUT', 'NEU')]
         if not hits: continue
         t = r.get('truth')
-        labelled_right = (t is not None and t.get('kind') in ('d', 'c', 'k') and t.get('amt') is not None
-                          and all(grade(W[r['id']][s], t, r['text']) == 'OK' for s in hits))
-        (nc_required if labelled_right else nc_recorded).append((r, hits))
+        ok = (r['id'] in VERIFIED_COMPLETED and t is not None and t.get('kind') in ('d', 'c')
+              and t.get('amt') is not None
+              and all(grade(W[r['id']][s], t, r['text']) == 'OK' for s in hits))
+        (nc_verified if ok else nc_recorded).append((r, hits))
     print(f'\n== base not-completed, now recorded: {len(nc_recorded)}')
     for r, hits in nc_recorded:
         print(f'- {r["id"]} {hits} {r["text"][:160]!r}')
-    print(f'\n== base not-completed, hand-labelled completed and now booked as labelled '
-          f'(required fixes; justify each): {len(nc_required)}')
-    for r, hits in nc_required:
-        print(f'- {r["id"]} truth={r["truth"]} {hits} {r["text"][:160]!r}')
+    seen_verified = {r['id'] for r, _ in nc_verified}
+    print('\n== NEWLY RECORDED, VERIFIED COMPLETED (round 4; confirmed completed movements by the independent '
+          'review W; booked exactly as labelled):')
+    for rid, why in VERIFIED_COMPLETED.items():
+        print(f'- {rid} [{"present" if rid in seen_verified else "not recorded this run"}] {why}')
     bad += len(nc_recorded)
     print(f'\nREGRESSIONS (right at base -> wrong/silent, a throw, or base not-completed now recorded): {bad}')
     to_review = {i[1]['id'] for c in ('right -> review', 'unlabelled record -> review') for i in moved.get(c, [])}
@@ -230,7 +255,10 @@ def server_compare(cases, base, work):
             return {'c': bookOf(t), 'p': f"server:{s.get('type')}", 'a': s.get('a'), 'cur': s.get('cur')}
         # As device.dart: a capture that would reach the AI, or a review kind
         # kept in Smart Inbox, is a review row; any other rejection is silent.
-        rev = s.get('ai') or re.match(r'^(cash_deposit|own_account_transfer|multiple_events|uncertain):', s.get('reason') or '')
+        # Round 5: a transfer the server decides locally and holds
+        # (transfer_not_clear) is kept for review the same way.
+        rev = s.get('ai') or re.match(r'^(cash_deposit|own_account_transfer|multiple_events|uncertain):|^transfer_not_clear$',
+                                      s.get('reason') or '')
         return {'c': 'REV' if rev else 'SIL', 'p': f"server_rejected:{s.get('reason') or ''}"}
 
     # The pre-round not-completed invariant (decided): these texts are never

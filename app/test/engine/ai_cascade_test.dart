@@ -594,9 +594,9 @@ void main() {
     );
     await useCase(rawMessage: rawTransferSms);
 
-    expect(capturedSanitized, isNotNull);
-    expect(capturedSanitized, isNot(contains('سارة')));
-    expect(capturedSanitized, isNot(contains('العمري')));
+    // Round 5 (owner decision): a transfer to or from a person never goes to
+    // the model; the device's own reading decides it (here none: review).
+    expect(capturedSanitized, isNull);
   });
 
   test('AI fabricated amount is ignored while the local parse is saved',
@@ -723,12 +723,11 @@ void main() {
 
     final result = await useCase(rawMessage: rawSms, senderId: 'CIB');
 
-    expect(result.outcome, AddTransactionOutcome.added);
-    // Sent to a person → expense (payment); the person's name is never stored
-    // as a merchant nor sent to Maps.
-    expect(saved!.type, TransactionTypeEntity.payment);
-    expect(saved!.rawMerchant, isNull);
-    expect(savedCategory, 'transfers');
+    // Round 5 (owner decision): a transfer to or from a person never goes to
+    // the model; the device's own reading decides it (here none: review).
+    expect(result.outcome, AddTransactionOutcome.notTransaction);
+    expect(saved, isNull);
+    expect(savedCategory, isNull);
     expect(mapsLookupCount, 0);
   });
 
@@ -768,15 +767,11 @@ void main() {
       smsReceivedAt: DateTime.utc(2026, 6, 15),
     );
 
-    expect(result.outcome, AddTransactionOutcome.added);
-    expect(saved!.amount, 2000);
-    expect(saved!.currency, 'EGP');
-    expect(saved!.occurredAt, DateTime(2026, 6, 14, 23, 10).toUtc());
-    // Money received from outside → income (counts), payer name dropped.
-    expect(saved!.type, TransactionTypeEntity.income);
-    expect(saved!.rawMerchant, isNull);
-    expect(saved!.direction, TransactionDirectionEntity.credit);
-    expect(savedCategory, 'income');
+    // Round 5 (owner decision): a transfer to or from a person never goes to
+    // the model; the device's own reading decides it (here none: review).
+    expect(result.outcome, AddTransactionOutcome.notTransaction);
+    expect(saved, isNull);
+    expect(savedCategory, isNull);
   });
 
   test('same-amount transfers with different references are not duplicates',
@@ -1211,11 +1206,10 @@ void main() {
 
     final result = await useCase(rawMessage: rawSms);
 
-    expect(result.outcome, AddTransactionOutcome.added);
-    expect(saved, isNotNull);
-    expect(saved!.amount, 31.43);
-    // Outgoing transfer → expense (payment).
-    expect(saved!.type, TransactionTypeEntity.payment);
+    // Round 5 (owner decision): a transfer to or from a person never goes to
+    // the model; the device's own reading decides it (here none: review).
+    expect(result.outcome, AddTransactionOutcome.notTransaction);
+    expect(saved, isNull);
   });
 
   test('AI failure reason is surfaced when parser also fails', () async {
@@ -1610,15 +1604,11 @@ void main() {
 
     final result = await useCase(rawMessage: rawSms);
 
-    expect(result.outcome, AddTransactionOutcome.added);
-    expect(seenInstallId, 'lazy-install-id');
-    expect(saved, isNotNull);
-    expect(saved!.amount, 10.0);
-    expect(saved!.currency, 'EGP');
-    // "transfer received" → money in → income.
-    expect(saved!.type, TransactionTypeEntity.income);
-    expect(saved!.status, TransactionStatus.confirmed);
-    expect(saved!.source, TransactionSourceEntity.aiParsed);
+    // Round 5 (owner decision): a transfer to or from a person never goes to
+    // the model; the device's own reading decides it (here none: review).
+    expect(result.outcome, AddTransactionOutcome.notTransaction);
+    expect(seenInstallId, isNull);
+    expect(saved, isNull);
   });
 
   test('AI rescue: without consent a dropped message stays notTransaction',
@@ -1823,10 +1813,15 @@ void main() {
       loadAiConsent: () async => false,
       dedupStore: _NoDedupStore(),
     );
-    await useCase(rawMessage: 'تحويل داخلي بمبلغ 500 ريال بين حساباتك');
+    await useCase(rawMessage: 'تم تحويل داخلي بمبلغ 500 ريال بين حساباتك');
 
     expect(saved, isNotNull);
     expect(saved!.type, TransactionTypeEntity.transfer);
+    // Round 5 (owner decision): a notice with no completed form and no
+    // stated flow is kept for review (decided locally, never by the model).
+    saved = null;
+    await useCase(rawMessage: 'تحويل داخلي بمبلغ 500 ريال بين حساباتك');
+    expect(saved, isNull);
   });
 
   // Round 3 closure (owner brief §5; parser meaning gate in the use case):
@@ -1915,9 +1910,9 @@ void main() {
     );
     await useCase(rawMessage: 'تحويل 750 جنيه');
 
-    expect(saved, isNotNull);
-    expect(saved!.type, TransactionTypeEntity.income);
-    expect(saved!.direction, TransactionDirectionEntity.credit);
+    // Round 5 (owner decision): a transfer to or from a person never goes to
+    // the model; the device's own reading decides it (here none: review).
+    expect(saved, isNull);
   });
 
   test('direction contradiction forces pending even at high confidence',

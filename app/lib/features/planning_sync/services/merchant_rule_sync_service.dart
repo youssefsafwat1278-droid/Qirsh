@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:drift/drift.dart' show Variable;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -29,10 +30,21 @@ import 'planning_outbox_queue.dart';
 ///  * consent: [EgressClass.financialSync], read fresh per run, default DENY;
 ///    the server must also advertise `merchant_rules_sync`.
 ///
-/// Conflict policy (same as sender→bank mappings): server-arrival
-/// last-writer-wins per merchant. `updated_at` is server-owned, so the keyset
-/// pull never skips a row; a pull never overwrites a merchant that still has a
-/// local outbox row (that edit is pushed and wins).
+/// Conflict policy: ONE precedence rule ([ruleVersionSupersedes], shared with
+/// restore): per merchant, the more recent of "rule" and "removal" wins, the
+/// device on a tie. The cloud's time is the row's server-owned `updated_at`
+/// (so the keyset pull never skips a row); after a push or a pull the device
+/// copy carries that same time. A pull never overwrites a merchant that still
+/// has a local outbox row (that edit is pushed and wins). When the device's
+/// state is the newer one and differs from the cloud row, the pull queues it,
+/// so a removal or a newer rule on the device reaches the cloud instead of
+/// being undone by an older cloud row. One exception: a newer cloud rule
+/// against the user's "Leave out" of a restored rule is not applied but goes
+/// back on the list for the user to choose (merchant_rule_restore_choices).
+///
+/// The one-time backfill (rules the cloud has never seen) runs only after a
+/// pull that COMPLETED: pushing first could overwrite a removal another device
+/// made and this device has not read yet.
 ///
 /// A pulled rule whose category key is unknown here (a custom category not
 /// restored yet, or deleted) is NOT dropped: it is parked in
@@ -203,7 +215,9 @@ class MerchantRuleSyncService {
         return MerchantRuleSyncResult(pushed: pushed.$1, failed: pushed.$2);
       }
       final pulled = await _pull(run, phase, uid);
-      await _backfill(run, uid, pulled.seen);
+      // Not after a failed or interrupted pull: the marker stays unset, so
+      // the backfill waits for a later run whose pull completes.
+      if (pulled.completed) await _backfill(run, uid, pulled.seen);
       // Rows the backfill just queued go out in this same run.
       final more = await _push(run, phase, uid);
       return MerchantRuleSyncResult(
@@ -255,7 +269,11 @@ class MerchantRuleSyncService {
           throw StateError('merchant_rule_receipt_mismatch');
         }
         if (!run.isCurrent) break;
-        await run.runLocal(() => _queue.acknowledge(item));
+        await run.runLocal(() => _db.transaction(() async {
+              await _queue.acknowledge(item);
+              await _adoptCloudTime(key, category, stored.single,
+                  removal: item.operation == PlanningSyncOperation.delete);
+            }));
         pushed++;
       } on StaleAdmissionException {
         rethrow;
@@ -275,9 +293,10 @@ class MerchantRuleSyncService {
 
   // ─────────────────────────────────────────────────────────────── pull
 
-  Future<({int applied, int removed, Set<String> seen})> _pull(
+  Future<({int applied, int removed, Set<String> seen, bool completed})> _pull(
       _RuleInvocation run, SyncPhaseBinding phase, String uid) async {
     var applied = 0, removed = 0;
+    var completed = false;
     final seen = <String>{};
     void count(_Outcome o) {
       if (o == _Outcome.applied) applied++;
@@ -293,7 +312,10 @@ class MerchantRuleSyncService {
       var cursor = await run.runLocal(() => readSyncCursor(_db, cursorKey));
       while (run.isCurrent) {
         final rows = await _remote.fetchRows(after: cursor, limit: _pageSize);
-        if (rows.isEmpty) break;
+        if (rows.isEmpty) {
+          completed = true;
+          break;
+        }
         await run.runLocal(() => _db.transaction(() async {
               for (final row in rows) {
                 final owner = row['user_id'];
@@ -305,7 +327,10 @@ class MerchantRuleSyncService {
               await writeSyncCursor(
                   _db, cursorKey, SyncCursor.fromServerRow(rows.last));
             }));
-        if (rows.length < _pageSize) break;
+        if (rows.length < _pageSize) {
+          completed = true;
+          break;
+        }
         cursor = SyncCursor.fromServerRow(rows.last);
       }
     } on StaleAdmissionException {
@@ -316,7 +341,12 @@ class MerchantRuleSyncService {
       phase.noteFailure(_health, e);
       if (kDebugMode) debugPrint('[MerchantRuleSync] pull: $e');
     }
-    return (applied: applied, removed: removed, seen: seen);
+    return (
+      applied: applied,
+      removed: removed,
+      seen: seen,
+      completed: completed
+    );
   }
 
   Future<_Outcome> _apply(Map<String, dynamic> row) async {
@@ -334,37 +364,90 @@ class MerchantRuleSyncService {
       await _unpark(serverId);
       return _Outcome.skipped;
     }
-    final current = await _rules.userConfirmedCategoryFor(key);
-    if (row['deleted_at'] != null) {
+    final at = RuleVersion.parse('${row['updated_at']}');
+    final deleted = row['deleted_at'] != null;
+    final held = await deviceRuleVersion(_db, key);
+    final wins = ruleVersionSupersedes(
+        deleted ? RuleVersion.removal(at) : RuleVersion.rule(category, at),
+        held);
+    if (!wins) {
+      // The device's rule or removal is at least as recent: it stands, and
+      // where it differs from the cloud row it is sent, like the user's own
+      // change. (`held` is non-null: nothing held always gives way.)
       await _unpark(serverId);
-      // Remembered even when this device never held the rule, so a backup
-      // restored here later cannot bring it back.
-      await recordMerchantRuleTombstone(
-          _db, key, category, '${row['deleted_at']}');
-      if (current == null) return _Outcome.skipped;
-      await _rules.forgetUserConfirmedRule(key);
+      final mine = held!.categoryKey;
+      if (mine == null) {
+        if (!deleted) {
+          await _queue.enqueueMerchantRule(PlanningSyncOperation.delete,
+              merchantKey: key, categoryKey: category);
+        }
+      } else if (deleted || mine != category) {
+        await _queue.enqueueMerchantRule(PlanningSyncOperation.update,
+            merchantKey: key, categoryKey: mine);
+      }
+      return _Outcome.skipped;
+    }
+    if (deleted) {
+      await _unpark(serverId);
+      final hadRule = held != null && !held.isRemoval;
+      if (hadRule) await _rules.forgetUserConfirmedRule(key);
+      // Recorded with the cloud's time (also when this device never held the
+      // rule), so a backup restored here later is compared with the removal
+      // itself, not with the moment of this pull.
+      await setMerchantRuleTombstone(_db, key, category, at!);
+      if (!hadRule) return _Outcome.skipped;
       _onRuleRemoved?.call(key);
       return _Outcome.removed;
+    }
+    if (held != null &&
+        held.isRemoval &&
+        await merchantRuleAwaitsUser(_db, key)) {
+      // The user left this rule out after a restore (or a rule for it already
+      // waits for the user): a newer cloud rule does not overturn that
+      // silently; it goes on the list to choose.
+      await _unpark(serverId);
+      final raw = await _db.customSelect(
+          'SELECT raw_name FROM merchants WHERE normalized_name = ? LIMIT 1;',
+          variables: [Variable.withString(key)]).getSingleOrNull();
+      await offerMerchantRuleChoice(
+          _db,
+          key,
+          raw?.read<String>('raw_name') ?? key,
+          category,
+          '${row['updated_at']}');
+      return _Outcome.skipped;
     }
     if (!await _categoryExists(category)) {
       await _park(serverId, row);
       return _Outcome.parked;
     }
     await _unpark(serverId);
-    if (current == category) return _Outcome.skipped;
-    await _rules.confirmMerchantCategory(
-        rawMerchant: key, categoryKey: category, isUserConfirmed: true);
-    // The rule's change time is the cloud's, not the moment of this pull: a
-    // restore compares it with the backup's copy to keep the newer change.
-    final changedAt = DateTime.tryParse('${row['updated_at']}');
-    if (changedAt != null) {
-      await _db.customStatement(
-          'UPDATE merchant_category_map SET updated_at = ? WHERE merchant_id = '
-          '(SELECT id FROM merchants WHERE normalized_name = ?);',
-          [dateTimeToSql(changedAt), key]);
+    final same = held?.categoryKey == category;
+    if (!same) {
+      await _rules.confirmMerchantCategory(
+          rawMerchant: key, categoryKey: category, isUserConfirmed: true);
     }
+    // The rule now equals the cloud's and carries the cloud's change time.
+    await setMerchantRuleTime(_db, key, at!);
+    if (same) return _Outcome.skipped;
     _onRuleApplied?.call(key, category);
     return _Outcome.applied;
+  }
+
+  /// After a push the cloud row is this device's own version: take its time,
+  /// so a later comparison with the cloud is on the cloud's clock, not this
+  /// device's. Skipped when the device has moved on since (a newer edit).
+  Future<void> _adoptCloudTime(
+      String key, String category, Map<String, dynamic> stored,
+      {required bool removal}) async {
+    final at = RuleVersion.parse('${stored['updated_at']}');
+    final held = await deviceRuleVersion(_db, key);
+    if (at == null || held == null || await _hasLocalIntent(key)) return;
+    if (removal && held.isRemoval) {
+      await setMerchantRuleTombstone(_db, key, category, at);
+    } else if (!removal && held.categoryKey == category) {
+      await setMerchantRuleTime(_db, key, at);
+    }
   }
 
   // ─────────────────────────────────────────────────────────── backfill

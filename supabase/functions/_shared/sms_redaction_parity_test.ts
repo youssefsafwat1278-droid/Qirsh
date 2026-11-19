@@ -24,7 +24,7 @@ const NUMBERS: [string, string, string, string, string][] = [
 ];
 
 interface Template {
-  /** {P} person, {M} merchant, {A} amount, {O} own suffix, {T} third-party suffix, {L} long number, {C} code. */
+  /** {P} person ({p} in lower case), {M} merchant, {A} amount, {O} own suffix, {T} third-party suffix, {L} long number, {C} code. */
   text: string;
   /** What must be gone / must stay, checked here before the fixture is trusted. */
   drop: string;
@@ -32,7 +32,9 @@ interface Template {
 }
 const TEMPLATES: Template[] = [
   { text: 'Transfer of SAR {A} to {P} from your account {O} completed', drop: 'PT', keep: 'AO' },
-  { text: 'Transfer of SAR {A} to {M} from your account {O} completed', drop: '', keep: 'AOM' },
+  // A business word in a transfer is person evidence winning: masked.
+  { text: 'Transfer of SAR {A} to {M} from your account {O} completed', drop: '', keep: 'AO' },
+  { text: 'SAR {A} paid to {M}', drop: '', keep: 'AM' },
   { text: 'SAR {A} received from {P} into your account {O}', drop: 'P', keep: 'AO' },
   { text: 'From {P}: SAR {A} received', drop: 'P', keep: 'A' },
   { text: 'SAR {A} paid to {P}', drop: 'P', keep: 'A' },
@@ -60,6 +62,18 @@ const TEMPLATES: Template[] = [
   { text: 'دفع {A} ريال إلى حساب {P} رقم {L}', drop: 'PL', keep: 'A' },
   { text: 'العميل {P}: رمز التحقق هو {C} لعملية شراء بمبلغ {A} ريال لدى {M}', drop: 'PC', keep: 'AM' },
   { text: 'أرسل لك {P} {A} ريال', drop: 'P', keep: 'A' },
+  // Review fixes: status and date words after a name, any letter case, the
+  // account holder, compound names, more code wordings.
+  { text: 'حوالة {A} ريال إلى {P} بانتظار التأكيد', drop: 'P', keep: 'A' },
+  { text: 'تم تحويل {A} ريال إلى {P} أمس', drop: 'P', keep: 'A' },
+  { text: 'Transfer of SAR {A} to {P} yesterday could not be completed', drop: 'P', keep: 'A' },
+  { text: 'حوالة واردة {A} ريال من حساب {P} {T}', drop: 'PT', keep: 'A' },
+  { text: 'حوالة واردة {A} ريال من عبد العزيز {P}', drop: 'P', keep: 'A' },
+  { text: 'تم تحويل {A} ريال للمستفيد {P} بنجاح', drop: 'P', keep: 'A' },
+  { text: 'Payment of SAR {A} to {p} via Mada', drop: 'p', keep: 'A' },
+  { text: 'Recipient - {P} - SAR {A} sent', drop: 'P', keep: 'A' },
+  { text: 'Your TAC is {C} for transfer of SAR {A} to {P}', drop: 'PC', keep: 'A' },
+  { text: 'الرقم السري لمرة واحدة {C} لعملية شراء بمبلغ {A} ريال لدى {M}', drop: 'C', keep: 'AM' },
 ];
 
 /** A merchant is kept only where its name is in the script the template reads it in. */
@@ -72,8 +86,8 @@ function generate(): { raw: string; drop: string[]; keep: string[] }[] {
       for (const k of [0, 1]) {
         const m = MERCHANTS[(ti + pi + k) % MERCHANTS.length];
         const [a, o, tp, l, c] = NUMBERS[(ti + pi + 2 * k) % NUMBERS.length];
-        const fill: Record<string, string> = { P: p, M: m, A: a, O: o, T: tp, L: l, C: c };
-        const raw = t.text.replace(/\{([A-Z])\}/g, (_, key) => fill[key]);
+        const fill: Record<string, string> = { P: p, p: p.toLowerCase(), M: m, A: a, O: o, T: tp, L: l, C: c };
+        const raw = t.text.replace(/\{([A-Za-z])\}/g, (_, key) => fill[key]);
         const used = (keys: string) => [...keys].filter((key) => t.text.includes(`{${key}}`)).map((key) => fill[key]);
         out.push({ raw, drop: used(t.drop).flatMap((v) => v.split(/[ .]+/).filter((w) => w.length > 2)), keep: used(t.keep) });
       }

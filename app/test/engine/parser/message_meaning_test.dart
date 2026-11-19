@@ -15,18 +15,19 @@ void main() {
   ParseResultView parse(String text) =>
       ParseResultView(engine.parse(text, senderId: 'AlRajhi'));
 
-  group('a cue applies to its own clause (footers never exclude an event)', () {
-    for (final (text, amount, currency) in [
-      ('Purchase completed for EGP 250; card payment due EGP 900', 250.0, 'EGP'),
-      ('عملية شراء بمبلغ 120 ريال لدى متجر تجريبي. تذكير: موعد سداد بطاقتك 25/11',
-          120.0, 'SAR'),
+  // Round 5 (owner decision): a due-date or reminder footer is a doubt — the
+  // movement is not clearly completed, so it is kept for review (never
+  // dropped as a notice, never recorded on the rule reading).
+  group('a due-date footer never excludes the event; it makes it a review', () {
+    for (final text in [
+      'Purchase completed for EGP 250; card payment due EGP 900',
+      'عملية شراء بمبلغ 120 ريال لدى متجر تجريبي. تذكير: موعد سداد بطاقتك 25/11',
     ]) {
       test(text, () {
-        final r = parse(text);
-        expect(r.recorded, isTrue);
-        expect(r.type, TransactionType.payment);
-        expect(r.amount, closeTo(amount, 0.005));
-        expect(r.currency, currency);
+        expect(parse(text).recorded, isFalse);
+        final m = ParserEngine.meaningOf(text);
+        expect(m.kind, MessageKind.uncertain);
+        expect(m.disposition, MessageDisposition.review);
       });
     }
   });
@@ -71,7 +72,6 @@ void main() {
   group('direction comes from the clause, not from nouns', () {
     for (final text in [
       'SAR 500 credited to Ali from your account *5678',
-      'Cashback reversal: SAR 15.00 deducted from account *5678',
       'Purchase SAR 45.00 at Deposit Mart card *4521',
       'Salary payment to employees SAR 45,000 debited from account *5678',
       'Security deposit payment SAR 1,500 to Test Rentals from account *5678',
@@ -83,6 +83,14 @@ void main() {
         expect(r.type, TransactionType.payment);
       });
     }
+    // Round 5: a reversal word is a doubt (review), whatever the direction.
+    test('Cashback reversal: SAR 15.00 deducted from account *5678', () {
+      expect(
+          ParserEngine.meaningOf(
+                  'Cashback reversal: SAR 15.00 deducted from account *5678')
+              .disposition,
+          MessageDisposition.review);
+    });
     test('loyalty points are not money; the merchant ends at its sentence',
         () {
       final r = engine.parse(
@@ -154,9 +162,13 @@ void main() {
 
   group('the meaning carries a disposition and a machine-readable reason', () {
     for (final (text, kind, reason, disposition) in [
-      ('Purchase completed for EGP 250; card payment due EGP 900',
+      ('Purchase completed for EGP 250 at Test Mart. Available balance EGP 900',
           MessageKind.completedMovement, 'footer_set_aside',
           MessageDisposition.record),
+      // Round 5: not clearly completed (a doubt word): review, with the reason.
+      ('Purchase completed for EGP 250; card payment due EGP 900',
+          MessageKind.uncertain, 'not_clearly_completed',
+          MessageDisposition.review),
       ('Your Test Electricity bill of SAR 300 is due on 25/11',
           MessageKind.noMovementNotice, 'bill_due',
           MessageDisposition.noMovement),

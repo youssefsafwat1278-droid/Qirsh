@@ -486,6 +486,44 @@
     "transaction",
     "txn"
   ],
+  "completionCertainty": {
+    "_readme": "Round 5 (owner decision): a message is recorded on its own reading only when it is clearly completed - a completed-event form (messageMeaning.doneVerbs, movementLeads, completedFormWords or a clause flow) and no doubt pattern anywhere outside a security-advice clause. Otherwise it is uncertain: the model (when allowed, never for a transfer) or visible review; a model answer of \"completed\" is never accepted when a doubt pattern matches. Regular-expression sources over the folded text (foldForCues); identical to CompletionCertainty in app/lib/engine/parser/completion_certainty.dart (drift test).",
+    "doubtPatterns": {
+      "negated": "(?<![a-z])(?:not|never|no longer|yet to|still to|unable to|failed to|cannot|unpaid|unconfirmed|unsuccessful|unsettled|unapproved|unprocessed|uncleared|incomplete)(?![a-z])|[a-z]n't(?![a-z])|(?<![ء-ي])(?:و|ف)?(?:لم|لن)(?![ء-ي])|(?<![ء-ي])(?:ما|لا) (?:زال|زالت|يزال|تزال)(?![ء-ي])|(?<![ء-ي])(?:مازال|مازالت|لازال|لازالت)(?![ء-ي])|(?<![ء-ي])(?:غير|عدم) (?:ال)?(?:مكتمل|مكتمله|موكد|موكده|معتمد|معتمده|مدفوع|مدفوعه|ناجح|ناجحه|مسدد|مسدده|منفذ|منفذه|مقبول|مقبوله|اكتمال|اتمام|تنفيذ|قبول|نجاح|سداد|دفع|خصم|ايداع|تاكيد)(?![ء-ي])",
+      "hedged": "(?<![a-z])(?:may|might|could|must|should|would|will|shall|ought to|has to|have to|need to|needs to|going to|about to|to be|possibly|probably|perhaps|presumably|apparently|likely|unlikely|seems?|appears? to|expected|expect|expecting|supposed to|estimated|tentative[a-z]*|provisional[a-z]*|temporar[a-z]*|scheduled|schedule|upcoming|tomorrow|later|soon|next|within|until|till|deadline|due|expir[a-z]*|can be|cannot be|before [0-9]|on or before|in [0-9]+ (?:business )?(?:days?|hours?))(?![a-z])|[a-z]'ll(?![a-z])|(?<![ء-ي])(?:و|ف)?(?:سوف|سيتم|ستتم|سيكون|ستكون|سنقوم|سيقوم|ستقوم|سيخصم|سيضاف|ستضاف|سيودع|سينفذ|ستنفذ|سيصلك|ستصلك|ستحصل|سيحصل|ستستلم|ستتلقي|سيقيد|ستقيد|سيرد|سيعاد|ستعاد|سيحول|ستحول|ربما|يمكن|يجب|ينبغي|يحتمل|محتمل|المحتمل|متوقع|متوقعه|المتوقع|المتوقعه|يتوقع|يفترض|المفترض|مقرر|المقرر|مجدول|مجدوله|المجدول|المجدوله|القادم|القادمه|غدا|لاحقا|قريبا|موعد|مستحق|مستحقه|المستحق|المستحقه|يستحق|تستحق)(?![ء-ي])|(?<![ء-ي])(?<!من )خلال(?![ء-ي])|(?<![ء-ي])قد (?:يكون|تكون|يتم|تتم)(?![ء-ي])",
+      "pending": "(?<![a-z])(?:pending|await[a-z]*|waiting|waits|wait for|on hold|held|hold|in progress|under process[a-z]*|under review|under verification|under investigation|under collection|under clearing|being processed|being reviewed|being verified|processing|outstanding|requires?|required|request[a-z]*|needs? your|subject to|upon|pre-?auth[a-z]*|reserved|blocked|initiated|queued|submitted|remind[a-z]*)(?![a-z])|(?<![ء-ي])(?:و|ف|ب|ال)?(?:معلق|معلقه|تعليق|انتظار|ينتظر|تنتظر|لحين|حين|حتي|ريثما|بحاجه|يتطلب|تتطلب|يحتاج|تحتاج|طلب|طلبك|طلبكم|مطلوب|مطلوبه|تذكير|نذكركم|نذكرك)(?![ء-ي])|(?<![ء-ي])(?<!حساب )(?<!حسابك )(?:و|ف)?(?:جاري|جار)(?![ء-ي])|(?<![ء-ي])قيد (?:ال)?(?:انتظار|معالجه|تحصيل|تنفيذ|مراجعه|موافقه|تحقق|دراسه|اجراء)(?![ء-ي])",
+      "question": "[^.!?؟\\n]*(?:[0-9٠-٩]|paid|pay|charg|debit|credit|transfer|purchase|refund|approv|confirm|authori|سداد|دفع|خصم|تحويل|شراء|استرداد|تاكيد|موافقه|تم)[^.!?؟\\n]*[?؟]|(?<![a-z])(?:reply|respond|press|tap|click) (?:with|y|yes|n|no|here|on|to|the|link|[0-9])(?![a-z])|(?<![a-z])(?:to|please) (?:confirm|approve|authori[sz]e|verify|accept)(?![a-z])|(?<![ء-ي])(?:و|ف|ل)?(?:ارسل|اضغط|للتاكيد|للموافقه|لتاكيد|للقبول|لقبول)(?![ء-ي])",
+      "cancelled": "(?<![a-z])(?:cancel[a-z]*|revers[a-z]*|declin[a-z]*|reject[a-z]*|fail[a-z]*|unsuccessful|suspend[a-z]*|attempt[a-z]*|void[a-z]*|refus[a-z]*|denied|insufficient|invalid|error|stopped|bounced|chargeback|disput[a-z]*|recall[a-z]*|undone)(?![a-z])|(?<![ء-ي])(?:و|ف|ب|ال|وال|بال)?(?:الغاء|ملغي|ملغيه|ملغاه|الغيت|الغي|عكس|معكوس|معكوسه|مرفوض|مرفوضه|رفض|رفضت|فشل|فشلت|تعذر|تعذرت|يتعذر|محاوله|ايقاف|موقوف|موقوفه|اعتراض)(?![ء-ي])",
+      "late": "(?<![a-z])(?:late|overdue|penalt[a-z]*|missed|delinquen[a-z]*|arrears)(?![a-z])|(?<![ء-ي])(?:ال)?(?:متاخر|متاخره|تاخير|تاخر|غرامه|غرامات)(?![ء-ي])",
+      "reference": "(?<![a-z])(?:previous|prior|earlier|last) (?:purchase|transaction|payment|salary|deposit|withdrawal|operation)s?(?![a-z])|(?<![ء-ي])(?:اخر|اخري) (?:عمليه|عمليات|حركه)(?![ء-ي])|(?<![ء-ي])(?:العمليه|الحركه) السابقه(?![ء-ي])"
+    },
+    "adviceClause": "(?<![a-z])(?:if (?:you|this|it)(?: transaction)? (?:did not|didn't|do not|don't|was not|wasn't|is not|isn't|were not|have not|haven't|are not|aren't)|if not (?:you|done|made|authori[sz]ed)|not you|not by you|not done by you|not made by you|(?:do not|don't|never) (?:share|disclose|give)|in case (?:you|this)|failure to report)(?![a-z])|(?<![ء-ي])(?:اذا|ان|في حال|لو) (?:لم|كنت لم|عدم)(?![ء-ي])|(?<![ء-ي])(?:لم تقم|ليست انت|لست انت|لا تشارك|لا تشاركوا|لا تفصح|عدم مشاركه|عدم الافصاح)(?![ء-ي])",
+    "completedFormWords": [
+      "used",
+      "incoming",
+      "outgoing",
+      "inward",
+      "outward",
+      "خصم",
+      "ايداع",
+      "سداد",
+      "استلام",
+      "وارده",
+      "صادره",
+      "refund",
+      "payment",
+      "استرداد",
+      "استرجاع",
+      "مرتجع",
+      "دفع",
+      "عمليه انترنت",
+      "اضافه اموال",
+      "الشراء عبر الانترنت",
+      "تاكيد السداد",
+      "trx. of"
+    ],
+    "transferPattern": "(?<![a-z])(?:transfer[a-z]*|remittance|ipn|instapay|wire|sent to|received from|credited by|debited by)(?![a-z])|(?<![ء-ي])(?:و|ف|ب|ل|ال|وال|بال)?(?:تحويل|تحويلات|حواله|حوالات|حولت|محول|محوله|انستاباي)(?![ء-ي])"
+  },
   "debitKeywords": [
     "عملية شراء",
     "شراء",
@@ -536,7 +574,7 @@
     "(?:من|from)\\s+(?!حساب|بطاق|card|account)([^\\n\\r؛;,]{2,40})",
     "(?:عند)\\s+(?!حساب)([^\\n\\r؛;,]{2,40})"
   ],
-  "merchantStopPattern": "\\s+(?:في|بتاريخ|بمبلغ|بقيمة|بواسطة|برقم|on|via|using|with|dated|ending)\\s.*$",
+  "merchantStopPattern": "\\s+(?:في|بتاريخ|بمبلغ|بقيمة|بواسطة|برقم|on|via|using|with|dated|ending|ببطاق\\S*|(?:عبر|باستخدام)(?=\\s+(?:بطاق|مدى|apple|google|samsung|أبل|ابل|stc)))\\s.*$",
   "last4Patterns": [
     "(?:بطاق[ةت]\\S*|ببطاقة|card)[^0-9\\n\\r]{0,20}([0-9]{4})(?![0-9])",
     "(?:حساب\\S*|account|a/c)[^0-9\\n\\r]{0,20}([0-9]{4})(?![0-9])",

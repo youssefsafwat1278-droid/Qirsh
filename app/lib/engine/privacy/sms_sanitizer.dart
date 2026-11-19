@@ -70,6 +70,14 @@ class SmsSanitizer {
       '[0125٠١٢٥۰۱۲۵]$_dc{8}$_nbEnd');
   // International: +CC followed by 7–14 digits
   static final _intlPhone = RegExp('\\+$_dc{7,15}$_nbEnd');
+  // R4P-07: the same numbers written in groups ("055 123 4567",
+  // "055-123-4567", "+966 55 123 4567"). Run before the unspaced rules.
+  // Server twin: SPACED_PHONE_PATTERNS.
+  static final List<RegExp> spacedPhonePatterns = [
+    RegExp('$_nb[0٠۰][5٥۵]$_dc[ \\-]$_dc{3}[ \\-]$_dc{4}$_nbEnd'),
+    RegExp('$_nb[0٠۰][1١۱][0125٠١٢٥۰۱۲۵][ \\-]$_dc{4}[ \\-]$_dc{4}$_nbEnd'),
+    RegExp('\\+$_dc{1,3}(?:[ \\-]$_dc{1,4}){2,4}$_nbEnd'),
+  ];
 
   // ── IBAN ─────────────────────────────────────────────────────────────────
   // ISO 13616: two country letters, two check digits, then up to 30
@@ -107,7 +115,10 @@ class SmsSanitizer {
   static const String _otpCurrency =
       r'sar|egp|aed|usd|eur|gbp|kwd|qar|bhd|omr|jod|le|sr|riyals?|pounds?|dirhams?|dinars?|dollars?|ريال|جنيه|جم|درهم|دينار|دولار|يورو|ر\.س';
   static const String _otpCue =
-      r'(?:otp|one[- ]?time[ \t]+(?:password|passcode|pin|code)'
+      r'(?:otp|one[- ]?time[ \t]+(?:password|passcode|pin|code)|pin|tac|mtoken|token|secure[ \t]+code'
+      // "Your authorization code is …" is a verification code;
+      // "Authorization code 771234" after a purchase is the approval.
+      r'|(?<=your[ \t])(?:authorization|authorisation|auth|approval)[ \t]+code'
       r'|(?:verification|security|activation|confirmation|authentication|access|login|secret)[ \t]+code'
       // A purchase's approval, reference or promo code is not a one-time code.
       r'|passcode|password|(?<!(?:approval|auth|authorization|authorisation|reference|transaction|receipt|pickup|promo|discount|coupon|voucher|order|branch|swift|bank|area|postal)[ \t])code|كلمة[ \t]+المرور(?:[ \t]+لمرة[ \t]+واحدة)?|كلمة[ \t]+السر'
@@ -116,7 +127,15 @@ class SmsSanitizer {
   static const String _otpNumber =
       '(?<![0-9٠-٩۰-۹*•#]|$_dc[.,٫٬/:\\-]|(?<![\\p{L}\\p{M}])(?:$_otpCurrency)[ \\t]{0,3}'
       r'|(?<![\p{L}\p{M}])(?:card|account|acct|ending|بطاقة|البطاقة|حساب|الحساب)[ \t]{1,3})'
-      '$_dc{4,8}(?!$_dc|[.,٫٬/:\\-]$_dc|[ \\t]*(?:$_otpCurrency)(?![\\p{L}\\p{M}]))';
+      // Four to eight digits, also written "482-913" or "4 8 2 9 1 3". A
+      // currency after it makes it an amount, unless another figure follows
+      // the currency ("code is 482913 SAR 250.00").
+      '(?:$_dc{4,8}|$_dc{3}[\\- ]$_dc{3}|$_dc(?:[ ]$_dc){3,7})'
+      '(?!$_dc|[.,٫٬/:\\-]$_dc|[ \\t]*(?:$_otpCurrency)(?![\\p{L}\\p{M}])(?![ \\t]*$_dc))';
+  // Words that may sit between the cue and the code. Server twin:
+  // OTP_QUALIFIER.
+  static const String _otpQualifier =
+      r'(?:[ \t]+(?:المؤقتة|المؤقت|مؤقتة|مؤقت|لمرة[ \t]+واحدة|التالي|التالية|الخاص[ \t]+بك|الخاصة[ \t]+بك|الجديد|الجديدة|below|following)(?![\p{L}\p{M}]))*';
   static RegExp _otpRule(String source) =>
       RegExp(source, caseSensitive: false, unicode: true);
 
@@ -128,12 +147,27 @@ class SmsSanitizer {
     // share.
     (
       _otpRule('()$_otpNumber'
-          r"(?=[ \t]*[.,،;]?[ \t]*(?:(?:please|الرجاء|يرجى)[ \t]+)?(?:do[ \t]+not[ \t]+share|don['’]?t[ \t]+share|never[ \t]+share|لا[ \t]+تشارك|عدم[ \t]+مشارك|لا[ \t]+تفصح))"),
+          r"(?=[ \t]*[.,،;]?\s*(?:(?:please|الرجاء|يرجى)[ \t]+)?(?:do[ \t]+not[ \t]+share|don['’]?t[ \t]+share|never[ \t]+share|لا[ \t]+تشارك|عدم[ \t]+مشارك|لا[ \t]+تفصح))"),
+      'strong'
+    ),
+    // A code alone on its line, the next line saying what to use it for:
+    // "482913\nUse this to log in …".
+    (
+      _otpRule(r'((?:^|(?<=\n))[ \t]*)'
+          '$_otpNumber'
+          r'(?=[ \t]*[.:]?[ \t]*\n[ \t]*(?:use|enter|استخدم|أدخل|ادخل)(?![\p{L}\p{M}]))'),
+      'strong'
+    ),
+    // "Never share this: 482913", «لا تشارك هذا الرمز: 482913».
+    (
+      _otpRule(
+          r"((?<![\p{L}\p{M}])(?:never[ \t]+share|do[ \t]+not[ \t]+share|don['’]?t[ \t]+share|لا[ \t]+تشارك[\p{L}\p{M}]*)(?:[ \t]+(?:this|it|the[ \t]+code|هذا[ \t]+الرمز|الرمز))?[ \t]*[:\-]?[ \t]*)"
+          '$_otpNumber'),
       'strong'
     ),
     // The cue, an optional "is" / «هو» / "no.", then the code.
     (
-      _otpRule('((?<![\\p{L}\\p{M}])($_otpCue)(?![\\p{L}\\p{M}])'
+      _otpRule('((?<![\\p{L}\\p{M}])($_otpCue)(?![\\p{L}\\p{M}])$_otpQualifier'
           r'(?:[ \t]*(?:is|are|was|no\.?|number|هو|هي|رقم)(?![\p{L}\p{M}]))?[ \t]*[:#=\-]?[ \t]*)'
           '$_otpNumber'),
       'cue'
@@ -233,7 +267,7 @@ class SmsSanitizer {
   // BENEFICIARY_AR / BENEFICIARY_EN in _shared/sms_redaction.ts.
   // Applied only when stripping is required (see [sanitize]).
   static final String _beneficiaryToken =
-      "(?!(?:${nameStopwords.where((w) => !beneficiaryObjectWords.contains(w)).join('|')})"
+      "(?!(?!$_afterParticle)$_arabicPrefix(?:${nameStopwords.where((w) => !beneficiaryObjectWords.contains(w)).join('|')})"
       "(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]))"
       "[\\p{L}\\p{M}][\\p{L}\\p{M}*'’\\-]*(?:\\.[\\p{L}\\p{M}][\\p{L}\\p{M}*'’\\-]*)*"
       '(?:(?<=(?<![\\p{L}\\p{M}])(?:\\p{L}|mrs|mr|ms|dr))\\.)?';
@@ -257,9 +291,9 @@ class SmsSanitizer {
       '(?![0-9A-Za-z]|[.,٫٬/:]$_dc|$_dc'
       '|[ \\t]*(?:${_currencyAfter.join('|')})(?![\\p{L}\\p{M}])(?![ \\t]*$_dc))';
   static final String _beneficiaryPart =
-      '(?:$_beneficiaryId|$_beneficiaryToken)';
+      '(?:\\[NAME\\]|$_beneficiaryId|$_beneficiaryToken)';
   static final String _beneficiaryRun =
-      '(?:\\[NAME\\]|$_beneficiaryPart)(?:[ \\t]+$_beneficiaryPart)*';
+      '$_beneficiaryPart(?:[ \\t]+$_beneficiaryPart)*';
   static final _beneficiaryAr = RegExp(
     '(إلى|الى)\\s*:?\\s*$_beneficiaryRun',
     caseSensitive: false,
@@ -363,71 +397,709 @@ class SmsSanitizer {
   // currencies, verbs). It never touches a digit, so amounts, dates, times
   // and card tails survive by construction.
   static const List<String> nameStopwords = [
-    // English
-    'your', 'yours', 'you', 'our', 'us', 'the', 'a', 'an', 'account',
-    'accounts', 'acct', 'acc', 'ac', 'card', 'cards', 'wallet', 'mobile', 'phone',
-    'number', 'no', 'on', 'at', 'in', 'into', 'via', 'using', 'with', 'for',
-    'of', 'to', 'from', 'by',
-    // PRIV-1: a person cue is never (the start of) the name it introduces.
-    'beneficiary', 'benef', 'payee', 'sender', 'remitter', 'recipient', 'payer',
-    'ref', 'reference', 'rrn', 'amount', 'amt',
-    'is', 'was', 'has', 'have', 'been', 'and', 'or', 'date', 'time',
-    'balance', 'bal', 'avl', 'available', 'avail', 'customer', 'customers',
-    'client', 'cardholder', 'holder', 'valued', 'sir', 'madam', 'member',
-    'there', 'team', 'atm', 'branch', 'bank', 'app', 'online', 'internet',
-    'instapay', 'ipn', 'sarie', 'mada', 'swift', 'transfer', 'transaction',
-    'trx', 'txn', 'successful', 'successfully', 'credit', 'debit',
-    'credited', 'debited', 'cash', 'deposit', 'salary', 'sar', 'egp', 'aed',
-    'usd', 'eur', 'gbp', 'kwd', 'qar', 'bhd', 'omr', 'jod', 'le', 'sr',
-    'riyal', 'riyals', 'pound', 'pounds', 'dirham', 'dirhams', 'dinar',
-    'dinars', 'dollar', 'dollars', 'transferred', 'sent', 'received', 'paid',
-    'made', 'requested', 'deposited', 'withdrew', 'initiated', 'will',
-    'would', 'name',
-    // Arabic
-    'حسابك', 'حسابكم', 'حساب', 'الحساب', 'حسابات', 'لحسابك', 'لحساب',
-    'للحساب', 'بطاقتك', 'بطاقتكم', 'بطاقة', 'البطاقة', 'بطاقه', 'رصيدك',
-    'رصيد', 'الرصيد', 'خلال', 'قبل', 'في', 'على', 'عن', 'إلى', 'الى', 'الي',
-    'من', 'بمبلغ', 'مبلغ', 'المبلغ', 'بقيمة', 'قيمة', 'بتاريخ', 'تاريخ',
-    'يوم', 'اليوم', 'الساعة', 'الساعه', 'ساعة', 'وقت', 'رقم', 'عبر',
-    'بواسطة', 'محفظة', 'محفظتك', 'المحفظة', 'ريال', 'جنيه', 'جم', 'درهم',
-    'دينار', 'دولار', 'يورو', 'العميل', 'عميلنا', 'عملائنا', 'عزيزي',
-    'تطبيق', 'الصراف', 'صراف', 'جهاز', 'مدى', 'سريع', 'انستاباي', 'حوالة',
-    'حواله', 'تحويل', 'التحويل', 'الحوالة', 'واردة', 'وارده', 'صادرة',
-    'صادره', 'البنك', 'بنك', 'فرع', 'عند', 'لدى', 'و', 'تم', 'المتاح',
-    'متاح', 'المرجع', 'مرجع', 'رسوم', 'عمولة', 'قام', 'حول', 'حوّل', 'أرسل',
-    'ارسل', 'إرسال', 'ارسال', 'بتحويل', 'بإرسال', 'استلم', 'أودع', 'اودع',
-    'سحب', 'دفع',
-    // Tense and status words (SM-07 / Vso4): a name never runs into what
-    // the message says happened, so «… إلى علي سينفذ غدا» keeps «سينفذ غدا».
-    'shall', 'tomorrow', 'today', 'scheduled', 'executes', 'executed',
-    'execution', 'pending', 'declined', 'rejected', 'failed', 'unsuccessful',
-    'completed', 'approved', 'processed', 'awaiting', 'expected', 'upcoming',
-    'reversed', 'cancelled', 'canceled', 'not', 'please', 'if', 'once', 'when',
-    'every', 'under', 'due', 'سينفذ', 'ستنفذ', 'سيتم', 'ستتم', 'سوف', 'غدا',
-    'غداً', 'مجدول', 'مجدولة', 'سيخصم', 'سيُخصم', 'سيضاف', 'سيودع', 'جاري',
-    'جارٍ', 'قيد', 'معلق', 'معلقة', 'مرفوضة', 'مرفوض', 'رفض', 'فشلت', 'فشل',
-    'لم', 'تمت', 'بنجاح', 'يرجى', 'الرجاء', 'إذا', 'اذا', 'مستحق', 'مستحقة',
-    // Account types (own-account moves keep «from Savings to Current»).
-    'savings', 'saving', 'current', 'checking', 'chequing',
-    'iban', 'الآيبان', 'الايبان', 'آيبان', 'ايبان',
-    // A failure reason after "due to" is never a name (L_L58).
-    'insufficient', 'funds', 'limit', 'reason', 'technical', 'error',
-    'request', 'lack',
-    'التوفير', 'توفير', 'الادخار', 'ادخار', 'الجاري',
-    // Words that open a label, a notice or a sentence without being a name.
-    'payment', 'payments', 'purchase', 'refund', 'bill', 'pos', 'attn',
-    'attention', 'cardholder', 'service', 'care', 'support', 'we', 'it', 'he',
-    'she', 'they', 'this', 'that', 'money', 'sum', 'total', 'fee', 'fees',
-    'charge', 'charges', 'loan', 'installment', 'instalment', 'invoice', 'tax',
-    'vat', 'cashback', 'order', 'standing', 'incoming', 'outgoing', 'local',
-    'international', 'domestic', 'instant', 'internal', 'external', 'own',
-    'between', 'confirmation', 'alert', 'notification', 'notice', 'details',
-    'update', 'status', 'advice', 'merchant', 'id', 'now', 'here', 'then',
-    'الاسم', 'اسم', 'عناية', 'شراء', 'سداد', 'عملية', 'العملية', 'التاجر',
-    'المتجر', 'الكريم', 'العزيز', 'خدمة', 'ناجح', 'ناجحة', 'داخلي', 'داخلية',
-    'دولي', 'دولية', 'محلي', 'محلية', 'فوري', 'فورية', 'سريعة', 'بنكي', 'بنكية',
-    'مالية', 'جديد', 'جديدة', 'صادر', 'وارد', 'إشعار', 'اشعار', 'تنبيه', 'تأكيد',
-    'تفاصيل', 'لك', 'إليك', 'اليك', 'حامل', 'صاحب', 'بين',
+    'your',
+    'yours',
+    'you',
+    'our',
+    'us',
+    'the',
+    'a',
+    'an',
+    'account',
+    'accounts',
+    'acct',
+    'acc',
+    'ac',
+    'card',
+    'cards',
+    'wallet',
+    'mobile',
+    'phone',
+    'number',
+    'no',
+    'on',
+    'at',
+    'in',
+    'into',
+    'via',
+    'using',
+    'with',
+    'for',
+    'of',
+    'to',
+    'from',
+    'by',
+    'beneficiary',
+    'benef',
+    'payee',
+    'sender',
+    'remitter',
+    'recipient',
+    'payer',
+    'ref',
+    'reference',
+    'rrn',
+    'amount',
+    'amt',
+    'is',
+    'was',
+    'has',
+    'have',
+    'been',
+    'and',
+    'or',
+    'date',
+    'time',
+    'balance',
+    'bal',
+    'avl',
+    'available',
+    'avail',
+    'customer',
+    'customers',
+    'client',
+    'cardholder',
+    'holder',
+    'valued',
+    'sir',
+    'madam',
+    'member',
+    'there',
+    'team',
+    'atm',
+    'branch',
+    'bank',
+    'app',
+    'online',
+    'internet',
+    'instapay',
+    'ipn',
+    'sarie',
+    'mada',
+    'swift',
+    'transfer',
+    'transaction',
+    'trx',
+    'txn',
+    'successful',
+    'successfully',
+    'credit',
+    'debit',
+    'credited',
+    'debited',
+    'cash',
+    'deposit',
+    'salary',
+    'sar',
+    'egp',
+    'aed',
+    'usd',
+    'eur',
+    'gbp',
+    'kwd',
+    'qar',
+    'bhd',
+    'omr',
+    'jod',
+    'le',
+    'sr',
+    'riyal',
+    'riyals',
+    'pound',
+    'pounds',
+    'dirham',
+    'dirhams',
+    'dinar',
+    'dinars',
+    'dollar',
+    'dollars',
+    'transferred',
+    'sent',
+    'received',
+    'paid',
+    'made',
+    'requested',
+    'deposited',
+    'withdrew',
+    'initiated',
+    'will',
+    'would',
+    'name',
+    'حسابك',
+    'حسابكم',
+    'حساب',
+    'الحساب',
+    'حسابات',
+    'لحسابك',
+    'لحساب',
+    'للحساب',
+    'بطاقتك',
+    'بطاقتكم',
+    'بطاقة',
+    'البطاقة',
+    'بطاقه',
+    'رصيدك',
+    'رصيد',
+    'الرصيد',
+    'خلال',
+    'قبل',
+    'في',
+    'على',
+    'عن',
+    'إلى',
+    'الى',
+    'الي',
+    'من',
+    'بمبلغ',
+    'مبلغ',
+    'المبلغ',
+    'بقيمة',
+    'قيمة',
+    'بتاريخ',
+    'تاريخ',
+    'يوم',
+    'اليوم',
+    'الساعة',
+    'الساعه',
+    'ساعة',
+    'وقت',
+    'رقم',
+    'عبر',
+    'بواسطة',
+    'محفظة',
+    'محفظتك',
+    'المحفظة',
+    'ريال',
+    'جنيه',
+    'جم',
+    'درهم',
+    'دينار',
+    'دولار',
+    'يورو',
+    'العميل',
+    'عميلنا',
+    'عملائنا',
+    'عزيزي',
+    'تطبيق',
+    'الصراف',
+    'صراف',
+    'جهاز',
+    'مدى',
+    'سريع',
+    'انستاباي',
+    'حوالة',
+    'حواله',
+    'تحويل',
+    'التحويل',
+    'الحوالة',
+    'واردة',
+    'وارده',
+    'صادرة',
+    'صادره',
+    'البنك',
+    'بنك',
+    'فرع',
+    'عند',
+    'لدى',
+    'و',
+    'تم',
+    'المتاح',
+    'متاح',
+    'المرجع',
+    'مرجع',
+    'رسوم',
+    'عمولة',
+    'قام',
+    'حول',
+    'حوّل',
+    'أرسل',
+    'ارسل',
+    'إرسال',
+    'ارسال',
+    'بتحويل',
+    'بإرسال',
+    'استلم',
+    'أودع',
+    'اودع',
+    'سحب',
+    'دفع',
+    'shall',
+    'tomorrow',
+    'today',
+    'scheduled',
+    'executes',
+    'executed',
+    'execution',
+    'pending',
+    'declined',
+    'rejected',
+    'failed',
+    'unsuccessful',
+    'completed',
+    'approved',
+    'processed',
+    'awaiting',
+    'expected',
+    'upcoming',
+    'reversed',
+    'cancelled',
+    'canceled',
+    'not',
+    'please',
+    'if',
+    'once',
+    'when',
+    'every',
+    'under',
+    'due',
+    'سينفذ',
+    'ستنفذ',
+    'سيتم',
+    'ستتم',
+    'سوف',
+    'غدا',
+    'غداً',
+    'مجدول',
+    'مجدولة',
+    'سيخصم',
+    'سيُخصم',
+    'سيضاف',
+    'سيودع',
+    'جاري',
+    'جارٍ',
+    'قيد',
+    'معلق',
+    'معلقة',
+    'مرفوضة',
+    'مرفوض',
+    'رفض',
+    'فشلت',
+    'فشل',
+    'لم',
+    'تمت',
+    'بنجاح',
+    'يرجى',
+    'الرجاء',
+    'إذا',
+    'اذا',
+    'مستحق',
+    'مستحقة',
+    'savings',
+    'saving',
+    'current',
+    'checking',
+    'chequing',
+    'iban',
+    'due to',
+    'insufficient',
+    'funds',
+    'limit',
+    'reason',
+    'technical',
+    'error',
+    'request',
+    'lack',
+    'الآيبان',
+    'الايبان',
+    'آيبان',
+    'ايبان',
+    'التوفير',
+    'توفير',
+    'الادخار',
+    'ادخار',
+    'الجاري',
+    'payment',
+    'payments',
+    'purchase',
+    'refund',
+    'bill',
+    'pos',
+    'attn',
+    'attention',
+    'cardholder',
+    'merchant',
+    'we',
+    'it',
+    'he',
+    'she',
+    'they',
+    'this',
+    'that',
+    'now',
+    'here',
+    'then',
+    'الاسم',
+    'اسم',
+    'عناية',
+    'شراء',
+    'سداد',
+    'عملية',
+    'العملية',
+    'الجهة',
+    'المفوتر',
+    'المستفيد',
+    'مستفيد',
+    'المرسل',
+    'المستلم',
+    'المحول',
+    'ناجح',
+    'ناجحة',
+    'داخلي',
+    'داخلية',
+    'دولي',
+    'دولية',
+    'محلي',
+    'محلية',
+    'فوري',
+    'فورية',
+    'سريعة',
+    'بنكي',
+    'بنكية',
+    'مالية',
+    'جديد',
+    'جديدة',
+    'صادر',
+    'وارد',
+    'إشعار',
+    'اشعار',
+    'تنبيه',
+    'تأكيد',
+    'تفاصيل',
+    'لك',
+    'إليك',
+    'اليك',
+    'حامل',
+    'صاحب',
+    'بين',
+    'are',
+    'attempted',
+    'authorization',
+    'being',
+    'blocked',
+    'bounced',
+    'call',
+    'can',
+    'cannot',
+    'contact',
+    'could',
+    'denied',
+    'did',
+    'didn',
+    'exceeded',
+    'exceeds',
+    'expired',
+    'going',
+    'hold',
+    'may',
+    'might',
+    'minimum',
+    'pre',
+    'preauthorisation',
+    'preauthorization',
+    'refused',
+    'remind',
+    'reminder',
+    'report',
+    'should',
+    'stopped',
+    'timed',
+    'unable',
+    'unauthorised',
+    'unauthorized',
+    'unless',
+    'void',
+    'voided',
+    'withdrawal',
+    'إبلاغ',
+    'اتصل',
+    'اعتراض',
+    'المتوقع',
+    'انتهت',
+    'بانتظار',
+    'تجاوز',
+    'تجاوزت',
+    'تخطي',
+    'تذكير',
+    'تستحق',
+    'تعذر',
+    'تعذرت',
+    'تواصل',
+    'رفضت',
+    'ستتلقى',
+    'ستحصل',
+    'ستستلم',
+    'سيصلك',
+    'طلب',
+    'عدم',
+    'غير',
+    'فاشلة',
+    'قد',
+    'لا',
+    'لعدم',
+    'لن',
+    'لو',
+    'متوقع',
+    'محاولة',
+    'ملغاة',
+    'ملغية',
+    'موعد',
+    'موقوفة',
+    'يستحق',
+    'يمكن',
+    'يمكنك',
+    'انتظار',
+    'التأكيد',
+    'الموافقة',
+    'المعالجة',
+    'التنفيذ',
+    'الانتظار',
+    'approval',
+    'attempt',
+    'authorised',
+    'authorized',
+    'confirmation',
+    "didn't",
+    'didn’t',
+    "couldn't",
+    'couldn’t',
+    "wasn't",
+    'wasn’t',
+    "can't",
+    'can’t',
+    "won't",
+    'won’t',
+    "hasn't",
+    'hasn’t',
+    "isn't",
+    'isn’t',
+    "doesn't",
+    'doesn’t',
+    'dispensed',
+    'out',
+    'pre-auth',
+    'pre-authorisation',
+    'pre-authorization',
+    'process',
+    'processing',
+    'review',
+    'reviewed',
+    'run',
+    'أن',
+    'إتمام',
+    'إلغاء',
+    'إيقاف',
+    'استرداد',
+    'الإلغاء',
+    'الاسترداد',
+    'الحد',
+    'الخصم',
+    'الدفع',
+    'الرفض',
+    'السحب',
+    'السداد',
+    'بنا',
+    'تتم',
+    'تعليق',
+    'تكتمل',
+    'تنجح',
+    'تنفذ',
+    'تنفيذ',
+    'حال',
+    'حجز',
+    'حد',
+    'خصم',
+    'صرف',
+    'صلاحية',
+    'كاف',
+    'كافي',
+    'كفاية',
+    'محجوز',
+    'مصرح',
+    'معالجة',
+    'معنا',
+    'مقبول',
+    'مقبولة',
+    'يتم',
+    'ينجح',
+    'to',
+    'by',
+    'were',
+    'be',
+    'does',
+    'do',
+    'done',
+    'must',
+    'went',
+    'go',
+    'goes',
+    'gone',
+    'through',
+    'got',
+    'get',
+    'gets',
+    'confirm',
+    'confirmed',
+    'verify',
+    'verified',
+    'complete',
+    'proceed',
+    'activate',
+    'avoid',
+    'view',
+    'check',
+    'receive',
+    'pay',
+    'use',
+    'visit',
+    'click',
+    'reply',
+    'send',
+    'make',
+    'see',
+    'authorise',
+    'authorize',
+    'approve',
+    'cancel',
+    'stop',
+    'try',
+    'tried',
+    'arrive',
+    'arrived',
+    'reach',
+    'reached',
+    'remain',
+    'remains',
+    'returned',
+    'refunded',
+    'posted',
+    'booked',
+    'placed',
+    'issued',
+    'released',
+    'held',
+    'settle',
+    'settled',
+    'yesterday',
+    'tonight',
+    'morning',
+    'evening',
+    'afternoon',
+    'noon',
+    'midnight',
+    'earlier',
+    'later',
+    'ago',
+    'recently',
+    'currently',
+    'already',
+    'just',
+    'still',
+    'again',
+    'soon',
+    'immediately',
+    'instantly',
+    'last',
+    'next',
+    'week',
+    'month',
+    'year',
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+    'sunday',
+    'أمس',
+    'امس',
+    'البارحة',
+    'الآن',
+    'الان',
+    'صباحا',
+    'صباحاً',
+    'مساء',
+    'مساءً',
+    'ظهرا',
+    'ظهراً',
+    'ليلا',
+    'ليلاً',
+    'الماضي',
+    'الماضية',
+    'القادم',
+    'القادمة',
+    'المقبل',
+    'المقبلة',
+    'هذا',
+    'هذه',
+    'الشهر',
+    'الأسبوع',
+    'الاسبوع',
+    'السنة',
+    'العام',
+    'لاحقا',
+    'لاحقاً',
+    'سابقا',
+    'سابقاً',
+    'حاليا',
+    'حالياً',
+    'مؤخرا',
+    'مؤخراً',
+    'الأحد',
+    'الاحد',
+    'الاثنين',
+    'الإثنين',
+    'الثلاثاء',
+    'الأربعاء',
+    'الاربعاء',
+    'الخميس',
+    'الجمعة',
+    'السبت',
+  ];
+
+  /// More words that are not a name, used only where there is no cue at all
+  /// or after a field label ("Customer service", "Transfer fee SAR 5"). Kept
+  /// out of [nameStopwords] because they are also (parts of) names after a
+  /// real cue: "from Mark Order", «عبد العزيز» (R4P-01, R4P-04). Server twin:
+  /// LOOSE_STOPWORDS.
+  static const List<String> looseStopwords = [
+    'service',
+    'care',
+    'support',
+    'money',
+    'sum',
+    'total',
+    'fee',
+    'fees',
+    'charge',
+    'charges',
+    'loan',
+    'installment',
+    'instalment',
+    'invoice',
+    'tax',
+    'vat',
+    'cashback',
+    'order',
+    'standing',
+    'incoming',
+    'outgoing',
+    'local',
+    'international',
+    'domestic',
+    'instant',
+    'internal',
+    'external',
+    'own',
+    'between',
+    'alert',
+    'notification',
+    'notice',
+    'details',
+    'update',
+    'status',
+    'advice',
+    'id',
+    'خدمة',
   ];
 
   /// Words the beneficiary rule may consume with the name: the account or
@@ -444,26 +1116,51 @@ class SmsSanitizer {
     'بطاقه', 'محفظة', 'المحفظة', 'رقم',
   };
 
-  static final String _nameToken =
-      // A one-letter stopword before ". Name" is an initial («A. Ali Hassan»).
-      "(?!(?:${nameStopwords.join('|')})(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]|(?<=(?<![\\p{L}\\p{M}])\\p{L})\\.[ \\t]+\\p{L}))"
-      // SM-07: a sentence-ending period is never part of a name (server twin
-      // NAME_TOKEN); an initial or title keeps its period. A lone star
-      // before digits is a masked number, and letters glued to digits
-      // (an IBAN's «SA03») are not a name.
+  // R4P-01: after an Arabic name particle the next word is part of the name
+  // whatever it is («عبد العزيز», «أبو بكر», «بن سعود», «آل سعود»).
+  static const String _afterParticle =
+      r'(?<=(?<![\p{L}\p{M}])(?:عبد|أبو|ابو|أبي|ابي|بن|ابن|بنت|آل|أم|ام)[ \t]{1,3})';
+  static const String _arabicPrefix = r'(?:[وف](?=[\u0621-\u064A]{2}))?';
+
+  /// The veto of a name token: a stop word (with an optional Arabic «و» /
+  /// «ف» prefix), as a whole token. Not a veto: after a name particle; a
+  /// one-letter stop word before ". Name" («A. Ali Hassan») or before another
+  /// name word (R4P-05: "NOURA A ALHARBI"). Server twin: stopAt.
+  static String _stopAt(Iterable<String> words) {
+    final stop = words.join('|');
+    return '(?!(?!$_afterParticle)$_arabicPrefix(?:$stop)'
+        "(?![\\p{L}\\p{M}*'’\\-]|\\.[\\p{L}\\p{M}]"
+        r'|(?<=(?<![\p{L}\p{M}])\p{L})\.[ \t]+\p{L}'
+        r'|(?<=(?<![\p{L}\p{M}])\p{L})[ \t]+'
+        '(?!(?:$stop)(?![\\p{L}\\p{M}]))\\p{L}))';
+  }
+
+  // SM-07: a sentence-ending period is never part of a name (server twin
+  // nameToken); an initial or title keeps its period. A lone star before
+  // digits is a masked number, and letters glued to digits (an IBAN's
+  // «SA03») are not a name.
+  static String _nameTokenOf(Iterable<String> words) => '${_stopAt(words)}'
       "(?!\\*+$_dc)[\\p{L}\\p{M}*](?:[\\p{L}\\p{M}*'’\\-]|(?!$_sentenceEnd)\\.)*"
       "(?![\\p{L}\\p{M}*'’\\-]|$_dc)";
+  static final String _nameToken = _nameTokenOf(nameStopwords);
+  static final String _looseNameToken =
+      _nameTokenOf([...nameStopwords, ...looseStopwords]);
+  static final String _looseName =
+      '$_looseNameToken(?:[ \\t]+$_looseNameToken){0,5}';
   static const String _sentenceEnd =
       r'(?:(?<!(?<![\p{L}\p{M}])(?:\p{L}|mrs|mr|ms|dr))\.(?=\s|$)|[\n!?؟;؛])';
   static final String _name = '$_nameToken(?:[ \\t]+$_nameToken){0,5}';
   static const String _cueSep = r'(?:[ \t]*:[ \t]*|[ \t]+)';
+  // After a field label a dash separates too ("Recipient - Dana Yousef - …").
+  static const String _labelSep = r'(?:[ \t]*[:\-][ \t]*|[ \t]+)';
 
   // Salutations — a name follows by definition, in any kind of message.
   // English greetings only at the start of the text or of a sentence, so a
   // merchant such as "DEAR DIARY CAFE" after "Purchase at" is not one.
   static final _salutation = RegExp(
     r'((?:(?<![\p{L}\p{M}])(?:عزيزي|عزيزتي|السيدة|السيد|الأستاذة|الاستاذة|'
-    r'الأستاذ|الاستاذ)|(?:^|(?<=[\n.!?؟؛;:،,]))[ \t]*(?:dear|hi|hello))'
+    r'الأستاذ|الاستاذ|(?:عميلنا|عميلتنا)[ \t]+(?:العزيز|العزيزة|الكريم|الكريمة)[ \t]*[\/:\-])'
+    r'|(?:^|(?<=[\n.!?؟؛;:،,]))[ \t]*(?:dear|hi|hello))'
     '(?![\\p{L}\\p{M}])$_cueSep)($_name)',
     caseSensitive: false,
     unicode: true,
@@ -479,7 +1176,7 @@ class SmsSanitizer {
     r'recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|'
     r'in[ \t]+favou?r[ \t]+of|mrs|mr|ms|dr|من[ \t]+قبل|اسم[ \t]+المستفيد|'
     r'اسم[ \t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|'
-    r'الي)'
+    r'الي|لـ)'
     '\\.?(?![\\p{L}\\p{M}])$_cueSep)($_name)',
     caseSensitive: false,
     unicode: true,
@@ -490,8 +1187,9 @@ class SmsSanitizer {
   static final _personCue = RegExp(
     r'((?<![\p{L}\p{M}])(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?'
     r'|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of'
-    r'|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم)'
-    '\\.?(?![\\p{L}\\p{M}])$_cueSep)($_name)',
+    r'|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول'
+    r'|لصالح|باسم|للسيدة|للسيد)'
+    '\\.?(?![\\p{L}\\p{M}])$_labelSep)($_name)',
     caseSensitive: false,
     unicode: true,
   );
@@ -499,7 +1197,7 @@ class SmsSanitizer {
   // PRIV-1: a "From:" field label and "paid to" — a person unless the text
   // reads as a purchase, refund or bill. Server twin: LABEL_CUE_PATTERN.
   static final _labelCue = RegExp(
-    r'((?<![\p{L}\p{M}])(?:from[ \t]*:|paid[ \t]+to(?![\p{L}\p{M}]))[ \t]*)'
+    r'((?<![\p{L}\p{M}])(?:from[ \t]*:|من[ \t]*:|request(?:ed)?[ \t]+from(?![\p{L}\p{M}])|paid[ \t]+to(?![\p{L}\p{M}]))[ \t]*)'
     '($_name)',
     caseSensitive: false,
     unicode: true,
@@ -521,8 +1219,8 @@ class SmsSanitizer {
   // PERSONAL_LABEL_PATTERN.
   static final _personalLabel = RegExp(
     r'((?<![\p{L}\p{M}])(?:attn|attention|(?<!merchant[ \t]|store[ \t]|shop[ \t]|bank[ \t]|company[ \t])name|customer(?:[ \t]+name)?'
-    r'|card[ \t]?holder(?:[ \t]+name)?|account[ \t]+holder(?:[ \t]+name)?|عناية|الاسم|اسم|العميل|حامل[ \t]+البطاقة|صاحب[ \t]+الحساب)'
-    '\\.?(?![\\p{L}\\p{M}])$_cueSep)($_name)',
+    r'|card[ \t]?holder(?:[ \t]+name)?|account[ \t]+holder(?:[ \t]+name)?|عناية|الاسم|اسم(?=[ \t]*:)|العميل|العميلة|حامل[ \t]+البطاقة|صاحب[ \t]+الحساب)'
+    '\\.?(?![\\p{L}\\p{M}])$_labelSep)($_looseName)',
     caseSensitive: false,
     unicode: true,
   );
@@ -530,8 +1228,30 @@ class SmsSanitizer {
   // SP-16: "to account of Mohammed Abdullah", «حساب باسم محمد» — the holder
   // of an account, in any message. Server twin: ACCOUNT_OF_PATTERN.
   static final _accountOf = RegExp(
-    r'((?<![\p{L}\p{M}])(?:(?:account|acct|acc|a\/c|ac|card|wallet)[ \t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \t]+باسم)(?![\p{L}\p{M}])'
+    r'((?<![\p{L}\p{M}])(?:(?:account|acct|acc|a\/c|ac|card|wallet)'
+    '(?:[ \\t]+(?:no\\.?[ \\t]*)?(?:[*xX•#]*$_dc{1,9}|\\[ACCOUNT\\]))?'
+    r'[ \t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \t]+باسم)(?![\p{L}\p{M}])'
     '$_cueSep)($_name)',
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  // AR-01: «من حساب هاني عادل 7788» — the holder named right after the
+  // account word, in any message. Server twin: ACCOUNT_HOLDER_PATTERN.
+  static final _accountHolder = RegExp(
+    r'((?<![\p{L}\p{M}])(?:من|في)[ \t]+(?:حساب|الحساب)[ \t]+)'
+    '($_name)',
+    caseSensitive: false,
+    unicode: true,
+  );
+
+  // AR-01: a number right after a masked name is that person's account or
+  // card number, whatever its length — unless it is an amount, a date or a
+  // time. Server twin: NUMBER_AFTER_NAME.
+  static final _numberAfterName = RegExp(
+    r'((?:\[NAME\]|\[REDACTED\])[ \t]+(?:(?:رقم|no\.?|number|account|acct|حساب)[ \t]*[:#]?[ \t]*)?)'
+    '[*xX•#]*$_dc{1,9}[*•]*'
+    '(?!$_dc|[.,٫٬/:\\-]$_dc|[ \\t]*(?:${_currencyAfter.join('|')})(?![\\p{L}\\p{M}]))',
     caseSensitive: false,
     unicode: true,
   );
@@ -557,7 +1277,7 @@ class SmsSanitizer {
   // NAME_AFTER_TRANSFER_PATTERN.
   static final _nameBeforeVerb = RegExp(
     r'((?:^|(?<=[\n.!?؟;؛:]))[ \t]*)'
-    '($_name)'
+    '($_looseName)'
     r'(?=[ \t]+(?:has[ \t]+|have[ \t]+)?(?:sent|transferred|paid|remitted)[ \t]+'
     r'(?:you(?![\p{L}\p{M}])|(?:[^.\n]|\.(?=[0-9٠-٩۰-۹])){0,30}?(?<![\p{L}\p{M}])(?:to|into)[ \t]+you))',
     caseSensitive: false,
@@ -571,7 +1291,7 @@ class SmsSanitizer {
   );
   static final _nameAfterTransfer = RegExp(
     r'((?<![\p{L}\p{M}])(?:transfer|transferred|remittance|حوالة|حواله|تحويل)(?![\p{L}\p{M}])(?:[ \t]*[:\-][ \t]*|[ \t]+))'
-    '($_nameToken(?:[ \\t]+$_nameToken){1,5})'
+    '($_looseNameToken(?:[ \\t]+$_looseNameToken){1,5})'
     '(?=[ \\t]*(?:[\\-,،]|$_dc|\$|\\n|(?:${_currencyAfter.join('|')})(?![\\p{L}\\p{M}])))',
     caseSensitive: false,
     unicode: true,
@@ -598,39 +1318,144 @@ class SmsSanitizer {
   // TRANSFER_WORDS.
   static final _transferContext = RegExp(
     r'transfer|remit|received|credited|deposit|\bipn\b|instapay|beneficiary|'
-    r'\bsent\b|حوال|تحويل|حول|وارد|استلام|استلمت|إيداع|ايداع|أودع|اودع|'
+    r'\bsent\b|payable\s+to|request(?:ed)?\s+from|حوال|تحويل|حول|وارد|وصلك|طلب\s+دفع|استلام|استلمت|إيداع|ايداع|أودع|اودع|'
     r'مستفيد|المرسل|انستا|لصالح|standing\s+order|أمر\s+(?:مستديم|دائم)|'
     r'امر\s+(?:مستديم|دائم)',
     caseSensitive: false,
     unicode: true,
   );
-  static final _purchaseContext = RegExp(
+  // "merchant" / «تاجر» alone reads as a purchase only where nothing says
+  // transfer («إلى محمد التاجر» is a surname in a transfer). Server twins:
+  // PURCHASE_WORDS, WEAK_PURCHASE_WORDS, PURCHASE_CONTEXT.
+  static final _purchaseWords = RegExp(
     r'purchase|\bpos\b|point of sale|paid at|spent|refund|revers|e-?commerce|'
-    r'\bbill|merchant|شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|'
-    r'مرتجع|إرجاع|ارجاع|فاتور|سداد|تاجر',
+    r'\bbill|شراء|مشتريات|نقاط البيع|نقطة بيع|نقاط بيع|استرداد|مسترد|'
+    r'مرتجع|إرجاع|ارجاع|فاتور|سداد',
     caseSensitive: false,
     unicode: true,
   );
+  static final _weakPurchaseWords =
+      RegExp('merchant|تاجر', caseSensitive: false, unicode: true);
+  // A transfer or remittance by its own wording: its counterparty is masked
+  // whole and a purchase or refund word does not make it a purchase. Server
+  // twin: STRONG_TRANSFER_WORDS.
+  static final _strongTransfer = RegExp(
+    r'transfer|remit|beneficiary|\bipn\b|instapay|\bsent\b|payable\s+to|'
+    r'request(?:ed)?\s+from|standing\s+order|حوال|تحويل|حول|مستفيد|المرسل|'
+    r'لصالح|وصلك|أرسل|ارسل|طلب\s+دفع|انستا|أمر\s+(?:مستديم|دائم)|'
+    r'امر\s+(?:مستديم|دائم)',
+    caseSensitive: false,
+    unicode: true,
+  );
+  static bool _readsAsPurchase(String text) =>
+      !_strongTransfer.hasMatch(text) &&
+      (_purchaseWords.hasMatch(text) ||
+          (_weakPurchaseWords.hasMatch(text) &&
+              !_transferContext.hasMatch(text)));
 
   /// A business, by the words a business name carries (a shop, company or
   /// service marker), never by a list of specific names. A counterparty whose
   /// name carries one is a merchant and is kept, whatever the cue. Server
   /// twin: COMPANY_MARKERS.
   static const List<String> companyMarkers = [
-    'shop', 'shops', 'store', 'stores', 'bookstore', 'market', 'markets',
-    'supermarket', 'hypermarket', 'mart', 'mall', 'cafe', 'café', 'coffee',
-    'restaurant', 'restaurants', 'kitchen', 'bakery', 'pharmacy', 'pharmacies',
-    'clinic', 'clinics', 'hospital', 'company', 'co', 'corp', 'corporation',
-    'ltd', 'llc', 'inc', 'est', 'establishment', 'trading', 'group', 'holding',
-    'services', 'solutions', 'hotel', 'hotels', 'station', 'petrol', 'fuel',
-    'telecom', 'electricity', 'water', 'insurance', 'school', 'university',
-    'academy', 'airlines', 'airways', 'pay', 'com', 'net',
-    'شركة', 'شركه', 'مؤسسة', 'مؤسسه', 'مكتبة', 'مكتبه', 'متجر', 'متاجر', 'محل',
-    'محلات', 'مطعم', 'مطاعم', 'مقهى', 'كافيه', 'كوفي', 'صيدلية', 'صيدليات',
-    'مستشفى', 'عيادة', 'عيادات', 'فندق', 'سوبرماركت', 'هايبر', 'هايبرماركت',
-    'أسواق', 'اسواق', 'سوق', 'مركز', 'محطة', 'مخبز', 'مخابز', 'بقالة', 'تموينات',
-    'للتجارة', 'التجارية', 'للخدمات', 'مدرسة', 'جامعة', 'الكهرباء', 'المياه',
-    'الاتصالات', 'للاتصالات', 'للتأمين',
+    'shop',
+    'shops',
+    'store',
+    'stores',
+    'bookstore',
+    'market',
+    'markets',
+    'supermarket',
+    'hypermarket',
+    'mart',
+    'mall',
+    'cafe',
+    'café',
+    'coffee',
+    'restaurant',
+    'restaurants',
+    'kitchen',
+    'bakery',
+    'pharmacy',
+    'pharmacies',
+    'clinic',
+    'clinics',
+    'hospital',
+    'company',
+    'co',
+    'corp',
+    'corporation',
+    'ltd',
+    'llc',
+    'inc',
+    'est',
+    'establishment',
+    'trading',
+    'group',
+    'holding',
+    'services',
+    'solutions',
+    'hotel',
+    'hotels',
+    'station',
+    'petrol',
+    'fuel',
+    'telecom',
+    'electricity',
+    'water',
+    'insurance',
+    'takaful',
+    'school',
+    'university',
+    'academy',
+    'airlines',
+    'airways',
+    'pay',
+    'com',
+    'net',
+    'شركة',
+    'شركه',
+    'مؤسسة',
+    'مؤسسه',
+    'مكتبة',
+    'مكتبه',
+    'متجر',
+    'متاجر',
+    'محل',
+    'محلات',
+    'مطعم',
+    'مطاعم',
+    'مقهى',
+    'كافيه',
+    'كوفي',
+    'صيدلية',
+    'صيدليات',
+    'مستشفى',
+    'عيادة',
+    'عيادات',
+    'فندق',
+    'سوبرماركت',
+    'هايبر',
+    'هايبرماركت',
+    'أسواق',
+    'اسواق',
+    'سوق',
+    'مركز',
+    'محطة',
+    'مخبز',
+    'مخابز',
+    'بقالة',
+    'تموينات',
+    'للتجارة',
+    'التجارية',
+    'للخدمات',
+    'مدرسة',
+    'جامعة',
+    'الكهرباء',
+    'المياه',
+    'الاتصالات',
+    'للاتصالات',
+    'للتأمين',
   ];
   static final _companyMarker = RegExp(
     '(?<![\\p{L}\\p{M}])(?:${companyMarkers.join('|')})(?![\\p{L}\\p{M}])',
@@ -753,7 +1578,10 @@ class SmsSanitizer {
           own = true;
         } else if (_destinationBefore.hasMatch(before) ||
             _destinationLabel.hasMatch(phrase)) {
-          own = _creditVerbBefore.hasMatch(before) && !outgoing;
+          // The other side of a debit is a third party (R4P-07).
+          own = _creditVerbBefore.hasMatch(before) &&
+              !outgoing &&
+              !_debitVerbBefore.hasMatch(before);
         } else if (card || purchase) {
           own = !sender;
         } else {
@@ -778,38 +1606,50 @@ class SmsSanitizer {
   /// counterparty of such a message is a merchant (MASK-1). Server twin:
   /// isMerchantContext.
   static bool isMerchantContext(String text) =>
-      _purchaseContext.hasMatch(text) ||
+      _readsAsPurchase(text) ||
       (!_transferContext.hasMatch(text) &&
           scanSuffixes(text, purchase: false).any((s) => s.card && s.own));
 
   /// True when [text] carries a transfer or credit word.
   static bool hasTransferWord(String text) => _transferContext.hasMatch(text);
 
-  // After the bare prepositions "to" and "by" a single lower-case Latin word
-  // is a verb or a common word, not a name ("Use the code to confirm your
-  // transfer", "by clicking"): a one-word name there starts with a capital, a
-  // star or a non-Latin letter. Two or more words are still a name, and a
-  // field label ("To:") is not bare. Server twins: BARE_PREPOSITION,
-  // ORDINARY_WORD.
+  // THE DECISION RULE for person or merchant is stated once, in
+  // `sms_redaction.ts` ("Person or merchant"): in a transfer every
+  // counterparty is masked whole; in a purchase the merchant is kept; after
+  // payment wording with neither, the payee is kept only when it carries a
+  // business word.
+
+  // After the bare prepositions "to" and "by", a single lower-case Latin word
+  // followed by a determiner is a verb, not a name ("to settle your bill",
+  // "by clicking the link"). A name in lower case is still masked. Server
+  // twin: isOrdinaryWord.
   static final _barePreposition = _ci(r'(?<![\p{L}\p{M}])(?:to|by)[ \t]+$');
-  static final _ordinaryWord = RegExp(r'^\p{Ll}[^ \t]*$', unicode: true);
+  static final _lowerCaseWord = RegExp(r'^\p{Ll}[^ \t]*$', unicode: true);
+  static final _determinerAfter = _ci(
+      r'^[ \t]+(?:your|the|this|that|these|those|a|an|it|my|our|all|any)(?![\p{L}\p{M}])');
+  static bool _isOrdinaryWord(Match m) =>
+      _barePreposition.hasMatch(m.group(1)!) &&
+      _lowerCaseWord.hasMatch(m.group(2)!) &&
+      _determinerAfter.hasMatch(m.input.substring(m.end));
 
-  /// The cue and `[NAME]`, or the match unchanged when the name is a
-  /// business's or (after a bare preposition) an ordinary word. Server twin:
-  /// maskName.
-  static String maskName(Match m) => _companyMarker.hasMatch(m.group(2)!) ||
-          (_barePreposition.hasMatch(m.group(1)!) &&
-              _ordinaryWord.hasMatch(m.group(2)!))
-      ? m.group(0)!
-      : '${m.group(1)!}[NAME]';
+  /// The cue and `[NAME]`: a person, whatever words the name carries. Server
+  /// twin: maskPerson.
+  static String maskPerson(Match m) =>
+      _isOrdinaryWord(m) ? m.group(0)! : '${m.group(1)!}[NAME]';
 
-  /// As [maskName], for the Latin forms that have no cue of their own: only
+  /// As [maskPerson], where the text has no transfer word (case 3 of THE
+  /// DECISION RULE): a name carrying a business-form word is kept. Server
+  /// twin: maskPayee.
+  static String maskPayee(Match m) =>
+      _companyMarker.hasMatch(m.group(2)!) ? m.group(0)! : maskPerson(m);
+
+  /// As [maskPerson], for the one Latin form with no cue and no verb: only
   /// the leading capitalised words are the name, and what follows them stays.
   /// Server twin: maskCapitalisedName.
   static String maskCapitalisedName(Match m) {
     final name = m.group(2)!;
     final run = _capitalisedRun.firstMatch(name)?.group(0);
-    return run == null || _companyMarker.hasMatch(run)
+    return run == null
         ? m.group(0)!
         : '${m.group(1)!}[NAME]${name.substring(run.length)}';
   }
@@ -825,11 +1665,16 @@ class SmsSanitizer {
       '(?<!$_l)(?:account|accounts|acct|acc|ac|wallet|mobile|phone|number|no|name|حساب|الحساب|حسابات|لحساب|للحساب|محفظة|المحفظة|رقم)(?!$_l)'
       '|^(?:(?:the|a|an)[ \\t]+)?(?:card|cards|بطاقة|البطاقة|بطاقه)(?!$_l)'
       '|\\[(?:NAME|ACCOUNT|IBAN|CARD|PHONE|REF)\\]|^[*xX•#]*$_dc|$_dc{5}|[A-Z]{2}$_dc{2}');
-  static bool keepsBeneficiary(String match, {required bool merchantContext}) {
+  static bool keepsBeneficiary(String match,
+      {required bool merchantContext, required bool transfer}) {
     final run = match.replaceFirst(_beneficiaryCue, '');
     return !_beneficiaryAccountObject.hasMatch(run) &&
-        (merchantContext || _companyMarker.hasMatch(run));
+        (merchantContext || (!transfer && _companyMarker.hasMatch(run)));
   }
+
+  /// True when [name] carries a business-form word (COMPANY_MARKERS).
+  static bool hasBusinessWord(String name) => _companyMarker.hasMatch(name);
+
 
   /// True when [text] carries an identifier the PII floor would mask: an
   /// e-mail, a card, phone, IBAN, account or cue-anchored reference number.
@@ -837,6 +1682,7 @@ class SmsSanitizer {
   static bool containsIdentifier(String text) =>
       _email.hasMatch(text) ||
       _cardNumber.hasMatch(text) ||
+      spacedPhonePatterns.any((p) => p.hasMatch(text)) ||
       _saudiPhone.hasMatch(text) ||
       _egyptPhone.hasMatch(text) ||
       _intlPhone.hasMatch(text) ||
@@ -862,7 +1708,7 @@ class SmsSanitizer {
   /// purchase, refund or bill payment. Decided from the text alone (never from
   /// a parser type) so the device and the server reach the same answer.
   static bool isCounterpartyContext(String text) =>
-      _transferContext.hasMatch(text) && !_purchaseContext.hasMatch(text);
+      _transferContext.hasMatch(text) && !_readsAsPurchase(text);
 
   // ── Read-only pattern accessors ──────────────────────────────────────────
   // Exposed so `sanitization_edit_map.dart` can run the SAME passes in the
@@ -893,12 +1739,14 @@ class SmsSanitizer {
   static RegExp get toHeadingPattern => _toHeading;
   static RegExp get personalLabelPattern => _personalLabel;
   static RegExp get accountOfPattern => _accountOf;
+  static RegExp get accountHolderPattern => _accountHolder;
+  static RegExp get numberAfterNamePattern => _numberAfterName;
   static RegExp get parenNamePattern => _parenName;
   static RegExp get paymentToPattern => _paymentTo;
   static RegExp get nameBeforeVerbPattern => _nameBeforeVerb;
   static RegExp get nameAfterVerbArPattern => _nameAfterVerbAr;
   static RegExp get nameAfterTransferPattern => _nameAfterTransfer;
-  static bool isPurchaseContext(String text) => _purchaseContext.hasMatch(text);
+  static bool isPurchaseContext(String text) => _readsAsPurchase(text);
 
   /// Returns a sanitized copy of [rawSms] safe for sending to an AI service.
   ///
@@ -919,6 +1767,9 @@ class SmsSanitizer {
     text = text.replaceAll(_cardNumber, '[CARD]');
 
     // 2. Phone numbers (before broad account pattern to avoid overlap)
+    for (final pattern in spacedPhonePatterns) {
+      text = text.replaceAll(pattern, '[PHONE]');
+    }
     text = text.replaceAll(_saudiPhone, '[PHONE]');
     text = text.replaceAll(_egyptPhone, '[PHONE]');
     text = text.replaceAll(_intlPhone, '[PHONE]');
@@ -950,44 +1801,44 @@ class SmsSanitizer {
     // step 7 so a multi-word name after عزيزي is masked in full.
     text = text.replaceAllMapped(_salutation, (m) => '${m.group(1)!}[NAME]');
     // PRIV-1: a person cue names a person in any message.
-    text = text.replaceAllMapped(_personCue, maskName);
-    text = text.replaceAllMapped(_personalLabel, maskName);
-    text = text.replaceAllMapped(_accountOf, maskName);
+    text = text.replaceAllMapped(_personCue, maskPerson);
+    text = text.replaceAllMapped(_personalLabel, maskPerson);
+    text = text.replaceAllMapped(_accountOf, maskPerson);
+    text = text.replaceAllMapped(_accountHolder, maskPerson);
     if (!isMerchantContext(text)) {
       if (_transferContext.hasMatch(text)) {
-        text = text.replaceAllMapped(_counterparty, maskName);
+        text = text.replaceAllMapped(_counterparty, maskPerson);
       } else {
         // PRIV-1: with no purchase, refund, bill or card-payment reading, a
         // "From:" label, "paid to" and a "To <Name>:" heading name a person.
-        text = text.replaceAllMapped(_labelCue, maskName);
-        text = text.replaceAllMapped(_toHeading, maskName);
-        text = text.replaceAllMapped(_paymentTo, maskCapitalisedName);
+        text = text.replaceAllMapped(_labelCue, maskPayee);
+        text = text.replaceAllMapped(_toHeading, maskPayee);
+        text = text.replaceAllMapped(_paymentTo, maskPayee);
       }
-      text = text.replaceAllMapped(_parenName, maskName);
-      text = text.replaceAllMapped(_nameBeforeVerb, maskCapitalisedName);
-      text = text.replaceAllMapped(_nameAfterVerbAr, maskName);
+      text = text.replaceAllMapped(_parenName, maskPerson);
+      text = text.replaceAllMapped(_nameBeforeVerb, maskPerson);
+      text = text.replaceAllMapped(_nameAfterVerbAr, maskPerson);
       text = text.replaceAllMapped(_nameAfterTransfer, maskCapitalisedName);
     }
 
     // 6. The beneficiary after «إلى»/"To:" — kept only when it is a merchant
     // ([keepsBeneficiary]).
     final merchantContext = isMerchantContext(text);
+    final transfer = _transferContext.hasMatch(text);
+    bool keeps(Match m) => keepsBeneficiary(m.group(0)!,
+        merchantContext: merchantContext, transfer: transfer);
+    text = text.replaceAllMapped(_beneficiaryAr,
+        (m) => keeps(m) ? m.group(0)! : '${m.group(1)!}: [REDACTED]');
     text = text.replaceAllMapped(
-        _beneficiaryAr,
-        (m) => keepsBeneficiary(m.group(0)!, merchantContext: merchantContext)
-            ? m.group(0)!
-            : '${m.group(1)!}: [REDACTED]');
-    text = text.replaceAllMapped(
-        _beneficiaryEn,
-        (m) => keepsBeneficiary(m.group(0)!, merchantContext: merchantContext)
-            ? m.group(0)!
-            : 'To: [REDACTED]');
+        _beneficiaryEn, (m) => keeps(m) ? m.group(0)! : 'To: [REDACTED]');
     text = text.replaceAllMapped(
         _ownDestinationNumber, (m) => '${m.group(1)!}[ACCOUNT]');
+    text = text.replaceAllMapped(
+        _numberAfterName, (m) => '${m.group(1)!}[ACCOUNT]');
 
     // 6a. Account and card suffixes the text does not mark as the user's own
     // (THE RULE above).
-    final purchase = _purchaseContext.hasMatch(text);
+    final purchase = _readsAsPurchase(text);
     for (final s in scanSuffixes(text, purchase: purchase).reversed) {
       if (!s.own) text = text.replaceRange(s.start, s.end, '[ACCOUNT]');
     }

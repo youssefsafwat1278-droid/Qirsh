@@ -235,17 +235,81 @@ bool localParseOpposesDirection({
 /// `total_with_parts`) whose [amount]
 /// (the server's or model's answer) is the total the message states
 /// ([AiCandidateValidator.statedTotal]) may be recorded.
-String? meaningHoldReason(String text, {num? amount}) {
+String? meaningHoldReason(String text,
+    {num? amount, bool modelDecided = false}) {
   final meaning = ParserEngine.meaningOf(text);
   // Follow-up 15 (VAL-1): released only by the single rule, which reads
-  // not-completed first.
+  // not-completed first. (Round 5: [modelDecided] — the row is a model's
+  // answer, which decides a message with no completed-event form.)
   if (meaning.disposition != MessageDisposition.record) {
-    return AiCandidateValidator.meaningRejectionOf(text, amount: amount) == null
+    return AiCandidateValidator.meaningRejectionOf(text,
+                amount: amount, modelDecided: modelDecided) ==
+            null
         ? null
         : meaning.reason;
   }
   return severalMovements(text, meaning) ? 'multiple_amounts' : null;
 }
+
+/// Round 5 (direction hazard): the direction [text] names, as the server's
+/// `namedDirection` (process-ios-sms/parse.ts): the meaning's flow, else the
+/// earliest money keyword of [namedDebitKeywords] / [namedCreditKeywords]
+/// ("credit card/limit" is a product; a standing order or direct debit names
+/// the instrument and decides only when nothing else does). Used only to
+/// reject a row that books the other direction (review), never to record.
+TxnDirection namedDirection(String text) {
+  final flow = ParserEngine.meaningOf(text).direction;
+  if (flow != TxnDirection.unknown) return flow;
+  final lower = text.toLowerCase();
+  int? earliest(String s, List<String> words) {
+    int? at;
+    for (final w in words) {
+      final i = s.indexOf(w);
+      if (i >= 0 && (at == null || i < at)) at = i;
+    }
+    return at;
+  }
+
+  const instrument = ['standing order', 'أمر مستديم', 'direct debit'];
+  var debitText = lower;
+  for (final w in instrument) {
+    debitText = debitText.replaceAll(w, ' ' * w.length);
+  }
+  final debit = earliest(debitText, namedDebitKeywords);
+  final credit = earliest(
+      lower.replaceAll(RegExp(r'credit(?= card| limit)'), '      '),
+      namedCreditKeywords);
+  if (debit == null && credit == null) {
+    return earliest(lower, instrument) == null
+        ? TxnDirection.unknown
+        : TxnDirection.debit;
+  }
+  if (credit == null) return TxnDirection.debit;
+  if (debit == null) return TxnDirection.credit;
+  return debit <= credit ? TxnDirection.debit : TxnDirection.credit;
+}
+
+/// Equal to `debitKeywords` / `creditKeywords` in
+/// `process-ios-sms/parser_rules.json` (drift test:
+/// completion_certainty_test.dart).
+const List<String> namedDebitKeywords = [
+  'عملية شراء', 'شراء', 'خصم', 'سحب', 'مدى', 'سداد', 'مشتريات', 'مدفوعات',
+  'pos', 'purchase', 'debit', 'withdraw', 'payment', 'paid', 'spent',
+  'standing order', 'أمر مستديم',
+];
+const List<String> namedCreditKeywords = [
+  'إيداع', 'ايداع', 'حوالة واردة', 'حواله وارده', 'تحويل وارد', 'استرداد',
+  'تم استرجاع', 'استرجاع مبلغ', 'راتب', 'credited', 'credit', 'deposit',
+  'received', 'refund', 'salary', 'reversal', 'reversed',
+];
+
+/// Round 5: a server row whose figure is a model's validated answer (the
+/// rule parse + model or AI-primary path), not the rule parse alone, and not
+/// a transfer (transfers are decided on the device's own reading).
+bool isModelDecidedRow(Map<String, dynamic>? parsed) =>
+    (parsed?['parserSource'] == 'ai_hybrid' ||
+        parsed?['parserSource'] == 'ai') &&
+    parsed?['type'] != 'transfer';
 
 final RegExp _sentenceCut = RegExp(r'[\n!?؟;؛]|\.(?![0-9])');
 
@@ -350,6 +414,7 @@ CaptureValidation validateCaptureCandidate({
   required CaptureCandidate candidate,
   required String text,
   required DateTime receivedAt,
+  bool modelDecided = false,
 }) {
   const reject = CaptureValidation.rejected;
   // DATA-01 / REV-03 — a declined/failed/cancelled message moved no money,
@@ -359,7 +424,7 @@ CaptureValidation validateCaptureCandidate({
   // ([AiCandidateValidator.meaningRejectionOf]): the not-completed reason
   // first, another non-record meaning just before acceptance.
   final meaningRejection = AiCandidateValidator.meaningRejectionOf(text,
-      amount: candidate.amount);
+      amount: candidate.amount, modelDecided: modelDecided);
   if (meaningRejection == 'transaction_not_completed') {
     return reject('transaction_not_completed');
   }
@@ -367,6 +432,11 @@ CaptureValidation validateCaptureCandidate({
     return reject('amount_not_grounded');
   }
   final amount = candidate.amount!;
+  // Round 5: a limit, balance or minimum-due figure is never the amount, from
+  // any server build (as the AI validator, OR-03).
+  if (ParserEngine.isAccountFigure(text, amount)) {
+    return reject('amount_is_account_figure');
+  }
   // Closure round (follow-up 6 (5)): a stated total next to a tip/fee/VAT is
   // the amount — a server (any build) that answered the base is not trusted.
   final total = AiCandidateValidator.chargedTotal(text);
@@ -399,8 +469,13 @@ CaptureValidation validateCaptureCandidate({
           : null);
   final aiDirection = _asDirection(candidate.direction);
   final typeDirection = _directionOfType(candidate.type);
+  // Round 5 (direction hazard): a direction the text names ("Direct debit",
+  // "Payroll credit", «خصم», «إيداع») is never flipped by a row.
+  final named = namedDirection(text);
   if (_contradicts(wording, typeDirection) ||
-      _contradicts(wording, aiDirection)) {
+      _contradicts(wording, aiDirection) ||
+      _contradicts(named, aiDirection) ||
+      _contradicts(named, typeDirection)) {
     return reject('direction_contradiction');
   }
   // Direction is required: the explicit direction, else the one the type implies.

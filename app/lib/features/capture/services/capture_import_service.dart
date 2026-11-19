@@ -483,7 +483,8 @@ class CaptureImportService {
     // A tip/fee form may be recorded at the total it states (dev siblings, e).
     final heldAmount = result?.parsed['amount'];
     final held = meaningHoldReason(item.text,
-        amount: heldAmount is num ? heldAmount : null);
+        amount: heldAmount is num ? heldAmount : null,
+        modelDecided: isModelDecidedRow(result?.parsed));
     if (aiPrimary) {
       if (result?.parsed['parserSource'] == 'ai_ignored') {
         // Only the device's deterministic OTP/promo filter may drop a capture.
@@ -519,9 +520,17 @@ class CaptureImportService {
       // No guessed financial transaction: retain the full native message in
       // Smart Inbox atomically before acknowledging the native receipt.
       final serverReason = result?.parsed['reviewReason'];
+      // Review fixes (R4M-08): a processed row that was not imported carries
+      // why — the validator's reason, or that the device reads the message
+      // differently.
+      final refused = result != null && _isProcessed(result)
+          ? (_validation(result, item).reason ?? 'local_reading_differs')
+          : null;
       await _sync.persistUnprocessableCapture(item,
           isOwnerCurrent: () => _stillOwner(owner),
-          reviewReason: held ?? (serverReason is String ? serverReason : null));
+          reviewReason: held ??
+              (serverReason is String ? serverReason : null) ??
+              refused);
       await _removeNative(owner, id);
       if (result != null) acks.add(id);
       return CaptureImportItem(id: id, path: CaptureImportPath.server,
@@ -541,6 +550,8 @@ class CaptureImportService {
         }
         if (reason == null ||
             reason == 'direction_contradiction' ||
+            // Round 5: a limit or balance taken for the amount (OR-03).
+            reason == 'amount_is_account_figure' ||
             held != null) {
           // LR-03 — the device's own reading contradicts the server's (the
           // opposite direction, or not a transaction), the validator found
@@ -550,8 +561,9 @@ class CaptureImportService {
           // row from either (the local fallback would confirm the device's).
           await _sync.persistUnprocessableCapture(item,
               isOwnerCurrent: () => _stillOwner(owner),
-              reviewReason: held ??
-                  (reason == 'direction_contradiction' ? reason : null));
+              // (R4M-08: with no validator reason, the device's own
+              // reading contradicts the row.)
+              reviewReason: held ?? reason ?? 'local_reading_differs');
           await _removeNative(owner, id);
           acks.add(id);
           return CaptureImportItem(id: id, path: CaptureImportPath.server,
@@ -593,6 +605,7 @@ class CaptureImportService {
       ),
       text: item.text,
       receivedAt: item.receivedAt ?? dto.createdAt ?? DateTime.now().toUtc(),
+      modelDecided: isModelDecidedRow(p),
     );
   }
 

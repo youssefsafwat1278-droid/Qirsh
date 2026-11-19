@@ -1329,7 +1329,8 @@ void main() {
         status: 'processed',
         type: 'transfer',
         direction: 'debit',
-        rawMessage: 'تحويل داخلي EGP 42 بين حساباتك',
+        // (Round 5: a completed-event form, else the import holds it.)
+        rawMessage: 'تم تحويل داخلي EGP 42 بين حساباتك',
       ),
     ]);
 

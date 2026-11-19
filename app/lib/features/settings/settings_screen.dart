@@ -425,7 +425,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _NavTile(
               icon: AppLucideIcons.sparkles,
               title: l10n.setLearnedRules,
-              subtitle: l10n.setLearnedRulesSub,
+              // Rules a restore left for the user's choice stay findable after
+              // "Not now" on the post-restore dialog (review R4R-04).
+              subtitle: switch (
+                  ref.watch(ruleRestoreChoicesProvider).valueOrNull?.length) {
+                final int n when n > 0 => l10n.lrRestoreCount(n),
+                _ => l10n.setLearnedRulesSub,
+              },
               onTap: () => LearnedRulesScreen.open(context),
             ),
             _NavTile(

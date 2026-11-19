@@ -10,14 +10,17 @@ const parse = (text: string) => deterministicParse(text, RECEIVED, 180);
 const outcome = (text: string) =>
   parseSms({ text, rawText: text, sender: 'BANK', receivedAt: RECEIVED, tzOffsetMinutes: 180, locale: 'en', allowAi: false });
 
-Deno.test('a cue applies to its own clause: footers never exclude the event', () => {
-  for (const [text, amount, currency] of [
-    ['Purchase completed for EGP 250; card payment due EGP 900', 250, 'EGP'],
-    ['عملية شراء بمبلغ 120 ريال لدى متجر تجريبي. تذكير: موعد سداد بطاقتك 25/11', 120, 'SAR'],
-  ] as const) {
-    const p = parse(text);
-    assert(isResolved(p), text);
-    assertEquals([p.direction, p.type, p.amount, p.currency], ['debit', 'payment', amount, currency], text);
+// Round 5 (owner decision): a due-date or reminder footer is a doubt — the
+// movement is not clearly completed, so it is kept for review (never dropped
+// as a notice, never recorded on the rule reading).
+Deno.test('a due-date footer never excludes the event; it makes it a review', () => {
+  for (const text of [
+    'Purchase completed for EGP 250; card payment due EGP 900',
+    'عملية شراء بمبلغ 120 ريال لدى متجر تجريبي. تذكير: موعد سداد بطاقتك 25/11',
+  ]) {
+    assertEquals(isResolved(parse(text)), false, text);
+    const m = messageMeaning(text);
+    assertEquals([m.kind, m.disposition], ['uncertain', 'review'], text);
   }
 });
 
@@ -68,7 +71,6 @@ Deno.test('clear notices and future or pending clauses are never accepted', asyn
 Deno.test('direction comes from the clause, not from nouns', () => {
   for (const text of [
     'SAR 500 credited to Ali from your account *5678',
-    'Cashback reversal: SAR 15.00 deducted from account *5678',
     'Salary payment to employees SAR 45,000 debited from account *5678',
     'Security deposit payment SAR 1,500 to Test Rentals from account *5678',
     'تم الدفع 300 ريال لشركة الإيداع',
@@ -77,6 +79,8 @@ Deno.test('direction comes from the clause, not from nouns', () => {
     assert(isResolved(p), text);
     assertEquals([p.direction, p.type], ['debit', 'payment'], text);
   }
+  // Round 5: a reversal word is a doubt (review), whatever the direction.
+  assertEquals(messageMeaning('Cashback reversal: SAR 15.00 deducted from account *5678').disposition, 'review');
 });
 
 Deno.test('a flow phrase that moves loyalty points is not a money direction', () => {
@@ -111,9 +115,13 @@ Deno.test('the meaning carries a disposition and a machine-readable reason', asy
   const notice = await outcome('Your Test Electricity bill of SAR 300 is due on 25/11');
   assertEquals([notice.meaning?.kind, notice.meaning?.reason, notice.meaning?.disposition],
     ['no_movement_notice', 'bill_due', 'no_movement']);
-  const purchase = await outcome('Purchase completed for EGP 250; card payment due EGP 900');
+  const purchase = await outcome('Purchase completed for EGP 250 at Test Mart. Available balance EGP 900');
   assertEquals([purchase.meaning?.kind, purchase.meaning?.reason, purchase.accepted],
     ['completed_movement', 'footer_set_aside', true]);
+  // Round 5: not clearly completed (a doubt word) — review, with the reason.
+  const due = await outcome('Purchase completed for EGP 250; card payment due EGP 900');
+  assertEquals([due.meaning?.kind, due.meaning?.reason, due.accepted],
+    ['uncertain', 'not_clearly_completed', false]);
 });
 
 Deno.test('amount roles and table-driven currency', () => {

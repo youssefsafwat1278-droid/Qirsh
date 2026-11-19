@@ -100,10 +100,12 @@ void main() {
     for (final text in [
       'Purchase SAR 230.00 at Jarir with card *4521 and earn rewards',
       'Purchase SAR 230.00 at Jarir with card *4521, total spent this month SAR 3,200',
-      'خصم 99 ريال اشتراك شاهد من بطاقتك 4521، تذكير بالتجديد',
     ]) {
       expect(_meaning(text), startsWith('completedMovement:'), reason: text);
     }
+    // Round 5 (owner decision): a reminder tail is a doubt: review, never a notice.
+    expect(_meaning('خصم 99 ريال اشتراك شاهد من بطاقتك 4521، تذكير بالتجديد'),
+        startsWith('uncertain:'));
   });
 
   // NEW-3: a text over the bound is read in part, so it is never recorded.

@@ -26,7 +26,9 @@ for (const r of rows) {
     if (processed && meaning && meaning.disposition !== 'record') {
       processed = false;
       reason = `${meaning.kind}:${meaning.reason}`;
-    } else if (!processed && meaning && !reason) {
+    } else if (!processed && meaning && (!reason || meaning.disposition === 'review')) {
+      // (Round 5: a review meaning is what the device shows, also when the
+      // server held the capture on its own reading — a transfer.)
       reason = `${meaning.kind}:${meaning.reason}`;
     }
     out.push(JSON.stringify({ id: r.id, processed, ai, reason, type: p.type ?? null, dir: p.direction ?? null,

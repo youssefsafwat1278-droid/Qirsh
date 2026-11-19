@@ -55,10 +55,11 @@ Deno.test('a completed purchase with a reward or reminder tail is recorded', () 
   for (const text of [
     'Purchase SAR 230.00 at Jarir with card *4521 and earn rewards',
     'Purchase SAR 230.00 at Jarir with card *4521, total spent this month SAR 3,200',
-    'خصم 99 ريال اشتراك شاهد من بطاقتك 4521، تذكير بالتجديد',
   ]) {
     assertEquals(messageMeaning(text).kind, 'completed_movement', text);
   }
+  // Round 5 (owner decision): a reminder tail is a doubt: review, never a notice.
+  assertEquals(messageMeaning('خصم 99 ريال اشتراك شاهد من بطاقتك 4521، تذكير بالتجديد').kind, 'uncertain');
 });
 
 // NEW-3: a text over the bound is read in part, so it is never recorded —

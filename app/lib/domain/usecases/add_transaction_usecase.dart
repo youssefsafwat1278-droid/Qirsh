@@ -19,6 +19,7 @@ import '../../engine/parser/bank_sender_filter.dart';
 import '../../data/db/ownership_guard.dart' show StaleOwnershipException;
 import '../../data/db/planning_cutover.dart';
 import '../../engine/parser/capture_money.dart';
+import '../../engine/parser/completion_certainty.dart';
 import '../../engine/parser/direction_signal.dart';
 import '../../engine/parser/local_validity.dart';
 import '../../engine/parser/message_meaning.dart';
@@ -942,8 +943,21 @@ class AddTransactionUseCase {
         : parsedMeaning;
     final meaningHold =
         !wasIgnored && meaning.disposition != MessageDisposition.record;
-    final aiFirstAttempt = wasIgnored || onDeviceOnly || notCompleted ||
-            meaningHold
+    // Round 5 (owner decision): a transfer to or from a person or between
+    // accounts never goes to the model; the device's own reading decides it
+    // (clearly completed: recorded; otherwise review).
+    final localTransfer = CompletionCertainty.isTransfer(rawMessage);
+    // Round 5 (owner decision): an uncertain message (no completed-event
+    // form, or a doubt) is asked of the model when AI is allowed; the
+    // validator records only a "completed" answer for a text with no doubt.
+    final modelDecides = meaning.kind == MessageKind.uncertain &&
+        (meaning.reason == 'no_completed_form' ||
+            meaning.reason == 'not_clearly_completed');
+    final aiFirstAttempt = wasIgnored ||
+            onDeviceOnly ||
+            notCompleted ||
+            (meaningHold && !modelDecides) ||
+            localTransfer
         ? _AiFirstAttempt.skipped(
             wasIgnored
                 ? 'message_ignored'
@@ -951,7 +965,9 @@ class AddTransactionUseCase {
                     ? 'on_device_only'
                     : notCompleted
                         ? 'transaction_not_completed'
-                        : 'message_meaning_${meaning.reason}',
+                        : meaningHold && !modelDecides
+                            ? 'message_meaning_${meaning.reason}'
+                            : 'transfer_local_only',
           )
         : await _tryAiParseFirst(
             rawMessage: rawMessage,
@@ -1008,7 +1024,9 @@ class AddTransactionUseCase {
 
     // An eligible production AI request owns the result even when the local
     // parser found a different amount/category. It is never replaced on failure.
-    final localParsed = !aiPrimary && localAccepted && !meaningHold
+    final localParsed = (!aiPrimary || localTransfer) &&
+            localAccepted &&
+            !meaningHold
         ? parseResult.transaction
         : null;
     if (localParsed != null) {
@@ -1050,7 +1068,13 @@ class AddTransactionUseCase {
               (aiFirstAttempt.response == null
                   ? null
                   : 'ai_response_rejected_by_grounding'),
-          reviewReason: meaningHold && droppedByParser ? meaning.reason : null);
+          // Review fixes (R4M-08): every message kept for review carries a
+          // reason — the meaning's, or that no reading could be confirmed.
+          reviewReason: !droppedByParser
+              ? null
+              : meaningHold
+                  ? meaning.reason
+                  : 'not_understood');
     }
     final now = DateTime.now().toUtc();
     final receivedAt = (smsReceivedAt ?? now).toUtc();

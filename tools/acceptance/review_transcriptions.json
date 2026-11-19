@@ -1,0 +1,1328 @@
+[
+ {
+  "id": "AR02",
+  "text": "حوالة 152 ريال إلى هاني عادل بانتظار التأكيد",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AR03",
+  "text": "Your expected refund of SAR 73.00 may have been credited to your account *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AR04a",
+  "text": "Purchase SAR 63.00 at Kudu card *4521. Merchant confirmation outstanding",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AR04b",
+  "text": "شراء 68 ريال لدى نون بطاقة 4521 لم يتم تأكيد العملية",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AR04c",
+  "text": "تم تعليق شراء 70 ريال لدى جرير لحين تأكيد التاجر",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AR04d",
+  "text": "Purchase SAR 82.00 at Jarir card *4521 is scheduled for tomorrow",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AR05a",
+  "text": "Refund of SAR 71.00 has not been credited to your card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AR05b",
+  "text": "لم يتم رد مبلغ 77 ريال عن عملية شراء لدى نون",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AR06a",
+  "text": "Purchase SAR 91.00 at Jarir card *4521. Your refund request for a previous order is pending",
+  "truth": {
+   "kind": "d",
+   "amt": 91,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AR06b",
+  "text": "Purchase SAR 90.00 at Panda card *4521. Refunds are pending for other purchases",
+  "truth": {
+   "kind": "d",
+   "amt": 90,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "R4M01a",
+  "text": "Your bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 can be paid via SADAD",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M01b",
+  "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 must be paid before 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M01c",
+  "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 should be paid today",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M01d",
+  "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 paid? Reply YES to confirm",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M01e",
+  "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 paid late incurs a fee",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M01f",
+  "text": "Bill SAR 200.00, VAT SAR 30.00, total SAR 230.00 paid by cheque is subject to clearing",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M01g",
+  "text": "فاتورة 200 ريال، ضريبة 30 ريال، تم سداد الإجمالي 230 ريال؟ للتأكيد أرسل 1",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M02a",
+  "text": "Thank you. We received your late payment of SAR 2,000.00 for credit card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M02b",
+  "text": "Your overdue payment of SAR 2,000.00 for credit card *4521 has been received",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M02c",
+  "text": "Late payment of SAR 2,000.00 received towards your credit card *4521. Fee waived",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M02d",
+  "text": "Pay SAR 2,000.00 by 25/11 or a late payment fee of SAR 100.00 applies to credit card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M02e",
+  "text": "تم استلام سدادك المتأخر 2,000 ريال لبطاقتك الائتمانية 4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M03a",
+  "text": "Your order was cancelled. Refund of SAR 150.00 is credited within 5 days",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M03b",
+  "text": "تم إلغاء عملية الاسترداد بمبلغ 150 ريال التي أضيفت إلى بطاقتك 4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M03c",
+  "text": "Purchase SAR 150.00 at Noon card *4521. Cancelled orders are refunded within 7 days",
+  "truth": {
+   "kind": "d",
+   "amt": 150,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "R4M03d",
+  "text": "Refund of SAR 150.00 credited to your card *4521 has been reversed",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M03e",
+  "text": "لم يتم رد مبلغ 150 ريال عن عملية شراء لدى نون",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M04",
+  "text": "Standing orders will be executed on the due date. SAR 500.00 to Ali on 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M05a",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. We are awaiting your feedback, rate us in the app",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "R4M05b",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Awaiting you at our new branch",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "R4M05c",
+  "text": "شراء 45 ريال لدى جرير بطاقة *4521. نحن بانتظار تقييمك للخدمة",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "R4M05d",
+  "text": "شراء 45 ريال لدى جرير بطاقة *4521. في انتظار زيارتكم القادمة",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "R4M05e",
+  "text": "Transfer SAR 500.00 from Current account *4521 to Savings account *7788 of Mohammed",
+  "truth": {
+   "kind": "d",
+   "amt": 500,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "R4M05f",
+  "text": "حركة مدينة بمبلغ 500 ريال على حسابك 4521",
+  "truth": {
+   "kind": "d",
+   "amt": 500,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "R4M05g",
+  "text": "حركة دائنة بمبلغ 500 ريال على حسابك 4521",
+  "truth": {
+   "kind": "c",
+   "amt": 500,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "R4M05h",
+  "text": "International transaction of USD 100.00 on your card *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 100,
+   "cur": "USD"
+  }
+ },
+ {
+  "id": "R4M05i",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Your standing order of SAR 500.00 to Ali will be executed on 01/12",
+  "truth": {
+   "kind": "d",
+   "amt": 45,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "R4M06a",
+  "text": "Purchase SAR 45.00 at Jarir card *4521 is waiting for merchant confirmation",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06b",
+  "text": "Purchase SAR 45.00 at Jarir card *4521 awaits merchant confirmation",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06c",
+  "text": "Purchase SAR 45.00 at Jarir card *4521. Merchant confirmation awaited",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06d",
+  "text": "Purchase SAR 45.00 at Jarir card *4521 is yet to be confirmed by the merchant",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06e",
+  "text": "Purchase SAR 45.00 at Jarir card *4521 not yet confirmed",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06f",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521 ينتظر تأكيد التاجر",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06g",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521 لم يتم تأكيده من التاجر بعد",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06h",
+  "text": "شراء 45 ريال لدى جرير بطاقة 4521 بحاجة إلى تأكيد التاجر",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06i",
+  "text": "You'll be charged SAR 99.00 on 01/12 for Shahid",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06j",
+  "text": "Purchase SAR 45.00 at Jarir card *4521 is under processing",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06k",
+  "text": "Purchase SAR 45.00 at Jarir card *4521 in progress",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06l",
+  "text": "Purchase SAR 45.00 at Jarir card *4521 requires your approval",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M06m",
+  "text": "Approve purchase SAR 45.00 at Jarir card *4521? Reply Y",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "R4M09a",
+  "text": "تم تحويل 500 ريال إلى حسابك الادخاري 7788 من حسابك الجاري 4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "FXFEE",
+  "text": "Purchase at Noon USD 100.00 (SAR 375.00) + FX fee SAR 8.25, total SAR 383.25 card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM001",
+  "text": "Purchase SAR 301.00 at Jarir card *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 301,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM002",
+  "text": "Purchase of SAR 302.00 at Jarir with card *4521 was not completed",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM003",
+  "text": "Purchase of SAR 303.00 at Jarir with card *4521 has not been approved",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM004",
+  "text": "Purchase of SAR 304.00 at Jarir with card *4521 couldn't be authorised",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM005",
+  "text": "Purchase of SAR 305.00 at Jarir with card *4521 may have been processed",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM006",
+  "text": "SAR 306.00 might have been charged to your card *4521 at Jarir",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM007",
+  "text": "Purchase of SAR 307.00 at Jarir with card *4521 is awaiting merchant confirmation",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM008",
+  "text": "Purchase SAR 308.00 at Jarir card *4521, merchant confirmation outstanding",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM009",
+  "text": "Purchase SAR 309.00 at Jarir card *4521 pending authorization",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM010",
+  "text": "Purchase SAR 310.00 at Jarir card *4521 is scheduled for tomorrow",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM011",
+  "text": "Purchase of SAR 311.00 at Jarir will be charged to your card *4521 tomorrow",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM012",
+  "text": "Purchase SAR 312.00 at Jarir card *4521, scheduled for 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM013",
+  "text": "Purchase SAR 313.00 at Jarir card *4521. The transaction has not been completed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM014",
+  "text": "Purchase SAR 314.00 at Jarir card *4521. It was not processed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM015",
+  "text": "Purchase SAR 315.00 at Jarir card *4521. It may not have been processed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM016",
+  "text": "Purchase SAR 316.00 at Jarir card *4521. The amount might have been reversed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM017",
+  "text": "Purchase SAR 317.00 at Jarir card *4521. Merchant confirmation outstanding.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM018",
+  "text": "Purchase SAR 318.00 at Jarir card *4521. Approval is still pending.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM019",
+  "text": "Purchase SAR 319.00 at Jarir card *4521. It is scheduled for tomorrow.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM020",
+  "text": "Purchase SAR 320.00 at Jarir card *4521. The amount will be processed on 01/12.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM021",
+  "text": "Purchase SAR 321.00 at Jarir card *4521. Your refund request for a previous order is pending.",
+  "truth": {
+   "kind": "d",
+   "amt": 321,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM022",
+  "text": "Purchase SAR 322.00 at Jarir card *4521. Refunds are pending for other purchases.",
+  "truth": {
+   "kind": "d",
+   "amt": 322,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM023",
+  "text": "Purchase SAR 323.00 at Jarir card *4521. Other transactions have not been processed yet.",
+  "truth": {
+   "kind": "d",
+   "amt": 323,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM024",
+  "text": "Refund of SAR 324.00 from Noon has been credited to your card *4521",
+  "truth": {
+   "kind": "c",
+   "amt": 324,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM025",
+  "text": "Refund of SAR 325.00 has not been credited to your card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM026",
+  "text": "Refund of SAR 326.00 from Noon could not be credited to your card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM027",
+  "text": "Your refund of SAR 327.00 from Noon was never processed",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM028",
+  "text": "Your expected refund of SAR 328.00 may have been credited to your account *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM029",
+  "text": "Refund of SAR 329.00 from Noon should have been credited to your card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM030",
+  "text": "Refund of SAR 330.00 from Noon has probably been credited to your card *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM031",
+  "text": "Refund of SAR 331.00 from Noon is pending",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM032",
+  "text": "Refund of SAR 332.00 from Noon is awaiting approval",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM033",
+  "text": "Refund of SAR 333.00 from Noon will be credited to your card *4521 within 5 days",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM034",
+  "text": "Refund of SAR 334.00 from Noon is expected on 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM035",
+  "text": "Your refund request of SAR 335.00 from Noon has been received",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM036",
+  "text": "Refund of SAR 336.00 from Noon has been credited to your card *4521. The transaction has not been completed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM037",
+  "text": "Refund of SAR 337.00 from Noon has been credited to your card *4521. It was not processed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM038",
+  "text": "Refund of SAR 338.00 from Noon has been credited to your card *4521. It may not have been processed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM039",
+  "text": "Refund of SAR 339.00 from Noon has been credited to your card *4521. The amount might have been reversed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM040",
+  "text": "Refund of SAR 340.00 from Noon has been credited to your card *4521. Merchant confirmation outstanding.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM041",
+  "text": "Refund of SAR 341.00 from Noon has been credited to your card *4521. Approval is still pending.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM042",
+  "text": "Refund of SAR 342.00 from Noon to your card *4521. It is scheduled for tomorrow.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM043",
+  "text": "Refund of SAR 343.00 from Noon to your card *4521. The amount will be processed on 01/12.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM044",
+  "text": "Refund of SAR 344.00 from Noon has been credited to your card *4521. Your refund request for a previous order is pending.",
+  "truth": {
+   "kind": "c",
+   "amt": 344,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM045",
+  "text": "Refund of SAR 345.00 from Noon has been credited to your card *4521. Refunds are pending for other purchases.",
+  "truth": {
+   "kind": "c",
+   "amt": 345,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM046",
+  "text": "Refund of SAR 346.00 from Noon has been credited to your card *4521. Other transactions have not been processed yet.",
+  "truth": {
+   "kind": "c",
+   "amt": 346,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM047",
+  "text": "SAR 347.00 has been transferred to Ali from your account *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 347,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM048",
+  "text": "SAR 348.00 has not been transferred to Ali from your account *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM049",
+  "text": "Transfer of SAR 349.00 to Ali could not be completed",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM050",
+  "text": "SAR 350.00 may have been transferred to Ali from your account *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM051",
+  "text": "Transfer of SAR 351.00 to Ali has possibly been executed",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM052",
+  "text": "Transfer of SAR 352.00 to Ali is awaiting approval",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM053",
+  "text": "Transfer of SAR 353.00 to Ali from your account *4521 is pending",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM054",
+  "text": "Transfer of SAR 354.00 to Ali is scheduled for 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM055",
+  "text": "SAR 355.00 will be transferred to Ali tomorrow",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM056",
+  "text": "Your request to transfer SAR 356.00 to Ali has been received",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM057",
+  "text": "SAR 357.00 has been transferred to Ali from your account *4521. The transaction has not been completed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM058",
+  "text": "SAR 358.00 has been transferred to Ali from your account *4521. It was not processed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM059",
+  "text": "SAR 359.00 has been transferred to Ali from your account *4521. It may not have been processed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM060",
+  "text": "SAR 360.00 has been transferred to Ali from your account *4521. The amount might have been reversed.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM061",
+  "text": "SAR 361.00 has been transferred to Ali from your account *4521. Merchant confirmation outstanding.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM062",
+  "text": "SAR 362.00 has been transferred to Ali from your account *4521. Approval is still pending.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM063",
+  "text": "Transfer of SAR 363.00 to Ali from your account *4521. It is scheduled for tomorrow.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM064",
+  "text": "Transfer of SAR 364.00 to Ali from your account *4521. The amount will be processed on 01/12.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM065",
+  "text": "SAR 365.00 has been transferred to Ali from your account *4521. Your refund request for a previous order is pending.",
+  "truth": {
+   "kind": "d",
+   "amt": 365,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM066",
+  "text": "SAR 366.00 has been transferred to Ali from your account *4521. Refunds are pending for other purchases.",
+  "truth": {
+   "kind": "d",
+   "amt": 366,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM067",
+  "text": "SAR 367.00 has been transferred to Ali from your account *4521. Other transactions have not been processed yet.",
+  "truth": {
+   "kind": "d",
+   "amt": 367,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM068",
+  "text": "شراء 368 ريال لدى جرير بطاقة *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 368,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM069",
+  "text": "شراء 369 ريال لدى جرير بطاقة *4521 لم يتم تأكيد العملية",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM070",
+  "text": "لم تتم عملية شراء بمبلغ 370 ريال لدى جرير بطاقة *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM071",
+  "text": "تعذر إتمام شراء 371 ريال لدى جرير بطاقة *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM072",
+  "text": "قد يكون تم خصم 372 ريال من بطاقتك *4521 لدى جرير",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM073",
+  "text": "ربما تم خصم 373 ريال من بطاقتك *4521 لدى جرير",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM074",
+  "text": "شراء 374 ريال لدى جرير بطاقة *4521 بانتظار تأكيد التاجر",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM075",
+  "text": "تم تعليق شراء 375 ريال لدى جرير لحين تأكيد التاجر",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM076",
+  "text": "شراء 376 ريال لدى جرير بطاقة *4521 قيد الموافقة",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM077",
+  "text": "شراء 377 ريال لدى جرير بطاقة *4521 سيتم خصمه غدا",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM078",
+  "text": "شراء 378 ريال لدى جرير بطاقة *4521 مجدول ليوم غد",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM079",
+  "text": "شراء 379 ريال لدى جرير بطاقة *4521. لم يتم تأكيد العملية.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM080",
+  "text": "شراء 380 ريال لدى جرير بطاقة *4521. لم تكتمل العملية.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM081",
+  "text": "شراء 381 ريال لدى جرير بطاقة *4521. من المحتمل أن العملية لم تتم.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM082",
+  "text": "شراء 382 ريال لدى جرير بطاقة *4521. ربما لم تكتمل العملية.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM083",
+  "text": "شراء 383 ريال لدى جرير بطاقة *4521. العملية بانتظار تأكيد التاجر.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM084",
+  "text": "شراء 384 ريال لدى جرير بطاقة *4521. العملية قيد الانتظار.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM085",
+  "text": "شراء 385 ريال لدى جرير بطاقة *4521. العملية مجدولة ليوم غد.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM086",
+  "text": "شراء 386 ريال لدى جرير بطاقة *4521. سيتم تنفيذها غدا.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM087",
+  "text": "شراء 387 ريال لدى جرير بطاقة *4521. طلب الاسترداد لطلب سابق قيد المراجعة.",
+  "truth": {
+   "kind": "d",
+   "amt": 387,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM088",
+  "text": "شراء 388 ريال لدى جرير بطاقة *4521. عمليات الاسترداد لمشتريات أخرى ما زالت معلقة.",
+  "truth": {
+   "kind": "d",
+   "amt": 388,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM089",
+  "text": "تم رد مبلغ 389 ريال إلى بطاقتك *4521 من نون",
+  "truth": {
+   "kind": "c",
+   "amt": 389,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM090",
+  "text": "لم يتم رد مبلغ 390 ريال عن عملية شراء لدى نون",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM091",
+  "text": "لم يتم إيداع مبلغ الاسترداد 391 ريال في بطاقتك *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM092",
+  "text": "تعذر رد مبلغ 392 ريال إلى بطاقتك *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM093",
+  "text": "من المحتمل أن يكون تم رد مبلغ 393 ريال إلى بطاقتك *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM094",
+  "text": "من المتوقع أن يتم إيداع مبلغ الاسترداد 394 ريال في حسابك *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM095",
+  "text": "استرداد مبلغ 395 ريال من نون قيد المعالجة",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM096",
+  "text": "استرداد مبلغ 396 ريال من نون بانتظار الموافقة",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM097",
+  "text": "سيتم رد مبلغ 397 ريال إلى بطاقتك *4521 خلال 5 أيام",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM098",
+  "text": "تم استلام طلب استرداد مبلغ 398 ريال من نون",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM099",
+  "text": "تم رد مبلغ 399 ريال إلى بطاقتك *4521 من نون. لم يتم تأكيد العملية.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM100",
+  "text": "تم رد مبلغ 400 ريال إلى بطاقتك *4521 من نون. لم تكتمل العملية.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM101",
+  "text": "تم رد مبلغ 401 ريال إلى بطاقتك *4521 من نون. من المحتمل أن العملية لم تتم.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM102",
+  "text": "تم رد مبلغ 402 ريال إلى بطاقتك *4521 من نون. ربما لم تكتمل العملية.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM103",
+  "text": "تم رد مبلغ 403 ريال إلى بطاقتك *4521 من نون. العملية بانتظار تأكيد التاجر.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM104",
+  "text": "تم رد مبلغ 404 ريال إلى بطاقتك *4521 من نون. العملية قيد الانتظار.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM105",
+  "text": "استرداد مبلغ 405 ريال من نون إلى بطاقتك *4521. العملية مجدولة ليوم غد.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM106",
+  "text": "استرداد مبلغ 406 ريال من نون إلى بطاقتك *4521. سيتم تنفيذها غدا.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM107",
+  "text": "تم رد مبلغ 407 ريال إلى بطاقتك *4521 من نون. طلب الاسترداد لطلب سابق قيد المراجعة.",
+  "truth": {
+   "kind": "c",
+   "amt": 407,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM108",
+  "text": "تم رد مبلغ 408 ريال إلى بطاقتك *4521 من نون. عمليات الاسترداد لمشتريات أخرى ما زالت معلقة.",
+  "truth": {
+   "kind": "c",
+   "amt": 408,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM109",
+  "text": "تم تحويل 409 ريال إلى علي من حسابك *4521",
+  "truth": {
+   "kind": "d",
+   "amt": 409,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM110",
+  "text": "لم يتم تحويل 410 ريال إلى علي من حسابك *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM111",
+  "text": "تعذر تنفيذ تحويل 411 ريال إلى علي",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM112",
+  "text": "ربما تم تحويل 412 ريال إلى علي من حسابك *4521",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM113",
+  "text": "قد يكون تم تحويل 413 ريال إلى علي",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM114",
+  "text": "تحويل 414 ريال إلى علي بانتظار الموافقة",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM115",
+  "text": "تحويل 415 ريال إلى علي من حسابك *4521 قيد التنفيذ",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM116",
+  "text": "سيتم تحويل 416 ريال إلى علي غدا",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM117",
+  "text": "تحويل 417 ريال إلى علي مجدول ليوم 01/12",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM118",
+  "text": "تم استلام طلبك لتحويل 418 ريال إلى علي",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM119",
+  "text": "تم تحويل 419 ريال إلى علي من حسابك *4521. لم يتم تأكيد العملية.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM120",
+  "text": "تم تحويل 420 ريال إلى علي من حسابك *4521. لم تكتمل العملية.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM121",
+  "text": "تم تحويل 421 ريال إلى علي من حسابك *4521. من المحتمل أن العملية لم تتم.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM122",
+  "text": "تم تحويل 422 ريال إلى علي من حسابك *4521. ربما لم تكتمل العملية.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM123",
+  "text": "تم تحويل 423 ريال إلى علي من حسابك *4521. العملية بانتظار تأكيد التاجر.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM124",
+  "text": "تم تحويل 424 ريال إلى علي من حسابك *4521. العملية قيد الانتظار.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM125",
+  "text": "تحويل 425 ريال إلى علي من حسابك *4521. العملية مجدولة ليوم غد.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM126",
+  "text": "تحويل 426 ريال إلى علي من حسابك *4521. سيتم تنفيذها غدا.",
+  "truth": {
+   "kind": "n"
+  }
+ },
+ {
+  "id": "AM127",
+  "text": "تم تحويل 427 ريال إلى علي من حسابك *4521. طلب الاسترداد لطلب سابق قيد المراجعة.",
+  "truth": {
+   "kind": "d",
+   "amt": 427,
+   "cur": "SAR"
+  }
+ },
+ {
+  "id": "AM128",
+  "text": "تم تحويل 428 ريال إلى علي من حسابك *4521. عمليات الاسترداد لمشتريات أخرى ما زالت معلقة.",
+  "truth": {
+   "kind": "d",
+   "amt": 428,
+   "cur": "SAR"
+  }
+ }
+]

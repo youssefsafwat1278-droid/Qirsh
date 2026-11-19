@@ -21,81 +21,21 @@ import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/merchant_rule_history.dart';
 import 'package:money_companion/data/repositories/drift_category_repository.dart';
 import 'package:money_companion/data/repositories/drift_merchant_category_repository.dart';
-import 'package:money_companion/data/sync/sync_cursor.dart';
 import 'package:money_companion/features/planning_sync/services/merchant_rule_sync_service.dart';
 import 'package:money_companion/features/planning_sync/services/planning_outbox_queue.dart';
 import 'package:money_companion/l10n/app_localizations.dart';
 
 import '../../features/capture/ledger_admission_fixture.dart';
 import 'fake_ledger_cloud.dart';
+import 'fake_rule_cloud.dart';
 import 'restore_sync_device.dart';
-
-/// In-memory `user_merchant_rules` for one user: one row per merchant key,
-/// server-owned `updated_at`, tombstones instead of deletes.
-class _RuleCloud implements MerchantRuleRemote {
-  final rows = <String, Map<String, dynamic>>{};
-  final pushedKeys = <String>[];
-  var _clock = 0;
-
-  String _tick() => DateTime.utc(2027, 1, 1)
-      .add(Duration(seconds: ++_clock))
-      .toIso8601String();
-
-  @override
-  Future<List<Map<String, dynamic>>> upsert(Map<String, dynamic> row) async {
-    final key = row['merchant_key'] as String;
-    pushedKeys.add(key);
-    rows[key] = {
-      'id': rows[key]?['id'] ?? 'srv-${rows.length + 1}',
-      'merchant_key': key,
-      'category_key': row['category_key'],
-      'deleted_at': row['deleted_at'],
-      'updated_at': _tick(),
-    };
-    return [Map.of(rows[key]!)];
-  }
-
-  @override
-  Future<List<Map<String, dynamic>>> fetchRows(
-      {required SyncCursor after, int limit = 200}) async {
-    final sorted = rows.values.toList()
-      ..sort((a, b) =>
-          (a['updated_at'] as String).compareTo(b['updated_at'] as String));
-    return sorted
-        .where((r) =>
-            after.id.isEmpty ||
-            normalizeCursorTimestamp(r['updated_at'])
-                    .compareTo(after.updatedAt) >
-                0)
-        .take(limit)
-        .map(Map<String, dynamic>.from)
-        .toList();
-  }
-
-  /// A write made by another device of the same user.
-  void otherDevice(String key, String category, {String? deletedAt}) {
-    rows[key] = {
-      'id': rows[key]?['id'] ?? 'srv-${rows.length + 1}',
-      'merchant_key': key,
-      'category_key': category,
-      'deleted_at': deletedAt,
-      'updated_at': _tick(),
-    };
-  }
-
-  /// Live rules: merchant key -> category key.
-  Map<String, Object?> live() => {
-        for (final r in rows.values)
-          if (r['deleted_at'] == null) r['merchant_key'] as String: r['category_key'],
-      };
-}
 
 void main() {
   late LedgerAdmissionFixture admission;
   late Device d;
   late AppDatabase db;
   late DriftMerchantCategoryRepository rules;
-  late _RuleCloud cloud;
+  late FakeRuleCloud cloud;
 
   const shop = 'Synthetic Rule Shop';
   const arabicShop = 'متجر اصطناعي';
@@ -112,7 +52,7 @@ void main() {
     // The device holds a record of its own, so every restore here MERGES.
     await d.seedAccount();
     rules = DriftMerchantCategoryRepository(db, outboxQueue: queue());
-    cloud = _RuleCloud();
+    cloud = FakeRuleCloud();
   });
   tearDown(() => admission.finish());
 
@@ -178,7 +118,8 @@ void main() {
         },
       };
 
-  Map<String, dynamic> backupRule(Map<String, dynamic> backup, String merchant) {
+  Map<String, dynamic> backupRule(
+      Map<String, dynamic> backup, String merchant) {
     final tables = backup['tables'] as Map;
     final merchantId = (tables['merchants'] as List)
         .cast<Map<String, dynamic>>()
@@ -217,7 +158,8 @@ void main() {
       };
 
   group('merge rule, per merchant', () {
-    test('a rule only in the backup, on a device with full deletion history, '
+    test(
+        'a rule only in the backup, on a device with full deletion history, '
         'is restored (English and Arabic merchant)', () async {
       await remember(shop, 'restaurants');
       await remember(arabicShop, 'shopping');
@@ -239,7 +181,8 @@ void main() {
           reason: 'the restored rule keeps its own change time');
     });
 
-    test('a rule removed after the backup stays removed, and is not offered '
+    test(
+        'a rule removed after the backup stays removed, and is not offered '
         'for review', () async {
       await remember(shop, 'restaurants');
       await remember(arabicShop, 'shopping');
@@ -274,11 +217,15 @@ void main() {
       expect(await pending(), isEmpty);
     });
 
-    test('rules of a category deleted after the backup stay removed and '
+    test(
+        'rules of a category deleted after the backup stay removed and '
         'nothing points at the deleted category', () async {
       final categories = DriftCategoryRepository(db, outboxQueue: queue());
       final custom = await categories.createCategory(
-          nameAr: 'فئة اصطناعية', icon: 'tag', color: '#000000', isIncome: false);
+          nameAr: 'فئة اصطناعية',
+          icon: 'tag',
+          color: '#000000',
+          isIncome: false);
       await remember(shop, custom.key);
       final backup = await d.backup();
       await categories.deleteCategory(custom.id);
@@ -307,7 +254,8 @@ void main() {
       expect(await ruleFor(shop), 'shopping');
     });
 
-    test('a rule the backup changed more recently wins, with the backup\'s '
+    test(
+        'a rule the backup changed more recently wins, with the backup\'s '
         'change time; a tie keeps the device rule', () async {
       await remember(shop, 'restaurants');
       await remember(arabicShop, 'restaurants');
@@ -329,24 +277,43 @@ void main() {
       expect(await ruleFor(arabicShop), 'restaurants');
     });
 
-    test('a rule only on the device is kept, even when the backup recorded a '
-        'later removal of it', () async {
-      final backup = await d.backup();
+    test(
+        'a removal recorded in the backup removes the device rule only when '
+        'it is newer than that rule (review AR-08); an older one changes '
+        'nothing', () async {
       await remember(shop, 'restaurants');
-      (backup['tables'] as Map)['merchant_rule_tombstones'] = [
+      await remember(arabicShop, 'shopping');
+      final backup = await d.backup();
+      final tables = backup['tables'] as Map;
+      // The backup's source removed both rules: one after this device's rule
+      // was last changed, one before.
+      (tables['merchant_category_map'] as List)
+          .removeWhere((r) => (r as Map)['is_user_confirmed'] == 1);
+      tables['merchant_rule_tombstones'] = [
         {
           'merchant_key': key(shop),
           'category_key': 'restaurants',
           'deleted_at': '2099-01-01T00:00:00.000Z',
-        }
+        },
+        {
+          'merchant_key': key(arabicShop),
+          'category_key': 'shopping',
+          'deleted_at': '2020-01-01T00:00:00.000Z',
+        },
       ];
 
       await d.restore(backup);
-      expect(await ruleFor(shop), 'restaurants');
-      expect(await tombstones(), isEmpty);
+      expect(await ruleFor(shop), isNull);
+      expect(await tombstones(), {key(shop): '2099-01-01T00:00:00.000Z'},
+          reason: 'the removal keeps the backup\'s time, not "now"');
+      expect(await ruleFor(arabicShop), 'shopping');
+      await d.restore(backup);
+      expect(await ruleFor(shop), isNull);
+      expect(await ruleFor(arabicShop), 'shopping');
     });
 
-    test('a rule saved again on another phone after it was removed here is '
+    test(
+        'a rule saved again on another phone after it was removed here is '
         'restored (the newer manual edit)', () async {
       await remember(shop, 'restaurants');
       final backup = await d.backup();
@@ -359,14 +326,14 @@ void main() {
           reason: 'a merchant has a rule or a removal, never both');
     });
 
-    test('removals recorded in the backup join this device\'s history, so an '
+    test(
+        'removals recorded in the backup join this device\'s history, so an '
         'older backup cannot bring those rules back later', () async {
       await remember(shop, 'restaurants');
       final older = await d.backup();
       await rules.forgetUserConfirmedRule(shop);
       final newer = await d.backup();
-      expect((newer['tables'] as Map)['merchant_rule_tombstones'],
-          hasLength(1),
+      expect((newer['tables'] as Map)['merchant_rule_tombstones'], hasLength(1),
           reason: 'the backup carries the removal');
       // A second phone that never held the rule or its removal.
       await db.customStatement('DELETE FROM merchant_rule_tombstones;');
@@ -380,7 +347,8 @@ void main() {
   });
 
   group('ambiguity', () {
-    test('a backup without deletion history: backup-only rules are listed, '
+    test(
+        'a backup without deletion history: backup-only rules are listed, '
         'not added and not dropped, until the user chooses', () async {
       await remember(shop, 'restaurants');
       await remember(arabicShop, 'shopping');
@@ -388,7 +356,8 @@ void main() {
       await absentHere(shop);
       await absentHere(arabicShop);
 
-      expect(await MerchantRuleRestore(db).reviewCount(
+      expect(
+          await MerchantRuleRestore(db).reviewCount(
               (backup['tables'] as Map).cast<String, Object?>(), 4),
           2,
           reason: 'the confirmation can say how many before anything changes');
@@ -423,25 +392,28 @@ void main() {
       expect(await state(), decided);
     });
 
-    test('undecided rules are stored: they survive a repeated restore and '
+    test(
+        'undecided rules are stored: they survive a repeated restore and '
         'travel in the next backup', () async {
       await remember(shop, 'restaurants');
       final backup = legacy(await d.backup());
       await absentHere(shop);
       await d.restore(backup);
-      final stored = await table('merchant_rule_restore_choices', 'merchant_key');
+      final stored =
+          await table('merchant_rule_restore_choices', 'merchant_key');
       expect(stored.single['merchant_key'], key(shop));
 
       await d.restore(backup);
-      expect(await table('merchant_rule_restore_choices', 'merchant_key'),
-          stored);
+      expect(
+          await table('merchant_rule_restore_choices', 'merchant_key'), stored);
 
       final next = await d.backup();
       expect((next['tables'] as Map)['merchant_rule_restore_choices'],
           hasLength(1));
     });
 
-    test('a device upgraded from a build without deletion history: a backup '
+    test(
+        'a device upgraded from a build without deletion history: a backup '
         'rule older than the upgrade is ambiguous, a newer one is restored',
         () async {
       await remember(shop, 'restaurants');
@@ -461,11 +433,15 @@ void main() {
       expect(await ruleFor(arabicShop), 'shopping');
     });
 
-    test('a backup rule whose category is deleted on this device is never '
+    test(
+        'a backup rule whose category is deleted on this device is never '
         'attached to anything: it waits, and cannot be added', () async {
       final categories = DriftCategoryRepository(db, outboxQueue: queue());
       final custom = await categories.createCategory(
-          nameAr: 'فئة اصطناعية', icon: 'tag', color: '#000000', isIncome: false);
+          nameAr: 'فئة اصطناعية',
+          icon: 'tag',
+          color: '#000000',
+          isIncome: false);
       await remember(shop, custom.key);
       final backup = await d.backup();
       await absentHere(shop);
@@ -489,7 +465,8 @@ void main() {
           isEmpty);
     });
 
-    test('a rule the user makes for the merchant supersedes the pending '
+    test(
+        'a rule the user makes for the merchant supersedes the pending '
         'choice', () async {
       await remember(shop, 'restaurants');
       final backup = legacy(await d.backup());
@@ -539,7 +516,8 @@ void main() {
       expect(await RestoreBackupUseCase.restoreWillMerge(db), isFalse);
     }
 
-    test('rules, removals, undecided rules and the history marker are '
+    test(
+        'rules, removals, undecided rules and the history marker are '
         'restored exactly as the backup holds them', () async {
       await remember(shop, 'restaurants');
       await remember(arabicShop, 'shopping');
@@ -564,7 +542,8 @@ void main() {
       expect(after['history'], before['history']);
     });
 
-    test('a backup without deletion history restores every rule and marks '
+    test(
+        'a backup without deletion history restores every rule and marks '
         'this device\'s history as starting now', () async {
       await remember(shop, 'restaurants');
       await remember(arabicShop, 'shopping');
@@ -579,7 +558,8 @@ void main() {
       expect(await table('merchant_rule_history', 'id'), hasLength(1));
     });
 
-    test('a device that only remembers removals merges instead, so the '
+    test(
+        'a device that only remembers removals merges instead, so the '
         'removals are not thrown away', () async {
       await remember(shop, 'restaurants');
       final backup = await d.backup();
@@ -611,7 +591,8 @@ void main() {
       );
     }
 
-    test('merge: more undecided rules than the backup carried is not a '
+    test(
+        'merge: more undecided rules than the backup carried is not a '
         'row-count mismatch', () async {
       await remember(shop, 'restaurants');
       await remember(arabicShop, 'shopping');
@@ -641,12 +622,14 @@ void main() {
   });
 
   group('restore, then sync, then pull', () {
-    test('a restored rule reaches the cloud once and device and cloud agree; '
+    test(
+        'a restored rule reaches the cloud once and device and cloud agree; '
         'a second sync sends nothing more', () async {
       await remember(shop, 'restaurants');
       await remember(arabicShop, 'shopping');
       await syncService().sync();
-      expect(cloud.live(), {key(shop): 'restaurants', key(arabicShop): 'shopping'});
+      expect(cloud.live(),
+          {key(shop): 'restaurants', key(arabicShop): 'shopping'});
       final backup = await d.backup();
       // Lost on this device and in the cloud copy of this user (e.g. the
       // backup is from a phone that never synced these).
@@ -666,7 +649,8 @@ void main() {
       expect(cloud.live(), await deviceRules());
     });
 
-    test('a rule removed here stays removed on device and cloud after '
+    test(
+        'a rule removed here stays removed on device and cloud after '
         'restore and sync', () async {
       await remember(shop, 'restaurants');
       await syncService().sync();
@@ -684,7 +668,8 @@ void main() {
           reason: 'the restore must not push the removed rule back');
     });
 
-    test('a removal still queued for the cloud survives the restore and is '
+    test(
+        'a removal still queued for the cloud survives the restore and is '
         'delivered', () async {
       await remember(shop, 'restaurants');
       await syncService().sync();
@@ -698,14 +683,14 @@ void main() {
       expect(cloud.live(), isEmpty);
     });
 
-    test('a removal made on another device that this one has not pulled yet '
+    test(
+        'a removal made on another device that this one has not pulled yet '
         'wins over the restored rule: it is not pushed back', () async {
       await remember(shop, 'restaurants');
       await syncService().sync();
       final backup = await d.backup();
       await absentHere(shop);
-      cloud.otherDevice(key(shop), 'restaurants',
-          deletedAt: '2027-01-02T00:00:00.000Z');
+      cloud.otherDevice(key(shop), 'restaurants', removed: true);
       cloud.pushedKeys.clear();
 
       await d.restore(backup);
@@ -723,13 +708,13 @@ void main() {
       expect(cloud.live(), isEmpty);
     });
 
-    test('a removal pulled from the cloud for a rule this device never held '
+    test(
+        'a removal pulled from the cloud for a rule this device never held '
         'is remembered: a later restore does not add the rule', () async {
       await remember(shop, 'restaurants');
       final backup = await d.backup();
       await absentHere(shop);
-      cloud.otherDevice(key(shop), 'restaurants',
-          deletedAt: '2099-01-01T00:00:00.000Z');
+      cloud.otherDevice(key(shop), 'restaurants', removed: true);
       await syncService().sync();
       expect(await tombstones(), contains(key(shop)));
 
@@ -738,7 +723,8 @@ void main() {
       expect(await pending(), isEmpty);
     });
 
-    test('a rule the backup changed more recently replaces a stale queued '
+    test(
+        'a rule the backup changed more recently replaces a stale queued '
         'edit, and the cloud ends with the restored rule', () async {
       await remember(shop, 'restaurants'); // queued, not yet pushed
       final backup = await d.backup();
@@ -753,7 +739,8 @@ void main() {
       expect(cloud.live(), {key(shop): 'shopping'});
     });
 
-    test('a rule added from the review list is pushed like a rule the user '
+    test(
+        'a rule added from the review list is pushed like a rule the user '
         'makes; one left out sends nothing', () async {
       await remember(shop, 'restaurants');
       await remember(arabicShop, 'shopping');
@@ -781,14 +768,15 @@ void main() {
     expect(backup['schemaVersion'], 5);
     expect(BackupSnapshotBuilder.backedUpTables,
         containsAll(MerchantRuleRestore.historyTables));
-    final removal = ((backup['tables'] as Map)['merchant_rule_tombstones']
-            as List)
-        .single as Map;
+    final removal =
+        ((backup['tables'] as Map)['merchant_rule_tombstones'] as List).single
+            as Map;
     expect(removal['merchant_key'], key(shop));
     expect(removal['category_key'], 'restaurants');
   });
 
-  test('the restore confirmation says what happens to saved rules, in English '
+  test(
+      'the restore confirmation says what happens to saved rules, in English '
       'and Arabic', () {
     final en = lookupAppL10n(const Locale('en'));
     final ar = lookupAppL10n(const Locale('ar'));
@@ -806,7 +794,8 @@ void main() {
       expect(body, contains('القواعد المحفوظة'));
     }
     expect(ar.rpConfirmBodyMerge, contains('تُضاف القاعدة غير الموجودة هنا'));
-    expect(ar.rpConfirmBodyMerge, contains('وتبقى القاعدة التي حذفتها هنا محذوفة'));
+    expect(ar.rpConfirmBodyMerge,
+        contains('وتبقى القاعدة التي حذفتها هنا محذوفة'));
     expect(ar.rpConfirmBodyMerge, contains('فلن يضيفها ولن يتجاهلها'));
     expect(en.lrRestoreCount(1), contains('1 rule'));
     expect(en.lrRestoreCount(3), contains('3 rules'));

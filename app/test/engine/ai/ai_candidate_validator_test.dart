@@ -63,6 +63,7 @@ AiCandidateValidation _run(
     );
 
 void main() {
+  // (Round 5: the text states a completed event, else the meaning rejects first.)
   test('direction is required: missing, transfer-only or unknown is unresolved',
       () {
     AiCandidateValidation run(String? direction, TransactionType type) =>
@@ -73,10 +74,10 @@ void main() {
             currency: 'SAR',
             direction: direction,
           ),
-          sanitizedText: 'Transaction of 75.00 SAR at SHOP ONE',
+          sanitizedText: 'Transaction of 75.00 SAR at SHOP ONE completed',
           localParsed: null,
           referenceTime: _ref,
-          messageText: 'Transaction of 75.00 SAR at SHOP ONE',
+          messageText: 'Transaction of 75.00 SAR at SHOP ONE completed',
           normalizedType: type,
         );
     for (final t in [TransactionType.unknown, TransactionType.transfer]) {

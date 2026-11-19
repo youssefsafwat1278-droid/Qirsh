@@ -2,6 +2,7 @@ import '../../domain/finance/currency_scale.dart';
 import '../models/parsed_transaction.dart';
 import '../models/transaction_type.dart';
 import '../parser/capture_money.dart';
+import '../parser/completion_certainty.dart';
 import '../parser/currency_table.dart';
 import '../parser/direction_signal.dart';
 import '../parser/merchant_sanity.dart';
@@ -91,8 +92,10 @@ class AiCandidateValidator {
     // Follow-up 13: any meaning other than `record` rejects. The not-completed
     // reason comes first, before any direction check; another non-record
     // meaning rejects after the specific checks, just before acceptance.
-    final meaningRejection =
-        meaningRejectionOf(messageText ?? sanitizedText, amount: response.amount);
+    final meaningRejection = meaningRejectionOf(messageText ?? sanitizedText,
+        amount: response.amount,
+        // A model's "transfer" never decides: transfers are read locally.
+        modelDecided: normalizedType != TransactionType.transfer);
     if (meaningRejection == 'transaction_not_completed') {
       return const AiCandidateValidation.rejected('transaction_not_completed');
     }
@@ -422,9 +425,19 @@ class AiCandidateValidator {
   /// A tip/fee form (`tip_component`, `total_with_parts`) answered at the
   /// total the message states ([statedTotal]) is not rejected. Server twin:
   /// `meaningRejectionOf` in `process-ios-sms/meaning_gate.ts`.
-  static String? meaningRejectionOf(String text, {num? amount}) {
+  static String? meaningRejectionOf(String text,
+      {num? amount, bool modelDecided = false}) {
     final meaning = ParserEngine.meaningOf(text);
     if (meaning.disposition == MessageDisposition.record) return null;
+    // Round 5 (owner decision): no doubt, only a wording the rules do not
+    // know as a completed form — a model's validated answer decides it
+    // (never a transfer: the device's own reading decides those).
+    if (modelDecided &&
+        meaning.kind == MessageKind.uncertain &&
+        meaning.reason == 'no_completed_form' &&
+        !CompletionCertainty.isTransfer(text)) {
+      return null;
+    }
     if (meaning.kind == MessageKind.notCompleted ||
         TransactionStateCues.isNotCompleted(text)) {
       return 'transaction_not_completed';
@@ -435,7 +448,12 @@ class AiCandidateValidator {
     if ((meaning.reason == 'tip_component' ||
             meaning.reason == 'total_with_parts') &&
         amount != null &&
-        !TransactionStateCues.hasStatusCue(text)) {
+        !TransactionStateCues.hasStatusCue(text) &&
+        // Round 5: and only a clearly completed one (no doubt, a completed
+        // form): "total SAR 230 can be paid" is not a payment.
+        CompletionCertainty.uncertaintyOf(text,
+                hasFlow: meaning.direction != TxnDirection.unknown) ==
+            null) {
       final total = statedTotal(text);
       if (total != null && (total - amount).abs() < 0.005) return null;
     }

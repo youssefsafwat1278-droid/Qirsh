@@ -7,6 +7,7 @@ import '../models/transaction_type.dart';
 import 'amount_candidate.dart';
 import 'bank_profile.dart';
 import 'catalog_rule_matcher.dart';
+import 'completion_certainty.dart';
 import 'direction_signal.dart';
 import 'merchant_sanity.dart';
 import 'message_meaning.dart';
@@ -446,7 +447,35 @@ class ParserEngine {
   /// The message's meaning ([MessageMeaning]): decided on [clauseScope]
   /// before any amount is trusted. Mirrors `meaningOf` in
   /// `process-ios-sms/message_meaning.ts`.
+  ///
+  /// Round 5 (owner decision): a reading that would record is kept only when
+  /// the message is clearly completed ([CompletionCertainty]); otherwise it
+  /// is `uncertain` (`not_clearly_completed` / `no_completed_form`): the
+  /// model or review, never the device's own record.
   static MessageMeaning meaningOf(String rawText) {
+    final m = _structuralMeaningOf(rawText);
+    if (m.disposition != MessageDisposition.record) return m;
+    final text = bounded(rawText);
+    // A text with no figure is not a money message (nothing to review).
+    if (m.kind == MessageKind.undetermined &&
+        !_amountWithCurrency.hasMatch(text)) {
+      return m;
+    }
+    final reason = CompletionCertainty.uncertaintyOf(text,
+        hasFlow: m.direction != TxnDirection.unknown);
+    return reason == null
+        ? m
+        : MessageMeaning(
+            kind: MessageKind.uncertain,
+            reason: reason,
+            direction: m.direction,
+            footerCount: m.footerCount,
+            eventCount: m.eventCount,
+            currencyAbsent: m.currencyAbsent);
+  }
+
+  /// The meaning before the completion-certainty test: what the clauses say.
+  static MessageMeaning _structuralMeaningOf(String rawText) {
     // Follow-up 4 (NEW-3): a text over the bound is read in part (its head
     // and tail, [bounded]); a status in the part not read could undo the
     // movement, so it is never recorded on that reading: review. A bounded
@@ -892,7 +921,10 @@ class ParserEngine {
       '(?<![a-z])$_acctType(?: account| acct| a/c)?$_acctRef to (?:your |the |my )?$_acctType(?![a-z])$_otherOwner'
       '|(?<![a-z])to (?:your |the |my )?$_acctType(?: account| acct| a/c)? from (?:your |the |my )?$_acctType(?![a-z])'
       r'|من\s+(?:(?:ال)?حسابك?\s+)?(?:ال)?(?:توفير|ادخار|جاري)[^\n]{0,30}?(?:إلى|الى):?\s+(?:\[(?:redacted|name)\]\s+)?(?:(?:ال)?حسابك?\s+)?(?:ال)?(?:جاري|توفير|ادخار)'
-      r'(?!ي?\s+(?:الخاص ب|باسم|للمستفيد|للسيد|العائد))');
+      r'(?!ي?\s+(?:الخاص ب|باسم|للمستفيد|للسيد|العائد))'
+      // Round 5 (R4M-09): the same in the other order, «إلى حسابك الادخاري …
+      // من حسابك الجاري».
+      r'|(?:إلى|الى)\s+حسابك\s+(?:ال)?(?:توفير|ادخار|جاري)[^\n]{0,30}?من\s+حسابك\s+(?:ال)?(?:جاري|توفير|ادخار)');
 
   /// Follow-up 6 (PRE-AT008): both ends named as the user's own in one
   /// clause ("from your account *4521 to your account *7788", «من حسابك 4521
@@ -1042,7 +1074,7 @@ class ParserEngine {
   /// card", «رسوم تأخير سداد بطاقتك الائتمانية»): the card is not what is
   /// being paid.
   static final RegExp _cardRepayment = RegExp(
-      r'(?<![a-z])credit card (?:re)?payment(?! fees?| charges?| penalt)(?![a-z])[^\n]{0,60}?(?<![a-z])received(?![a-z])'
+      r'(?<![a-z])credit card(?: [*x•]*[0-9]{4})? (?:re)?payment(?! fees?| charges?| penalt)(?![a-z])[^\n]{0,60}?(?<![a-z])received(?![a-z])'
       r'|(?<![a-z])(?<!late )(?<!missed )(?<!overdue )(?:re)?payment(?! fees?| charges?| penalt)(?![a-z])[^\n]{0,60}?(?<![a-z])(?:for|to|towards) (?:your )?credit card(?![a-z])'
       r'|(?<![a-z])(?:transfer(?:red)?|paid)(?![a-z])[^\n]{0,60}?(?<![a-z])to (?:your )?credit card(?![a-z])'
       // Follow-up 5: the card is what is repaid («سداد بطاقتك»), not the
@@ -1871,7 +1903,8 @@ class ParserEngine {
   /// amount stays an advert).
   static String _ignoreScope(String rawText) {
     final scope = clauseScope(rawText);
-    return (meaningOf(rawText).kind == MessageKind.completedMovement
+    return (_structuralMeaningOf(rawText).kind ==
+                MessageKind.completedMovement
             ? withoutNoticeTails(scope.core)
             : scope.text)
         .toLowerCase();
@@ -2036,6 +2069,12 @@ class ParserEngine {
     }
     if (_containsAny(lower, ['تحويل', 'حوالة', 'transfer'])) {
       return TransactionType.transfer;
+    }
+    // Round 5 (Q072): "Payment of SAR 1,500 for security deposit to …" is a
+    // payment the deposit noun does not make income (as on the server); a
+    // salary credited is still income through the clause flow.
+    if (_containsAny(lower, ['payment of', 'payment to', 'paid to'])) {
+      return TransactionType.payment;
     }
     if (_containsAny(lower, ['راتب', 'إيداع', 'ايداع', 'deposit', 'salary'])) {
       return TransactionType.income;
@@ -2638,6 +2677,20 @@ class ParserEngine {
             '')
         .replaceAll(
             RegExp(r'(?:ref|reference|for more details|call)(?:[#\s]|$).*$',
+                caseSensitive: false),
+            '')
+        // The user's own card or wallet is not part of the merchant ("Careem
+        // with card *4521", "via Apple Pay", «ببطاقة مدى», «عبر Apple Pay»);
+        // server twin: merchantStopPattern in parser_rules.json.
+        .replaceAll(
+            RegExp(
+                r'\s+(?:(?:with|using|via)\s+(?:(?:your|the|a)\s+)?'
+                r'(?:(?:credit|debit|prepaid)\s+)?'
+                r'(?:card|apple\s*pay|google\s*pay|samsung\s*pay|mada|stc\s*pay)'
+                r'(?![a-z])'
+                r'|ببطاق'
+                r'|(?:عبر|باستخدام|بواسطة)\s+(?:بطاق|مدى|apple|google|samsung|أبل|ابل|stc))'
+                r'.*$',
                 caseSensitive: false),
             '')
         .replaceAll(

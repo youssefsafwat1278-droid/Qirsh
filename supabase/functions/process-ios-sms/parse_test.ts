@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertNotEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { deterministicParse, isDeclinedText, isResolved, parseSms } from './parse.ts';
+import { deterministicParse, isDeclinedText, isResolved, messageMeaning, parseSms } from './parse.ts';
+import { isTransfer } from './completion_certainty.ts';
 import declinedTable from './declined_cases.json' with { type: 'json' };
 import declinedDeviations from './declined_cases_deviations.json' with { type: 'json' };
 import { amountTokens, isNonTransactionText } from '../_shared/ai_candidate_validator.ts';
@@ -7,9 +8,10 @@ import { amountTokens, isNonTransactionText } from '../_shared/ai_candidate_vali
 const RECEIVED = '2026-09-07T19:30:00.000Z';
 
 Deno.test('AI primary: literal bank clock wins over an AI timestamp mislabeled UTC', async () => {
-  const text = 'IPN transfer sent with amount of EGP 1.00 from 1938 on 09/11 at 06:45 PM. Ref# abc123.';
+  // (Round 5: a transfer never reaches the model, so the clock is checked on a purchase.)
+  const text = 'Purchase with amount of EGP 1.00 at Test Mart card 1938 on 09/11 at 06:45 PM. Ref# abc123.';
   const stub = stubGemini({ is_transaction: true, amount: 1, amount_text: '1.00',
-    currency: 'EGP', type: 'transfer', direction: 'debit', category: 'transfers',
+    currency: 'EGP', type: 'payment', direction: 'debit', category: 'shopping',
     occurredAt: '2026-11-09T18:45:00Z' });
   try {
     const r = await parseSms({ text, rawText: text, sender: 'BANK',
@@ -23,9 +25,9 @@ Deno.test('AI primary: literal bank clock wins over an AI timestamp mislabeled U
 });
 
 Deno.test('AI primary: local midnight uses the SMS date across the UTC day boundary', async () => {
-  const text = 'IPN transfer sent with amount of EGP 1.00 on 10/11 at 12:05 AM.';
+  const text = 'Purchase with amount of EGP 1.00 at Test Mart on 10/11 at 12:05 AM.';
   const stub = stubGemini({ is_transaction: true, amount: 1, amount_text: '1.00',
-    currency: 'EGP', type: 'transfer', direction: 'debit', category: 'transfers',
+    currency: 'EGP', type: 'payment', direction: 'debit', category: 'shopping',
     occurredAt: '2026-11-10T00:05:00' });
   try {
     const r = await parseSms({ text, rawText: text, sender: 'BANK',
@@ -532,7 +534,11 @@ Deno.test('declined table: not completed is never confirmed money, on every serv
   // outside it is an acceptance row. 758 before the clause-scope fixes.
   // Follow-up 3 (SM-08): equal to the count (six purchases next to another
   // event's status sentence are now review, never recorded).
-  const MAX_DEVIATIONS = 703;
+  // Round 5 (owner decision, completion certainty): 794 — completed rows that
+  // are not clearly completed are kept for review on both sides (device review,
+  // server unresolved); Q072, Q076 and Q078 are fixed and Q060 is reduced to
+  // its preview; a plain transfer and the golden completed wordings record.
+  const MAX_DEVIATIONS = 794;
   assert(declinedDeviations.count <= MAX_DEVIATIONS, `allowlist grew: ${declinedDeviations.count}`);
   for (const p of declinedDeviations.rows as Array<{ defect?: string; pin?: string; text: string }>) {
     assertEquals(p.pin, p.defect ? 'open_defect' : 'safe_deviation', p.text);
@@ -619,16 +625,28 @@ Deno.test('declined table: not completed is never confirmed money, on every serv
       continue;
     }
     assertEquals(isResolved(p), false, `not completed: ${text}`);
+    // Round 5 (owner decision): a pending message reaches the model when AI is
+    // allowed (a transfer never does); its answer is never accepted. Any other
+    // not-completed message never reaches it.
+    const m = messageMeaning(text);
+    const pending = m.kind === 'not_completed' && m.reason === 'pending' && !isTransfer(text);
     for (const [type, direction] of [['payment', 'debit'], ['refund', 'credit']]) {
       for (const allowAi of [true, false]) {
         const r = await run(text, allowAi, ai(type, direction));
-        assertEquals([r.calls, r.accepted], [0, false], `${type} ${allowAi}: ${text}`);
+        assertEquals([pending && allowAi ? r.calls > 0 : r.calls, r.accepted],
+          [pending && allowAi ? true : 0, false], `${type} ${allowAi}: ${text}`);
       }
       const stub = stubGemini(ai(type, direction));
       try {
         const primary = await parseSms({ text, rawText: text, sender: 'BANK', receivedAt: RECEIVED,
           tzOffsetMinutes: 180, locale: 'ar', allowAi: true, aiPrimary: true });
-        assertEquals([stub.calls, primary.accepted, primary.parsed.parserSource], [0, false, 'ai_ignored'], text);
+        assertEquals(primary.accepted, false, text);
+        if (!pending) {
+          assertEquals(stub.calls, 0, text);
+          // (A transfer may be held on its own reading: deterministic.)
+          const sources = isTransfer(text) ? ['ai_ignored', 'deterministic'] : ['ai_ignored'];
+          assert(sources.includes(primary.parsed.parserSource ?? ''), text);
+        }
       } finally { stub.restore(); }
     }
   }
@@ -645,8 +663,10 @@ Deno.test('a refund offer "up to SAR 50" is not a resolved credit', () => {
     const p = deterministicParse(text, RECEIVED, 180);
     assertEquals([isResolved(p), p.amount], [false, undefined], text);
   }
+  // Round 5 (owner decision): "may take" is a hedge: the amount is kept, the
+  // refund is not clearly completed (review).
   const real = deterministicParse('Refund of SAR 99.00 from SHOP TWO. It may take up to 5 days', RECEIVED, 180);
-  assertEquals([isResolved(real), real.amount, real.type], [true, 99, 'refund']);
+  assertEquals([isResolved(real), real.amount], [false, 99]);
 });
 
 // Round 9 regressions (PR-01..PR-05), synthetic text.

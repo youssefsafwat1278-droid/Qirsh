@@ -55,7 +55,9 @@ void main() {
     await rules.confirmMerchantCategory(
         rawMerchant: shop, categoryKey: 'restaurants', isUserConfirmed: true);
     await rules.confirmMerchantCategory(
-        rawMerchant: arabicShop, categoryKey: 'shopping', isUserConfirmed: true);
+        rawMerchant: arabicShop,
+        categoryKey: 'shopping',
+        isUserConfirmed: true);
     await db.customStatement(
       "INSERT INTO accounts(id, name, currency, type, created_at, updated_at) "
       "VALUES ('acc-1', 'Main', 'SAR', 'bank', '2026-01-01', '2026-01-01');",
@@ -79,7 +81,8 @@ void main() {
     return db;
   }
 
-  test('v43 -> v44 keeps rules and money, invents no removal, and marks the '
+  test(
+      'v43 -> v44 keeps rules and money, invents no removal, and marks the '
       'history as starting at the upgrade', () async {
     final db = await v43Fixture();
     addTearDown(db.close);
@@ -121,6 +124,8 @@ void main() {
     final rules = DriftMerchantCategoryRepository(db);
     expect(await rules.userConfirmedCategoryFor(shop), 'restaurants');
     expect(await rules.userConfirmedCategoryFor(arabicShop), 'shopping');
+    expect((await objects(db, 'trigger')).toSet(), merchantRuleHistoryTriggers,
+        reason: 'the six triggers exist (also the step\'s postcondition)');
     expect(await count(db, 'merchant_rule_tombstones'), 0,
         reason: 'no removal is invented for the past');
     expect(await count(db, 'merchant_rule_restore_choices'), 0);
@@ -143,14 +148,66 @@ void main() {
     await db.debugReinitialize();
     expect(
         (await db
-                .customSelect('SELECT history_since FROM merchant_rule_history;')
+                .customSelect(
+                    'SELECT history_since FROM merchant_rule_history;')
                 .getSingle())
             .data,
         since.data);
     expect(await count(db, 'merchant_rule_tombstones'), 1);
   });
 
-  test('a new install has the tables, no history marker (its history is '
+  test(
+      'a trigger whose body changed in a later build replaces the old one on '
+      'the next open (review R4R-06)', () async {
+    final db = await open();
+    addTearDown(db.close);
+    Future<String> body() async => (await db
+            .customSelect("SELECT sql FROM sqlite_master "
+                "WHERE type = 'trigger' AND name = 'rule_history_delete';")
+            .getSingle())
+        .read<String>('sql');
+    final current = await body();
+    // An older build's body under the same name.
+    await db.customStatement('DROP TRIGGER rule_history_delete;');
+    await db.customStatement('CREATE TRIGGER rule_history_delete '
+        'BEFORE DELETE ON merchant_category_map BEGIN SELECT 1; END;');
+    expect(await body(), isNot(current));
+
+    await db.debugReinitialize();
+    expect(await body(), current);
+    expect((await objects(db, 'trigger')).toSet(), merchantRuleHistoryTriggers);
+  });
+
+  test(
+      'a removal made now is later than the rule it removes, even when that '
+      'rule was stamped by a clock that runs ahead (the cloud\'s, a backup\'s)',
+      () async {
+    final db = await open();
+    addTearDown(db.close);
+    final rules = DriftMerchantCategoryRepository(db);
+    for (final stamp in [
+      '2099-01-01T00:00:00.000Z',
+      '2099-01-01T00:00:00.123900Z',
+      '2099-01-01T02:00:00.000+02:00',
+    ]) {
+      await rules.confirmMerchantCategory(
+          rawMerchant: shop, categoryKey: 'restaurants', isUserConfirmed: true);
+      await setMerchantRuleTime(
+          db, AppDatabase.normalizeMerchant(shop), DateTime.parse(stamp));
+      await rules.forgetUserConfirmedRule(shop);
+      final removed =
+          (await deviceRuleVersion(db, AppDatabase.normalizeMerchant(shop)))!;
+      expect(removed.isRemoval, isTrue);
+      expect(
+          ruleVersionSupersedes(
+              RuleVersion.rule('restaurants', DateTime.parse(stamp)), removed),
+          isFalse,
+          reason: 'the rule stamped $stamp must read as removed');
+    }
+  });
+
+  test(
+      'a new install has the tables, no history marker (its history is '
       'complete) and schema 44', () async {
     final db = await open();
     addTearDown(db.close);
@@ -191,7 +248,8 @@ void main() {
       });
     });
 
-    test('Forget rule on a catalog merchant (the row goes back to the catalog '
+    test(
+        'Forget rule on a catalog merchant (the row goes back to the catalog '
         'mapping instead of being deleted)', () async {
       final seed = DatabaseSeed.merchantMappings.first;
       final name = seed.rawName;
@@ -204,22 +262,27 @@ void main() {
       expect(await removals(), {AppDatabase.normalizeMerchant(name): chosen});
       expect((await rules.getLearnedCategoryMap())[name], seed.categoryKey,
           reason: 'the catalog mapping is back');
-      expect(await count(db, 'merchant_category_map WHERE is_user_confirmed = 1'),
+      expect(
+          await count(db, 'merchant_category_map WHERE is_user_confirmed = 1'),
           0);
     });
 
     test('deleting the rule\'s category', () async {
       final categories = DriftCategoryRepository(db);
       final custom = await categories.createCategory(
-          nameAr: 'فئة اصطناعية', icon: 'tag', color: '#000000', isIncome: false);
+          nameAr: 'فئة اصطناعية',
+          icon: 'tag',
+          color: '#000000',
+          isIncome: false);
       await rules.confirmMerchantCategory(
           rawMerchant: shop, categoryKey: custom.key, isUserConfirmed: true);
       await categories.deleteCategory(custom.id);
-      expect(await removals(),
-          {AppDatabase.normalizeMerchant(shop): custom.key});
+      expect(
+          await removals(), {AppDatabase.normalizeMerchant(shop): custom.key});
     });
 
-    test('saving the rule again clears the removal; a catalog row is never '
+    test(
+        'saving the rule again clears the removal; a catalog row is never '
         'recorded', () async {
       await rules.confirmMerchantCategory(
           rawMerchant: shop, categoryKey: 'restaurants', isUserConfirmed: true);
@@ -245,7 +308,8 @@ void main() {
       expect(await removals(), {'SHOP': 'shopping'});
     });
 
-    test('retention: only the newest removals are kept, and pruning moves the '
+    test(
+        'retention: only the newest removals are kept, and pruning moves the '
         'history marker so older backup rules go to review', () async {
       await db.transaction(() async {
         for (var i = 0; i < merchantRuleTombstoneLimit; i++) {

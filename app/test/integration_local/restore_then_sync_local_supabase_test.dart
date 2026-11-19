@@ -23,6 +23,7 @@ import 'package:money_companion/core/sync/pending_sync_reconciler.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/planning_cutover.dart';
 import 'package:money_companion/data/repositories/drift_merchant_category_repository.dart';
+import 'package:money_companion/data/sync/sync_cursor.dart';
 import 'package:money_companion/data/sync/exact_transport_capability.dart';
 import 'package:money_companion/domain/entities/account_entity.dart';
 import 'package:money_companion/domain/entities/transaction_entity.dart';
@@ -124,8 +125,9 @@ Future<Map<String, List<String>>> serverLive(String uid) async {
   final out = <String, List<String>>{};
   for (final r in rows) {
     if (r['deleted_at'] != null || r['status'] == 'ignored') continue;
-    out.putIfAbsent(r['merchant'] as String, () => []).add(
-        Money.parse(r['amount_text'] as String, 'KWD').toDecimalString());
+    out
+        .putIfAbsent(r['merchant'] as String, () => [])
+        .add(Money.parse(r['amount_text'] as String, 'KWD').toDecimalString());
   }
   for (final v in out.values) {
     v.sort();
@@ -212,9 +214,9 @@ void main() {
       return (d, u.uid);
     }
 
-    test('R1 backup, then edit/delete/add and sync, restore, Cloud on: the '
-        'newer edit, the deletion and the new row all survive',
-        () async {
+    test(
+        'R1 backup, then edit/delete/add and sync, restore, Cloud on: the '
+        'newer edit, the deletion and the new row all survive', () async {
       final (d, uid) = await openSignedIn('r1');
       await d.accounts.create(_account('acc-r1'));
       for (final (id, amt) in [('A', '10'), ('B', '20'), ('C', '30')]) {
@@ -289,7 +291,8 @@ void main() {
       await expectMergedAndConverged(d, uid, merged);
     });
 
-    test('R3 a row created after the backup and never synced is kept and '
+    test(
+        'R3 a row created after the backup and never synced is kept and '
         'pushed once', () async {
       final (d, uid) = await openSignedIn('r3');
       await d.accounts.create(_account('acc-r3'));
@@ -314,7 +317,8 @@ void main() {
       await expectMergedAndConverged(d, uid, merged);
     });
 
-    test('R4 a category chosen by hand after the backup keeps the choice and '
+    test(
+        'R4 a category chosen by hand after the backup keeps the choice and '
         'its provenance on device and cloud', () async {
       final (d, uid) = await openSignedIn('r4');
       await d.accounts.create(_account('acc-r4'));
@@ -371,7 +375,8 @@ void main() {
       });
     });
 
-    test('R6 a row missing on this device returns from the backup and binds to '
+    test(
+        'R6 a row missing on this device returns from the backup and binds to '
         'its cloud copy without a duplicate', () async {
       final (d, uid) = await openSignedIn('r6');
       await d.accounts.create(_account('acc-r6'));
@@ -396,7 +401,8 @@ void main() {
       expect(await remote.count('user_transactions', uid), 2);
     });
 
-    test('R9 new device (full apply): a backup row deleted in the cloud after '
+    test(
+        'R9 new device (full apply): a backup row deleted in the cloud after '
         'the backup stays deleted, with no conflict and no duplicate',
         () async {
       final u = await remote.createUser('r9');
@@ -423,10 +429,13 @@ void main() {
       addTearDown(second.finish);
       final d2 = Device.wrap(second.database);
       await restoreBackup(d2, backup);
-      expect(await localLive(d2), {
-        'Synthetic shop r9-A': '10.000',
-        'Synthetic shop r9-B': '20.000',
-      }, reason: 'full apply restores the backup as it was');
+      expect(
+          await localLive(d2),
+          {
+            'Synthetic shop r9-A': '10.000',
+            'Synthetic shop r9-B': '20.000',
+          },
+          reason: 'full apply restores the backup as it was');
       d2.consent = true;
       await syncCycle(d2);
       await syncCycle(d2);
@@ -437,7 +446,8 @@ void main() {
           reason: 'A and the B tombstone; nothing re-inserted');
     });
 
-    test('R9b as R9, but the first ledger pull after Cloud on is interrupted, '
+    test(
+        'R9b as R9, but the first ledger pull after Cloud on is interrupted, '
         'so the startup backfill meets the cloud tombstone first', () async {
       final u = await remote.createUser('r9b');
       await Supabase.instance.client.auth
@@ -468,7 +478,8 @@ void main() {
         getAuthUserId: signedInUid,
         coordinator: _canonical,
         pushCapability: () => ExactTransportCapability.verifiedExact,
-        planningCurrencyFor: (_) async => ExactTransportCapability.verifiedExact,
+        planningCurrencyFor: (_) async =>
+            ExactTransportCapability.verifiedExact,
         mayEgress: () async => d2.consent,
       ).run();
       await d2.accountsPush.push();
@@ -504,7 +515,8 @@ void main() {
       }
     }
 
-    test('R7 account switch: A\'s queued changes are never sent as B; '
+    test(
+        'R7 account switch: A\'s queued changes are never sent as B; '
         'they deliver to A when A is back', () async {
       final a = await remote.createUser('r7a');
       await Supabase.instance.client.auth
@@ -531,7 +543,9 @@ void main() {
           .signInWithPassword(email: a.email, password: a.password);
       await syncCycle(d);
       await expectNothingUnder(b.uid);
-      expect(await serverLive(uidA), {'Synthetic shop r7-A': ['10.000']});
+      expect(await serverLive(uidA), {
+        'Synthetic shop r7-A': ['10.000']
+      });
     });
 
     test('R8 signed out: queued changes are not sent', () async {
@@ -552,9 +566,11 @@ void main() {
     DriftMerchantCategoryRepository rulesOf(Device d) =>
         DriftMerchantCategoryRepository(d.db, outboxQueue: d.planningQueue);
 
-    Future<void> ruleSync(Device d) => MerchantRuleSyncService(
+    Future<void> ruleSync(Device d, {MerchantRuleRemote? remote}) =>
+        MerchantRuleSyncService(
           db: d.db,
           queue: d.planningQueue,
+          remote: remote,
           getAuthUserId: signedInUid,
           mayEgress: () async => d.consent,
           serverReady: () async => true,
@@ -576,11 +592,14 @@ void main() {
 
     Future<void> remember(Device d, String merchant, String category) =>
         rulesOf(d).confirmMerchantCategory(
-            rawMerchant: merchant, categoryKey: category, isUserConfirmed: true);
+            rawMerchant: merchant,
+            categoryKey: category,
+            isUserConfirmed: true);
 
     String k(String merchant) => AppDatabase.normalizeMerchant(merchant);
 
-    test('RR1 rules: backup, then forget one, change one, add one and sync; '
+    test(
+        'RR1 rules: backup, then forget one, change one, add one and sync; '
         'restore; Cloud on: device and cloud agree, the removed rule stays '
         'removed, and a second phone gets the same rules', () async {
       final u = await remote.createUser('rr1');
@@ -637,7 +656,8 @@ void main() {
       expect(await serverRules(uid), merged);
     });
 
-    test('RR2 rules, new phone (full apply) that has not synced yet: a rule '
+    test(
+        'RR2 rules, new phone (full apply) that has not synced yet: a rule '
         'removed in the cloud after the backup is not pushed back', () async {
       final u = await remote.createUser('rr2');
       await Supabase.instance.client.auth
@@ -677,7 +697,8 @@ void main() {
       expect(await serverRules(u.uid), merged);
     });
 
-    test('RR3 rules, a backup without deletion history: nothing is added or '
+    test(
+        'RR3 rules, a backup without deletion history: nothing is added or '
         'dropped silently; "add" reaches the cloud, "leave out" does not',
         () async {
       final (d, uid) = await openSignedIn('rr3');
@@ -707,7 +728,8 @@ void main() {
       final review = MerchantRuleRestore(d.db);
       await review.decide(k('Synthetic Wanted Shop'),
           add: true, save: (m, c) => remember(d, m, c));
-      await review.decide(k('Synthetic Unwanted Shop'), add: false);
+      await review.decide(k('Synthetic Unwanted Shop'),
+          add: false, queue: d.planningQueue);
       await ruleSync(d);
       final chosen = {k('Synthetic Wanted Shop'): 'restaurants'};
       expect(await localRules(d), chosen);
@@ -721,5 +743,150 @@ void main() {
       expect(await localRules(d), chosen);
       expect(await serverRules(uid), chosen);
     });
+
+    // ── Review fixes (R4R-01, R4R-02, AR-09) on the real table ─────────────
+    Future<Map<String, dynamic>> serverRow(String uid, String merchant) async =>
+        (await remote.rows('user_merchant_rules', uid,
+                filter:
+                    'merchant_key=eq.${Uri.encodeQueryComponent(k(merchant))}'))
+            .single;
+
+    /// The rule is not on this phone and it has no record of a removal.
+    Future<void> absentHere(Device d) async {
+      await d.db.customStatement(
+          'DELETE FROM merchant_category_map WHERE is_user_confirmed = 1;');
+      await d.db.customStatement('DELETE FROM merchant_rule_tombstones;');
+      await d.db.customStatement("DELETE FROM planning_sync_outbox "
+          "WHERE entity_type = 'merchant_rule';");
+    }
+
+    test(
+        'RR4 (R4R-01) the pull fails once after a restore: the restored rule '
+        'is not pushed over a removal made elsewhere; the retry removes it',
+        () async {
+      final (d, uid) = await openSignedIn('rr4');
+      await d.accounts.create(_account('acc-rr4'));
+      await remember(d, 'Synthetic Rule Shop', 'restaurants');
+      await ruleSync(d);
+      final backup = await takeBackup(d);
+      await absentHere(d);
+      // Another device removes the rule; this one has not read it.
+      final row = await serverRow(uid, 'Synthetic Rule Shop');
+      await remote.patch('user_merchant_rules', row['id'] as String,
+          {'deleted_at': DateTime.now().toUtc().toIso8601String()});
+      final removed = await serverRow(uid, 'Synthetic Rule Shop');
+
+      await restoreBackup(d, backup);
+      expect(await localRules(d), hasLength(1));
+      d.consent = true;
+      await ruleSync(d, remote: _FailingOnce());
+      expect(await serverRow(uid, 'Synthetic Rule Shop'), removed,
+          reason: 'nothing was pushed while the pull had not completed');
+
+      await ruleSync(d);
+      await ruleSync(d);
+      expect(await localRules(d), isEmpty);
+      expect(await serverRules(uid), isEmpty);
+      expect((await serverRow(uid, 'Synthetic Rule Shop'))['deleted_at'],
+          isNotNull);
+    });
+
+    test(
+        'RR5 (R4R-02) "Leave out" while the cloud holds the rule live and '
+        'this phone has not read it: removed here and in the cloud, and a '
+        'later pull does not bring it back', () async {
+      final (d, uid) = await openSignedIn('rr5');
+      await d.accounts.create(_account('acc-rr5'));
+      await remember(d, 'Synthetic Rule Shop', 'restaurants');
+      await ruleSync(d);
+      final backup = await takeBackup(d);
+      backup['version'] = 4;
+      backup['schemaVersion'] = 4;
+      (backup['tables'] as Map)
+          .removeWhere((t, _) => MerchantRuleRestore.historyTables.contains(t));
+      await absentHere(d);
+      await d.db.customStatement(
+          "DELETE FROM sync_cursors WHERE entity = 'merchant_rules';");
+
+      await restoreBackup(d, backup);
+      expect(await MerchantRuleRestore(d.db).pending(), hasLength(1));
+      await MerchantRuleRestore(d.db)
+          .decide(k('Synthetic Rule Shop'), add: false, queue: d.planningQueue);
+      d.consent = true;
+      await ruleSync(d);
+      await ruleSync(d);
+      expect(await localRules(d), isEmpty);
+      expect(await serverRules(uid), isEmpty);
+      expect(await serverRules(uid, deleted: true), hasLength(1));
+
+      await restoreBackup(d, backup);
+      d.consent = true;
+      await ruleSync(d);
+      expect(await localRules(d), isEmpty);
+      expect(await MerchantRuleRestore(d.db).pending(), isEmpty);
+      expect(await serverRules(uid), isEmpty);
+    });
+
+    test(
+        'RR6 (AR-09) a restored newer edit is kept against an older cloud '
+        'change this phone had not read, and reaches the cloud', () async {
+      final (d, uid) = await openSignedIn('rr6');
+      await d.accounts.create(_account('acc-rr6'));
+      await remember(d, 'Synthetic Rule Shop', 'restaurants');
+      await ruleSync(d);
+      final synced = await d.sql('SELECT updated_at FROM merchant_category_map '
+          'WHERE is_user_confirmed = 1');
+      // Another device changes the category; this phone does not read it.
+      final row = await serverRow(uid, 'Synthetic Rule Shop');
+      await remote.patch('user_merchant_rules', row['id'] as String,
+          {'category_key': 'transport'});
+      final changed = DateTime.parse(
+          (await serverRow(uid, 'Synthetic Rule Shop'))['updated_at']
+              as String);
+      // A later edit, made on the phone the backup comes from (one minute
+      // after the cloud change, whatever the two clocks say).
+      await remember(d, 'Synthetic Rule Shop', 'shopping');
+      final backup = await takeBackup(d);
+      ((backup['tables'] as Map)['merchant_category_map'] as List)
+              .cast<Map<String, dynamic>>()
+              .singleWhere((r) => r['is_user_confirmed'] == 1)['updated_at'] =
+          changed.add(const Duration(minutes: 1)).toUtc().toIso8601String();
+      // This phone is back to what it had synced, with nothing queued.
+      await remember(d, 'Synthetic Rule Shop', 'restaurants');
+      await d.db.customStatement(
+          'UPDATE merchant_category_map SET updated_at = ? '
+          'WHERE is_user_confirmed = 1;',
+          [synced.single['updated_at']]);
+      await d.db.customStatement("DELETE FROM planning_sync_outbox "
+          "WHERE entity_type = 'merchant_rule';");
+
+      await restoreBackup(d, backup);
+      expect(await localRules(d), {k('Synthetic Rule Shop'): 'shopping'});
+      d.consent = true;
+      await ruleSync(d);
+      await ruleSync(d);
+      expect(await localRules(d), {k('Synthetic Rule Shop'): 'shopping'});
+      expect(await serverRules(uid), {k('Synthetic Rule Shop'): 'shopping'});
+    });
   });
+}
+
+/// The real remote, whose first fetch fails (a dropped connection).
+class _FailingOnce implements MerchantRuleRemote {
+  static const _real = SupabaseMerchantRuleRemote();
+  var _failed = false;
+
+  @override
+  Future<List<Map<String, dynamic>>> upsert(Map<String, dynamic> row) =>
+      _real.upsert(row);
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchRows(
+      {required SyncCursor after, int limit = 200}) {
+    if (!_failed) {
+      _failed = true;
+      throw StateError('synthetic network failure');
+    }
+    return _real.fetchRows(after: after, limit: limit);
+  }
 }

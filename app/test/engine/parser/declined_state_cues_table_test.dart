@@ -20,7 +20,11 @@ const _casesPath = '../supabase/functions/process-ios-sms/declined_cases.json';
 // (SM-08): equal to the count, 703 — six purchases next to another event's
 // status sentence ("Previous attempt declined", read not completed at
 // 5dae2e2d) are now review on both sides, never recorded.
-const _maxDeviations = 703;
+// Round 5 (owner decision, completion certainty): 794 — completed rows that are
+// not clearly completed are kept for review on both sides (device review,
+// server unresolved); Q072, Q076 and Q078 are fixed and Q060 is reduced to its
+// preview; a plain transfer and the golden completed wordings record.
+const _maxDeviations = 794;
 const _deviationsPath =
     '../supabase/functions/process-ios-sms/declined_cases_deviations.json';
 const _notCompleted = 'transaction_not_completed';
@@ -175,7 +179,9 @@ void main() {
             ParserEngine.isNoticeMessage(text, wholeText: true)) {
           expect(preview.parse(text).isHighConfidence, isFalse,
               reason: 'preview');
-        } else {
+        } else if (!ParserEngine.isNonTransactionText(text)) {
+          // (Round 5: a completed row kept for review by its code or offer
+          // tail may get the generic preview, as a recorded one below.)
           expect(preview.parse(text).outcome, isNot(PreviewOutcome.ignored),
               reason: 'preview');
         }

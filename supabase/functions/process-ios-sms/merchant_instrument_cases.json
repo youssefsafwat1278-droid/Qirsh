@@ -1,0 +1,14 @@
+{
+  "_readme": "Round 5 (coordinator follow-up): the user's own card or wallet named after the merchant ('with card *4521', 'using card ending 4521', 'via Apple Pay', «ببطاقة مدى», «عبر Apple Pay») is not part of the merchant, so a saved rule for the merchant matches. Read by process-ios-sms/merchant_instrument_test.ts (deterministicParse merchant) and app/test/engine/parser/merchant_instrument_test.dart (ParserEngine rawMerchant). merchant = both sides; device / server = that side only where it differs (the server has no 'Payment … to <merchant>' pattern). Synthetic messages only.",
+  "cases": [
+    {"text": "Purchase of SAR 85.00 at Careem with card *4521", "merchant": "Careem"},
+    {"text": "Purchase of SAR 85.00 at Careem using card ending 4521", "merchant": "Careem"},
+    {"text": "Purchase of SAR 85.00 at Careem via Apple Pay", "merchant": "Careem"},
+    {"text": "POS purchase SAR 85.00 at Careem with card *4521", "merchant": "Careem"},
+    {"text": "شراء 85 ريال لدى: مطعم البيك ببطاقة مدى *4521", "merchant": "مطعم البيك"},
+    {"text": "شراء 85 ريال لدى: مطعم البيك عبر Apple Pay", "merchant": "مطعم البيك"},
+    {"text": "Purchase of SAR 85.00 at Card Factory", "merchant": "Card Factory"},
+    {"text": "شراء 85 ريال لدى: متجر بطاقات الهدايا", "merchant": "متجر بطاقات الهدايا"},
+    {"text": "Payment of SAR 85.00 to Careem with card *4521", "device": "Careem", "server": null}
+  ]
+}

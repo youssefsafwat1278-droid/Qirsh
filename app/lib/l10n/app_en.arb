@@ -456,11 +456,20 @@
       }
     }
   },
-  "lrRestoreExplanation": "These rules were in the backup you restored but are not on this device. Qirsh cannot tell whether they were deleted here on purpose, so it did not add them and did not discard them. They are not used to categorise anything until you choose. Add puts the rule back. Leave out keeps it off this device, and later restores will not ask again.",
+  "lrRestoreExplanation": "These rules were in the backup you restored but are not on this device. Qirsh cannot tell whether they were deleted here on purpose, so it did not add them and did not discard them. They are not used to categorise anything until you choose. Add puts the rule back. Leave out deletes it: it stays off this device, it is removed from your other devices when Cloud is on, and Qirsh asks again only if the rule is changed later, for example on another device.",
   "lrRestoreAdd": "Add",
   "lrRestoreLeave": "Leave out",
   "lrRestoreAddAll": "Add all",
   "lrRestoreLeaveAll": "Leave all out",
+  "lrRestoreLeaveAllTitle": "{count, plural, =1{Leave out this rule?} other{Leave out all {count} rules?}}",
+  "@lrRestoreLeaveAllTitle": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "lrRestoreLeaveAllBody": "None of them will be added. They are deleted on this device and, when Cloud is on, on your other devices. Qirsh asks again only about a rule that is changed later, for example on another device.",
   "lrRestoreMissingCategory": "Its category was deleted on this device, so it cannot be added.",
   "lrRestoreReview": "Review rules",
   "setAchievements": "Achievements and level",
@@ -3002,7 +3011,7 @@
   "fuBody": "Please update Qirsh to keep using it.",
   "fuNow": "Update now",
   "rpConfirmTitle": "Confirm the restore",
-  "rpConfirmBodyMerge": "This device already has your records, so the backup will be merged into them. Records missing here are added. Everything you added, changed or deleted on this device stays as it is now: a transaction you deleted is not brought back, and when a record exists in both, the more recently edited copy is kept. Saved category rules work the same way: a rule missing here is added, a rule you deleted here stays deleted, and when a merchant has a rule in both, the more recently changed one is kept. If Qirsh cannot tell whether a rule in the backup was deleted here on purpose, it neither adds nor discards it: you choose afterwards in Settings, under Learned rules. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?",
+  "rpConfirmBodyMerge": "This device already has your records, so the backup will be merged into them. Records missing here are added. Everything you added, changed or deleted on this device stays as it is now: a transaction you deleted is not brought back, and when a record exists in both, the more recently edited copy is kept. Saved category rules work the same way: a rule missing here is added, a rule you deleted here stays deleted, a rule the backup shows you deleted after it was last changed here is deleted, and when a merchant has a rule in both, the more recently changed one is kept. If Qirsh cannot tell whether a rule in the backup was deleted here on purpose, it neither adds nor discards it: you choose afterwards in Settings, under Learned rules. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?",
   "rpConfirmBodyFull": "This device has no records yet, so the backup will be restored as it is, settings and saved category rules included. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?",
   "rpConfirmBody": "The restore merges this backup into the data on this device. Records missing here are brought back. Anything you added, changed or deleted after the backup was made stays as it is now; when a record exists in both, the more recently edited copy is kept. Saved category rules for merchants work the same way: a missing rule is added, a rule you deleted stays deleted, and the more recently changed one is kept; a rule that may have been deleted here on purpose is neither added nor discarded until you choose in Settings, under Learned rules. On a device with no records yet (no accounts, transactions, plans, rules or custom categories), the whole backup is restored, settings and rules included. Cloud and Smart Analysis are turned off after the restore until you turn them on again. Continue?",
   "rpCancel": "Cancel",

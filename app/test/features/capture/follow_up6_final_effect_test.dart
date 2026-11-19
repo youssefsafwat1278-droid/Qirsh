@@ -141,8 +141,7 @@ sealed class _Effect {
 
 /// One confirmed row: it counts in the totals.
 class _Saved extends _Effect {
-  const _Saved(this.type, this.amount, this.currency,
-      {this.expense = 0, this.local = true});
+  const _Saved(this.type, this.amount, this.currency, {this.expense = 0});
   final String type;
   final double amount;
   final String currency;
@@ -150,9 +149,6 @@ class _Saved extends _Effect {
   /// The dashboard's net expense in minor units after the import (a refund
   /// subtracts); income stays 0 for every class here.
   final int expense;
-
-  /// False when the device alone (Cloud off) keeps the message for review.
-  final bool local;
 }
 
 /// No row, totals untouched, the message visible in review with [reason].
@@ -207,30 +203,35 @@ const _cases = <_Case>[
     effect: _Review('scheduled_or_expected')
   ),
   // 3. completed purchases with a footer (FT-1, NEW-2r, HOLD-1)
+  // Round 5 (owner decision): a doubt word anywhere outside security advice
+  // (will, due, request, reminder, expected, pending, late, cancelled) makes
+  // the movement not clearly completed: kept for review on every path, never
+  // recorded on any reading (this reverses the round-4 records of these
+  // classes).
   (
     name: 'a purchase with a standing-order footer',
     text: 'Purchase SAR 45.00 at Jarir card *4521. Standing orders will be executed on the due date',
-    effect: _Saved('payment', 45, 'SAR', expense: 4500)
+    effect: _Review('not_clearly_completed')
   ),
   (
     name: 'a purchase with a standing-order footer (ar)',
     text: 'شراء 45 ريال لدى جرير بطاقة *4521. سيتم تنفيذ الأوامر المستديمة في تاريخ الاستحقاق',
-    effect: _Saved('payment', 45, 'SAR', expense: 4500)
+    effect: _Review('not_clearly_completed')
   ),
   (
     name: 'a purchase with a refund-request footer',
     text: 'Purchase SAR 45.00 at Jarir card *4521. Refund requests will be processed within 7 days',
-    effect: _Saved('payment', 45, 'SAR', expense: 4500)
+    effect: _Review('not_clearly_completed')
   ),
   (
     name: 'a purchase with a refund-request footer (ar)',
     text: 'شراء 45 ريال لدى جرير بطاقة *4521. طلبات الاسترداد تعالج خلال 7 أيام',
-    effect: _Saved('payment', 45, 'SAR', expense: 4500)
+    effect: _Review('not_clearly_completed')
   ),
   (
     name: 'a bill payment with a reminder tail (ar)',
     text: 'دفع فاتورة 45 ريال من حسابك *4521، تذكير: موعد السداد القادم 1/12',
-    effect: _Saved('payment', 45, 'SAR', expense: 4500)
+    effect: _Review('not_clearly_completed')
   ),
   (
     name: 'a purchase with a month-to-date total tail',
@@ -241,12 +242,12 @@ const _cases = <_Case>[
   (
     name: 'an expected refund that has been credited',
     text: 'Your expected refund of SAR 45.00 from Noon has been credited to your card *4521',
-    effect: _Saved('refund', 45, 'SAR', expense: -4500)
+    effect: _Review('not_clearly_completed')
   ),
   (
     name: 'a pending refund that has been credited (ar)',
     text: 'تم إيداع مبلغ الاسترداد المعلق 45 ريال في حسابك *4521',
-    effect: _Saved('refund', 45, 'SAR', expense: -4500)
+    effect: _Review('not_clearly_completed')
   ),
   (
     name: 'an Arabic refund that names the purchase',
@@ -310,23 +311,23 @@ const _cases = <_Case>[
   (
     name: 'a late-payment fee charged to the credit card',
     text: 'Late payment fee of SAR 45.00 charged to your credit card *4521',
-    effect: _Saved('payment', 45, 'SAR', expense: 4500, local: false)
+    effect: _Review('not_clearly_completed')
   ),
   (
     name: 'a late-payment fee charged to the credit card (ar)',
     text: 'تم خصم رسوم تأخير سداد بطاقتك الائتمانية *4521 بمبلغ 45 ريال',
-    effect: _Saved('payment', 45, 'SAR', expense: 4500)
+    effect: _Review('not_clearly_completed')
   ),
   // real-model run: a completed refund of a cancelled operation
   (
     name: 'a refund of a cancelled transaction that has been credited',
     text: 'Refund of SAR 45.00 for the cancelled transaction has been credited to your card *4521',
-    effect: _Saved('refund', 45, 'SAR', expense: -4500)
+    effect: _Review('not_clearly_completed')
   ),
   (
     name: 'a refund of a cancelled transaction that has been credited (ar)',
     text: 'تم إيداع مبلغ الاسترداد 45 ريال للعملية الملغاة في بطاقتك *4521',
-    effect: _Saved('refund', 45, 'SAR', expense: -4500)
+    effect: _Review('not_clearly_completed')
   ),
 ];
 
@@ -485,18 +486,13 @@ void main() {
 
         final saved = await txRepo.getAll();
         expect(ai.calls, 0, reason: 'the import path makes no AI request');
-        if (effect is _Review ||
-            (path == 'device alone' && !(effect as _Saved).local)) {
+        if (effect is _Review) {
           // (a) nothing saved, (b) totals untouched, (c) visible in review.
           expect(saved, isEmpty);
           expect(await totals(), (0, 0));
           final reason = await reviewReason(_id(1));
-          if (effect is _Review) {
-            expect(reason, effect.reason);
-            expect(ParserEngine.meaningOf(c.text).reason, effect.reason);
-          } else {
-            expect(reason, isNot('not in the review list'));
-          }
+          expect(reason, effect.reason);
+          expect(ParserEngine.meaningOf(c.text).reason, effect.reason);
           return;
         }
         effect as _Saved;

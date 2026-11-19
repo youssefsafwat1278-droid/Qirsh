@@ -357,10 +357,51 @@ void main() {
   group('withdraw (a learned rule was deleted)', () {
     test('sends only the merchant key and the withdraw action', () async {
       final h = _Harness(optedIn: true);
+      // Offered by this account first (review fix R4P-08): a key that was
+      // never offered and has no business word is not sent on deletion.
+      await h.client.offer(_tx(), 'shopping');
+      h.sent.clear();
       await h.client.withdraw('HALA BOUTIQUE 123');
       expect(h.sent, [
         {'merchant_key': 'HALA BOUTIQUE', 'action': 'withdraw'}
       ]);
+    });
+
+    test('R4P-08: a rule saved for a person is never sent on deletion',
+        () async {
+      final h = _Harness(optedIn: true);
+      for (final person in [
+        'Nadir',
+        'Nadir Zaki',
+        'NADIR ZAKI',
+        'nadir zaki',
+        'NADIR ZAKI VIA MADA',
+        'نادر زكي',
+        'عبد العزيز القحطاني',
+        'ACCOUNT OF NADIR ZAKI',
+      ]) {
+        await h.client.withdraw(person);
+      }
+      expect(h.sent, isEmpty);
+      // The merchant twin: a business by its own words is still withdrawn
+      // without having been offered in this session.
+      await h.client.withdraw('Example Bookstore');
+      await h.client.withdraw('مكتبة المثال');
+      expect(h.sent, [
+        {'merchant_key': 'EXAMPLE BOOKSTORE', 'action': 'withdraw'},
+        {'merchant_key': 'مكتبة المثال', 'action': 'withdraw'},
+      ]);
+    });
+
+    test('R4P-08: a key offered by another account is not withdrawn',
+        () async {
+      final h = _Harness(optedIn: true);
+      await h.client.offer(_tx(), 'shopping');
+      h.sent.clear();
+      h.uid = 'uid-b';
+      h.prefs[SharedLearningPreference.keyFor('uid-b')] = 'on';
+      await h.client.withdraw('HALA BOUTIQUE');
+      expect(h.sent, isEmpty);
     });
 
     test('drops a still-queued offer for the same merchant', () async {
@@ -415,7 +456,7 @@ void main() {
         mayEgress: () async => true,
         send: (_) async => throw Exception('offline'),
       );
-      await client.withdraw('HALA BOUTIQUE');
+      await client.withdraw('HALA BOUTIQUE STORE');
     });
   });
 

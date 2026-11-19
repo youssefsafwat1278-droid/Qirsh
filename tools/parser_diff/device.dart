@@ -133,7 +133,8 @@ void run(List<String> a) {
                 : {
                     // A review kind is kept in Smart Inbox; any other
                     // rejection before the AI is silent on the server path.
-                    'c': RegExp(r'^(cash_deposit|own_account_transfer|multiple_events|uncertain):')
+                    // Round 5: so is a transfer the server holds locally.
+                    'c': RegExp(r'^(cash_deposit|own_account_transfer|multiple_events|uncertain):|^transfer_not_clear$')
                             .hasMatch('${s['reason'] ?? ''}')
                         ? 'REV'
                         : 'SIL',

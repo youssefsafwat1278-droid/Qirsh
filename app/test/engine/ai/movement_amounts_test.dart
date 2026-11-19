@@ -45,8 +45,9 @@ void main() {
           'transaction_not_completed',
       'Purchase of SAR 120.00 at Jarir with card *4521. Previous transaction declined.':
           null,
+      // Round 5 (owner decision): a reversal word is a doubt.
       'Reversal processed: SAR 140.00 for Pine Books returned to card *1907.':
-          null,
+          'message_meaning_not_clearly_completed',
     };
     for (final MapEntry(key: text, value: expected) in cases.entries) {
       final meaning = ParserEngine.meaningOf(text);
@@ -75,9 +76,14 @@ void main() {
         expect(r.accepted, isFalse, reason: text);
         expect(c.accepted, isFalse, reason: text);
       }
-      if (rule != null) {
+      if (rule == 'transaction_not_completed') {
         expect(r.rejectionReason, rule, reason: text);
         expect(c.reason, rule, reason: text);
+      } else if (rule != null) {
+        // (Round 5: an uncertain meaning; an ungrounded figure may be
+        // reported first.)
+        expect(r.accepted, isFalse, reason: text);
+        expect(c.accepted, isFalse, reason: text);
       } else {
         expect(r.rejectionReason, isNot('transaction_not_completed'),
             reason: text);
@@ -103,10 +109,12 @@ void main() {
           meaningHoldReason(
               'Purchase SAR 120.00 at Oak Bakery card *1111. Available balance SAR 3,400.00'),
           isNull);
+      // Round 5 (owner decision): a reference to an earlier operation is a
+      // doubt.
       expect(
           meaningHoldReason(
               'Salary SAR 12,000.00 credited to account *4521. Previous salary SAR 11,500.00'),
-          isNull);
+          'not_clearly_completed');
     });
 
     test('a tip form records only at the total it states', () {
@@ -132,9 +140,16 @@ void main() {
       final text = c['text'] as String;
       final amount = c['amount'] as num;
       final held = c['held'] as bool;
+      // Round 5 (owner decision): no completed-event form — review, at any
+      // figure (never 'transaction_not_completed').
+      final review = c['review'] == true;
       expect(AiCandidateValidator.meaningRejectionOf(text, amount: amount),
-          held ? 'transaction_not_completed' : null);
-      expect(meaningHoldReason(text, amount: amount) != null, held);
+          held
+              ? 'transaction_not_completed'
+              : review
+                  ? 'message_meaning_total_with_parts'
+                  : null);
+      expect(meaningHoldReason(text, amount: amount) != null, held || review);
       final v = validateCaptureCandidate(
         candidate: CaptureCandidate(
             amount: amount.toDouble(),

@@ -22,12 +22,14 @@ Deno.test('one purchase with a balance or a footer is not held', () => {
   for (
     const text of [
       'Purchase SAR 120.00 at Oak Bakery card *1111. Available balance SAR 3,400.00',
-      'Salary SAR 12,000.00 credited to account *4521. Previous salary SAR 11,500.00',
       'Purchase USD 20.00 at WEBSHOP, charged SAR 75.40',
     ]
   ) {
     assertEquals(gatedMeaning(text).disposition, 'record', text);
   }
+  // Round 5 (owner decision): a reference to an earlier operation is a doubt.
+  assertEquals(gatedMeaning('Salary SAR 12,000.00 credited to account *4521. Previous salary SAR 11,500.00').disposition,
+    'review');
 });
 
 Deno.test('a tip form records only at the total it states', () => {
@@ -90,7 +92,13 @@ Deno.test('declined table: server meaning rejection matches the device rule on e
 // total; a completed one is. App twin: movement_amounts_test.dart.
 Deno.test('total forms: the stated-total release never applies to a not-completed message', async () => {
   const { default: fixture } = await import('../_shared/fixtures/total_status_cases.json', { with: { type: 'json' } });
-  for (const c of fixture.cases as Array<{ id: string; text: string; amount: number; held: boolean }>) {
+  for (const c of fixture.cases as Array<{ id: string; text: string; amount: number; held: boolean; review?: boolean }>) {
+    if (c.review) {
+      // Round 5: no completed-event form — review, at any figure.
+      assertEquals(meaningRejectionOf(c.text, c.amount), 'message_meaning_total_with_parts', c.id);
+      assertEquals(gatedMeaning(c.text, undefined, c.amount).disposition, 'review', c.id);
+      continue;
+    }
     assertEquals(meaningRejectionOf(c.text, c.amount), c.held ? 'transaction_not_completed' : null, c.id);
     assertEquals(gatedMeaning(c.text, undefined, c.amount).disposition !== 'record', c.held, c.id);
   }
