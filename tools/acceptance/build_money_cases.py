@@ -164,6 +164,12 @@ X_ROWS = [
     ('Y-NM2-got', 'c', 750, 'SAR', 'Y N-M2', 'You got SAR 750.00 from Ali via Test Pay'),
     ('Y-NM2-qayd-person', 'c', 2000, 'SAR', 'Y N-M2', 'قيد مبلغ 2,000 ريال لحسابك *5678 من علي'),
     ('Y-NM2-received', 'c', 300, 'SAR', 'Y N-M2', 'You received SAR 300.00 from Sara Ahmed via Test Pay'),
+    # Narrow check Z (N-M1b / N-M2b).
+    ('Z-NM1b-installment', 'd', 250, 'SAR', 'Z N-M1b', 'Installment of SAR 250.00 added to your card *4521'),
+    ('Z-NM2b-wasalak', 'c', 250, 'SAR', 'Z N-M2b', 'وصلك 250 ريال من نورة أحمد'),
+    ('Z-NM2b-istalamt', 'c', 400, 'SAR', 'Z N-M2b', 'استلمت 400 ريال من محمد العتيبي'),
+    ('Z-NM2b-sent-you', 'c', 120, 'SAR', 'Z N-M2b', 'Ali Hassan sent you SAR 120.00'),
+    ('Z-NM2b-topped-up-by', 'c', 95, 'SAR', 'Z N-M2b', 'Your wallet was topped up with SAR 95.00 by Ali Hassan'),
 ]
 
 

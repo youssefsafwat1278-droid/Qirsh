@@ -815,7 +815,7 @@ const COUNTERPARTY_PATTERN = new RegExp(
 /// PRIV-1: cues that only ever introduce a person (a payee, a beneficiary, a
 /// sender), so they apply in any message, transfer word or not.
 const PERSON_CUE_PATTERN = new RegExp(
-  `((?<![\\p{L}\\p{M}])(?:beneficiary(?:[ \\t]+name)?|benef|payee(?:[ \\t]+name)?|sender(?:[ \\t]+name)?` +
+  `((?<![\\p{L}\\p{M}])(?<!(?<![\\p{L}\\p{M}])at[ \\t]{1,3})(?:beneficiary(?:[ \\t]+name)?|benef|payee(?:[ \\t]+name)?|sender(?:[ \\t]+name)?` +
     `|remitter(?:[ \\t]+name)?|recipient(?:[ \\t]+name)?|payer(?:[ \\t]+name)?|on[ \\t]+behalf[ \\t]+of|in[ \\t]+favou?r[ \\t]+of` +
     `|payable[ \\t]+to|(?:for[ \\t]+)?employee|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول` +
     `|لصالح|باسم|للسيدة|للسيد)\\.?(?![\\p{L}\\p{M}])${LABEL_SEP})(${NAME})`,
@@ -829,7 +829,7 @@ const PERSON_CUE_PATTERN = new RegExp(
 /// added as a beneficiary", «تمت إضافة رامي فوزي كمستفيد»). The status words
 /// stay.
 const BENEFICIARY_NOTICE_PATTERN = new RegExp(
-  `((?<![\\p{L}\\p{M}])(?:beneficiary|beneficiaries|payee|المستفيد|مستفيد|للمستفيد)(?![\\p{L}\\p{M}])` +
+  `((?<![\\p{L}\\p{M}])(?<!(?<![\\p{L}\\p{M}])at[ \\t]{1,3})(?:beneficiary|beneficiaries|payee|المستفيد|مستفيد|للمستفيد)(?![\\p{L}\\p{M}])` +
     `(?:[ \\t]+(?:new|added|successfully|has|have|been|was|الجديد|جديد|بنجاح)(?![\\p{L}\\p{M}]))*` +
     `(?:[ \\t]*[:,،\\-][ \\t]*|[ \\t]+))(${NAME})`,
   'giu',
@@ -925,6 +925,19 @@ const PAYMENT_TO_PATTERN = new RegExp(
   `((?<![\\p{L}\\p{M}])(?:payment|payments|paid|pay)(?![\\p{L}\\p{M}])(?:[^.\\n;؛!?؟]|\\.(?=${D})){0,40}?(?<![\\p{L}\\p{M}])to[ \\t]+)(${NAME})`,
   'giu',
 );
+/// N-P2: money coming in from someone, in wording that is not a purchase:
+/// the counterparty after "from" / "by" / «من» that follows an amount or an
+/// incoming-money verb ("You got SAR 200.00 from …", "topped up with SAR 95.00
+/// by …", «تم قيد مبلغ 300 ريال … من …»). Masked unless it carries a business
+/// word ([maskPayee]); skipped where the text marks a merchant ([MERCHANT_MARK]).
+const INCOMING_FROM_PATTERN = new RegExp(
+  `((?:${D}|(?<![\\p{L}\\p{M}])(?:got|received|credited|deposited|added|topped[ \\t]+up|sent[ \\t]+you` +
+    `|قيد|أودع|اودع|أضيف|اضيف|وصلك|استلمت|حول|حوّل|حُوّل)(?![\\p{L}\\p{M}]))` +
+    `(?:[^.\\n;؛!?؟]|\\.(?=${D})){0,60}?(?<![\\p{L}\\p{M}])(?:from|by|من)[ \\t]+)(${NAME})`,
+  'giu',
+);
+/// A merchant mark: "at <Name>", "@", «لدى», «من متجر».
+const MERCHANT_MARK = /(?<![\p{L}\p{M}])(?:at|At|AT)[ \t]+(?=\p{Lu})|@|(?<![\p{L}\p{M}])(?:لدى|من[ \t]+متجر)(?![\p{L}\p{M}])/u;
 /// The leading words of a match that can be a name in Latin script: each
 /// starts with a capital (or is Arabic, or star-masked).
 const CAPITALISED_RUN = /^[\p{Lu}\p{Lo}*][^ \t]*(?:[ \t]+[\p{Lu}\p{Lo}*][^ \t]*)*/u;
@@ -1192,7 +1205,11 @@ export function redactPersonNames(text: string): string {
     ? greeted.replace(COUNTERPARTY_PATTERN, maskPerson)
     : greeted.replace(LABEL_CUE_PATTERN, maskPayee).replace(TO_HEADING_PATTERN, maskPayee)
       .replace(PAYMENT_TO_PATTERN, maskPayee);
-  return cued.replace(PAREN_NAME_PATTERN, maskPerson)
+  // N-P2: money in from someone, where nothing marks a merchant.
+  const incoming = TRANSFER_WORDS.test(greeted) || MERCHANT_MARK.test(cued)
+    ? cued
+    : cued.replace(INCOMING_FROM_PATTERN, maskPayee);
+  return incoming.replace(PAREN_NAME_PATTERN, maskPerson)
     .replace(NAME_BEFORE_VERB_PATTERN, maskPerson)
     .replace(NAME_AFTER_VERB_AR_PATTERN, maskPerson)
     .replace(NAME_AFTER_TRANSFER_PATTERN, maskCapitalisedName);

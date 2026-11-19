@@ -18,6 +18,7 @@ const C = rules.completionCertainty as {
   transferPattern: string;
   statedCreditPattern: string;
   statedDebitPattern: string;
+  statedCreditDebtPattern: string;
 };
 
 // Same as TransactionStateCues.foldForCues / parse.ts foldForCues (kept here
@@ -41,6 +42,7 @@ const ADVICE = new RegExp(C.adviceClause);
 const TRANSFER = new RegExp(C.transferPattern);
 const STATED_CREDIT = new RegExp(C.statedCreditPattern);
 const STATED_DEBIT = new RegExp(C.statedDebitPattern);
+const STATED_CREDIT_DEBT = new RegExp(C.statedCreditDebtPattern);
 const CLAUSE_END = /[\n!?؟;؛]|[.,،](?![0-9])| [-–—] /g;
 const FORM_WORD = new RegExp(
   `(?<![a-zء-ي])(?:و|ف)?(?:${
@@ -90,6 +92,14 @@ export function statedDirection(text: string): 'credit' | 'debit' | 'unknown' {
   const t = fold(text);
   const credit = STATED_CREDIT.test(t), debit = STATED_DEBIT.test(t);
   return credit === debit ? 'unknown' : credit ? 'credit' : 'debit';
+}
+
+/**
+ * Narrow check Z (N-M1b): a stated credit wording next to an installment, fee
+ * or charge noun ("Installment … added to your account"): a conflicting cue.
+ */
+export function statedCreditWithDebt(text: string): boolean {
+  return statedDirection(text) === 'credit' && STATED_CREDIT_DEBT.test(fold(text));
 }
 
 /**

@@ -1187,7 +1187,7 @@ class SmsSanitizer {
   // PRIV-1: cues that only ever introduce a person (a payee, a beneficiary,
   // a sender), so they apply in any message. Server twin: PERSON_CUE_PATTERN.
   static final _personCue = RegExp(
-    r'((?<![\p{L}\p{M}])(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?'
+    r'((?<![\p{L}\p{M}])(?<!(?<![\p{L}\p{M}])at[ \t]{1,3})(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?'
     r'|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of'
     r'|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول'
     r'|لصالح|باسم|للسيدة|للسيد)'
@@ -1201,7 +1201,7 @@ class SmsSanitizer {
   // was added as a beneficiary", «… كمستفيد»). The status words stay. Server
   // twins: BENEFICIARY_NOTICE_PATTERN, NAME_ADDED_AS_PATTERN.
   static final _beneficiaryNotice = RegExp(
-    r'((?<![\p{L}\p{M}])(?:beneficiary|beneficiaries|payee|المستفيد|مستفيد|للمستفيد)(?![\p{L}\p{M}])'
+    r'((?<![\p{L}\p{M}])(?<!(?<![\p{L}\p{M}])at[ \t]{1,3})(?:beneficiary|beneficiaries|payee|المستفيد|مستفيد|للمستفيد)(?![\p{L}\p{M}])'
     r'(?:[ \t]+(?:new|added|successfully|has|have|been|was|الجديد|جديد|بنجاح)(?![\p{L}\p{M}]))*'
     r'(?:[ \t]*[:,،\-][ \t]*|[ \t]+))'
     '($_name)',
@@ -1328,6 +1328,22 @@ class SmsSanitizer {
     r'((?<![\p{L}\p{M}])(?:payment|payments|paid|pay)(?![\p{L}\p{M}])(?:[^.\n;؛!?؟]|\.(?=[0-9٠-٩۰-۹])){0,40}?(?<![\p{L}\p{M}])to[ \t]+)'
     '($_name)',
     caseSensitive: false,
+    unicode: true,
+  );
+  // N-P2: money in from someone, in wording that is not a purchase: the
+  // counterparty after "from" / "by" / «من» that follows an amount or an
+  // incoming-money verb, unless the text marks a merchant ([_merchantMark]).
+  // Server twins: INCOMING_FROM_PATTERN, MERCHANT_MARK.
+  static final _incomingFrom = RegExp(
+    r'((?:[0-9٠-٩۰-۹]|(?<![\p{L}\p{M}])(?:got|received|credited|deposited|added|topped[ \t]+up|sent[ \t]+you'
+    r'|قيد|أودع|اودع|أضيف|اضيف|وصلك|استلمت|حول|حوّل|حُوّل)(?![\p{L}\p{M}]))'
+    r'(?:[^.\n;؛!?؟]|\.(?=[0-9٠-٩۰-۹])){0,60}?(?<![\p{L}\p{M}])(?:from|by|من)[ \t]+)'
+    '($_name)',
+    caseSensitive: false,
+    unicode: true,
+  );
+  static final _merchantMark = RegExp(
+    r'(?<![\p{L}\p{M}])(?:at|At|AT)[ \t]+(?=\p{Lu})|@|(?<![\p{L}\p{M}])(?:لدى|من[ \t]+متجر)(?![\p{L}\p{M}])',
     unicode: true,
   );
   // The leading words of a match that can be a name in Latin script: each
@@ -1764,6 +1780,8 @@ class SmsSanitizer {
   static RegExp get numberAfterNamePattern => _numberAfterName;
   static RegExp get parenNamePattern => _parenName;
   static RegExp get paymentToPattern => _paymentTo;
+  static RegExp get incomingFromPattern => _incomingFrom;
+  static RegExp get merchantMarkPattern => _merchantMark;
   static RegExp get nameBeforeVerbPattern => _nameBeforeVerb;
   static RegExp get nameAfterVerbArPattern => _nameAfterVerbAr;
   static RegExp get nameAfterTransferPattern => _nameAfterTransfer;
@@ -1837,6 +1855,10 @@ class SmsSanitizer {
         text = text.replaceAllMapped(_labelCue, maskPayee);
         text = text.replaceAllMapped(_toHeading, maskPayee);
         text = text.replaceAllMapped(_paymentTo, maskPayee);
+        // N-P2: money in from someone, where nothing marks a merchant.
+        if (!_merchantMark.hasMatch(text)) {
+          text = text.replaceAllMapped(_incomingFrom, maskPayee);
+        }
       }
       text = text.replaceAllMapped(_parenName, maskPerson);
       text = text.replaceAllMapped(_nameBeforeVerb, maskPerson);
