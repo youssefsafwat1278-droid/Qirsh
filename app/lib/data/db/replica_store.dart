@@ -465,7 +465,13 @@ class ReplicaStore {
             .join();
         await _storage.write(key: saltKey, value: salt);
         return salt;
-      }();
+      }()
+          .catchError((Object error, StackTrace stack) {
+        // Not cached: a failed keychain read (protected data locked) is asked
+        // again by the next call, not replayed for the life of the process.
+        _saltFuture = null;
+        Error.throwWithStackTrace(error, stack);
+      });
 
   /// `hex(HMAC-SHA256(deviceSalt, uid))`, truncated to 128 bits.
   Future<String> uidHash(String uid) async =>

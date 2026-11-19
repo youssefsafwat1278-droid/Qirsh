@@ -101,7 +101,7 @@ class _ErrorBody extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.s2),
         Text(
-          context.l10n.startCheckConnection,
+          context.l10n.startTryLater,
           textAlign: TextAlign.center,
           style: AppTypography.callout(c.textLight)
               .copyWith(decoration: TextDecoration.none),

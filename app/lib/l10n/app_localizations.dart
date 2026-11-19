@@ -9619,11 +9619,11 @@ abstract class AppL10n {
   /// **'تعذّر تجهيز التطبيق'**
   String get startFailed;
 
-  /// No description provided for @startCheckConnection.
+  /// No description provided for @startTryLater.
   ///
   /// In ar, this message translates to:
-  /// **'تأكد من اتصالك بالإنترنت وحاول مرة أخرى.'**
-  String get startCheckConnection;
+  /// **'يُرجى المحاولة مرة أخرى بعد قليل.'**
+  String get startTryLater;
 
   /// No description provided for @startStepId.
   ///
@@ -9654,6 +9654,24 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'إعادة تعيين البيانات'**
   String get dbRecoveryReset;
+
+  /// No description provided for @dbResetConfirmTitle.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف البيانات على هذا الجهاز؟'**
+  String get dbResetConfirmTitle;
+
+  /// No description provided for @dbResetConfirmBody.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستُحذف البيانات المحفوظة على هذا الجهاز وغير الموجودة في السحابة، ولا يمكن استرجاعها.'**
+  String get dbResetConfirmBody;
+
+  /// No description provided for @dbResetConfirmAction.
+  ///
+  /// In ar, this message translates to:
+  /// **'حذف وإعادة التعيين'**
+  String get dbResetConfirmAction;
 
   /// No description provided for @lockTitle.
   ///

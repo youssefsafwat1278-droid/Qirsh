@@ -5743,7 +5743,7 @@ class AppL10nAr extends AppL10n {
   String get startFailed => 'تعذّر تجهيز التطبيق';
 
   @override
-  String get startCheckConnection => 'تأكد من اتصالك بالإنترنت وحاول مرة أخرى.';
+  String get startTryLater => 'يُرجى المحاولة مرة أخرى بعد قليل.';
 
   @override
   String startStepId(String step) {
@@ -5762,6 +5762,16 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get dbRecoveryReset => 'إعادة تعيين البيانات';
+
+  @override
+  String get dbResetConfirmTitle => 'حذف البيانات على هذا الجهاز؟';
+
+  @override
+  String get dbResetConfirmBody =>
+      'ستُحذف البيانات المحفوظة على هذا الجهاز وغير الموجودة في السحابة، ولا يمكن استرجاعها.';
+
+  @override
+  String get dbResetConfirmAction => 'حذف وإعادة التعيين';
 
   @override
   String get lockTitle => 'قِرش مقفل';

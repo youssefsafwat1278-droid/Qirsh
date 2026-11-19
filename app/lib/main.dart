@@ -175,8 +175,11 @@ class _StartupAppState extends State<StartupApp> {
   }
 
   void _attempt() {
-    if (_bootstrapping) return;
+    _clearDeferredRetry();
     setState(() => _error = null);
+    // A run still in flight (one that timed out keeps going) is being awaited:
+    // joined, never started a second time.
+    if (_bootstrapping) return;
     unawaited(_runBootstrap());
   }
 
@@ -209,14 +212,16 @@ class _StartupAppState extends State<StartupApp> {
     _deferredResume = null;
   }
 
-  void _scheduleDeferredRetry() {
+  /// [backoff] false: no timer, only protected data becoming available or the
+  /// next foreground (a stored error is never retried in a foreground loop).
+  void _scheduleDeferredRetry({bool backoff = true}) {
     _clearDeferredRetry();
     void retry() {
       _clearDeferredRetry();
       if (mounted) _attempt();
     }
 
-    _deferredRetry = Timer(const Duration(seconds: 3), retry);
+    if (backoff) _deferredRetry = Timer(const Duration(seconds: 3), retry);
     _deferredAvailable =
         _runner.protectedDataAvailableEvents?.listen((_) => retry());
     _deferredResume = AppLifecycleListener(onResume: retry);
@@ -239,7 +244,18 @@ class _StartupAppState extends State<StartupApp> {
         AppSession.instance.configureInstallPresentation(presentation);
         _installPresentation = presentation;
       }
-      await _runner.run();
+      // A timed-out run keeps going (the runner is single-flight): show the
+      // timeout and keep waiting on that same run, so its late success still
+      // proceeds without a tap.
+      while (true) {
+        try {
+          await _runner.run();
+          break;
+        } on BootstrapTimeoutException catch (timedOut) {
+          if (!mounted) return;
+          setState(() => _error = timedOut);
+        }
+      }
       _consecutiveDeferrals = 0;
       if (widget.runner == null) await debugQaLocalIdentity();
       if (!mounted) return;
@@ -248,14 +264,17 @@ class _StartupAppState extends State<StartupApp> {
         _accountScope?.removeListener(_onAccountScopeChanged);
         host.addListener(_onAccountScopeChanged);
       }
-      setState(() => _accountScope = host);
+      setState(() {
+        _accountScope = host;
+        _error = null; // a timeout shown while the run was still going
+      });
     } catch (error) {
       if (!mounted) return;
       if (error is BootstrapAuthDeferred &&
           defaultTargetPlatform == TargetPlatform.android &&
           ++_consecutiveDeferrals >= StartupApp.maxAndroidDeferrals) {
         _consecutiveDeferrals = 0;
-        _clearDeferredRetry();
+        _scheduleDeferredRetry(backoff: false);
         setState(() => _error = error);
         return;
       }
@@ -268,6 +287,10 @@ class _StartupAppState extends State<StartupApp> {
         return;
       }
       setState(() => _error = error);
+      // Not proven permanent: retried on the next foreground or unlock.
+      if (error is! BootstrapDatabaseUnreadable) {
+        _scheduleDeferredRetry(backoff: false);
+      }
     } finally {
       _bootstrapping = false;
     }
@@ -312,10 +335,9 @@ class _StartupAppState extends State<StartupApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
-      // A timeout can land while `database_open` is the step in flight (it's
-      // simply the slowest step, e.g. first-run key generation) without the
-      // database itself being corrupt — only route to the destructive
-      // reset flow for a real database_open failure, never for a timeout.
+      // Only a positively unreadable database (classified by the runner) is
+      // routed to the destructive reset flow; a timeout, busy/locked database,
+      // keychain read error or refusal is the retry screen.
       home: AutomaticSessionRecovery.recoveryTimedOut.value
           ? StartupLoadingScreen(
               error: const BootstrapTimeoutException('session_recovery'),
@@ -326,9 +348,7 @@ class _StartupAppState extends State<StartupApp> {
           // C1: fail closed. No database is involved in this screen and nothing
           // behind it can open; Retry re-runs bootstrap from the start.
           ? _CoordinatorUnavailableView(onRetry: _attempt)
-          : _error != null &&
-              _error is! BootstrapTimeoutException &&
-              _runner.lastStep == 'database_open'
+          : _error is BootstrapDatabaseUnreadable
           ? _DatabaseRecoveryView(onReset: _resetDatabaseAndRetry)
           : StartupLoadingScreen(
               updatingData: host?.swapInProgress ?? false,
@@ -393,10 +413,10 @@ class _CoordinatorUnavailableView extends StatelessWidget {
   }
 }
 
-/// Shown when the local encrypted DB can't be opened (corrupt file, or a
-/// key/file mismatch after the keychain was cleared) — lets the user
-/// explicitly reset their data rather than being stuck on a generic retry
-/// that would just fail identically.
+/// Shown only for [BootstrapDatabaseUnreadable] (the key was read and the file
+/// is not a database / corrupt) — lets the user explicitly reset their data,
+/// behind a confirmation, rather than being stuck on a generic retry that would
+/// just fail identically.
 class _DatabaseRecoveryView extends StatefulWidget {
   const _DatabaseRecoveryView({required this.onReset});
 
@@ -410,6 +430,26 @@ class _DatabaseRecoveryViewState extends State<_DatabaseRecoveryView> {
   bool _resetting = false;
 
   Future<void> _reset() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(context.l10n.dbResetConfirmTitle),
+        content: Text(context.l10n.dbResetConfirmBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(context.l10n.commonCancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFFDC2626)),
+            child: Text(context.l10n.dbResetConfirmAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
     setState(() => _resetting = true);
     try {
       await widget.onReset();
