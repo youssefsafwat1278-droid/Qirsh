@@ -582,7 +582,12 @@ class LedgerSyncService implements LedgerPullAdapter {
       final mappedDirection = LedgerPayloadCodec.directionFromPull(
         canonicalDirection: _canonicalMeta(metadata, 'canonical_direction'),
         type: mappedType,
+        serverDirection: row['direction'] as String?,
       );
+      // A transfer row that says nothing about its direction keeps the local
+      // one: unknown is never better than a known debit/credit.
+      final keepLocalDirection = mappedType == TransactionTypeEntity.transfer &&
+          mappedDirection == TransactionDirectionEntity.unknown;
       // Category provenance travels in its own column. A server that predates
       // it sends no key: then a changed category could have been anyone's
       // choice, so it becomes 'unknown'; an unchanged one keeps its provenance.
@@ -626,7 +631,7 @@ class LedgerSyncService implements LedgerPullAdapter {
             note = ${sqlNullableString(row['description'] as String?)},
             type = ${sqlString(mappedType.name)},
             source = ${sqlString(mappedSource.name)},
-            direction = ${sqlString(mappedDirection.name)},
+            direction = ${keepLocalDirection ? 'direction' : sqlString(mappedDirection.name)},
             status = ${sqlString(mappedStatus)},
             ${occurredAt != null ? 'occurred_at = ${sqlString(dateTimeToSql(DateTime.tryParse(occurredAt)?.toUtc() ?? DateTime.now().toUtc()))},' : ''}
             category_id = ${sqlNullableString(localCategoryId)},
@@ -939,6 +944,7 @@ class LedgerSyncService implements LedgerPullAdapter {
       direction: LedgerPayloadCodec.directionFromPull(
         canonicalDirection: _canonicalMeta(metadata, 'canonical_direction'),
         type: canonicalType,
+        serverDirection: row['direction'] as String?,
       ),
       accountId: accountId,
       // Who chose the category, from its own server column. Absent (an older

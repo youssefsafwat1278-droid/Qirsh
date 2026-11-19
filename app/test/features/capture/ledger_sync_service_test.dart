@@ -1101,6 +1101,29 @@ void main() {
       expect(row['direction'], 'debit');
     });
 
+    test('a legacy transfer row with no canonical metadata takes the server '
+        'direction column', () async {
+      remote.activeRows = [
+        leg('acc-b', 'credit')..remove('metadata'),
+      ];
+      await _makeSvc(db, remote).pull();
+      expect((await legs()).single['direction'], 'credit');
+    });
+
+    test('a later legacy write with no usable direction keeps a known local '
+        'transfer direction', () async {
+      remote.activeRows = [leg('acc-a', 'debit')];
+      await _makeSvc(db, remote).pull();
+      remote.activeRows = [
+        leg('acc-a', 'unknown', updatedAt: '2026-01-02T10:00:00.000Z')
+          ..['id'] = 'srv-debit'
+          ..['client_request_id'] = 'leg-debit'
+          ..remove('metadata'),
+      ];
+      expect((await _makeSvc(db, remote).pull()).updated, 1);
+      expect((await legs()).single['direction'], 'debit');
+    });
+
     test('a pair without the key pulls as two correct unlinked transfers',
         () async {
       remote.activeRows = [
