@@ -1373,10 +1373,16 @@ struct BackendCaptureClient {
     // PRIV-1: cues that only ever introduce a person (payee, beneficiary,
     // sender …) apply in any message, transfer word or not.
     try maskPerson(
-      #"(\#(noLetterBefore)(?<!\#(noLetterBefore)at[ \t]{1,3})(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?"# +
+      #"((?:\#(noLetterBefore)(?<!\#(noLetterBefore)at[ \t]{1,3})(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?"# +
         #"|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of"# +
         #"|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول"# +
-        #"|لصالح|باسم|للسيدة|للسيد)\.?\#(notLetter)\#(labelSep))(\#(name))"#)
+        #"|لصالح|ب[اإأ]سم|للسيدة|للسيد)\.?\#(notLetter)\#(labelSep)"# +
+        // Gemini-first phase 2 (server twins GLUED_NAME, MASKED_NUMBER_SEP): the
+        // name glued to «باسم» / «بإسم» (not a pronoun ending), and the holder
+        // after a from/to cue, a masked number and a semicolon («من****;فهد»).
+        #"|\#(noLetterBefore)ب[اإأ]سم(?=[\p{L}])(?!(?:ك|كم|كن|ه|ها|هم|هما|هن|ي|ى|نا)\#(notLetter)|ة|اء|ائ)"# +
+        #"|\#(noLetterBefore)(?:من|لـ|ل|إلى|الى|الي|from|to)[ \t]*"# +
+        #"(?:\[(?:ACCOUNT|PHONE|CARD)\]|[*xX•#]+\#(d)*|\#(d)+[*•]+)[ \t]*[;؛][ \t]*))(\#(name))"#)
     // N-P1: a beneficiary notice names a person wherever the name sits: after
     // the cue and its status words, between commas, and before the role.
     try maskPerson(
@@ -1396,7 +1402,7 @@ struct BackendCaptureClient {
     // SP-16: the holder of an account ("to account of …", «حساب باسم …»); a
     // number may sit between ("acct 7788 of …").
     try maskPerson(
-      #"(\#(noLetterBefore)(?:(?:account|acct|acc|a\/c|ac|card|wallet)(?:[ \t]+(?:no\.?[ \t]*)?(?:[*xX•#]*\#(d){1,9}|\[ACCOUNT\]))?[ \t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \t]+باسم)\#(notLetter)\#(cueSep))(\#(name))"#)
+      #"(\#(noLetterBefore)(?:(?:account|acct|acc|a\/c|ac|card|wallet)(?:[ \t]+(?:no\.?[ \t]*)?(?:[*xX•#]*\#(d){1,9}|\[ACCOUNT\]))?[ \t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \t]+ب[اإأ]سم)\#(notLetter)\#(cueSep))(\#(name))"#)
     // AR-01: «من حساب هاني عادل 7788» — the holder right after the account word.
     try maskPerson(#"(\#(noLetterBefore)(?:من|في)[ \t]+(?:حساب|الحساب)[ \t]+)(\#(name))"#)
     if !isMerchantContext() {
@@ -1408,7 +1414,7 @@ struct BackendCaptureClient {
           #"(\#(noLetterBefore)(?:from|to(?:[ \t]+name)?|by|beneficiary(?:[ \t]+name)?|sender(?:[ \t]+name)?|"# +
             #"remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|"# +
             #"in[ \t]+favou?r[ \t]+of|mrs|mr|ms|dr|من[ \t]+قبل|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|"# +
-            #"مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي|لـ)\.?\#(notLetter)\#(cueSep))(\#(name))"#)
+            #"مستفيد|المرسل|المحول|لصالح|ب[اإأ]سم|بواسطة|من|إلى|الى|الي|لـ)\.?\#(notLetter)\#(cueSep))(\#(name))"#)
       } else {
         // PRIV-1: with no purchase, refund, bill or card-payment reading, a
         // "From:" label, "paid to", a "To/From <Name>:" heading and the payee
@@ -1508,10 +1514,19 @@ struct BackendCaptureClient {
     let ownWordBounded = #"\#(ownWord)(?:[ \t]{1,10}(?:account|card|wallet|رقم|no\.?|number))?"#
     let currencyWord = #"(?:\#(currency))\#(notLetter)"#
     let months = alternation(Self.monthNames)
+    // Bounded for ICU look-behind (server twins DATE_WORD, HOTLINE_WORD).
+    let dateWord = #"\#(noLetterBefore)(?:بتاريخ|تاريخ|date|dated)"#
+    let hotlineWord =
+      #"\#(noLetterBefore)(?:call(?:[ \t]{1,3}us)?(?:[ \t]{1,3}(?:on|at))?|hotline|اتصل(?:[ \t]{1,3}على)?|للاستفسار|للاستعلام|الخط[ \t]{1,3}الساخن)"#
     try replaceEach(
       #"(?<![A-Za-z0-9٠-٩۰-۹*•#]|\#(d)[.,٫٬/:\-])"# +
         #"(?![*xX•#]*\#(d){1,4}(?!\#(d)|-\#(d))(?<=\#(ownWordBounded)[ \t]{1,10}[*xX•#]{0,10}\#(d){1,4}))"# +
         #"(?!\#(d){1,2}[ \t]+(?:\#(months))\#(notLetter))"# +
+        // Gemini-first phase 2: a dashed date, a compact date after a date word
+        // and a short hotline number after a call cue stay (server twin).
+        #"(?!\#(d){1,2}-\#(d){1,2}-\#(d){4}(?!\#(d))|\#(d){4}-\#(d){1,2}-\#(d){1,2}(?!\#(d)))"# +
+        #"(?!(?<=\#(dateWord)[ \t]{0,3}:?[ \t]{0,3})\#(d){6,8}(?!\#(d)))"# +
+        #"(?!(?<=\#(hotlineWord)[ \t]{0,3}:?[ \t]{0,3})\#(d){3,5}(?!\#(d)))"# +
         #"(?<!\#(noLetterBefore)\#(currencyWord)[ \t]{0,10})"# +
         #"(?:[A-Z]{2}(?=\#(d)))?[*xX•#]*\#(d)+(?:-\#(d)+)*"# +
         #"(?![0-9A-Za-z٠-٩۰-۹]|[.,٫٬/:\-]\#(d)|[ \t]*\#(currencyWord)(?![ \t]*\#(d)))"# +
@@ -1590,7 +1605,10 @@ struct BackendCaptureClient {
     "صباحاً", "مساء", "مساءً", "ظهرا", "ظهراً", "ليلا", "ليلاً", "الماضي", "الماضية", "القادم",
     "القادمة", "المقبل", "المقبلة", "هذا", "هذه", "الشهر", "الأسبوع", "الاسبوع", "السنة", "العام",
     "لاحقا", "لاحقاً", "سابقا", "سابقاً", "حاليا", "حالياً", "مؤخرا", "مؤخراً", "الأحد", "الاحد",
-    "الاثنين", "الإثنين", "الثلاثاء", "الأربعاء", "الاربعاء", "الخميس", "الجمعة", "السبت"
+    "الاثنين", "الإثنين", "الثلاثاء", "الأربعاء", "الاربعاء", "الخميس", "الجمعة", "السبت",
+    // Gemini-first phase 2: wallet brands and enquiry words (server twin).
+    "vodafone", "orange", "etisalat", "فودافون", "اورنج", "أورنج", "اتصالات", "كاش", "للاستفسار", "للاستعلام",
+    "استفسار"
   ]
   // LOOSE_STOPWORDS, verbatim: not a name only where there is no cue at all or
   // after a field label.

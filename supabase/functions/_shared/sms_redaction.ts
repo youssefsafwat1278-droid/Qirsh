@@ -647,6 +647,10 @@ const NAME_STOPWORDS = [
   'الماضية', 'القادم', 'القادمة', 'المقبل', 'المقبلة', 'هذا', 'هذه', 'الشهر', 'الأسبوع', 'الاسبوع', 'السنة', 'العام',
   'لاحقا', 'لاحقاً', 'سابقا', 'سابقاً', 'حاليا', 'حالياً', 'مؤخرا', 'مؤخراً', 'الأحد', 'الاحد', 'الاثنين', 'الإثنين',
   'الثلاثاء', 'الأربعاء', 'الاربعاء', 'الخميس', 'الجمعة', 'السبت',
+  // Gemini-first phase 2: a mobile-wallet brand is not a person («من فودافون
+  // كاش», "from Orange Cash"), and an enquiry line («للاستفسار اتصل …») is
+  // not part of a beneficiary's name.
+  'vodafone', 'orange', 'etisalat', 'فودافون', 'اورنج', 'أورنج', 'اتصالات', 'كاش', 'للاستفسار', 'للاستعلام', 'استفسار',
 ];
 
 /// More words that are not a name, used only where there is no cue at all or
@@ -776,10 +780,19 @@ const MONTH = [
 ];
 const OWN_WORD = `(?:your|حسابك|حسابكم|لحسابك|بطاقتك|بطاقتكم|محفظتك)(?:[ \\t]+(?:account|card|wallet|رقم|no\\.?|number))?`;
 const CURRENCY_WORD = `(?:${CURRENCY_AFTER.join('|')})(?![\\p{L}\\p{M}])`;
+const DATE_WORD = `(?<![\\p{L}\\p{M}])(?:بتاريخ|تاريخ|date|dated)`;
+const HOTLINE_WORD =
+  `(?<![\\p{L}\\p{M}])(?:call(?:[ \\t]+us)?(?:[ \\t]+(?:on|at))?|hotline|اتصل(?:[ \\t]+على)?|للاستفسار|للاستعلام|الخط[ \\t]+الساخن)`;
 const NUMBER_IN_BENEFICIARY_SENTENCE = new RegExp(
   `(?<![A-Za-z0-9\u0660-\u0669\u06F0-\u06F9*•#]|${D}[.,\u066B\u066C/:\\-])` +
     `(?![*xX•#]*${D}{1,4}(?!${D}|-${D})(?<=${OWN_WORD}[ \\t]+[*xX•#]*${D}+))` +
     `(?!${D}{1,2}[ \\t]+(?:${MONTH.join('|')})(?![\\p{L}\\p{M}]))` +
+    // Gemini-first phase 2: a dashed date ("12-05-2024", "2024-05-12"), a
+    // compact date right after a date word («بتاريخ 20240512») and a short
+    // hotline number after a call cue («للاستفسار اتصل 19623») stay.
+    `(?!${D}{1,2}-${D}{1,2}-${D}{4}(?!${D})|${D}{4}-${D}{1,2}-${D}{1,2}(?!${D}))` +
+    `(?!(?<=${DATE_WORD}[ \\t]{0,3}:?[ \\t]{0,3})${D}{6,8}(?!${D}))` +
+    `(?!(?<=${HOTLINE_WORD}[ \\t]{0,3}:?[ \\t]{0,3})${D}{3,5}(?!${D}))` +
     `(?<!(?<![\\p{L}\\p{M}])${CURRENCY_WORD}[ \\t]*)` +
     `(?:[A-Z]{2}(?=${D}))?[*xX•#]*${D}+(?:-${D}+)*` +
     `(?![0-9A-Za-z\u0660-\u0669\u06F0-\u06F9]|[.,\u066B\u066C/:\\-]${D}|[ \\t]*${CURRENCY_WORD}(?![ \\t]*${D}))` +
@@ -807,18 +820,34 @@ const SALUTATION_PATTERN = new RegExp(
 const COUNTERPARTY_PATTERN = new RegExp(
   `((?<![\\p{L}\\p{M}])(?:from|to(?:[ \\t]+name)?|by|beneficiary(?:[ \\t]+name)?|sender(?:[ \\t]+name)?|remitter(?:[ \\t]+name)?` +
     `|recipient(?:[ \\t]+name)?|payer(?:[ \\t]+name)?|on[ \\t]+behalf[ \\t]+of|in[ \\t]+favou?r[ \\t]+of|mrs|mr|ms|dr` +
-    `|من[ \\t]+قبل|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|الي|لـ)` +
+    `|من[ \\t]+قبل|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|ب[اإأ]سم|بواسطة|من|إلى|الى|الي|لـ)` +
     `\\.?(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
   'giu',
 );
 
+/// Gemini-first phase 2: what may follow a glued «باسم»: a letter, never a
+/// pronoun ending («باسمك», «باسمه», «باسمها» …), «ة» (the name «باسمة») or the
+/// plural «أسماء».
+const GLUED_NAME = `(?=[\\p{L}])(?!(?:ك|كم|كن|ه|ها|هم|هما|هن|ي|ى|نا)(?![\\p{L}\\p{M}])|ة|اء|ائ)`;
+/// A from/to cue, a masked or placeholder number, then a semicolon: the
+/// holder's name follows. Not after a card label: «بطاقة: ***1046;ائتمانية»
+/// names the card type.
+const MASKED_NUMBER_SEP = `(?<![\\p{L}\\p{M}])(?:من|لـ|ل|إلى|الى|الي|from|to)[ \\t]*` +
+  `(?:\\[(?:ACCOUNT|PHONE|CARD)\\]|[*xX•#]+${D}*|${D}+[*•]+)[ \\t]*[;؛][ \\t]*`;
+
 /// PRIV-1: cues that only ever introduce a person (a payee, a beneficiary, a
 /// sender), so they apply in any message, transfer word or not.
 const PERSON_CUE_PATTERN = new RegExp(
-  `((?<![\\p{L}\\p{M}])(?<!(?<![\\p{L}\\p{M}])at[ \\t]{1,3})(?:beneficiary(?:[ \\t]+name)?|benef|payee(?:[ \\t]+name)?|sender(?:[ \\t]+name)?` +
+  `((?:(?<![\\p{L}\\p{M}])(?<!(?<![\\p{L}\\p{M}])at[ \\t]{1,3})(?:beneficiary(?:[ \\t]+name)?|benef|payee(?:[ \\t]+name)?|sender(?:[ \\t]+name)?` +
     `|remitter(?:[ \\t]+name)?|recipient(?:[ \\t]+name)?|payer(?:[ \\t]+name)?|on[ \\t]+behalf[ \\t]+of|in[ \\t]+favou?r[ \\t]+of` +
     `|payable[ \\t]+to|(?:for[ \\t]+)?employee|اسم[ \\t]+المستفيد|اسم[ \\t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول` +
-    `|لصالح|باسم|للسيدة|للسيد)\\.?(?![\\p{L}\\p{M}])${LABEL_SEP})(${NAME})`,
+    `|لصالح|ب[اإأ]سم|للسيدة|للسيد)\\.?(?![\\p{L}\\p{M}])${LABEL_SEP}` +
+    // Gemini-first phase 2: the name glued to «باسم» / «بإسم» («المسجل
+    // باسمسارة نبيل»), but not a pronoun ending («باسمك», «باسمه») …
+    `|(?<![\\p{L}\\p{M}])ب[اإأ]سم${GLUED_NAME}` +
+    // … and the holder after a masked number and a semicolon («من****;فهد
+    // العتيبي», «لـ****; نورة القحطاني»).
+    `|${MASKED_NUMBER_SEP}))(${NAME})`,
   'giu',
 );
 
@@ -869,7 +898,7 @@ const PERSONAL_LABEL_PATTERN = new RegExp(
 /// SP-16: "to account of Mohammed Abdullah", «حساب باسم محمد» — the holder of
 /// an account, in any message.
 const ACCOUNT_OF_PATTERN = new RegExp(
-  `((?<![\\p{L}\\p{M}])(?:(?:account|acct|acc|a\\/c|ac|card|wallet)(?:[ \\t]+(?:no\\.?[ \\t]*)?(?:[*xX•#]*${D}{1,9}|\\[ACCOUNT\\]))?[ \\t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \\t]+باسم)(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
+  `((?<![\\p{L}\\p{M}])(?:(?:account|acct|acc|a\\/c|ac|card|wallet)(?:[ \\t]+(?:no\\.?[ \\t]*)?(?:[*xX•#]*${D}{1,9}|\\[ACCOUNT\\]))?[ \\t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \\t]+ب[اإأ]سم)(?![\\p{L}\\p{M}])${CUE_SEP})(${NAME})`,
   'giu',
 );
 

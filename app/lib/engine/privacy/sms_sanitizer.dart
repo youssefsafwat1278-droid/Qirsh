@@ -335,10 +335,19 @@ class SmsSanitizer {
       r'(?:[ \t]+(?:account|card|wallet|رقم|no\.?|number))?';
   static final String _currencyWord =
       '(?:${_currencyAfter.join('|')})(?![\\p{L}\\p{M}])';
+  static const String _dateWord =
+      r'(?<![\p{L}\p{M}])(?:بتاريخ|تاريخ|date|dated)';
+  static const String _hotlineWord =
+      r'(?<![\p{L}\p{M}])(?:call(?:[ \t]+us)?(?:[ \t]+(?:on|at))?|hotline|اتصل(?:[ \t]+على)?|للاستفسار|للاستعلام|الخط[ \t]+الساخن)';
   static final _numberInBeneficiarySentence = RegExp(
     '(?<![A-Za-z0-9٠-٩۰-۹*•#]|$_dc[.,٫٬/:\\-])'
     '(?![*xX•#]*$_dc{1,4}(?!$_dc|-$_dc)(?<=$_ownWord[ \\t]+[*xX•#]*$_dc+))'
     '(?!$_dc{1,2}[ \\t]+(?:${_month.join('|')})(?![\\p{L}\\p{M}]))'
+    // Gemini-first phase 2: a dashed date, a compact date after a date word
+    // and a short hotline number after a call cue stay (server twin).
+    '(?!$_dc{1,2}-$_dc{1,2}-$_dc{4}(?!$_dc)|$_dc{4}-$_dc{1,2}-$_dc{1,2}(?!$_dc))'
+    '(?!(?<=$_dateWord[ \\t]{0,3}:?[ \\t]{0,3})$_dc{6,8}(?!$_dc))'
+    '(?!(?<=$_hotlineWord[ \\t]{0,3}:?[ \\t]{0,3})$_dc{3,5}(?!$_dc))'
     '(?<!(?<![\\p{L}\\p{M}])$_currencyWord[ \\t]*)'
     '(?:[A-Z]{2}(?=$_dc))?[*xX•#]*$_dc+(?:-$_dc+)*'
     '(?![0-9A-Za-z٠-٩۰-۹]|[.,٫٬/:\\-]$_dc|[ \\t]*$_currencyWord(?![ \\t]*$_dc))'
@@ -1056,6 +1065,19 @@ class SmsSanitizer {
     'الخميس',
     'الجمعة',
     'السبت',
+    // Gemini-first phase 2: a mobile-wallet brand is not a person, and an
+    // enquiry line is not part of a beneficiary's name (server twin).
+    'vodafone',
+    'orange',
+    'etisalat',
+    'فودافون',
+    'اورنج',
+    'أورنج',
+    'اتصالات',
+    'كاش',
+    'للاستفسار',
+    'للاستعلام',
+    'استفسار',
   ];
 
   /// More words that are not a name, used only where there is no cue at all
@@ -1177,7 +1199,7 @@ class SmsSanitizer {
     r'sender(?:[ \t]+name)?|remitter(?:[ \t]+name)?|'
     r'recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|'
     r'in[ \t]+favou?r[ \t]+of|mrs|mr|ms|dr|من[ \t]+قبل|اسم[ \t]+المستفيد|'
-    r'اسم[ \t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|باسم|بواسطة|من|إلى|الى|'
+    r'اسم[ \t]+المرسل|المستفيد|مستفيد|المرسل|المحول|لصالح|ب[اإأ]سم|بواسطة|من|إلى|الى|'
     r'الي|لـ)'
     '\\.?(?![\\p{L}\\p{M}])$_cueSep)($_name)',
     caseSensitive: false,
@@ -1187,11 +1209,18 @@ class SmsSanitizer {
   // PRIV-1: cues that only ever introduce a person (a payee, a beneficiary,
   // a sender), so they apply in any message. Server twin: PERSON_CUE_PATTERN.
   static final _personCue = RegExp(
-    r'((?<![\p{L}\p{M}])(?<!(?<![\p{L}\p{M}])at[ \t]{1,3})(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?'
+    r'((?:(?<![\p{L}\p{M}])(?<!(?<![\p{L}\p{M}])at[ \t]{1,3})(?:beneficiary(?:[ \t]+name)?|benef|payee(?:[ \t]+name)?|sender(?:[ \t]+name)?'
     r'|remitter(?:[ \t]+name)?|recipient(?:[ \t]+name)?|payer(?:[ \t]+name)?|on[ \t]+behalf[ \t]+of|in[ \t]+favou?r[ \t]+of'
     r'|payable[ \t]+to|(?:for[ \t]+)?employee|اسم[ \t]+المستفيد|اسم[ \t]+المرسل|المستفيد|مستفيد|للمستفيد|المرسل|المستلم|للمستلم|المحول'
-    r'|لصالح|باسم|للسيدة|للسيد)'
-    '\\.?(?![\\p{L}\\p{M}])$_labelSep)($_name)',
+    r'|لصالح|ب[اإأ]سم|للسيدة|للسيد)'
+    '\\.?(?![\\p{L}\\p{M}])$_labelSep'
+    // Gemini-first phase 2 (server twins GLUED_NAME, MASKED_NUMBER_SEP): the
+    // name glued to «باسم» / «بإسم» (not a pronoun ending), and the holder
+    // after a masked number and a semicolon («من****;فهد العتيبي»).
+    r'|(?<![\p{L}\p{M}])ب[اإأ]سم(?=[\p{L}])(?!(?:ك|كم|كن|ه|ها|هم|هما|هن|ي|ى|نا)(?![\p{L}\p{M}])|ة|اء|ائ)'
+    r'|(?<![\p{L}\p{M}])(?:من|لـ|ل|إلى|الى|الي|from|to)[ \t]*'
+    '(?:\\[(?:ACCOUNT|PHONE|CARD)\\]|[*xX•#]+$_dc*|$_dc+[*•]+)[ \\t]*[;؛][ \\t]*'
+    '))($_name)',
     caseSensitive: false,
     unicode: true,
   );
@@ -1253,7 +1282,7 @@ class SmsSanitizer {
   static final _accountOf = RegExp(
     r'((?<![\p{L}\p{M}])(?:(?:account|acct|acc|a\/c|ac|card|wallet)'
     '(?:[ \\t]+(?:no\\.?[ \\t]*)?(?:[*xX•#]*$_dc{1,9}|\\[ACCOUNT\\]))?'
-    r'[ \t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \t]+باسم)(?![\p{L}\p{M}])'
+    r'[ \t]+of|(?:حساب|الحساب|لحساب|بطاقة|محفظة)[ \t]+ب[اإأ]سم)(?![\p{L}\p{M}])'
     '$_cueSep)($_name)',
     caseSensitive: false,
     unicode: true,
