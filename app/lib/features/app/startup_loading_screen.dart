@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/startup/bootstrap_runner.dart';
@@ -31,7 +32,8 @@ class StartupLoadingScreen extends StatelessWidget {
   final Object? error;
 
   /// Name of the bootstrap step that was running when [error] occurred, for
-  /// the optional diagnostic identifier. Never contains user data.
+  /// the optional diagnostic identifier (debug builds only). Never contains
+  /// user data.
   final String? lastStep;
 
   final VoidCallback onRetry;
@@ -106,7 +108,7 @@ class _ErrorBody extends StatelessWidget {
           style: AppTypography.callout(c.textLight)
               .copyWith(decoration: TextDecoration.none),
         ),
-        if (lastStep != null) ...[
+        if (kDebugMode && lastStep != null) ...[
           const SizedBox(height: AppSpacing.s2),
           Text(
             context.l10n.startStepId(lastStep!),

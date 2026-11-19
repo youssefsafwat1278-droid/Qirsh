@@ -67,9 +67,10 @@ void main() {
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(find.text('${incomplete()} (E: CloudEnableIncomplete:native)'),
-          findsOneWidget,
+      expect(find.text(incomplete()), findsOneWidget,
           reason: 'the failure is reported, not hidden');
+      expect(find.textContaining('(E:'), findsNothing,
+          reason: 'no reason code in user-facing copy');
       await tester.pumpAndSettle(const Duration(seconds: 6));
       expect(find.byType(CircularProgressIndicator), findsNothing,
           reason: 'no spinner hang');
@@ -133,7 +134,8 @@ void main() {
         findsNothing);
   });
 
-  testWidgets('sheet: the toast carries the incomplete reason (owner_mismatch)',
+  testWidgets('sheet: the toast never carries the incomplete reason '
+      '(owner_mismatch)',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(800, 1600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -150,10 +152,34 @@ void main() {
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(
-        find.text('${lookupAppL10n(const Locale('en')).cloudEnableIncomplete} '
-            '(E: CloudEnableIncomplete:owner_mismatch)'),
+    expect(find.text(lookupAppL10n(const Locale('en')).cloudEnableIncomplete),
         findsOneWidget);
+    expect(find.textContaining('owner_mismatch'), findsNothing);
+    expect(find.textContaining('(E:'), findsNothing);
+    await tester.pumpAndSettle(const Duration(seconds: 6));
+  });
+
+  testWidgets('sheet: any other failure shows the plain save message, never '
+      'the exception type', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    service.enableError = StateError('private detail');
+    await tester.pumpWidget(consentApp(
+      overrides: consentOverrides(repo, service),
+      home: _Opener((v) {}),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('initialConsentAccept')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text(lookupAppL10n(const Locale('en')).setupSaveFailed),
+        findsOneWidget);
+    expect(find.textContaining('StateError'), findsNothing);
+    expect(find.textContaining('private detail'), findsNothing);
+    expect(find.textContaining('(E:'), findsNothing);
     await tester.pumpAndSettle(const Duration(seconds: 6));
   });
 
@@ -195,10 +221,9 @@ void main() {
     await tester.tap(find.byKey(const Key('initialConsentAccept')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(
-        find.text('${lookupAppL10n(const Locale('en')).cloudEnableIncomplete} '
-            '(E: CloudEnableIncomplete:native)'),
+    expect(find.text(lookupAppL10n(const Locale('en')).cloudEnableIncomplete),
         findsOneWidget);
+    expect(find.textContaining('(E:'), findsNothing);
     await tester.pumpAndSettle(const Duration(seconds: 6));
     expect(service.enableCalls, 1);
     expect(service.syncCalls, 0);

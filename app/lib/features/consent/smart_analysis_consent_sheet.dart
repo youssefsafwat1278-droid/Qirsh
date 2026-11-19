@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -502,8 +503,8 @@ class SmartAnalysisConsentPanel extends ConsumerStatefulWidget {
       _SmartAnalysisConsentPanelState();
 }
 
-/// A short, non-sensitive reason code appended to a failed consent toast so a
-/// field report can be diagnosed: the incomplete-enable reason (an internal
+/// A short, non-sensitive reason code for a failed consent, for the debug log
+/// (never shown to the user): the incomplete-enable reason (an internal
 /// identifier) and, while egress is frozen, the freeze tag; otherwise only the
 /// exception type. Never a message, token, email or uid.
 @visibleForTesting
@@ -551,19 +552,20 @@ class _SmartAnalysisConsentPanelState
       // Saving failed: nothing was granted; the user can tap Enable again. A
       // revoked scope reports nothing (no toast into whatever scope is now live).
       if (mounted && work.current && error is! StaleAdmissionException) {
+        if (kDebugMode) {
+          debugPrint('[Consent] save failed: ${consentFailureCode(error)}');
+        }
         // An incomplete Cloud enable is not a failed save: say it could not turn
         // on (it stays off) so the user can try again.
         AppToast.showError(
             context,
             error is CloudEnableIncompleteException
-                ? '${context.l10n.cloudEnableIncomplete} '
-                    '(E: ${consentFailureCode(error)})'
+                ? context.l10n.cloudEnableIncomplete
                 : error is CloudEnableWithdrawFirstException
                     ? context.l10n.cloudEnableWithdrawFirst
                     : error is ConsentChoiceNotPersistedException
                         ? context.l10n.cloudEnableChoiceNotSaved
-                        : '${context.l10n.setupSaveFailed} '
-                            '(E: ${consentFailureCode(error)})');
+                        : context.l10n.setupSaveFailed);
       }
       if (mounted) setState(() => _granting = false);
       return;

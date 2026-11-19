@@ -900,7 +900,7 @@ String _or(String? value, String fallback) => _nullable(value) ?? fallback;
 String _currency(String? value) {
   final code = _or(value, '').toUpperCase();
   if (!RegExp(r'^[A-Z]{3}$').hasMatch(code)) {
-    throw DataPortabilityException('رمز عملة غير صالح: $value', code: DataPortabilityError.invalidCurrencyCode, args: ['\$value']);
+    throw DataPortabilityException('رمز عملة غير صالح: $value', code: DataPortabilityError.invalidCurrencyCode, args: ['$value']);
   }
   return code;
 }
@@ -951,7 +951,7 @@ Money _portablePositiveMoney(
     currency: currency,
   );
   if (money == null || money.isZero || money.isNegative) {
-    throw DataPortabilityException('قيمة مالية غير صالحة: ${row[legacyKey]}', code: DataPortabilityError.invalidAmountLegacy, args: ['\${row[legacyKey]}']);
+    throw DataPortabilityException('قيمة مالية غير صالحة: ${row[legacyKey]}', code: DataPortabilityError.invalidAmountLegacy, args: ['${row[legacyKey]}']);
   }
   return money;
 }
@@ -963,7 +963,7 @@ Money? _legacyMoneyOrNull(String? value, String currency) {
   if (text == null) return null;
   final numeric = num.tryParse(text);
   if (numeric == null) {
-    throw DataPortabilityException('قيمة مالية غير صالحة: $value', code: DataPortabilityError.invalidAmount, args: ['\$value']);
+    throw DataPortabilityException('قيمة مالية غير صالحة: $value', code: DataPortabilityError.invalidAmount, args: ['$value']);
   }
   return legacyLossyNumberToMoney(numeric, currency);
 }
@@ -975,7 +975,7 @@ int _boolInt(String? value) =>
 
 String _date(String? value) {
   final parsed = DateTime.tryParse(value?.trim() ?? '');
-  if (parsed == null) throw DataPortabilityException('تاريخ غير صالح: $value', code: DataPortabilityError.invalidDate, args: ['\$value']);
+  if (parsed == null) throw DataPortabilityException('تاريخ غير صالح: $value', code: DataPortabilityError.invalidDate, args: ['$value']);
   return dateTimeToSql(parsed.toUtc());
 }
 

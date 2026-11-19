@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -14,8 +15,8 @@ import 'auth_screen.dart' show signInFailureCode;
 
 /// Verifies the admitted account before routing to setup. A failed lookup can
 /// be retried with the current session, without another provider sign-in, or
-/// left with "Use another account". The failure shows a non-sensitive reason
-/// code so a field report can be diagnosed.
+/// left with "Use another account". A non-sensitive reason code goes to the
+/// debug log only.
 class OnboardingAccountCompletionScreen extends StatefulWidget {
   const OnboardingAccountCompletionScreen({
     super.key,
@@ -36,7 +37,6 @@ class OnboardingAccountCompletionScreen extends StatefulWidget {
 class _AccountCompletionState extends State<OnboardingAccountCompletionScreen> {
   bool _busy = false;
   bool _failed = false;
-  String? _failureCode;
   Timer? _retry;
 
   @override
@@ -72,10 +72,10 @@ class _AccountCompletionState extends State<OnboardingAccountCompletionScreen> {
       } else {
         final cause =
             error is OnboardingStatusUnavailable ? error.cause : error;
-        setState(() {
-          _failed = true;
-          _failureCode = cause == null ? null : signInFailureCode(cause);
-        });
+        if (kDebugMode && cause != null) {
+          debugPrint('[Auth] account check failed: ${signInFailureCode(cause)}');
+        }
+        setState(() => _failed = true);
         _retry = Timer(const Duration(seconds: 5), () => unawaited(_check()));
       }
     } finally {
@@ -128,13 +128,6 @@ class _AccountCompletionState extends State<OnboardingAccountCompletionScreen> {
                           retryLabel: context.l10n.startRetry,
                           onRetry: _busy ? null : _check,
                         ),
-                        if (_failureCode != null)
-                          Text('(E: $_failureCode)',
-                              key: const Key('account_check_code'),
-                              textDirection: TextDirection.ltr,
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: context.colors.textSecondary)),
                         TextButton(
                           key: const Key('account_check_other_account'),
                           onPressed: _busy ? null : _useAnotherAccount,

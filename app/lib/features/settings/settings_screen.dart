@@ -2797,7 +2797,7 @@ class _CaptureHealthTile extends StatelessWidget {
             ? context.l10n.setNoBankMessagesRecently
             : context.l10n.setBankCaptureStatus;
     final statusSubtitle = apnsFailure != null
-        ? context.l10n.setApnsFailed(apnsFailure.message)
+        ? context.l10n.setApnsFailed
         : status.shouldNudge
             ? context.l10n.setCheckShortcutStillOn(subtitle)
             : subtitle;

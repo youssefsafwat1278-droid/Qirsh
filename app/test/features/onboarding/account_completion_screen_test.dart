@@ -108,8 +108,10 @@ void main() {
           expect(find.text(l10n.onboardingAccountCheckFailed), findsOneWidget);
           expect(find.text('SETUP'), findsNothing);
           expect(find.textContaining('private detail'), findsNothing);
-          // Audit L6: a reason code and a way out, never a dead end.
-          expect(find.text('(E: PostgrestException)'), findsOneWidget);
+          // Audit L6: a way out, never a dead end. The reason code went to the
+          // debug log only: no `(E: …)` or exception name is shown.
+          expect(find.textContaining('(E:'), findsNothing);
+          expect(find.textContaining('PostgrestException'), findsNothing);
           expect(find.text(l10n.onboardingUseAnotherAccount), findsOneWidget);
           profileResponse = Future.value(profile);
           await tester.tap(find.text(l10n.startRetry));

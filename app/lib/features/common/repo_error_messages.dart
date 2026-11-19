@@ -13,7 +13,7 @@ String repoErrorMessage(BuildContext context, RepoException e) {
   return switch (e) {
     NetworkRepoException() => l.repoErrNetwork,
     AuthRepoException() => l.repoErrAuth,
-    ValidationRepoException() => l.repoErrValidation(e.message),
+    ValidationRepoException() => l.repoErrValidation,
     ForbiddenRepoException() => l.repoErrForbidden,
     DuplicateRepoException() => l.repoErrDuplicate,
     NotFoundRepoException() => l.repoErrNotFound,

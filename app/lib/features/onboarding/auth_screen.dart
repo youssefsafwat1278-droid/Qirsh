@@ -1,11 +1,14 @@
 import 'widgets/onboarding_language_button.dart';
 import '../../core/session/admission_authority.dart';
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../core/auth/auth_coordinator.dart';
@@ -14,7 +17,10 @@ import '../../core/auth/auth_methods_config.dart';
 import '../../core/theme/widgets/glass_sheet.dart';
 import 'widgets/email_code_sheet.dart';
 import '../../core/auth/supabase_auth_service.dart'
-    show AuthCancelledException, googleSignInConfigured;
+    show
+        AuthCancelledException,
+        AuthConfigurationException,
+        googleSignInConfigured;
 import '../../core/backend/supabase_config.dart';
 import '../../core/privacy/cloud_egress_gate.dart' show EgressDeniedException;
 import '../../core/privacy/consent_authority.dart' show ConsentAuthority;
@@ -56,19 +62,27 @@ String _egressCode(String reason) {
       : 'EgressDenied:$reason';
 }
 
-/// A short, non-sensitive reason code for a failed sign-in, appended to the
-/// generic toast so a field report can be diagnosed: the exception type and, for
+/// A short, non-sensitive reason code for a failed sign-in, for the debug log
+/// (never shown to the user): the exception type and, for
 /// an egress refusal, the gate's reason string. Never the exception message, a
 /// token, an email or a uid. The Supabase client wraps a refused request in its
 /// own exception type, so the reason is read from the stable `egress_denied:`
 /// prefix that [EgressDeniedException] puts in its message (reason strings are
-/// lower-case identifiers). Also shown by the account-check screen.
+/// lower-case identifiers). Also logged by the account-check screen.
 String signInFailureCode(Object error) {
   if (error is EgressDeniedException) return _egressCode(error.reason);
   final wrapped = RegExp(r'egress_denied:([a-z_]+)').firstMatch('$error');
   if (wrapped != null) return _egressCode(wrapped.group(1)!);
   return error.runtimeType.toString();
 }
+
+/// Whether a failed sign-in never reached the server. An egress refusal also
+/// arrives as a fetch failure, but it is not a connection problem.
+bool _offline(Object error) =>
+    !signInFailureCode(error).startsWith('EgressDenied') &&
+    (error is TimeoutException ||
+        error is http.ClientException ||
+        error is supabase.AuthRetryableFetchException);
 
 /// Whether a failed email verification was the server rejecting the code
 /// itself (wrong or expired), as opposed to any other sign-in failure.
@@ -159,35 +173,38 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
       }
       onFailure?.call(error);
       if (mounted && showFailureToast) {
-        // A CONFIGURATION failure is permanent: "try again" would be a lie the
-        // user could follow forever. Surface the service's own message for
-        // those; keep the generic retry copy for transient failures.
         if (error is AuthCancelledException) {
           // The user closed the sheet. Nothing failed; say nothing.
         } else {
-          final needsGoogleSignup = provider == 'google' &&
-              error is supabase.AuthApiException &&
-              error.message == 'Use Create an account to register with Google.';
-          // L5: the previous account's cleanup did not finish. Its data
-          // stays locked; a retry re-runs the cleanup, and that account can
-          // always sign back in.
-          final message = needsGoogleSignup
-              ? context.l10n.authGoogleSignupRequired
-              : error is LocalDataOwnershipException
-                  ? context.l10n.authPreviousAccountCleanupPending
-                  : context.l10n.authSignInError;
-          AppToast.showError(
-            context,
-            needsGoogleSignup
-                ? message
-                : '$message (E: ${signInFailureCode(error)})',
-          );
+          AppToast.showError(context, _failureMessage(error, provider));
         }
       }
       return false;
     } finally {
       _pendingMethod.value = null;
     }
+  }
+
+  /// Plain copy for a failed sign-in. The reason code goes to the debug log
+  /// only; the user is told what happened and what to do.
+  String _failureMessage(Object error, String provider) {
+    final l = context.l10n;
+    if (provider == 'google' &&
+        error is supabase.AuthApiException &&
+        error.message == 'Use Create an account to register with Google.') {
+      return l.authGoogleSignupRequired;
+    }
+    // L5: the previous account's cleanup did not finish. Its data stays
+    // locked; a retry re-runs the cleanup, and that account can always sign
+    // back in.
+    if (error is LocalDataOwnershipException) {
+      return l.authPreviousAccountCleanupPending;
+    }
+    // A CONFIGURATION failure is permanent: "try again" would be a lie the
+    // user could follow forever.
+    if (error is AuthConfigurationException) return l.authGoogleUnavailable;
+    if (_offline(error)) return l.repoErrNetwork;
+    return l.authSignInError;
   }
 
   @override
@@ -485,15 +502,14 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
                 if (ok) return EmailCodeResult.verified;
                 // Only the server's rejection of the code itself is "wrong
                 // code". Any other failure (network, a refused request, a
-                // stale attempt) is reported as a sign-in failure with its
-                // reason code, so the user is not told to re-type a good code.
+                // stale attempt) is reported as a sign-in failure, so the user
+                // is not told to re-type a good code.
                 final error = failure;
                 if (error == null || emailCodeRejected(error)) {
                   return EmailCodeResult.invalid;
                 }
                 if (!mounted) return EmailCodeResult.invalid;
-                throw EmailCodeFailure('${context.l10n.authSignInError} '
-                    '(E: ${signInFailureCode(error)})');
+                throw EmailCodeFailure(_failureMessage(error, 'email'));
               },
             ));
   }

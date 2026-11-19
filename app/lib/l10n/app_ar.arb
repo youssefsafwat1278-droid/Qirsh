@@ -66,7 +66,7 @@
   "authTermsNotice": "بالمتابعة أنت توافق على شروط الاستخدام وسياسة الخصوصية.",
   "authAppleCta": "المتابعة بحساب Apple",
   "authGoogleCta": "المتابعة بحساب Google",
-  "authSignInError": "تعذّر تسجيل الدخول. جرب تاني.",
+  "authSignInError": "تعذّر تسجيل الدخول. حاول مرة أخرى.",
   "authPreviousAccountCleanupPending": "ما زلنا نمسح بيانات الحساب السابق من هذا الجهاز. حاول مرة أخرى بعد قليل، أو سجّل الدخول بذلك الحساب.",
   "authBackupFoundTitle": "لقينا نسخة احتياطية لحسابك",
   "authBackupFoundBody": "تحب نرجّع بياناتك من آخر نسخة، ولا تبدأ من جديد؟",
@@ -356,7 +356,7 @@
   "referralErrorAlreadyReferred": "لقد استخدمت رمز دعوة من قبل.",
   "referralErrorNoActiveRule": "الدعوات غير متاحة حاليًا.",
   "referralErrorIdentityUnverified": "أكمل تأكيد حسابك لتُحتسب دعوتك.",
-  "referralErrorGeneric": "حصل خطأ، حاول تاني.",
+  "referralErrorGeneric": "حدث خطأ. حاول مرة أخرى.",
   "smsDisclosureTitle": "قراءة رسائل البنك تلقائياً",
   "@smsDisclosureTitle": {
     "description": "Title of the Android prominent disclosure shown immediately before the RECEIVE_SMS system dialog."
@@ -1299,14 +1299,7 @@
       }
     }
   },
-  "setApnsFailed": "فشل تسجيل APNs: {message}",
-  "@setApnsFailed": {
-    "placeholders": {
-      "message": {
-        "type": "String"
-      }
-    }
-  },
+  "setApnsFailed": "تعذّر تجهيز الإشعارات على هذا الجهاز. حاول مرة أخرى لاحقًا.",
   "setCheckShortcutStillOn": "{subtitle} — تأكد أن الاختصار لا يزال مفعّلًا",
   "@setCheckShortcutStillOn": {
     "placeholders": {
@@ -2949,19 +2942,12 @@
   "dpePackageTooManyRows": "الحزمة تتجاوز 100,000 صف إجمالي.",
   "repoErrNetwork": "تعذّر الاتصال بالخادم — تحقّق من الإنترنت وحاول مجددًا.",
   "repoErrAuth": "الرجاء تسجيل الدخول للمتابعة.",
-  "repoErrValidation": "بيانات غير صالحة: {detail}",
+  "repoErrValidation": "بعض البيانات غير صالحة. راجعها وحاول مرة أخرى.",
   "repoErrForbidden": "لا تملك صلاحية تنفيذ هذه العملية.",
   "repoErrDuplicate": "هذا العنصر موجود بالفعل.",
   "repoErrNotFound": "العنصر غير موجود أو تم حذفه.",
   "repoErrServer": "حدث خطأ في الخادم — حاول لاحقًا.",
   "repoErrUnknown": "حدث خطأ غير متوقع — حاول مجددًا.",
-  "@repoErrValidation": {
-    "placeholders": {
-      "detail": {
-        "type": "String"
-      }
-    }
-  },
   "cardThemeNavy": "كحلي",
   "cardThemeEmerald": "زمرّدي",
   "cardThemePlum": "برقوقي",
@@ -4051,8 +4037,8 @@
   "authEmailExplanation": "أدخل البريد المرتبط بحساب قرش لاستلام رمز دخول يُستخدم مرة واحدة.",
   "authEmailLinkExplanation": "أضف بريدًا لحسابك الحالي. عملياتك وإعداداتك هتفضل في نفس الحساب. تغيير البريد بيتطلب تأكيد البريد الحالي والجديد.",
   "authInvalidEmail": "اكتب بريدًا إلكترونيًا صحيحًا.",
-  "authCodeSendFailed": "تعذّر إرسال الكود. تأكد من اتصالك وحاول تاني بعد دقيقة.",
-  "authCodeVerifyFailed": "تعذّر تأكيد الكود. راجعه وحاول تاني.",
+  "authCodeSendFailed": "تعذّر إرسال الكود. تأكد من اتصالك وحاول مرة أخرى بعد دقيقة.",
+  "authCodeVerifyFailed": "تعذّر تأكيد الكود. راجعه وحاول مرة أخرى.",
   "authCodeExpired": "انتهت صلاحية هذا الرمز. اطلب رمزًا جديدًا.",
   "authResendCode": "إرسال الكود مرة تانية",
   "authChangeEmail": "استخدام بريد آخر",
@@ -4064,7 +4050,7 @@
   "authLinkGoogle": "ربط حساب Google",
   "authLinkEmail": "ربط البريد الإلكتروني",
   "authLinkSuccess": "تم ربط طريقة الدخول بحسابك.",
-  "authLinkFailed": "تعذّر ربط طريقة الدخول. لو مرتبطة بحساب قرش تاني، استخدم غيرها.",
+  "authLinkFailed": "تعذّر ربط طريقة الدخول. إذا كانت مرتبطة بحساب قرش آخر، فاستخدم طريقة غيرها.",
   "authExistingAccountHint": "تستخدم Apple؟ سجّل الدخول به أولًا لربط طريقة دخول جديدة.",
   "authCreateAccount": "إنشاء حساب",
   "authBackToSignIn": "عندك حساب بالفعل؟ سجّل الدخول",

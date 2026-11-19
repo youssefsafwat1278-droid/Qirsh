@@ -1329,7 +1329,9 @@ enum ApnsEnvironment {
         guard let tokens = auth?.lastTokenResponse, let idToken = tokens.idToken,
           let accessToken = tokens.accessToken else {
           let error = error as NSError?
-          if error?.domain == OIDGeneralErrorDomain && error?.code == OIDErrorCode.userCanceledAuthorizationFlow.rawValue {
+          // Closing the sheet, or Google's own Cancel (error=access_denied).
+          if (error?.domain == OIDGeneralErrorDomain && error?.code == OIDErrorCode.userCanceledAuthorizationFlow.rawValue)
+            || (error?.domain == OIDOAuthAuthorizationErrorDomain && error?.code == OIDErrorCodeOAuth.accessDenied.rawValue) {
             result(nil)
           } else {
             result(FlutterError(code: "google_authorization_failed", message: nil, details: nil))

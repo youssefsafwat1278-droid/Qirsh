@@ -394,7 +394,7 @@ abstract class AppL10n {
   /// No description provided for @authSignInError.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر تسجيل الدخول. جرب تاني.'**
+  /// **'تعذّر تسجيل الدخول. حاول مرة أخرى.'**
   String get authSignInError;
 
   /// No description provided for @authPreviousAccountCleanupPending.
@@ -1636,7 +1636,7 @@ abstract class AppL10n {
   /// No description provided for @referralErrorGeneric.
   ///
   /// In ar, this message translates to:
-  /// **'حصل خطأ، حاول تاني.'**
+  /// **'حدث خطأ. حاول مرة أخرى.'**
   String get referralErrorGeneric;
 
   /// Title of the Android prominent disclosure shown immediately before the RECEIVE_SMS system dialog.
@@ -4636,8 +4636,8 @@ abstract class AppL10n {
   /// No description provided for @setApnsFailed.
   ///
   /// In ar, this message translates to:
-  /// **'فشل تسجيل APNs: {message}'**
-  String setApnsFailed(String message);
+  /// **'تعذّر تجهيز الإشعارات على هذا الجهاز. حاول مرة أخرى لاحقًا.'**
+  String get setApnsFailed;
 
   /// No description provided for @setCheckShortcutStillOn.
   ///
@@ -9340,8 +9340,8 @@ abstract class AppL10n {
   /// No description provided for @repoErrValidation.
   ///
   /// In ar, this message translates to:
-  /// **'بيانات غير صالحة: {detail}'**
-  String repoErrValidation(String detail);
+  /// **'بعض البيانات غير صالحة. راجعها وحاول مرة أخرى.'**
+  String get repoErrValidation;
 
   /// No description provided for @repoErrForbidden.
   ///
@@ -12532,13 +12532,13 @@ abstract class AppL10n {
   /// No description provided for @authCodeSendFailed.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر إرسال الكود. تأكد من اتصالك وحاول تاني بعد دقيقة.'**
+  /// **'تعذّر إرسال الكود. تأكد من اتصالك وحاول مرة أخرى بعد دقيقة.'**
   String get authCodeSendFailed;
 
   /// No description provided for @authCodeVerifyFailed.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر تأكيد الكود. راجعه وحاول تاني.'**
+  /// **'تعذّر تأكيد الكود. راجعه وحاول مرة أخرى.'**
   String get authCodeVerifyFailed;
 
   /// No description provided for @authCodeExpired.
@@ -12610,7 +12610,7 @@ abstract class AppL10n {
   /// No description provided for @authLinkFailed.
   ///
   /// In ar, this message translates to:
-  /// **'تعذّر ربط طريقة الدخول. لو مرتبطة بحساب قرش تاني، استخدم غيرها.'**
+  /// **'تعذّر ربط طريقة الدخول. إذا كانت مرتبطة بحساب قرش آخر، فاستخدم طريقة غيرها.'**
   String get authLinkFailed;
 
   /// No description provided for @authExistingAccountHint.

@@ -172,7 +172,7 @@ class AppL10nAr extends AppL10n {
   String get authGoogleCta => 'المتابعة بحساب Google';
 
   @override
-  String get authSignInError => 'تعذّر تسجيل الدخول. جرب تاني.';
+  String get authSignInError => 'تعذّر تسجيل الدخول. حاول مرة أخرى.';
 
   @override
   String get authPreviousAccountCleanupPending =>
@@ -856,7 +856,7 @@ class AppL10nAr extends AppL10n {
       'أكمل تأكيد حسابك لتُحتسب دعوتك.';
 
   @override
-  String get referralErrorGeneric => 'حصل خطأ، حاول تاني.';
+  String get referralErrorGeneric => 'حدث خطأ. حاول مرة أخرى.';
 
   @override
   String get smsDisclosureTitle => 'قراءة رسائل البنك تلقائياً';
@@ -2692,9 +2692,8 @@ class AppL10nAr extends AppL10n {
   }
 
   @override
-  String setApnsFailed(String message) {
-    return 'فشل تسجيل APNs: $message';
-  }
+  String get setApnsFailed =>
+      'تعذّر تجهيز الإشعارات على هذا الجهاز. حاول مرة أخرى لاحقًا.';
 
   @override
   String setCheckShortcutStillOn(String subtitle) {
@@ -5572,9 +5571,8 @@ class AppL10nAr extends AppL10n {
   String get repoErrAuth => 'الرجاء تسجيل الدخول للمتابعة.';
 
   @override
-  String repoErrValidation(String detail) {
-    return 'بيانات غير صالحة: $detail';
-  }
+  String get repoErrValidation =>
+      'بعض البيانات غير صالحة. راجعها وحاول مرة أخرى.';
 
   @override
   String get repoErrForbidden => 'لا تملك صلاحية تنفيذ هذه العملية.';
@@ -7511,10 +7509,10 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get authCodeSendFailed =>
-      'تعذّر إرسال الكود. تأكد من اتصالك وحاول تاني بعد دقيقة.';
+      'تعذّر إرسال الكود. تأكد من اتصالك وحاول مرة أخرى بعد دقيقة.';
 
   @override
-  String get authCodeVerifyFailed => 'تعذّر تأكيد الكود. راجعه وحاول تاني.';
+  String get authCodeVerifyFailed => 'تعذّر تأكيد الكود. راجعه وحاول مرة أخرى.';
 
   @override
   String get authCodeExpired => 'انتهت صلاحية هذا الرمز. اطلب رمزًا جديدًا.';
@@ -7553,7 +7551,7 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get authLinkFailed =>
-      'تعذّر ربط طريقة الدخول. لو مرتبطة بحساب قرش تاني، استخدم غيرها.';
+      'تعذّر ربط طريقة الدخول. إذا كانت مرتبطة بحساب قرش آخر، فاستخدم طريقة غيرها.';
 
   @override
   String get authExistingAccountHint =>

@@ -2684,9 +2684,8 @@ class AppL10nEn extends AppL10n {
   }
 
   @override
-  String setApnsFailed(String message) {
-    return 'APNs registration failed: $message';
-  }
+  String get setApnsFailed =>
+      'This device could not be set up for notifications. Please try again later.';
 
   @override
   String setCheckShortcutStillOn(String subtitle) {
@@ -5552,9 +5551,8 @@ class AppL10nEn extends AppL10n {
   String get repoErrAuth => 'Please sign in to continue.';
 
   @override
-  String repoErrValidation(String detail) {
-    return 'Invalid data: $detail';
-  }
+  String get repoErrValidation =>
+      'Some of the details are not valid. Check them and try again.';
 
   @override
   String get repoErrForbidden => 'You do not have permission to do that.';

@@ -413,10 +413,8 @@ void main() {
       await tester.tap(find.byKey(const Key('initialConsentAccept')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
-      expect(
-          find.text('${_en.cloudEnableIncomplete} '
-              '(E: CloudEnableIncomplete:native)'),
-          findsOneWidget);
+      expect(find.text(_en.cloudEnableIncomplete), findsOneWidget);
+      expect(find.textContaining('(E:'), findsNothing);
       await tester.pumpAndSettle(const Duration(seconds: 6));
       expect(repo.settings.cloudConsentState, ConsentState.unset);
       expect(service.syncCalls, 0);

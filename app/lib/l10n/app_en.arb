@@ -1173,14 +1173,7 @@
       }
     }
   },
-  "setApnsFailed": "APNs registration failed: {message}",
-  "@setApnsFailed": {
-    "placeholders": {
-      "message": {
-        "type": "String"
-      }
-    }
-  },
+  "setApnsFailed": "This device could not be set up for notifications. Please try again later.",
   "setCheckShortcutStillOn": "{subtitle} — check the shortcut is still enabled",
   "@setCheckShortcutStillOn": {
     "placeholders": {
@@ -2823,19 +2816,12 @@
   "dpePackageTooManyRows": "The package exceeds 100,000 rows in total.",
   "repoErrNetwork": "Could not reach the server — check your connection and try again.",
   "repoErrAuth": "Please sign in to continue.",
-  "repoErrValidation": "Invalid data: {detail}",
+  "repoErrValidation": "Some of the details are not valid. Check them and try again.",
   "repoErrForbidden": "You do not have permission to do that.",
   "repoErrDuplicate": "That item already exists.",
   "repoErrNotFound": "That item no longer exists, or was deleted.",
   "repoErrServer": "The server had a problem — please try again later.",
   "repoErrUnknown": "Something unexpected went wrong — please try again.",
-  "@repoErrValidation": {
-    "placeholders": {
-      "detail": {
-        "type": "String"
-      }
-    }
-  },
   "cardThemeNavy": "Navy",
   "cardThemeEmerald": "Emerald",
   "cardThemePlum": "Plum",
