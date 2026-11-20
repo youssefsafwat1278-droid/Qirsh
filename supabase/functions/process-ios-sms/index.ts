@@ -917,7 +917,10 @@ export function analysisNotification(
   reasonCode: string | null,
 ): NotificationPayload {
   if (!state) return { title: '', body: '', type: 'received' };
-  const alert = analysisOutcomeAlert(parsed, locale, { state, reasonCode, finalCategory: parsed.ruleCategory });
+  // The category the app files it under: the owner's merchant rule, else the
+  // analysed category (capture_sync_service: learned rule ?? parsed.category).
+  const alert = analysisOutcomeAlert(parsed, locale,
+    { state, reasonCode, finalCategory: parsed.ruleCategory ?? parsed.category });
   return {
     ...alert,
     type: state === 'saved' ? 'new_transaction'

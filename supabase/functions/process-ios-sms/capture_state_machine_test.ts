@@ -957,3 +957,17 @@ Deno.test('3.12: a declined message is pushed as "not recorded", never as a capt
     });
   }
 });
+
+Deno.test('the saved push names the analysed category when the owner has no merchant rule', async () => {
+  const { analysisNotification } = await import('./index.ts');
+  const parsed = {
+    amount: 132.75, currency: 'EGP', merchant: 'SPINNEYS ZAMALEK', direction: 'debit',
+    type: 'purchase', category: 'groceries', rawMessage: '',
+  } as Parameters<typeof analysisNotification>[2];
+  const n = analysisNotification('saved', 'processed' as Parameters<typeof analysisNotification>[1], parsed, 'ar', null);
+  assertEquals(n.body, 'SPINNEYS ZAMALEK · بقالة');
+  // The owner's own rule still wins.
+  const ruled = analysisNotification('saved', 'processed' as Parameters<typeof analysisNotification>[1],
+    { ...parsed, ruleCategory: 'shopping' }, 'ar', null);
+  assertEquals(ruled.body, 'SPINNEYS ZAMALEK · تسوق');
+});
