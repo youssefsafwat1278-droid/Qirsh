@@ -1,5 +1,11 @@
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { checkPrimaryAmount, runPrimaryAi } from './ai_primary.ts';
+import {
+  AI_ATTEMPT_TIMEOUT_MS,
+  AI_TOTAL_BUDGET_MS,
+  checkPrimaryAmount,
+  runPrimaryAi,
+  TRANSACTION_SCHEMA,
+} from './ai_primary.ts';
 
 const qnb = 'QNB: Purchase of EGP 250.00 at CARREFOUR. Available balance EGP 4750.00.';
 const candidate = { is_transaction: true, amount: 250, amount_text: '250.00',
@@ -121,4 +127,95 @@ Deno.test('global budget exhausted mid-repair: no further provider request', asy
   });
   assertEquals(reply, { ok: false, reason: 'budget', attempts: 1 });
   assertEquals(calls, 1);
+});
+
+// Gemini-first phase 2 (class E): the schema requires what the validator reads.
+Deno.test('schema: a transaction must carry amount, amount_text, currency, type and direction', () => {
+  assertEquals(TRANSACTION_SCHEMA.type, 'object');
+  for (const k of ['is_transaction', 'message_type', 'status', 'amount', 'amount_text', 'currency', 'type', 'direction']) {
+    assertEquals(TRANSACTION_SCHEMA.required.includes(k), true, k);
+  }
+  for (const k of TRANSACTION_SCHEMA.required) assertEquals(k in TRANSACTION_SCHEMA.properties, true, k);
+  // A non-transaction can still answer: type and direction have "unknown".
+  for (const k of ['type', 'direction']) {
+    assertEquals((TRANSACTION_SCHEMA.properties[k] as { enum: string[] }).enum.includes('unknown'), true, k);
+  }
+});
+
+const timeout = () => Promise.reject(new DOMException('timed out', 'TimeoutError'));
+
+Deno.test('a timeout is retried once, then the message stays retryable (unavailable)', async () => {
+  let calls = 0;
+  const reply = await runPrimaryAi({
+    key: 'test', model: 'gemini-3.8-flash', prompt: qnb,
+    beforeAttempt: () => Promise.resolve(true),
+    validate: () => null, sleep: () => Promise.resolve(),
+    fetcher: () => { calls++; return timeout(); },
+  });
+  assertEquals(reply, { ok: false, reason: 'unavailable', attempts: 2 });
+  assertEquals(calls, 2);
+});
+
+Deno.test('one timeout then an answer: accepted on the retry', async () => {
+  let calls = 0;
+  const reply = await runPrimaryAi({
+    key: 'test', model: 'gemini-3.8-flash', prompt: qnb,
+    beforeAttempt: () => Promise.resolve(true),
+    validate: () => null, sleep: () => Promise.resolve(),
+    fetcher: () => (++calls === 1 ? timeout() : Promise.resolve(modelReply(candidate))),
+  });
+  assertEquals(reply, { ok: true, value: candidate, attempts: 2 });
+});
+
+Deno.test('each request waits up to the attempt timeout, clamped to the time left', async () => {
+  // The fake clock jumps by the request's own limit, as if it ran out.
+  let clock = 0;
+  const limits: number[] = [];
+  const realTimeout = AbortSignal.timeout;
+  AbortSignal.timeout = (ms: number) => { limits.push(ms); clock += ms; return realTimeout.call(AbortSignal, ms); };
+  try {
+    const reply = await runPrimaryAi({
+      key: 'test', model: 'gemini-3.8-flash', prompt: qnb, now: () => clock,
+      beforeAttempt: () => Promise.resolve(true),
+      validate: () => null, sleep: () => Promise.resolve(),
+      fetcher: () => timeout(),
+    });
+    assertEquals(reply.ok, false);
+  } finally {
+    AbortSignal.timeout = realTimeout;
+  }
+  assertEquals(limits, [AI_ATTEMPT_TIMEOUT_MS, AI_TOTAL_BUDGET_MS - AI_ATTEMPT_TIMEOUT_MS]);
+  // Within the app's 45 s parse-sms wait and the 60 s process-ios-sms lease.
+  assertEquals(AI_TOTAL_BUDGET_MS < 45000 && AI_ATTEMPT_TIMEOUT_MS > 11800, true);
+});
+
+Deno.test('no request starts with too little time left', async () => {
+  let clock = 0;
+  let calls = 0;
+  const reply = await runPrimaryAi({
+    key: 'test', model: 'gemini-3.8-flash', prompt: qnb, now: () => clock,
+    beforeAttempt: () => Promise.resolve(true),
+    validate: () => null, sleep: () => Promise.resolve(),
+    // A slow 503 that uses up the budget.
+    fetcher: () => { calls++; clock += 35000; return Promise.resolve(new Response('', { status: 503 })); },
+  });
+  assertEquals(reply, { ok: false, reason: 'unavailable', attempts: 1 });
+  assertEquals(calls, 1);
+});
+
+Deno.test('repair turns keep the low thinking level', async () => {
+  const bodies: Record<string, unknown>[] = [];
+  await runPrimaryAi({
+    key: 'test', model: 'gemini-3.8-flash', prompt: qnb,
+    beforeAttempt: () => Promise.resolve(true),
+    validate: (value) => checkPrimaryAmount(value, qnb), sleep: () => Promise.resolve(),
+    fetcher: (_u, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return Promise.resolve(modelReply(bodies.length === 1 ? { ...candidate, amount: 4750, amount_text: '4750.00' } : candidate));
+    },
+  });
+  assertEquals(bodies.length, 2);
+  for (const b of bodies) {
+    assertEquals((b.generationConfig as { thinkingConfig: unknown }).thinkingConfig, { thinkingLevel: 'low' });
+  }
 });

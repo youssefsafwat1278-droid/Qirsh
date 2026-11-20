@@ -56,7 +56,7 @@ type NotificationPayload = {
 type ShownCapture = ParsedCapture & { ruleCategory?: string };
 
 const CAPTURE_RATE_LIMIT_PER_DAY = 300;
-const LEASE_SECONDS = 60; // must stay well above the 3.5 s AI timeout (parse.ts)
+const LEASE_SECONDS = 60; // above the AI time per message: 3.5 s (rule path, parse.ts), AI_TOTAL_BUDGET_MS 38 s (AI-primary)
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type ProcessIosSmsDependencies = {

@@ -22,28 +22,52 @@ export type PrimaryAiResult =
     value?: Record<string, unknown>;
   };
 
+const TRANSACTION_PROPERTIES: Record<string, unknown> = {
+  is_transaction: { type: 'boolean' },
+  amount: { type: 'number' },
+  amount_text: { type: 'string' },
+  currency: { type: 'string' },
+  merchant_name: { type: 'string' },
+  merchant: { type: 'string' },
+  type: { type: 'string', enum: ['payment', 'withdrawal', 'transfer', 'income', 'refund', 'unknown'] },
+  direction: { type: 'string', enum: ['credit', 'debit', 'unknown'] },
+  category_key: { type: 'string' },
+  category: { type: 'string' },
+  occurred_at: { type: 'string' },
+  occurredAt: { type: 'string' },
+  last4: { type: 'string' },
+  // 4.2: message type, status, evidence quotes, original vs charged amount.
+  ...STRUCTURED_PROPERTIES,
+};
+
+/**
+ * Gemini-first phase 2: the schema requires every field the validator reads
+ * for a transaction, so an answer can no longer leave out `type` or
+ * `direction`. One plain object at the root (not an `anyOf` of a transaction
+ * and a non-transaction variant): the structured-output docs could not be
+ * checked offline for a root-level `anyOf`, and a schema the API refused would
+ * fail every request. A non-transaction answers `unknown` / empty values,
+ * which the verdict path never reads (`nonTransactionVerdict`). The category
+ * is not required: the two prompts name it differently (`category` /
+ * `category_key`).
+ */
 export const TRANSACTION_SCHEMA = {
   type: 'object',
-  properties: {
-    is_transaction: { type: 'boolean' },
-    amount: { type: 'number' },
-    amount_text: { type: 'string' },
-    currency: { type: 'string' },
-    merchant_name: { type: 'string' },
-    merchant: { type: 'string' },
-    type: { type: 'string', enum: ['payment', 'withdrawal', 'transfer', 'income', 'refund', 'unknown'] },
-    direction: { type: 'string', enum: ['credit', 'debit', 'unknown'] },
-    category_key: { type: 'string' },
-    category: { type: 'string' },
-    occurred_at: { type: 'string' },
-    occurredAt: { type: 'string' },
-    last4: { type: 'string' },
-    // 4.2: message type, status, evidence quotes, original vs charged amount.
-    ...STRUCTURED_PROPERTIES,
-  },
-  required: ['is_transaction'],
+  properties: TRANSACTION_PROPERTIES,
+  required: ['is_transaction', 'message_type', 'status', 'amount', 'amount_text', 'currency', 'type', 'direction'],
   additionalProperties: false,
 };
+
+/** One provider request's limit: answered requests took p50 7.3 s, p95 11.8 s. */
+export const AI_ATTEMPT_TIMEOUT_MS = 20000;
+/**
+ * All requests for one message, repairs and the one timeout retry included:
+ * under the 45 s the app waits for parse-sms and well under the 60 s
+ * process-ios-sms lease (and the Edge Function wall clock).
+ */
+export const AI_TOTAL_BUDGET_MS = 38000;
+/** A request with less time than this left is not started. */
+const MIN_ATTEMPT_MS = 5000;
 
 export function checkPrimaryAmount(value: Record<string, unknown>, sms: string): string | null {
   const amount = value.amount_text;
@@ -86,6 +110,7 @@ export async function runPrimaryAi(options: {
   timeoutMs?: number;
   fetcher?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
 }): Promise<PrimaryAiResult> {
   if (!options.key) return { ok: false, reason: 'unavailable', attempts: 0 };
   const send = options.fetcher ?? fetch;
@@ -93,18 +118,26 @@ export async function runPrimaryAi(options: {
   let correction = '';
   let reason: 'unavailable' | 'invalid_result' = 'unavailable';
   let lastInvalid: { invalid: string; value: Record<string, unknown> } | undefined;
+  const now = options.now ?? Date.now;
+  const deadline = now() + AI_TOTAL_BUDGET_MS;
+  let timedOut = false;
+  let attempts = 0;
   for (let attempt = 1; attempt <= MAX_AI_ATTEMPTS; attempt++) {
+    // The time left for this message; a timed-out message stays retryable.
+    const left = deadline - now();
+    if (left < MIN_ATTEMPT_MS) break;
     if (!(await options.beforeAttempt())) return { ok: false, reason: 'denied', attempts: attempt - 1 };
     if (options.reserveAttempt && !(await options.reserveAttempt())) {
       return { ok: false, reason: 'budget', attempts: attempt - 1 };
     }
     let retryAfter = 0;
+    attempts = attempt;
     try {
       const response = await send(
         `https://generativelanguage.googleapis.com/v1beta/models/${options.model}:generateContent`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': options.key },
-          signal: AbortSignal.timeout(options.timeoutMs ?? 12000),
+          signal: AbortSignal.timeout(Math.min(options.timeoutMs ?? AI_ATTEMPT_TIMEOUT_MS, left)),
           body: geminiRequestBody({
             // Every caller: the message is untrusted data, never instructions.
             systemInstruction: { parts: [{ text: UNDERSTANDING_SYSTEM_INSTRUCTION }] },
@@ -114,8 +147,9 @@ export async function runPrimaryAi(options: {
               maxOutputTokens: 1536,
               responseMimeType: 'application/json',
               responseJsonSchema: TRANSACTION_SCHEMA,
+              // Repairs too: a correction is a short re-read, not a harder question.
               ...(options.model === 'gemini-3.8-flash'
-                ? { thinkingConfig: { thinkingLevel: attempt === 1 ? 'low' : 'medium' } } : {}),
+                ? { thinkingConfig: { thinkingLevel: 'low' } } : {}),
             },
           }),
         });
@@ -154,12 +188,18 @@ export async function runPrimaryAi(options: {
           + 'Distinguish the transaction amount from remaining balance, card/account numbers and reference codes. '
           + `Correction required: ${invalid ?? 'invalid_result'}. Do not invent missing facts.`;
       }
-    } catch {
+    } catch (error) {
       reason = 'unavailable';
+      // At most one retry after a timeout: a second slow answer is retried
+      // later (the message stays retryable), not within this request.
+      if (error instanceof DOMException && error.name === 'TimeoutError') {
+        if (timedOut) break;
+        timedOut = true;
+      }
     }
     if (attempt < MAX_AI_ATTEMPTS) await sleep(Math.max(retryAfter, attempt * 400));
   }
   return reason === 'invalid_result' && lastInvalid
-    ? { ok: false, reason, attempts: MAX_AI_ATTEMPTS, ...lastInvalid }
-    : { ok: false, reason, attempts: MAX_AI_ATTEMPTS };
+    ? { ok: false, reason, attempts, ...lastInvalid }
+    : { ok: false, reason, attempts };
 }
