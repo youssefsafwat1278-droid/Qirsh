@@ -78,6 +78,8 @@ type ShownCapture = ParsedCapture & { ruleCategory?: string };
 
 const CAPTURE_RATE_LIMIT_PER_DAY = 300;
 const LEASE_SECONDS = 60; // above the AI time per message: 3.5 s (rule path, parse.ts), AI_TOTAL_BUDGET_MS 38 s (AI-primary)
+// Waits before re-trying capture_ai_dispatch after a transient 55P03 (0.75 s in all).
+const DISPATCH_BUSY_RETRY_MS = [250, 500];
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type ProcessIosSmsDependencies = {
@@ -336,11 +338,21 @@ export async function handleProcessIosSms(
       // memory (no account data: read for Cloud and smart-analysis-only alike).
       memory: aiPrimary ? memoryReader : undefined,
       beforeAi: async () => {
-        const dispatch = await rpc('capture_ai_dispatch', {
+        const dispatchOnce = () => rpc('capture_ai_dispatch', {
           p_install_id_hash: auth.installIdHash,
           p_payload_id: payloadId,
           p_lease_token: leaseToken,
         });
+        // A 55P03 is a momentary lock held by another request of the same
+        // account (e.g. sync-captures): retried briefly before the capture is
+        // released as account_busy. Each call re-checks consent, ownership,
+        // the lease and the quota; nothing is reserved until one is allowed.
+        let dispatch = await dispatchOnce();
+        for (const delayMs of DISPATCH_BUSY_RETRY_MS) {
+          if (dispatch.error?.code !== '55P03') break;
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          dispatch = await dispatchOnce();
+        }
         const data = dispatch.data as Json | null;
         if (!dispatch.error && data?.allowed === true) {
           // After consent, ownership and the quota (capture_claim, bumpRateLimit,

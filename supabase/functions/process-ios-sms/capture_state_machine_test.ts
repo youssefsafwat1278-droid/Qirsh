@@ -299,13 +299,22 @@ Deno.test('account_busy before AI dispatch returns retryable and the same captur
   const fake = fakeCapture({ device: linkedA });
   const original = fake.client.rpc;
   let busy = true;
-  fake.client.rpc = (name, args) => name === 'capture_ai_dispatch' && busy
-    ? Promise.resolve({ data: null, error: { code: '55P03', message: 'account_busy' } }) as never
-    : original(name, args);
+  let dispatches = 0;
+  let budgetReservations = 0;
+  fake.client.rpc = (name, args) => {
+    if (name === 'capture_ai_dispatch') dispatches++;
+    if (name === 'consume_ai_global_budget') budgetReservations++;
+    return name === 'capture_ai_dispatch' && busy
+      ? Promise.resolve({ data: null, error: { code: '55P03', message: 'account_busy' } }) as never
+      : original(name, args);
+  };
   const body = v2({ payloadId: 'busy-ai', sanitizedText: UNRESOLVED, allowAi: true });
 
   const result = await post(fake, body, () => aiResponse(GOOD_AI));
   assertEquals([result.status, result.json.state, result.calls], [202, 'retryable', 0]);
+  // A lock that outlasts the short retries (first try + 2) is still account_busy.
+  assertEquals([dispatches, budgetReservations], [3, 0]);
+  assertEquals(fake.state.rows.get('busy-ai')!.failure_reason, 'account_busy');
   assertEquals(fake.state.rows.get('busy-ai')!.state, 'retryable');
   assertEquals(fake.state.logs.length, 0);
 
@@ -313,6 +322,36 @@ Deno.test('account_busy before AI dispatch returns retryable and the same captur
   fake.state.rows.get('busy-ai')!.next_attempt_at = Date.now() - 1;
   const retried = await post(fake, body, () => aiResponse(GOOD_AI));
   assertEquals([retried.status, retried.json.state, retried.calls], [200, 'processed', 1]);
+});
+
+Deno.test('a single transient 55P03 on AI dispatch is retried: analysed and saved, never account_busy', async () => {
+  const fake = fakeCapture({ device: linkedA });
+  const original = fake.client.rpc;
+  let dispatches = 0;
+  let budgetReservations = 0;
+  fake.client.rpc = (name, args) => {
+    if (name === 'consume_ai_global_budget') budgetReservations++;
+    if (name === 'capture_ai_dispatch' && ++dispatches === 1) {
+      return Promise.resolve({ data: null, error: { code: '55P03', message: 'account_busy' } }) as never;
+    }
+    return original(name, args);
+  };
+  const logs: string[] = [];
+  const log = console.log;
+  console.log = (...args: unknown[]) => logs.push(args.map(String).join(' '));
+  try {
+    const r = await post(fake, v2({ payloadId: 'busy-once', sanitizedText: UNRESOLVED, allowAi: true }),
+      () => aiResponse(GOOD_AI));
+    assertEquals([r.status, r.json.state, r.calls], [200, 'processed', 1]);
+  } finally {
+    console.log = log;
+  }
+  assertEquals(dispatches, 2);
+  // The budget is reserved once, only after the dispatch that was allowed.
+  assertEquals(budgetReservations, 1);
+  const row = fake.state.rows.get('busy-once')!;
+  assertEquals([row.state, row.failure_reason ?? null], ['processed', null]);
+  assertEquals(logs.some((line) => line.includes('account_busy')), false);
 });
 
 Deno.test('A10: revoke after AI dispatch -> output fenced: nothing stored, no notification, no APNs', async () => {
