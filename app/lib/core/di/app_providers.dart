@@ -52,6 +52,8 @@ import '../../data/catalog/seed_loader.dart';
 import '../../core/utils/id_generator.dart';
 import '../../core/utils/install_id.dart';
 import '../../data/db/app_database.dart';
+import '../privacy/smart_analysis_consent.dart';
+import '../../features/capture/services/smart_analysis_lane_ai_client.dart';
 import '../privacy/cloud_egress_gate.dart';
 import '../privacy/consent_authority.dart';
 import '../privacy/shared_learning_preference.dart';
@@ -1684,10 +1686,12 @@ final captureImportServiceProvider =
   final db = ref.watch(appDatabaseProvider);
   final sync = ref.watch(captureSyncServiceProvider);
   return CaptureImportService(
-    aiPrimarySelected: () async {
-      final settings = await DriftUserSettingsRepository(db).getSettings();
-      return settings.cloudProcessingEnabled && settings.aiConsentGranted;
-    },
+    // Phase 3: smart analysis needs no Cloud on iOS.
+    aiPrimarySelected: () async =>
+        smartAnalysisSelected(await DriftUserSettingsRepository(db).getSettings()),
+    // Phase 3: without Smart Analysis a capture waits; nothing is recorded on
+    // the device's own reading.
+    parkWithoutSmartAnalysis: true,
     queue: const NativeCaptureImportQueue(),
     server: ref.watch(captureServerPortProvider),
     captureSyncService: sync,
@@ -1989,35 +1993,41 @@ final addTransactionUseCaseProvider =
               supabase.Supabase.instance.client.auth.currentUser?.id,
             )
         : null,
+    // Phase 3: with smart-analysis consent and Cloud OFF the request travels
+    // in the smart-analysis lane.
     aiClient: SupabaseConfig.isConfigured
-        ? SupabaseAiParserClient(
-            edgeFunctionUrl: '${SupabaseConfig.url}/functions/v1/parse-sms',
-            getAnonJwt: () async =>
-                supabase.Supabase.instance.client.auth.currentSession
-                    ?.accessToken ??
-                SupabaseConfig.anonKey,
-            loadDeviceSecret: ref
-                .read(captureDeviceRegistrationServiceProvider)
-                .readDeviceSecret,
+        ? SmartAnalysisLaneAiParserClient(
+            SupabaseAiParserClient(
+              edgeFunctionUrl: '${SupabaseConfig.url}/functions/v1/parse-sms',
+              getAnonJwt: () async =>
+                  supabase.Supabase.instance.client.auth.currentSession
+                      ?.accessToken ??
+                  SupabaseConfig.anonKey,
+              loadDeviceSecret: ref
+                  .read(captureDeviceRegistrationServiceProvider)
+                  .readDeviceSecret,
+            ),
+            laneOwner: smartAnalysisRequestLane(
+              settings: () => DriftUserSettingsRepository(db).getSettings(),
+              uid: () => supabase.Supabase.instance.client.auth.currentUser?.id,
+            ),
           )
         : null,
-    aiPrimarySelected: () async {
-      final settings = await DriftUserSettingsRepository(db).getSettings();
-      return settings.cloudProcessingEnabled && settings.aiConsentGranted;
-    },
+    // Phase 3: on iOS smart analysis is the AI consent alone (no Cloud).
+    aiPrimarySelected: () async =>
+        smartAnalysisSelected(await DriftUserSettingsRepository(db).getSettings()),
     // F9: the same message text captured again is kept as a suspected
     // duplicate for review (never merged, never dropped).
     findSameTextCapture: DriftTransactionRepository(db).findSameTextCapture,
     loadAiConsent: () async {
       final settings = await DriftUserSettingsRepository(db).getSettings();
-      // OD-07 / C-3 — AI needs BOTH consents, matching
-      // `ConsentAuthority.decide(EgressClass.aiProcessing)`: "restrictive state
-      // wins". This used to read `aiConsentGranted` alone, so a user with cloud
-      // processing OFF and AI ON still had sanitized SMS text transmitted —
-      // contradicting the LIVE privacy policy, which promises that with cloud
-      // off "no financial data leaves your device — this is enforced at every
-      // network call, not only in the settings UI".
-      return ConsentAuthority.decide(EgressClass.aiProcessing, settings);
+      // OD-07 / C-3 — AI needs BOTH consents on Android, matching
+      // `ConsentAuthority.decide(EgressClass.aiProcessing)`. Gemini-first
+      // phase 3 (owner decision 2026-11-20): on iOS smart analysis needs its
+      // own consent only (`EgressClass.smartAnalysis`), and the request then
+      // travels in the gate's smart-analysis lane, which admits nothing but
+      // the analysis endpoints.
+      return smartAnalysisAllowed(settings);
     },
     loadInstallId: InstallId.get,
     resolveBankForSenderUseCase: ref.watch(resolveBankForSenderUseCaseProvider),

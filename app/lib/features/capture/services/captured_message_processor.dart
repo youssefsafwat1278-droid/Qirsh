@@ -1,5 +1,7 @@
 import 'budget_alert_commits.dart';
 import '../../../core/privacy/consent_authority.dart';
+import '../../../core/privacy/smart_analysis_consent.dart';
+import 'smart_analysis_lane_ai_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 import '../../../core/backend/supabase_config.dart';
@@ -189,14 +191,24 @@ class CapturedMessageProcessor {
         }
       };
       final senderBankMappingRepository = DriftSenderBankMappingRepository(db);
+      // Phase 3: with smart-analysis consent and Cloud OFF the request travels
+      // in the smart-analysis lane.
       final aiParserClient = SupabaseConfig.isConfigured
-          ? SupabaseAiParserClient(
-              edgeFunctionUrl: '${SupabaseConfig.url}/functions/v1/parse-sms',
-              getAnonJwt: () async =>
-                  supabase.Supabase.instance.client.auth.currentSession
-                      ?.accessToken ??
-                  SupabaseConfig.anonKey,
-              loadDeviceSecret: loadDeviceSecret,
+          ? SmartAnalysisLaneAiParserClient(
+              SupabaseAiParserClient(
+                edgeFunctionUrl:
+                    '${SupabaseConfig.url}/functions/v1/parse-sms',
+                getAnonJwt: () async =>
+                    supabase.Supabase.instance.client.auth.currentSession
+                        ?.accessToken ??
+                    SupabaseConfig.anonKey,
+                loadDeviceSecret: loadDeviceSecret,
+              ),
+              laneOwner: smartAnalysisRequestLane(
+                settings: settingsRepository.getSettings,
+                uid: () =>
+                    supabase.Supabase.instance.client.auth.currentUser?.id,
+              ),
             )
           : null;
       final bankDiscoveryClient = SupabaseConfig.isConfigured
@@ -280,13 +292,11 @@ class CapturedMessageProcessor {
                 () => settingsRepository.getSettings(),
               ).allows(EgressClass.financialSync),
           aiClient: aiParserClient,
-          aiPrimarySelected: () async {
-            final settings = await settingsRepository.getSettings();
-            return settings.cloudProcessingEnabled && settings.aiConsentGranted;
-          },
+          // Phase 3: on iOS smart analysis needs its own consent only.
+          aiPrimarySelected: () async =>
+              smartAnalysisSelected(await settingsRepository.getSettings()),
           loadAiConsent: () async =>
-              ConsentAuthority.decide(EgressClass.aiProcessing,
-                          await settingsRepository.getSettings()),
+              smartAnalysisAllowed(await settingsRepository.getSettings()),
           loadInstallId: InstallId.get,
           accountRepository:
               DriftAccountRepository(db, outboxQueue: planningOutbox),

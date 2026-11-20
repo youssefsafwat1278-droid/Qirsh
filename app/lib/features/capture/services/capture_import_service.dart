@@ -128,6 +128,7 @@ class CaptureImportService {
     required Future<String?> Function() replicaOwnerUid,
     required OwnershipGuard ownershipGuard,
     Future<bool> Function()? aiPrimarySelected,
+    this.parkWithoutSmartAnalysis = false,
     // Bounds automatic retries (backoff, attempt cap, then Smart Inbox).
     // Absent => an item that cannot be finished is retried on every run.
     CaptureRetryLedger? retryLedger,
@@ -143,6 +144,12 @@ class CaptureImportService {
         _guard = ownershipGuard;
 
   final Future<bool> Function()? _aiPrimarySelected;
+
+  /// Gemini-first phase 3 (production: true): a capture that may not be
+  /// analysed (Smart Analysis off, or a localOnly item) is kept in Smart Inbox
+  /// as awaiting analysis instead of being recorded on the device's own
+  /// reading. False keeps the earlier on-device parse (the engine's own tests).
+  final bool parkWithoutSmartAnalysis;
   final CaptureRetryLedger? _retryLedger;
   final CaptureImportQueue _queue;
   final CaptureServerPort _server;
@@ -655,6 +662,24 @@ class CaptureImportService {
       } else {
         local = true;
       }
+    }
+    // Gemini-first phase 3: smart analysis is off, so the device's own reading
+    // records nothing. The message is kept in Smart Inbox as awaiting analysis
+    // (turn Smart Analysis on, or record it yourself); only the deterministic
+    // OTP/promo filter still drops one on the device. No notice: the capture
+    // banner already told the person.
+    if (parkWithoutSmartAnalysis &&
+        !ParserEngine.isIgnoredMessage(item.text, senderId: item.sender)) {
+      await _sync.persistUnprocessableCapture(item,
+          isOwnerCurrent: () => _stillOwner(owner),
+          reviewReason: SmartInboxReviewReason.smartAnalysisOff);
+      await _removeNative(owner, id);
+      if (results.containsKey(id)) acks.add(id);
+      return CaptureImportItem(
+          id: id,
+          path: CaptureImportPath.local,
+          message: item,
+          committedTransactions: const []);
     }
     return _importLocally(owner, item, id, results.containsKey(id), acks);
   }

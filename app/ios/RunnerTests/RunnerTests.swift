@@ -1054,6 +1054,28 @@ class RunnerTests: XCTestCase {
   }
 
   // Owner mismatch: an upload is allowed only under the stamped {uid, generation}.
+  // Gemini-first phase 3: the smart-analysis lane. The owner's mirror says
+  // Cloud OFF and AI ON: the capture uploads for AI analysis (allowAi true);
+  // AI OFF again: local-only at once. Neither consent at capture: local-only.
+  func testSmartAnalysisLaneUploadsWithCloudOff() throws {
+    resetCapSeams()
+    defer { resetCapSeams() }
+    let a = try publish(ownerA)
+    try SharedCaptureStore.setConsentMirror(uid: ownerA, cloud: false, ai: true, version: 2)
+    guard case .enqueued(let item) = put("smart 8.00 SAR") else { return XCTFail("enqueue") }
+    let id = try XCTUnwrap(item.id)
+    XCTAssertEqual(SharedCaptureStore.authorizeUpload(payloadID: id),
+                   .allowed(ownerUid: ownerA, ownerGeneration: a.generation, allowAi: true),
+                   "Smart Analysis without Cloud is analysed, with AI")
+    try SharedCaptureStore.setConsentMirror(uid: ownerA, cloud: false, ai: false, version: 3)
+    XCTAssertEqual(SharedCaptureStore.authorizeUpload(payloadID: id), .localOnly,
+                   "turned off: nothing more is sent")
+    guard case .enqueued(let later) = put("later 9.00 SAR") else { return XCTFail("enqueue") }
+    try SharedCaptureStore.setConsentMirror(uid: ownerA, cloud: false, ai: true, version: 4)
+    XCTAssertEqual(SharedCaptureStore.authorizeUpload(payloadID: try XCTUnwrap(later.id)), .localOnly,
+                   "captured with neither consent: local-only for good")
+  }
+
   func testUploadAuthorizationOwnerMismatchAndConsentMirror() throws {
     resetCapSeams()
     defer { resetCapSeams() }

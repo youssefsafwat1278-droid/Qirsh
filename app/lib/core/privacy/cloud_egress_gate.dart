@@ -1370,7 +1370,13 @@ class EgressWriteFailedException implements Exception {
   String toString() => 'EgressWriteFailedException($what)';
 }
 
-enum EgressGrantKind { accountControl, revoke, revokeRetry, deviceUnlink }
+enum EgressGrantKind {
+  accountControl,
+  revoke,
+  revokeRetry,
+  deviceUnlink,
+  smartAnalysis,
+}
 
 /// The ONLY operations allowed to reach the network while Cloud is OFF
 /// (Astra H2.1). They never enable Cloud and never widen any consent.
@@ -1634,6 +1640,23 @@ class EgressGrant {
   /// `unlink-capture-device` (see [CloudEgressGate.isDeviceUnlinkRequest]).
   const EgressGrant.deviceUnlink({required String this.owner})
       : kind = EgressGrantKind.deviceUnlink,
+        generation = null,
+        control = null,
+        _deletion = null;
+
+  /// Gemini-first phase 3 (owner decision 2026-11-20: "Gemini is always
+  /// available in the app, separated from Cloud"): the smart-analysis lane.
+  /// With Cloud OFF, a captured bank message (sanitised on the device) may go
+  /// to Qirsh's server for Gemini analysis, and its result may come back, when
+  /// the account holds smart-analysis consent. The caller checks that consent
+  /// fresh (`ConsentAuthority.decide(EgressClass.smartAnalysis)`) before it
+  /// opens the lane; the gate admits only the analysis endpoints
+  /// ([CloudEgressGate.isSmartAnalysisRequest]) for the ACTIVE owner, never any
+  /// sync, backup, telemetry, catalog or other Cloud traffic, and still denies
+  /// on every non-consent process state (unresolved, transition hold, lifecycle
+  /// fence, local read, terminal, freeze).
+  const EgressGrant.smartAnalysis({required String this.owner})
+      : kind = EgressGrantKind.smartAnalysis,
         generation = null,
         control = null,
         _deletion = null;
@@ -2378,6 +2401,22 @@ class CloudEgressGate {
     }
     // ASR §11.1: a transition hold denies every Dart permit path.
     if (_holds.isNotEmpty) return 'transition_hold';
+    if (grant?.kind == EgressGrantKind.smartAnalysis) {
+      // Phase 3: independent of the Cloud record (ON, OFF or absent), never of
+      // the process states below. Exact scope: the active owner's own lane, the
+      // analysis endpoints only.
+      if (request == null ||
+          grant!.owner != owner ||
+          owner.isEmpty ||
+          !isSmartAnalysisRequest(request, _supabaseUrl())) {
+        return 'smart_analysis_scope';
+      }
+      if (_localReadDenies) return 'local_read';
+      if (_terminalDenied) return 'terminal';
+      if (ConsentAuthority.egressFrozen) return 'frozen';
+      if (_lifecycleDenied) return 'lifecycle_fence';
+      return null;
+    }
     final revoke = grant?.kind == EgressGrantKind.revoke;
     final revokeRetry = grant?.kind == EgressGrantKind.revokeRetry;
     final control = grant?.control;
@@ -2954,6 +2993,40 @@ class CloudEgressGate {
 
   static bool isRevokeRetryRequest(AdmissionRequest request, String baseUrl) =>
       _isExactFunctionPost(request, baseUrl, 'set-device-consent');
+
+  /// Phase 3: the ONLY endpoints the smart-analysis lane admits — the capture
+  /// device's own registration, link and consent exchanges, its push token,
+  /// the analysis upload, the result pull and the in-app analysis request.
+  static const Set<String> kSmartAnalysisFunctions = {
+    'register-device',
+    'link-capture-device',
+    'set-device-consent',
+    'register-push-token',
+    'process-ios-sms',
+    'sync-captures',
+    'parse-sms',
+  };
+
+  static bool isSmartAnalysisRequest(
+          AdmissionRequest request, String baseUrl) =>
+      kSmartAnalysisFunctions
+          .any((fn) => _isExactFunctionPost(request, baseUrl, fn));
+
+  /// Test probe: the kind and owner of the grant of the current zone (what a
+  /// request made right now would be admitted under), or null.
+  @visibleForTesting
+  static ({EgressGrantKind kind, String? owner})? get debugZoneGrant {
+    final grant = Zone.current[_grantKey] as EgressGrant?;
+    return grant == null ? null : (kind: grant.kind, owner: grant.owner);
+  }
+
+  /// Phase 3: runs [body] in the smart-analysis lane of [owner] (see
+  /// [EgressGrant.smartAnalysis]). Only for a caller that has just read the
+  /// smart-analysis consent; every request [body] makes is admitted again with
+  /// its method and URL.
+  Future<T> runSmartAnalysis<T>(String owner, Future<T> Function() body) =>
+      runZoned(body,
+          zoneValues: {_grantKey: EgressGrant.smartAnalysis(owner: owner)});
 
   /// Runs [body] under [EgressGrant.revokeRetry] for [owner] at [generation]:
   /// admitted only while that owner's record is still OFF at that generation
@@ -3533,7 +3606,8 @@ class GatedHttpClient extends http.BaseClient {
     if (ticket.grant?.control != null ||
         ticket.grant?.kind == EgressGrantKind.revoke ||
         ticket.grant?.kind == EgressGrantKind.revokeRetry ||
-        ticket.grant?.kind == EgressGrantKind.deviceUnlink) {
+        ticket.grant?.kind == EgressGrantKind.deviceUnlink ||
+        ticket.grant?.kind == EgressGrantKind.smartAnalysis) {
       request.followRedirects = false;
     }
     unawaited(

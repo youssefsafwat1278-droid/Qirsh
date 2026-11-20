@@ -1,6 +1,8 @@
 import 'package:drift/native.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:money_companion/core/privacy/cloud_egress_gate.dart';
+import 'package:money_companion/core/privacy/smart_analysis_consent.dart';
 import 'package:money_companion/core/session/admission_authority.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
@@ -49,6 +51,9 @@ class _ConsentServer extends CaptureConsentClient {
   final List<String> events;
   final links = <_Consent>[];
   final sets = <_Consent>[];
+  /// Phase 3: the egress grant each call ran under, and its generation.
+  final lanes = <String>[];
+  final generations = <int>[];
   Object? linkError;
   Object? setError;
 
@@ -63,6 +68,8 @@ class _ConsentServer extends CaptureConsentClient {
   required int clientGeneration,
   }) async {
     events.add('link');
+    lanes.add('${CloudEgressGate.debugZoneGrant?.kind.name}:${CloudEgressGate.debugZoneGrant?.owner}');
+    generations.add(clientGeneration);
     if (linkError != null) throw linkError!;
     links.add((cloud: cloud, ai: ai, version: version));
   }
@@ -78,6 +85,8 @@ class _ConsentServer extends CaptureConsentClient {
   required int clientGeneration,
   }) async {
     events.add('set');
+    lanes.add('${CloudEgressGate.debugZoneGrant?.kind.name}:${CloudEgressGate.debugZoneGrant?.owner}');
+    generations.add(clientGeneration);
     if (setError != null) throw setError!;
     sets.add((cloud: cloud, ai: ai, version: version));
   }
@@ -114,9 +123,12 @@ void main() {
   CaptureSession? session;
   String? replicaOwner;
 
+  late Map<String, String> wording;
+
   CaptureDeviceRegistrationService service() =>
       CaptureDeviceRegistrationService(
         settingsRepository: repo,
+        smartAnalysisRecord: SmartAnalysisConsentRecord.memory(wording),
         client: backend,
         consentClient: server,
         storage: const FlutterSecureStorage(),
@@ -172,6 +184,7 @@ void main() {
   }
 
   setUp(() async {
+    CaptureDeviceRegistrationService.debugResetSmartAnalysisEligibility();
     FlutterSecureStorage.setMockInitialValues({});
     CaptureDeviceRegistrationService.debugResetUnlinkTarget();
     db = await AppDatabase.open(
@@ -184,6 +197,7 @@ void main() {
     published = [];
     session = (uid: 'uid-a', jwt: 'jwt-a');
     replicaOwner = 'uid-a';
+    wording = {};
   });
   tearDown(() async => db.close());
 
@@ -273,13 +287,92 @@ void main() {
       expect(published, ['uid-a']);
     });
 
-    test('AI is never projected without Cloud (cloud is the master gate)',
-        () async {
+    // Gemini-first phase 3 (owner decision 2026-11-20): Smart Analysis is
+    // separated from Cloud. Cloud OFF with Smart Analysis links the device for
+    // analysis only — in the smart-analysis lane, never as Cloud — and the
+    // App Intent's mirror says exactly that (Cloud off, AI on).
+    Future<void> grantSmartAnalysisOnly() async {
+      await SmartAnalysisConsentRecord.memory(wording).recordAccepted('uid-a');
       await save(cloud: ConsentState.declined, ai: ConsentState.accepted);
+    }
+
+    test('Cloud OFF + Smart Analysis: an AI-only link in the lane, AI-only mirror',
+        () async {
+      await grantSmartAnalysisOnly();
       await service().linkToCurrentUser();
-      expect(server.links, isEmpty, reason: 'OFF is never linked');
+      expect(server.links.single.cloud, isFalse);
+      expect(server.links.single.ai, isTrue);
+      expect(server.lanes.single, 'smartAnalysis:uid-a',
+          reason: 'the link runs in the smart-analysis lane of the owner');
+      final recordGeneration =
+          (await CloudEgressGate.instance.view(owner: 'uid-a'))
+                  .record
+                  ?.transitionGeneration ??
+              0;
+      expect(server.generations.single, recordGeneration + 1,
+          reason: 'ordered after any Cloud revoke at the record generation');
+      expect(mirrors.single.$2.cloud, isFalse);
+      expect(mirrors.single.$2.ai, isTrue);
+      expect(published, ['uid-a']);
+    });
+
+    // Existing consents (decision): an AI choice an earlier build kept while
+    // Cloud was OFF was dormant (the app said nothing is analysed). Smart
+    // Analysis becoming independent never switches it on silently.
+    test('a dormant pre-phase-3 AI choice (Cloud OFF, no wording) is never '
+        'linked or mirrored on; it stays stored until a new Allow', () async {
+      await save(cloud: ConsentState.declined, ai: ConsentState.accepted);
+      final s = service();
+      await s.linkToCurrentUser();
+      expect(server.links, isEmpty);
       expect(mirrors.single.$2.cloud, isFalse);
       expect(mirrors.single.$2.ai, isFalse);
+      expect((await repo.getSettings()).aiConsentState, ConsentState.accepted,
+          reason: 'not rewritten: a later withdrawal still changes it');
+      expect(await s.smartAnalysisLaneOwner(), isNull);
+      // A new Allow records the wording: from then on it is in effect.
+      await SmartAnalysisConsentRecord.memory(wording).recordAccepted('uid-a');
+      await s.linkToCurrentUser();
+      expect(server.links.single, (cloud: false, ai: true,
+          version: server.links.single.version));
+    });
+
+    test('an AI consent in effect before phase 3 (Cloud ON) is kept and '
+        'stamped as wording version 1, not asked again', () async {
+      await save(cloud: ConsentState.accepted, ai: ConsentState.accepted);
+      await service().linkToCurrentUser();
+      expect((await repo.getSettings()).aiConsentGranted, isTrue);
+      expect(await SmartAnalysisConsentRecord.memory(wording)
+          .acceptedVersion('uid-a'), 1);
+      expect(await SmartAnalysisConsentRecord.memory(wording).hasRecord('uid-a'),
+          isTrue);
+    });
+
+    test('Cloud OFF + Smart Analysis whose link fails: nothing is widened',
+        () async {
+      await grantSmartAnalysisOnly();
+      server.linkError = const CaptureBackendException('offline');
+      await service().linkToCurrentUser();
+      expect(published, isEmpty);
+      expect(mirrors, isEmpty);
+    });
+
+    test('Smart Analysis turned off with Cloud OFF: device first, then the '
+        'server copy is narrowed in the lane', () async {
+      await grantSmartAnalysisOnly();
+      final s = service();
+      await s.linkToCurrentUser();
+      expect(mirrors.last.$2, (cloud: false, ai: true, version: 1));
+      await s.restrictSmartAnalysisNow();
+      expect(mirrors.last.$2.ai, isFalse,
+          reason: 'the App Intent stops before the choice is even committed');
+      await save(ai: ConsentState.declined);
+      await s.syncNativeState();
+      expect(mirrors.last.$2, (cloud: false, ai: false, version: 2));
+      expect(server.sets.single, (cloud: false, ai: false, version: 2));
+      expect(server.lanes.last, 'smartAnalysis:uid-a');
+      expect(await s.consentAckSnapshot(),
+          (cloud: false, ai: false, version: 2));
     });
 
     test('a repeat admission with nothing changed does not call the server',

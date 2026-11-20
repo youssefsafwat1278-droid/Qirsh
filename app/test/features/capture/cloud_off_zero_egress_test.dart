@@ -38,6 +38,12 @@ import '../../harness/egress_test_support.dart';
 // the revoke only, its own owner, bounded backoff, never while ON, never after
 // a newer grant the server acknowledged (see the last group).
 
+/// A spy call made inside the phase-3 smart-analysis lane is tagged `@lane`.
+String _tag(String name) =>
+    CloudEgressGate.debugZoneGrant?.kind == EgressGrantKind.smartAnalysis
+        ? '$name@lane'
+        : name;
+
 class _MemoryKeyStore implements DatabaseKeyStore {
   @override
   Future<String> readOrCreateKey() async => 'memory-key';
@@ -59,7 +65,7 @@ class _SpyBackend extends CaptureBackendClient {
   @override
   Future<String> registerDevice(
       {required String installId, String platform = 'ios'}) async {
-    calls.add('registerDevice');
+    calls.add(_tag('registerDevice'));
     if (error != null) throw error!;
     return 'device-secret';
   }
@@ -67,7 +73,7 @@ class _SpyBackend extends CaptureBackendClient {
   @override
   Future<void> unlinkDevice(
       {required String installId, required String deviceSecret}) async {
-    calls.add('unlinkDevice');
+    calls.add(_tag('unlinkDevice'));
   }
 
   @override
@@ -77,7 +83,7 @@ class _SpyBackend extends CaptureBackendClient {
     required bool aiConsentGranted,
     required bool cloudProcessingEnabled,
   }) async {
-    calls.add('setDeviceConsent');
+    calls.add(_tag('setDeviceConsent'));
     deviceConsents.add((cloud: cloudProcessingEnabled, ai: aiConsentGranted));
     await onSetDevice?.call();
   }
@@ -89,7 +95,7 @@ class _SpyBackend extends CaptureBackendClient {
     required String apnsToken,
     required String apnsEnvironment,
   }) async {
-    calls.add('registerPushToken');
+    calls.add(_tag('registerPushToken'));
   }
 
   @override
@@ -98,7 +104,7 @@ class _SpyBackend extends CaptureBackendClient {
     required String deviceSecret,
     List<String> ackPayloadIds = const [],
   }) async {
-    calls.add('syncCaptures');
+    calls.add(_tag('syncCaptures'));
     return const [];
   }
 
@@ -117,7 +123,7 @@ class _SpyBackend extends CaptureBackendClient {
     bool schemaV2 = false,
     int? textLength,
   }) async {
-    calls.add('processIosSms');
+    calls.add(_tag('processIosSms'));
   }
 }
 
@@ -142,7 +148,7 @@ class _SpyConsent extends CaptureConsentClient {
     required int version,
   required int clientGeneration,
   }) async {
-    calls.add('link');
+    calls.add(_tag('link'));
     await onLink?.call();
     if (linkError != null) throw linkError!;
     links.add((cloud: cloud, ai: ai, version: version));
@@ -158,7 +164,7 @@ class _SpyConsent extends CaptureConsentClient {
     required int version,
   required int clientGeneration,
   }) async {
-    calls.add('set');
+    calls.add(_tag('set'));
     await onSet?.call();
     if (setError != null) throw setError!;
     sets.add((cloud: cloud, ai: ai, version: version));
@@ -179,7 +185,7 @@ class _SpyConsent extends CaptureConsentClient {
     required int transitionGeneration,
     required int version,
   }) async {
-    calls.add('revoke');
+    calls.add(_tag('revoke'));
     revokeOwners.add(ownerUid);
     revokeGenerations.add(transitionGeneration);
     await onSet?.call();
@@ -320,6 +326,7 @@ void main() {
   }
 
   setUp(() async {
+    CaptureDeviceRegistrationService.debugResetSmartAnalysisEligibility();
     FlutterSecureStorage.setMockInitialValues({});
     db = await AppDatabase.open(
         executor: NativeDatabase.memory(), keyStore: _MemoryKeyStore());
@@ -514,9 +521,11 @@ void main() {
   // E1 — the user-ratified Cloud ON->OFF transition (disableCloud).
   group('E1: the ON->OFF transition (disableCloud)', () {
     var commits = 0;
+    // The Privacy withdrawal turns Cloud AND Smart Analysis off (phase 3:
+    // Smart Analysis alone keeps its own lane, pinned separately below).
     Future<void> commit() async {
       commits++;
-      await save(cloud: ConsentState.declined);
+      await save(cloud: ConsentState.declined, ai: ConsentState.declined);
     }
 
     Future<void> pump() async {
@@ -870,10 +879,29 @@ void main() {
     test('the OFF branch of syncBackendState never sends a revoke, even right '
         'after the save', () async {
       final s = await linkedOn();
-      await save(cloud: ConsentState.declined); // a bare save, no transition
+      // A bare save, no transition (both off, as the Privacy withdrawal does).
+      await save(cloud: ConsentState.declined, ai: ConsentState.declined);
       await s.syncBackendState();
       await s.syncBackendState();
       expect(calls, isEmpty);
+    });
+
+    // Gemini-first phase 3: with Cloud OFF and Smart Analysis kept on, the
+    // only requests are the analysis lane's own, each made in the lane; no
+    // revoke, no Cloud request, nothing outside it.
+    test('Cloud OFF with Smart Analysis kept: only the lane, never a revoke',
+        () async {
+      final s = await linkedOn();
+      await save(cloud: ConsentState.declined); // Smart Analysis stays on
+      await s.syncBackendState();
+      await s.syncBackendState();
+      expect(calls, isNotEmpty, reason: 'Smart Analysis keeps working');
+      expect(calls.every((c) => c.endsWith('@lane')), isTrue, reason: '$calls');
+      expect(calls.any((c) => c.startsWith('revoke')), isFalse);
+      expect(calls.any((c) => c == 'set@lane' || c == 'link@lane'), isTrue,
+          reason: 'the server copy becomes AI-only, in the lane');
+      expect(await s.isLinkedForCloud(), isFalse,
+          reason: 'never linked as Cloud');
     });
 
     test('withdrawal revokes a possibly applied grant whose receipt was lost',
@@ -1086,7 +1114,7 @@ void main() {
     var failCommit = true;
     Future<void> commit() async {
       if (failCommit) throw StateError('local OFF write failed');
-      await save(cloud: ConsentState.declined);
+      await save(cloud: ConsentState.declined, ai: ConsentState.declined);
     }
 
     Future<CaptureDeviceRegistrationService> linkedOn() async {

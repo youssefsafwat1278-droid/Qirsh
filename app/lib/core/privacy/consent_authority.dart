@@ -24,6 +24,16 @@ enum EgressClass {
   /// discovery, and merchant enrichment. The most sensitive class: raw bank SMS.
   aiProcessing,
 
+  /// Gemini-first phase 3 (owner decision 2026-11-20): smart analysis — a
+  /// captured bank message, sanitised on the device (names, phone and account
+  /// numbers hidden), sent to Qirsh's server for Google Gemini to read the
+  /// amount, type and merchant, and the result fetched back. Needs the
+  /// smart-analysis (AI) consent ONLY, not Cloud: it travels in its own lane
+  /// (`CloudEgressGate.runSmartAnalysis`), which admits the analysis endpoints
+  /// and nothing else. Bank discovery, merchant enrichment and shared learning
+  /// stay [aiProcessing] (Cloud AND AI).
+  smartAnalysis,
+
   /// Which banks the user holds — inferred from sender→bank mappings. Not money,
   /// but a direct read on the user's financial life.
   senderBankMappings,
@@ -136,6 +146,9 @@ class ConsentAuthority {
   /// Whether [egressClass] may transmit right now.
   Future<bool> allows(EgressClass egressClass) async {
     if (!decide(egressClass, await _settings())) return false;
+    // Phase 3: smart analysis does not depend on the Cloud record; its lane is
+    // admitted by the gate on its own scope (EgressGrant.smartAnalysis).
+    if (egressClass == EgressClass.smartAnalysis) return true;
     // The durable gate: DISABLING / OFF / unreadable / corrupt / conflicting /
     // ABSENT state denies for the active owner, whatever the settings read. The
     // effective cloud consent is the persisted consent AND a durable ON record
@@ -168,6 +181,11 @@ class ConsentAuthority {
       // OD-07: restrictive state wins. AI needs BOTH.
       case EgressClass.aiProcessing:
         return cloud && settings.aiConsentGranted;
+
+      // Phase 3: smart analysis needs its own consent only (still never while
+      // a Cloud transition froze egress).
+      case EgressClass.smartAnalysis:
+        return settings.aiConsentGranted && !egressFrozen;
     }
   }
 
@@ -180,6 +198,9 @@ class ConsentAuthority {
       return 'ai_requires_cloud_consent';
     }
     if (egressClass == EgressClass.aiProcessing) return 'ai_consent_off';
+    if (egressClass == EgressClass.smartAnalysis) {
+      return egressFrozen ? 'egress_frozen' : 'ai_consent_off';
+    }
     return 'cloud_consent_off';
   }
 }

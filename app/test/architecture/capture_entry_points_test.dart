@@ -208,10 +208,11 @@ void main() {
           contains('onDeviceOnly: route != LegacyDrainRoute.ingestWithAi'),
           reason: 'a later drain must never re-send an SMS to AI/enrichment '
               'except on the one route that consent + a kill switch allow');
-      expect(policy,
-          contains('if (!aiSelected) return LegacyDrainRoute.ingest;'),
-          reason: 'without Cloud AND AI consent nothing leaves the device');
-      expect(drain, contains('EgressClass.aiProcessing'),
+      // Phase 3: without Smart Analysis nothing leaves the device (iOS: the
+      // message waits for it; Android: read on the device).
+      expect(policy, contains('if (!aiSelected) {'));
+      expect(policy, contains('LegacyDrainRoute.awaitSmartAnalysis'));
+      expect(drain, contains('smartAnalysisAllowed(settings, ios: ios)'),
           reason:
               'consent is read fresh per message so revocation never re-sends');
       expect(drain, contains("'capture_ai_fallback_enabled'"));

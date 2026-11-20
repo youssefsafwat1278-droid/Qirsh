@@ -286,8 +286,21 @@ void _signedOutCapture() {
 void _egressInventory() {
   group('38 Cloud OFF: only the documented exceptions reach the network', () {
     test('the grant vocabulary is exactly the documented set', () {
+      // Phase 3 (owner decision 2026-11-20): 'smartAnalysis', the lane that
+      // admits only the analysis endpoints (CloudEgressGate
+      // .kSmartAnalysisFunctions), pinned below.
       expect(EgressGrantKind.values.map((e) => e.name).toSet(),
-          {'accountControl', 'revoke', 'revokeRetry', 'deviceUnlink'});
+          {'accountControl', 'revoke', 'revokeRetry', 'deviceUnlink',
+           'smartAnalysis'});
+      expect(CloudEgressGate.kSmartAnalysisFunctions, {
+        'register-device',
+        'link-capture-device',
+        'set-device-consent',
+        'register-push-token',
+        'process-ios-sms',
+        'sync-captures',
+        'parse-sms',
+      });
       // signIn/reauthenticate, delete/cancel, onboarding lookup, identity
       // linking and the owner's two-field cloud-preference lookup. The latter
       // only offers restore; it cannot enable cloud or fetch financial data.

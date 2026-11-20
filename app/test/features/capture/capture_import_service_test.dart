@@ -200,7 +200,8 @@ void main() {
         localOnly: localOnly,
       );
 
-  CaptureImportService buildService({bool aiPrimary = false}) {
+  CaptureImportService buildService(
+      {bool aiPrimary = false, bool parkWithoutSmartAnalysis = false}) {
     final ingest = IngestCapturedMessageUseCase(AddTransactionUseCase(
       transactionRepository: txRepo,
       merchantCategoryRepository: DriftMerchantCategoryRepository(db),
@@ -229,6 +230,7 @@ void main() {
       replicaOwnerUid: () async => replicaUid,
       ownershipGuard: _Guard(() => admissionCurrent),
       aiPrimarySelected: aiPrimary ? () async => true : null,
+      parkWithoutSmartAnalysis: parkWithoutSmartAnalysis,
     );
   }
 
@@ -500,6 +502,53 @@ void main() {
       expect(await txIds(), isEmpty);
       expect(queue.acked, isEmpty);
       expect(server.acks, isEmpty);
+    });
+  });
+
+  // Gemini-first phase 3, as wired in production: without Smart Analysis
+  // nothing is recorded on the device's own reading; the message waits in
+  // Smart Inbox (the analysis log's "awaiting analysis — turn on Smart
+  // Analysis") and nothing is uploaded or sent to AI.
+  group('phase 3: Smart Analysis off (production wiring)', () {
+    Future<String?> reasonOf(String id) async {
+      final row = await db
+          .customSelect(
+              "SELECT metadata_json FROM smart_inbox_items WHERE payload_id = '$id';")
+          .getSingleOrNull();
+      final m = RegExp(r'"review_reason":"([a-z_]+)"')
+          .firstMatch(row?.read<String?>('metadata_json') ?? '');
+      return m?.group(1);
+    }
+
+    test('a capture waits as awaiting analysis; nothing sent, nothing recorded',
+        () async {
+      queue.items.add(item(_id(1)));
+      server.fetch = const CaptureServerFetch(CaptureFetchStatus.notConfigured);
+
+      await buildService(parkWithoutSmartAnalysis: true).run();
+
+      expect(await txIds(), isEmpty);
+      expect(ingestCalls, 0, reason: 'the device reading records nothing');
+      expect(server.uploads, 0);
+      expect(await reasonOf(_id(1)), 'smart_analysis_off');
+      expect(queue.items, isEmpty, reason: 'kept in Smart Inbox, then removed');
+    });
+
+    test('a localOnly item waits too, even with Smart Analysis on', () async {
+      queue.items.add(item(_id(1), localOnly: true));
+      await buildService(aiPrimary: true, parkWithoutSmartAnalysis: true).run();
+      expect(await txIds(), isEmpty);
+      expect(server.uploads, 0);
+      expect(await reasonOf(_id(1)), 'smart_analysis_off');
+    });
+
+    test('an OTP is still dropped by the deterministic filter, never kept',
+        () async {
+      queue.items.add(item(_id(1), text: 'Your OTP is 123456. Do not share it.'));
+      server.fetch = const CaptureServerFetch(CaptureFetchStatus.notConfigured);
+      await buildService(parkWithoutSmartAnalysis: true).run();
+      expect(await reasonOf(_id(1)), isNull);
+      expect(await txIds(), isEmpty);
     });
   });
 

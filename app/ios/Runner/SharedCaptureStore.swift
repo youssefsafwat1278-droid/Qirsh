@@ -219,9 +219,13 @@ enum SharedCaptureStore {
     /// Mirror of the client flag `capture_notify_v2` (CAP-7), set by Dart.
     /// Default false: the App Intent banners behave exactly as before.
     var captureNotifyV2: Bool = false
+    /// Gemini-first phase 3: the install's smart-analysis (AI) consent, set by
+    /// Dart. With Cloud OFF it alone makes the backend usable; every upload is
+    /// still decided per capture by [authorizeUpload] from the owner's mirror.
+    var aiConsentGranted: Bool = false
 
     var canUseBackend: Bool {
-      cloudProcessingEnabled &&
+      (cloudProcessingEnabled || aiConsentGranted) &&
         !(installID?.isEmpty ?? true) &&
         !(deviceSecret?.isEmpty ?? true) &&
         !(backendURL?.isEmpty ?? true) &&
@@ -513,11 +517,13 @@ enum SharedCaptureStore {
           stamped.ownerState = ownerStateStamped
           stamped.ownerUid = owner.uid
           stamped.ownerGeneration = owner.generation
-          // A-12-min R3: consent is judged at capture time. A missing mirror or
-          // `cloud == false` makes the item local-only for good: it never uploads
-          // and never reaches AI, even if Cloud is turned ON later. A replay-able
-          // `pendingSend` becomes `sent`, so no drain replays it.
-          if consentMirror(forHash: owner.uidHash)?.cloud != true {
+          // A-12-min R3: consent is judged at capture time. A missing mirror, or
+          // one with neither Cloud nor smart analysis (phase 3), makes the item
+          // local-only for good: it never uploads and never reaches AI, even if
+          // either is turned ON later. A replay-able `pendingSend` becomes
+          // `sent`, so no drain replays it.
+          let mirror = consentMirror(forHash: owner.uidHash)
+          if mirror == nil || (mirror?.cloud != true && mirror?.ai != true) {
             stamped.localOnly = true
             if stamped.status == CaptureStatus.pendingSend.rawValue {
               stamped.status = CaptureStatus.sent.rawValue
@@ -696,7 +702,8 @@ enum SharedCaptureStore {
       backendURL: clean(defaults?.string(forKey: backendURLKey)),
       anonKey: clean(defaults?.string(forKey: anonKeyKey)),
       captureContractV2: defaults?.bool(forKey: contractV2Key) ?? false,
-      captureNotifyV2: defaults?.bool(forKey: notifyV2Key) ?? false
+      captureNotifyV2: defaults?.bool(forKey: notifyV2Key) ?? false,
+      aiConsentGranted: defaults?.bool(forKey: aiConsentGrantedKey) ?? false
     )
   }
 
@@ -766,6 +773,8 @@ enum SharedCaptureStore {
   /// [ownerUid], or when the write would WIDEN (cloud ON) while the egress state
   /// denies the owner (the explicit [ownerUid], else the active owner) or is
   /// uncertain. Restrictive writes (cloud OFF) are never refused for denial.
+  /// Gemini-first phase 3: an AI-only write (cloud OFF, AI on) is the
+  /// smart-analysis lane, which does not depend on the Cloud egress state.
   @discardableResult
   static func setBackendConfig(
     cloudProcessingEnabled: Bool,
@@ -783,7 +792,7 @@ enum SharedCaptureStore {
          egressGenerationIsStale(transitionGeneration, owner: ownerUid) {
         return false
       }
-      if cloudProcessingEnabled || aiConsentGranted {
+      if cloudProcessingEnabled {
         let subject = try ownerUid.map(normalizedUID) ?? readActiveOwner()?.uid
         if egressDenied(forOwner: subject) { return false }
       }
@@ -1874,7 +1883,9 @@ enum SharedCaptureStore {
     if let transitionGeneration, egressGenerationIsStale(transitionGeneration, owner: owner) {
       throw QueueError.staleGeneration
     }
-    if (mirror.cloud || mirror.ai) && egressDenied(forOwner: owner) {
+    // Phase 3: an AI-only mirror (Cloud OFF) is the smart-analysis lane, which
+    // does not depend on the Cloud egress state; widening Cloud still does.
+    if mirror.cloud && egressDenied(forOwner: owner) {
       throw QueueError.egressDenied
     }
   }
@@ -1923,9 +1934,11 @@ enum SharedCaptureStore {
       guard let owner = try readActiveOwner() else { return "no_active_owner" }
       if owner.uid != uid { return "owner_uid_changed" }
       if owner.generation != generation { return "owner_generation_changed" }
-      if let denial = egressDenialReason(forOwner: uid) { return "egress_" + denial }
       if item.localOnly == true { return "item_local_only_at_capture" }
-      guard let mirror = consentMirror(forHash: owner.uidHash) else { return "mirror_missing" }
+      let mirror = consentMirror(forHash: owner.uidHash)
+      if let mirror, !mirror.cloud, mirror.ai { return "allowed_smart_analysis" }
+      if let denial = egressDenialReason(forOwner: uid) { return "egress_" + denial }
+      guard let mirror else { return "mirror_missing" }
       return mirror.cloud ? (mirror.ai ? "allowed_ai" : "allowed_no_ai") : "mirror_cloud_off"
     }) ?? "lock_or_storage_error"
   }
@@ -1962,7 +1975,7 @@ enum SharedCaptureStore {
 
   /// Diagnostics only: why the backend config cannot be used, or nil.
   static func backendConfigGap(_ config: BackendConfig) -> String? {
-    if !config.cloudProcessingEnabled { return "config_cloud_off" }
+    if !config.cloudProcessingEnabled && !config.aiConsentGranted { return "config_cloud_off" }
     if config.installID?.isEmpty ?? true { return "config_install_missing" }
     if config.deviceSecret?.isEmpty ?? true { return "config_secret_missing" }
     if config.backendURL?.isEmpty ?? true { return "config_url_missing" }
@@ -1984,14 +1997,23 @@ enum SharedCaptureStore {
             owner.uid == uid, owner.generation == generation else {
         return .waiting
       }
+      if item.localOnly == true { return .localOnly }
+      let mirror = consentMirror(forHash: owner.uidHash)
+      // Gemini-first phase 3: the smart-analysis lane. The owner's mirror says
+      // Cloud OFF and smart analysis ON (Dart writes it only under that
+      // consent, and writes AI off before anything else when it is withdrawn):
+      // the capture goes to the server for AI analysis, whatever the Cloud
+      // egress state. Nothing else is uploaded in this lane.
+      if let mirror, !mirror.cloud, mirror.ai {
+        return .allowed(ownerUid: uid, ownerGeneration: generation, allowAi: true)
+      }
       // C.4 admission: the denial state is read under THIS flock, with the owner
       // check. DISABLING / OFF / unreadable / conflicting for the stamped owner
       // means no request; the item stays on the device (local parse only).
       if egressDenied(forOwner: uid) { return .localOnly }
-      if item.localOnly == true { return .localOnly }
       // A-12-min R2: fail closed. No mirror means nothing is known about this
       // owner's consent, so the item waits; it is never `allowed` by default.
-      guard let mirror = consentMirror(forHash: owner.uidHash) else { return .waiting }
+      guard let mirror else { return .waiting }
       return mirror.cloud
         ? .allowed(ownerUid: uid, ownerGeneration: generation, allowAi: mirror.ai)
         : .localOnly
@@ -2225,6 +2247,14 @@ enum SharedCaptureStore {
   static func egressAdmitsHostRequest(transitionGeneration generation: Int? = nil) -> Bool {
     (try? withQueueLock { () throws -> Bool in
       let owner = try readActiveOwner()
+      // Gemini-first phase 3: the active owner's smart-analysis lane (mirror
+      // Cloud OFF, AI on) registers for its one outcome push, whatever the
+      // Cloud egress state.
+      if let owner, let mirror = consentMirror(forHash: owner.uidHash),
+         !mirror.cloud, mirror.ai {
+        if let generation, egressGenerationIsStale(generation, owner: owner.uid) { return false }
+        return true
+      }
       if egressDenied(forOwner: owner?.uid) { return false }
       if let generation, let uid = owner?.uid,
          egressGenerationIsStale(generation, owner: uid) { return false }

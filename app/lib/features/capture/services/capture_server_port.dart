@@ -108,23 +108,30 @@ class BackendCaptureServerPort implements CaptureServerPort {
   final Future<bool> Function()? _useContractV2;
   final Future<String?> Function()? _accessToken;
 
-  Future<({String installId, String secret})?> _credentials() async {
+  Future<({String installId, String secret, String? lane})?>
+      _credentials() async {
     final settings = await _settings.getSettings();
     final configured = _backendConfigured ?? SupabaseConfig.isConfigured;
-    if (!settings.cloudProcessingEnabled ||
+    // Phase 3: smart analysis fetches its results with Cloud OFF too.
+    if (!(settings.cloudProcessingEnabled ||
+            ConsentAuthority.decide(EgressClass.smartAnalysis, settings)) ||
         !configured ||
         ConsentAuthority.egressFrozen) {
       return null;
     }
     await _registration.syncBackendState();
     // A-12-min R5: no legacy device-credential call (fetch, ACK) without a
-    // uid-bound ack for this user at Cloud ON; "not configured" imports locally.
-    if (!await _registration.isLinkedForCloud()) return null;
+    // uid-bound ack for this user at Cloud ON (or, phase 3, its smart-analysis
+    // link with Cloud OFF); "not configured" imports locally.
+    final cloudLinked = await _registration.isLinkedForCloud();
+    final lane = cloudLinked ? null : await smartAnalysisLaneOf(_registration);
+    if (!cloudLinked && lane == null) return null;
     final secret = await _registration.readDeviceSecret();
     if (secret == null || secret.isEmpty) return null;
     return (
       installId: await (_loadInstallId ?? InstallId.get)(),
       secret: secret,
+      lane: lane,
     );
   }
 
@@ -143,7 +150,13 @@ class BackendCaptureServerPort implements CaptureServerPort {
       );
 
   Future<List<ProcessedCaptureDto>> _call(
-    ({String installId, String secret}) credentials,
+    ({String installId, String secret, String? lane}) credentials,
+    List<String> ackIds,
+  ) =>
+      inSmartAnalysisLane(credentials.lane, () => _callAs(credentials, ackIds));
+
+  Future<List<ProcessedCaptureDto>> _callAs(
+    ({String installId, String secret, String? lane}) credentials,
     List<String> ackIds,
   ) async {
     if (await (_useContractV2?.call() ?? Future.value(false))) {

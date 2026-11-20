@@ -131,8 +131,10 @@ void main() {
     expect(bridge, contains("{'transitionGeneration': transitionGeneration}"));
     final reg = read(
         'lib/features/capture/services/capture_device_registration_service.dart');
-    final loader =
-        body(reg, 'Future<ApnsTokenInfo?> _loadApnsToken(String owner)');
+    final loader = body(reg,
+        'Future<ApnsTokenInfo?> _loadApnsToken(String owner,\n      {bool smart = false})');
+    // Phase 3: only the smart-analysis lane skips the Cloud permit.
+    expect(loader, contains('if (!smart && !await _gate.permits()) return null;'));
     expect(loader.indexOf('_gate.permits()'),
         lessThan(loader.indexOf('registerForRemoteNotifications')));
   });

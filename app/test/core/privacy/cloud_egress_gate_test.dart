@@ -273,6 +273,118 @@ void main() {
     });
   });
 
+  // Gemini-first phase 3 (owner decision 2026-11-20: "Gemini is always
+  // available in the app, separated from Cloud"): the smart-analysis lane
+  // admits the analysis endpoints for the ACTIVE owner whatever the Cloud
+  // record says, and nothing else. Every non-consent process denial holds.
+  group('the smart-analysis lane', () {
+    const base = 'https://example.supabase.co/functions/v1';
+    Future<Object?> admitLane(
+        {String owner = 'uid-a',
+        String method = 'POST',
+        String url = '$base/process-ios-sms'}) async {
+      try {
+        final t = await gate.admit(
+            grant: EgressGrant.smartAnalysis(owner: owner),
+            request: AdmissionRequest(method, Uri.parse(url)));
+        gate.release(t);
+        return null;
+      } on EgressDeniedException catch (e) {
+        return e.reason;
+      }
+    }
+
+    test('admitted with Cloud OFF (no record) for every analysis endpoint, '
+        'while ordinary egress stays denied', () async {
+      expect(await admitError(), 'off');
+      for (final fn in CloudEgressGate.kSmartAnalysisFunctions) {
+        expect(await admitLane(url: '$base/$fn'), isNull, reason: fn);
+      }
+      expect(await gate.permits(), isFalse,
+          reason: 'the lane never turns Cloud on');
+    });
+
+    test('admitted after a committed Cloud OFF', () async {
+      await putOn();
+      final freeze =
+          await gate.beginDisabling(owner: 'uid-a', reservedVersion: 2);
+      await gate.commitOff(freeze);
+      expect(await admitError(), 'off');
+      expect(await admitLane(), isNull);
+    });
+
+    test('nothing but the analysis endpoints, POST over https to the backend',
+        () async {
+      for (final (method, url) in const [
+        ('GET', '$base/process-ios-sms'),
+        ('POST', '$base/enrich-merchant'),
+        ('POST', '$base/bank-discovery'),
+        ('POST', '$base/unlink-capture-device'),
+        ('POST', '$base/merchant-category-contribution'),
+        ('POST', 'https://example.supabase.co/rest/v1/user_settings'),
+        ('POST', 'https://example.supabase.co/rest/v1/transactions'),
+        ('POST', 'https://example.supabase.co/storage/v1/object/backups/x'),
+        ('POST', 'http://example.supabase.co/functions/v1/process-ios-sms'),
+        ('POST', 'https://evil.example/functions/v1/process-ios-sms'),
+        ('POST', '$base/process-ios-sms?x=1'),
+      ]) {
+        expect(await admitLane(method: method, url: url),
+            'smart_analysis_scope',
+            reason: '$method $url');
+      }
+    });
+
+    test("only the active owner's own lane", () async {
+      expect(await admitLane(owner: 'uid-b'), 'smart_analysis_scope');
+      egress.owner = null;
+      expect(await admitLane(owner: ''), 'smart_analysis_scope');
+    });
+
+    test('a request without a URL is denied', () async {
+      try {
+        final t = await gate.admit(
+            grant: const EgressGrant.smartAnalysis(owner: 'uid-a'));
+        gate.release(t);
+        fail('admitted without a request');
+      } on EgressDeniedException catch (e) {
+        expect(e.reason, 'smart_analysis_scope');
+      }
+    });
+
+    test('process denials still hold: freeze, lifecycle fence, unresolved',
+        () async {
+      ConsentAuthority.egressFrozen = true;
+      addTearDown(() => ConsentAuthority.egressFrozen = false);
+      expect(await admitLane(), 'frozen');
+      ConsentAuthority.egressFrozen = false;
+      gate.denyForLifecycleLoss();
+      expect(await admitLane(), 'lifecycle_fence');
+      gate.releaseLifecycleDenial();
+      expect(await admitLane(), isNull);
+      final unresolved = TestEgress(resolved: false);
+      try {
+        final t = await unresolved.gate.admit(
+            grant: const EgressGrant.smartAnalysis(owner: 'uid-a'),
+            request:
+                AdmissionRequest('POST', Uri.parse('$base/process-ios-sms')));
+        unresolved.gate.release(t);
+        fail('admitted while unresolved');
+      } on EgressDeniedException catch (e) {
+        expect(e.reason, 'unresolved');
+      }
+    });
+
+    test('runSmartAnalysis puts the lane in the zone of its body only',
+        () async {
+      expect(CloudEgressGate.debugZoneGrant, isNull);
+      final seen = await gate.runSmartAnalysis(
+          'uid-a', () async => CloudEgressGate.debugZoneGrant);
+      expect(seen?.kind, EgressGrantKind.smartAnalysis);
+      expect(seen?.owner, 'uid-a');
+      expect(CloudEgressGate.debugZoneGrant, isNull);
+    });
+  });
+
   // Approved 2026-11-12 (product owner): the ONE automatic exception to the
   // Cloud-OFF rule is re-sending a revoke that did not land, identifiers only,
   // for its own owner, while OFF at its own generation, to the revoke route.

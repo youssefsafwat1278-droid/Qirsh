@@ -46,6 +46,14 @@ void main() {
 
     test('every user-data class is denied when cloud consent is DECLINED', () {
       final s = _settings(cloud: ConsentState.declined, ai: ConsentState.accepted);
+      // Phase 3: Smart Analysis alone is decided by its own consent (below).
+      for (final c in allClasses.where((c) => c != EgressClass.smartAnalysis)) {
+        expect(ConsentAuthority.decide(c, s), isFalse, reason: '$c');
+      }
+    });
+
+    test('with BOTH declined, smart analysis is denied too', () {
+      final s = _settings(cloud: ConsentState.declined, ai: ConsentState.declined);
       for (final c in allClasses) {
         expect(ConsentAuthority.decide(c, s), isFalse, reason: '$c');
       }
@@ -85,6 +93,49 @@ void main() {
     test('AI requires BOTH', () {
       final s = _settings(cloud: ConsentState.accepted, ai: ConsentState.accepted);
       expect(ConsentAuthority.decide(EgressClass.aiProcessing, s), isTrue);
+    });
+  });
+
+  // Gemini-first phase 3 (owner decision 2026-11-20): smart analysis is
+  // separated from Cloud. It needs its own consent and nothing else; every
+  // other class keeps its rule, aiProcessing (bank discovery, enrichment,
+  // shared learning) included.
+  group('phase 3 — smart analysis needs its own consent only', () {
+    test('AI consent with Cloud OFF allows smart analysis and nothing else', () {
+      final s = _settings(cloud: ConsentState.declined, ai: ConsentState.accepted);
+      expect(ConsentAuthority.decide(EgressClass.smartAnalysis, s), isTrue);
+      for (final c in allClasses.where((c) => c != EgressClass.smartAnalysis)) {
+        expect(ConsentAuthority.decide(c, s), isFalse, reason: '$c');
+      }
+    });
+
+    test('Cloud consent alone never allows smart analysis', () {
+      for (final ai in [ConsentState.unset, ConsentState.declined]) {
+        final s = _settings(cloud: ConsentState.accepted, ai: ai);
+        expect(ConsentAuthority.decide(EgressClass.smartAnalysis, s), isFalse);
+        expect(ConsentAuthority.denialReason(EgressClass.smartAnalysis, s),
+            'ai_consent_off');
+      }
+    });
+
+    test('a Cloud transition freeze denies smart analysis too', () {
+      final s = _settings(cloud: ConsentState.declined, ai: ConsentState.accepted);
+      ConsentAuthority.egressFrozen = true;
+      addTearDown(() => ConsentAuthority.egressFrozen = false);
+      expect(ConsentAuthority.decide(EgressClass.smartAnalysis, s), isFalse);
+      expect(ConsentAuthority.denialReason(EgressClass.smartAnalysis, s),
+          'egress_frozen');
+    });
+
+    test('allows() for smart analysis needs no Cloud record, and observes a '
+        'withdrawal at once', () async {
+      var ai = ConsentState.accepted;
+      final authority = ConsentAuthority(
+          () async => _settings(cloud: ConsentState.declined, ai: ai));
+      expect(await authority.allows(EgressClass.smartAnalysis), isTrue);
+      ai = ConsentState.declined;
+      expect(await authority.allows(EgressClass.smartAnalysis), isFalse);
+      expect(await authority.allows(EgressClass.aiProcessing), isFalse);
     });
   });
 

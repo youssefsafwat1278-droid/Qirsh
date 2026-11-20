@@ -236,7 +236,9 @@ class CaptureSyncService {
     await requireCurrentAdmission();
     final settings = await _settingsRepository.getSettings();
     final backendConfigured = _backendConfigured ?? SupabaseConfig.isConfigured;
-    if (!settings.cloudProcessingEnabled ||
+    // Phase 3: smart analysis pulls its results with Cloud OFF too.
+    if (!(settings.cloudProcessingEnabled ||
+            ConsentAuthority.decide(EgressClass.smartAnalysis, settings)) ||
         !backendConfigured ||
         ConsentAuthority.egressFrozen) {
       return const CaptureSyncResult(
@@ -250,7 +252,11 @@ class CaptureSyncService {
     // A-12-min R5: the legacy device-credential `sync-captures` (and its ACK)
     // runs only with a uid-bound ack for THIS user at Cloud ON. A failed link
     // never falls through to a projection that may still belong to another user.
-    final secret = await _registrationService.isLinkedForCloud()
+    // Phase 3: or the smart-analysis lane's own link (Cloud OFF, AI on).
+    final cloudLinked = await _registrationService.isLinkedForCloud();
+    final lane =
+        cloudLinked ? null : await smartAnalysisLaneOf(_registrationService);
+    final secret = cloudLinked || lane != null
         ? await _registrationService.readDeviceSecret()
         : null;
     if (secret == null || secret.isEmpty) {
@@ -268,10 +274,12 @@ class CaptureSyncService {
         );
     final installId = await (_loadInstallId ?? InstallId.get)();
     await requireCurrentAdmission();
-    final captures = await client.syncCaptures(
-      installId: installId,
-      deviceSecret: secret,
-    );
+    final captures = await inSmartAnalysisLane(
+        lane,
+        () => client.syncCaptures(
+              installId: installId,
+              deviceSecret: secret,
+            ));
     Diag.log('[CaptureImport]', 'relay_fetched count=${captures.length}');
 
     // MALI-029 — prefetch accounts once (first-match-per-currency), reused for
@@ -332,11 +340,13 @@ class CaptureSyncService {
       // Native/relay deletion is a separate side-effect boundary. A stale run
       // leaves every capture server-side for the authoritative admission.
       await requireCurrentAdmission();
-      await client.syncCaptures(
-        installId: installId,
-        deviceSecret: secret,
-        ackPayloadIds: imported.toList(),
-      );
+      await inSmartAnalysisLane(
+          lane,
+          () => client.syncCaptures(
+                installId: installId,
+                deviceSecret: secret,
+                ackPayloadIds: imported.toList(),
+              ));
     }
 
     return CaptureSyncResult(
@@ -419,7 +429,10 @@ class CaptureSyncService {
     }
     final settings = await _settingsRepository.getSettings();
     final configured = _backendConfigured ?? SupabaseConfig.isConfigured;
-    if (!settings.cloudProcessingEnabled ||
+    // Phase 3: smart analysis uploads with Cloud OFF too (the native gate below
+    // still decides per capture, from the owner's mirror).
+    if (!(settings.cloudProcessingEnabled ||
+            ConsentAuthority.decide(EgressClass.smartAnalysis, settings)) ||
         !configured ||
         ConsentAuthority.egressFrozen) {
       return false;
@@ -450,7 +463,10 @@ class CaptureSyncService {
     if (ownerUid == null || ownerUid.isEmpty || ownerGeneration == null) {
       return false;
     }
-    if (!await _registrationService.isLinkedForCloud()) return false;
+    final cloudLinked = await _registrationService.isLinkedForCloud();
+    final lane =
+        cloudLinked ? null : await smartAnalysisLaneOf(_registrationService);
+    if (!cloudLinked && lane == null) return false;
     final secret = await _registrationService.readDeviceSecret();
     if (secret == null || secret.isEmpty) return false;
     final preferences =
@@ -461,9 +477,10 @@ class CaptureSyncService {
           anonKey: SupabaseConfig.anonKey,
           notificationDetails: !preferences.hideLockScreenContent,
         );
+    final installId = await (_loadInstallId ?? InstallId.get)();
     try {
-      await client.processIosSms(
-        installId: await (_loadInstallId ?? InstallId.get)(),
+      await inSmartAnalysisLane(lane, () => client.processIosSms(
+        installId: installId,
         deviceSecret: secret,
         payloadId: message.id!,
         // The server persists this value verbatim (processed_captures.parsed.
@@ -483,7 +500,7 @@ class CaptureSyncService {
         // LEN-1: the queued length when the native layer stored it, else the
         // same measure on the raw text (never the redacted one).
         textLength: message.textLength ?? message.text.length,
-      );
+      ));
     } on CaptureBackendException catch (e) {
       // §4.8 / G1: a 409 (`capture_owner_mismatch`, `capture_owner_conflict`,
       // `capture_id_conflict`, `capture_expired`) is TERMINAL for the upload:
@@ -678,7 +695,9 @@ class CaptureSyncService {
                 'Backend capture ${capture.payloadId} could not be parsed',
           );
     final settings = await _settingsRepository.getSettings();
-    if (!(settings.cloudProcessingEnabled && settings.aiConsentGranted) &&
+    // Phase 3: smart analysis (Cloud ON or OFF) leaves a refused capture to
+    // review; only a device without it recovers one locally.
+    if (!settings.aiConsentGranted &&
         parsed['parserSource'] != 'ai_pending' &&
         (capture.status == 'rejected' || capture.status == 'needs_review') &&
         await _recoverRejectedLocally(

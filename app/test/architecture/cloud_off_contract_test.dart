@@ -121,12 +121,15 @@ void main() {
   });
 
   group('Swift: stamping and the one upload gate (R2, R3)', () {
-    test('stamping: no mirror or cloud OFF => localOnly + pendingSend->sent',
+    // Gemini-first phase 3: Smart Analysis (AI on, Cloud OFF) also uploads;
+    // neither consent stays local-only for good.
+    test('stamping: no mirror or neither consent => localOnly + pendingSend->sent',
         () {
       final enqueue = body(store, 'static func enqueue(');
       inOrder(enqueue, [
         'try readActiveOwner()',
-        'consentMirror(forHash: owner.uidHash)?.cloud != true',
+        'let mirror = consentMirror(forHash: owner.uidHash)',
+        'if mirror == nil || (mirror?.cloud != true && mirror?.ai != true)',
         'stamped.localOnly = true',
         'CaptureStatus.pendingSend.rawValue',
         'CaptureStatus.sent.rawValue',
@@ -140,10 +143,17 @@ void main() {
         () {
       final fn = body(store, 'private static func authorizeUploadLocked(');
       expect(fn, contains('item.localOnly == true'));
-      expect(
-          fn,
-          contains(
-              'guard let mirror = consentMirror(forHash: owner.uidHash) else { return .waiting }'));
+      expect(fn, contains('let mirror = consentMirror(forHash: owner.uidHash)'));
+      expect(fn, contains('guard let mirror else { return .waiting }'));
+      // Phase 3: the smart-analysis lane is the owner's own AI-only mirror,
+      // and only it skips the Cloud egress state; it always asks for AI.
+      inOrder(fn, [
+        'if item.localOnly == true { return .localOnly }',
+        'if let mirror, !mirror.cloud, mirror.ai {',
+        'allowAi: true)',
+        'if egressDenied(forOwner: uid) { return .localOnly }',
+        'guard let mirror else { return .waiting }',
+      ]);
       expect(fn, isNot(contains('allowAi: nil')));
       expect(
           store,
@@ -343,12 +353,15 @@ void main() {
     test('_linkAndPublish: OFF never needs the backend, ON links first', () {
       final fn = body(registration, 'Future<bool> _linkAndPublish(bool Function() current)');
       final beforeCloudBranch =
-          fn.substring(0, fn.indexOf('if (snapshot.cloud &&'));
+          fn.substring(0, fn.indexOf('if ((snapshot.cloud &&'));
       expect(beforeCloudBranch, isNot(contains('_isBackendConfigured')));
       expect(beforeCloudBranch, isNot(contains('_linkWithConsent')));
+      // Phase 3: the only other network link is the smart-analysis lane's.
       inOrder(fn, [
         '_readOwnerEpoch()',
-        'if (snapshot.cloud &&',
+        'final smart = _smartOnly(snapshot);',
+        'if ((snapshot.cloud && gateState == _Gate.open) || smart)',
+        '_lane(smart, session.uid,',
         '_linkWithConsent(',
         '_publishOwner(',
       ]);
@@ -358,10 +371,13 @@ void main() {
     test('a 401 never re-registers while Cloud is OFF', () {
       final start =
           registration.indexOf('Future<String> _recoverRejectedSecret(');
-      final fn = registration.substring(start, start + 1500);
+      final fn = registration.substring(start, start + 2800);
+      // Phase 3: or in the smart-analysis lane while that consent holds.
       inOrder(fn, [
-        'cloudProcessingEnabled',
+        'final recoverySmart = _smartOnly(_snapshotOf(recoverySettings));',
+        'recoverySettings.cloudProcessingEnabled',
         'recovery_skipped_cloud_off',
+        '_lane(recoverySmart, tx.owner,',
         'registerDevice(',
       ]);
     });
@@ -423,10 +439,18 @@ void main() {
       expect(fn, contains('ack.cloud'));
       expect(body(sync, 'Future<CaptureSyncResult> _syncOnce()'),
           contains('isLinkedForCloud()'));
-      expect(
-          body(port,
-              'Future<({String installId, String secret})?> _credentials()'),
-          contains('isLinkedForCloud()'));
+      final credentials = body(port,
+          'Future<({String installId, String secret, String? lane})?>\n      _credentials()');
+      expect(credentials, contains('isLinkedForCloud()'));
+      // Phase 3: or the smart-analysis lane's own uid-bound, AI-only ack.
+      expect(body(sync, 'Future<CaptureSyncResult> _syncOnce()'),
+          contains('smartAnalysisLaneOf(_registrationService)'));
+      expect(credentials, contains('smartAnalysisLaneOf(_registration)'));
+      final lane = body(registration, 'Future<String?> smartAnalysisLaneOwner()');
+      inOrder(lane, [
+        '_readAck(uid)',
+        'ack.ai && !ack.cloud ? uid : null',
+      ]);
     });
 
     test('the publish hook and the epoch reach the registration service', () {

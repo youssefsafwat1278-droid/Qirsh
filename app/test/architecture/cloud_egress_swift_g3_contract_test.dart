@@ -160,9 +160,15 @@ void main() {
       expect(auth, contains('egressDenied(forOwner: uid)'));
       expect(auth.indexOf('egressDenied(forOwner: uid)'),
           greaterThan(auth.indexOf('owner.uid == uid')));
+      // Phase 3: the one .allowed before the Cloud denial check is the
+      // smart-analysis lane (the owner's own AI-only mirror); the Cloud
+      // .allowed comes after it.
+      final lane = auth.indexOf('if let mirror, !mirror.cloud, mirror.ai {');
+      expect(lane, greaterThan(auth.indexOf('owner.uid == uid')));
+      expect(auth.indexOf('.allowed('), greaterThan(lane));
       expect(auth.indexOf('egressDenied(forOwner: uid)'),
-          lessThan(auth.indexOf('.allowed(')),
-          reason: 'the denial check precedes any .allowed verdict');
+          lessThan(auth.indexOf('allowAi: mirror.ai)')),
+          reason: 'the denial check precedes the Cloud .allowed verdict');
       expect(auth,
           contains('if egressDenied(forOwner: uid) { return .localOnly }'));
     });
@@ -426,10 +432,8 @@ void main() {
       expect(publish, contains('throw QueueError.barrierActive'));
       expect(publish, contains('throw QueueError.ownerChanged'));
       final auth = body(store, 'private static func authorizeUploadLocked(');
-      expect(
-          auth,
-          contains(
-              'guard let mirror = consentMirror(forHash: owner.uidHash) else { return .waiting }'));
+      expect(auth, contains('let mirror = consentMirror(forHash: owner.uidHash)'));
+      expect(auth, contains('guard let mirror else { return .waiting }'));
       expect(body(store, 'static func authorizeUpload(payloadID: String)'),
           contains(') ?? .waiting'));
     });

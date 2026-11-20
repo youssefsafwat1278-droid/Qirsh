@@ -13,6 +13,7 @@ import '../../../core/observability/diagnostics.dart';
 import '../../../core/privacy/cloud_egress_gate.dart';
 import '../../../core/privacy/cloud_resume_reminder.dart';
 import '../../../core/privacy/consent_authority.dart';
+import '../../../core/privacy/smart_analysis_consent.dart';
 import '../../../core/session/admission_authority.dart';
 import '../../../core/session/app_session.dart';
 import '../../../core/session/consent_capability.dart';
@@ -307,6 +308,7 @@ typedef _UnlinkTarget = ({
 class CaptureDeviceRegistrationService {
   CaptureDeviceRegistrationService({
     required DriftUserSettingsRepository settingsRepository,
+    SmartAnalysisConsentRecord? smartAnalysisRecord,
     CaptureBackendClient? client,
     FlutterSecureStorage? storage,
     bool Function()? isIos,
@@ -351,6 +353,8 @@ class CaptureDeviceRegistrationService {
         _now = now ?? DateTime.now,
         _markerDirectory = markerDirectory ?? getApplicationSupportDirectory,
         _settingsRepository = settingsRepository,
+        _smartAnalysisRecord =
+            smartAnalysisRecord ?? SmartAnalysisConsentRecord(),
         _client = client,
         _storage = storage ?? SecureStorageOptions.storage,
         _isIos = isIos ?? (() => Platform.isIOS),
@@ -499,6 +503,9 @@ class CaptureDeviceRegistrationService {
   }
 
   final DriftUserSettingsRepository _settingsRepository;
+
+  /// Phase 3: the Smart Analysis wording record (keychain, per account).
+  final SmartAnalysisConsentRecord _smartAnalysisRecord;
   final bool Function() _isCurrentScope;
   final AdmissionAuthority? Function() _captureWorkAuthority;
   final bool _requiresAdmission;
@@ -751,10 +758,12 @@ class CaptureDeviceRegistrationService {
   /// The APNs registration. Astra H3 cross-unit: the native call carries the
   /// CURRENT transition generation of the active owner so the native side can
   /// refuse a stale call, and it is made only while the gate permits.
-  Future<ApnsTokenInfo?> _loadApnsToken(String owner) async {
+  Future<ApnsTokenInfo?> _loadApnsToken(String owner,
+      {bool smart = false}) async {
     final override = _loadApnsTokenOverride;
     if (override != null) return override();
-    if (!await _gate.permits()) return null;
+    // Phase 3: the smart-analysis lane needs the token for its one outcome push.
+    if (!smart && !await _gate.permits()) return null;
     final generation = await _clientGeneration(owner);
     return await NativeCaptureBridge.registerForRemoteNotifications(
             transitionGeneration: generation) ??
@@ -815,9 +824,9 @@ class CaptureDeviceRegistrationService {
     try {
       final settings = await _settingsRepository.getSettings();
       if (!current()) return;
-      final wantsCloud = ios
-          ? settings.cloudProcessingEnabled
-          : settings.cloudProcessingEnabled || settings.aiConsentGranted;
+      // Phase 3: on iOS smart analysis connects on its own (Cloud OFF too).
+      final wantsCloud =
+          settings.cloudProcessingEnabled || settings.aiConsentGranted;
       tracked = _isBackendConfigured() && wantsCloud;
       record(CaptureRegistrationStatus(
         tracked
@@ -946,10 +955,14 @@ class CaptureDeviceRegistrationService {
     if (!await _holds(tx)) return;
     var secret = await _storage.read(key: _secretKey);
     if (!await _holds(tx)) return;
+    // Phase 3: Cloud OFF with smart-analysis consent. Only the analysis
+    // exchanges below run, each in the smart-analysis lane.
+    final smart = _smartOnly(_snapshotOf(settings)) && _isBackendConfigured();
 
-    if (!settings.cloudProcessingEnabled ||
-        !_isBackendConfigured() ||
-        gateState == _Gate.off) {
+    if (!smart &&
+        (!settings.cloudProcessingEnabled ||
+            !_isBackendConfigured() ||
+            gateState == _Gate.off)) {
       final nativeGeneration = await _clientGeneration(tx.owner ?? '');
       if (!await _holds(tx)) return;
       await _writeNativeBackendConfig(
@@ -964,8 +977,15 @@ class CaptureDeviceRegistrationService {
       // Cloud OFF = ZERO EGRESS (A-12-min R6): no link, no registerDevice, no
       // setConsent, no APNs registration and no 401 recovery. The owner and its
       // restrictive mirror are published LOCALLY. This branch NEVER sends a
-      // revoke: the only one lives inside [disableCloud].
-      if (!settings.cloudProcessingEnabled) await _linkOnce();
+      // Cloud revoke: the only one lives inside [disableCloud].
+      if (!settings.cloudProcessingEnabled) {
+        await _linkOnce();
+        // Phase 3: smart analysis was just turned off with Cloud OFF. The
+        // device already stopped (the restrictive mirror above); the server's
+        // copy of the consent is narrowed too, in the lane, carrying nothing
+        // but identifiers and the OFF state.
+        if (await _holds(tx)) await _narrowSmartAnalysis(tx);
+      }
       return;
     }
 
@@ -987,7 +1007,8 @@ class CaptureDeviceRegistrationService {
 
     if (secret == null || secret.isEmpty) {
       try {
-        secret = await _backendClient.registerDevice(installId: installId);
+        secret = await _lane(smart, tx.owner,
+            () => _backendClient.registerDevice(installId: installId));
       } catch (_) {
         outcome.registerFailed = true;
         rethrow;
@@ -1003,7 +1024,9 @@ class CaptureDeviceRegistrationService {
     final nativeGeneration = await _clientGeneration(tx.owner ?? '');
     if (!await _holds(tx)) return;
     await _writeNativeBackendConfig(
-      cloudProcessingEnabled: _isBackendConfigured(),
+      // Phase 3: the native config never claims Cloud for the AI-only lane; the
+      // App Intent uploads on the AI flag and the owner's mirror instead.
+      cloudProcessingEnabled: !smart && _isBackendConfigured(),
       installId: installId,
       deviceSecret: secret,
       backendUrl: SupabaseConfig.url,
@@ -1017,13 +1040,13 @@ class CaptureDeviceRegistrationService {
     // moment the user toggles it, since syncNativeState re-runs). Best-effort:
     // a failure here must never block native config or local capture.
     if (!await _holds(tx)) return;
-    await _projectConsent(outcome, tx);
+    await _lane(smart, tx.owner, () => _projectConsent(outcome, tx));
     if (!await _holds(tx)) return;
     try {
-      final token = await _loadApnsToken(tx.owner ?? '');
+      final token = await _loadApnsToken(tx.owner ?? '', smart: smart);
       if (!await _holds(tx)) return;
       if (token != null) {
-        await syncApnsToken(token);
+        await _lane(smart, tx.owner, () => syncApnsToken(token));
       }
     } catch (error) {
       // Push delivery is optional. A throttled/unavailable APNs registration
@@ -1112,7 +1135,7 @@ class CaptureDeviceRegistrationService {
         final saved = await _readAckAny();
         if (saved != null &&
             saved.uid == signedIn.uid &&
-            saved.snapshot.cloud) {
+            (saved.snapshot.cloud || saved.snapshot.ai)) {
           await _armUnlink(saved.uid, seq);
         }
       } catch (_) {
@@ -1138,13 +1161,17 @@ class CaptureDeviceRegistrationService {
     final snapshot = _snapshotOf(await _settingsRepository.getSettings());
     if (!current()) return false;
     var linked = (cloud: false, ai: false, version: snapshot.version);
-    if (snapshot.cloud && gateState == _Gate.open) {
+    final smart = _smartOnly(snapshot);
+    if ((snapshot.cloud && gateState == _Gate.open) || smart) {
       if (!_isBackendConfigured()) return false;
       final seq = _unlinkTargetSeq;
       final ack = await _readAck(session.uid);
       if (!current()) return false;
       if (ack != snapshot || !await _hasVerifiedAck(session.uid, snapshot)) {
-        if (!await _linkWithConsent(session, snapshot, tx)) return false;
+        if (!await _lane(smart, session.uid,
+            () => _linkWithConsent(session, snapshot, tx))) {
+          return false;
+        }
       } else {
         // P3: an ack from an earlier process is known now; arm its unlink.
         await _armUnlink(session.uid, seq);
@@ -1193,7 +1220,7 @@ class CaptureDeviceRegistrationService {
     if (!await _holds(tx)) return false;
     var secret = await _storage.read(key: _secretKey);
     if (!await _holds(tx)) return false;
-    final generation = await _clientGeneration(session.uid);
+    final generation = await _consentGeneration(session.uid, snapshot);
     if (!await _holds(tx)) return false;
     try {
       if (secret == null || secret.isEmpty) {
@@ -1231,6 +1258,18 @@ class CaptureDeviceRegistrationService {
     return true;
   }
 
+  /// Phase 3: the `p_client_generation` of a consent write. Cloud writes carry
+  /// the owner's egress generation ([_clientGeneration]). A smart-analysis-lane
+  /// write is made only with Cloud OFF, after any Cloud revoke at that
+  /// generation committed, so it is ordered just after it (generation + 1, the
+  /// next one a Cloud enable would allocate): the server then accepts it over
+  /// that revoke, while a write still in flight from before a LATER revoke stays
+  /// narrow-only.
+  Future<int> _consentGeneration(String uid, _ConsentSnapshot snapshot) async {
+    final generation = await _clientGeneration(uid);
+    return _smartOnly(snapshot) ? generation + 1 : generation;
+  }
+
   /// The client transition generation sent as `p_client_generation` (C.2): the
   /// owner's durable `cloud_egress_state` generation (0 before any record).
   Future<int> _clientGeneration(String uid) async {
@@ -1265,14 +1304,14 @@ class CaptureDeviceRegistrationService {
               capability?.uid == session.uid
           ? await _linkWithConsent(session, snapshot, tx)
           : await _linkOnce();
-      if (!linked && snapshot.cloud) {
+      if (!linked && (snapshot.cloud || snapshot.ai)) {
         outcome.consentPushFailed = true;
       }
       return;
     }
     if (ack == snapshot) {
       if (!await _hasVerifiedAck(session.uid, snapshot) && !await _linkOnce()) {
-        outcome.consentPushFailed = snapshot.cloud;
+        outcome.consentPushFailed = snapshot.cloud || snapshot.ai;
       }
       return;
     }
@@ -1282,7 +1321,7 @@ class CaptureDeviceRegistrationService {
       ai: snapshot.ai && ack.ai,
       version: snapshot.version,
     ), lifetime: tx.current);
-    final generation = await _clientGeneration(session.uid);
+    final generation = await _consentGeneration(session.uid, snapshot);
     if (!await _holds(tx)) return;
     try {
       final installId = await _loadInstallId();
@@ -1305,7 +1344,7 @@ class CaptureDeviceRegistrationService {
         );
       }, lifetime: tx.current);
     } catch (_) {
-      if (snapshot.cloud) outcome.consentPushFailed = true;
+      if (snapshot.cloud || snapshot.ai) outcome.consentPushFailed = true;
       return;
     }
     // P4: the answer of a set that outlived an account switch / transition has
@@ -1318,9 +1357,28 @@ class CaptureDeviceRegistrationService {
 
   _ConsentSnapshot _snapshotOf(UserSettingsEntity settings) => (
         cloud: settings.cloudProcessingEnabled,
-        ai: settings.cloudProcessingEnabled && settings.aiConsentGranted,
+        // Gemini-first phase 3: on iOS smart analysis no longer needs Cloud, so
+        // the device and server carry the AI consent as it is. Android keeps
+        // AI under Cloud (its capture has no smart-analysis lane yet).
+        ai: _isIos()
+            ? settings.aiConsentGranted &&
+                (settings.cloudProcessingEnabled ||
+                    _smartAnalysisEligible[_readSession()?.uid ?? ''] == true)
+            : settings.cloudProcessingEnabled && settings.aiConsentGranted,
         version: settings.consentVersion,
       );
+
+  /// Phase 3: Cloud OFF with smart-analysis consent (iOS). The capture device's
+  /// analysis exchanges then run in the gate's smart-analysis lane
+  /// ([CloudEgressGate.runSmartAnalysis]); nothing else leaves the device.
+  bool _smartOnly(_ConsentSnapshot snapshot) =>
+      _isIos() && !snapshot.cloud && snapshot.ai;
+
+  /// Runs [body] in the smart-analysis lane of [owner] when [smart], else as is.
+  Future<T> _lane<T>(bool smart, String? owner, Future<T> Function() body) =>
+      smart && owner != null && owner.isNotEmpty
+          ? _gate.runSmartAnalysis(owner, body)
+          : body();
 
   /// Runs [call] with [secret]; a 401 replaces the credential exactly once
   /// (shared with every other caller) and retries with the fresh one.
@@ -1409,8 +1467,9 @@ class CaptureDeviceRegistrationService {
       consentServerRevision.value++;
       if (snapshot.cloud) SyncWakeup.notify();
     }
-    // P3: a Cloud-ON ack is what a sign-out unlinks; any other ack is not.
-    if (snapshot.cloud) {
+    // P3: a Cloud-ON (or, phase 3, smart-analysis) ack is what a sign-out
+    // unlinks; any other ack is not.
+    if (snapshot.cloud || snapshot.ai) {
       await _armUnlink(uid, seq);
     } else {
       _disarmUnlink();
@@ -3843,6 +3902,8 @@ class CaptureDeviceRegistrationService {
       if (!current()) return _Gate.blocked;
       final settings = await _settingsRepository.getSettings();
       if (!current()) return _Gate.blocked;
+      await _refreshSmartAnalysisEligibility(owner, settings, rec);
+      if (!current()) return _Gate.blocked;
       final on = _cloudOn(settings);
       if (rec == null) {
         // Astra H2.2: an ABSENT record is NOT adopted as ON. Cloud only becomes
@@ -3929,6 +3990,49 @@ class CaptureDeviceRegistrationService {
     return rec.state == EgressState.off ? _Gate.off : _Gate.open;
   }
 
+  /// Gemini-first phase 3, existing consents (iOS). Which accounts' AI consent
+  /// may use the smart-analysis lane: one given to the Smart Analysis wording
+  /// (a wording record), or one in effect from before phase 3 (Cloud ON with a
+  /// durable ON record, AI ON), which is stamped as having accepted wording
+  /// version 1 — it disclosed the same AI processing and is not asked again.
+  /// An AI choice an earlier build kept while Cloud was OFF (a sign-out pause,
+  /// an integrity downgrade) was dormant — the app said nothing is analysed —
+  /// so Smart Analysis becoming independent never switches it on silently: it
+  /// stays as stored (a later withdrawal still changes it) but is not
+  /// eligible until the person allows Smart Analysis again. Process-wide: the
+  /// UI and startup own different instances.
+  static final Map<String, bool> _smartAnalysisEligible = {};
+
+  Future<void> _refreshSmartAnalysisEligibility(
+      String owner, UserSettingsEntity settings, CloudEgressRecord? rec) async {
+    if (!_isIos() || owner.isEmpty) return;
+    if (!settings.aiConsentGranted) {
+      _smartAnalysisEligible.remove(owner);
+      return;
+    }
+    try {
+      if (await _smartAnalysisRecord.hasRecord(owner)) {
+        _smartAnalysisEligible[owner] = true;
+        return;
+      }
+      if (settings.cloudProcessingEnabled && rec?.state == EgressState.on) {
+        await _smartAnalysisRecord.recordAccepted(owner, version: 1);
+        _smartAnalysisEligible[owner] = true;
+        return;
+      }
+    } catch (_) {
+      // Unreadable: not eligible (fail closed).
+    }
+    if (_smartAnalysisEligible[owner] != false) {
+      Diag.log('[ConsentDisable]', 'legacy_smart_analysis_dormant');
+    }
+    _smartAnalysisEligible[owner] = false;
+  }
+
+  @visibleForTesting
+  static void debugResetSmartAnalysisEligibility() =>
+      _smartAnalysisEligible.clear();
+
   Future<void> _rememberCloudResume(String owner, UserSettingsEntity saved,
       bool Function() current, {bool aiWasOn = false}) async {
     if (!current() || owner.isEmpty || _readSession()?.uid != owner) return;
@@ -3959,10 +4063,12 @@ class CaptureDeviceRegistrationService {
       final settings = await _settingsRepository.getSettings();
       if (!current()) return false;
       if (_cloudOn(settings)) {
+        // Phase 3: the interrupted withdrawal turned Cloud AND Smart Analysis
+        // off (Smart Analysis no longer rides on Cloud); completing it never
+        // leaves a wider state than the one asked for.
         await _settingsRepository.saveSettings(settings.copyWith(
           cloudConsentState: ConsentState.declined,
-          aiConsentState:
-              _isAndroid() ? ConsentState.declined : settings.aiConsentState,
+          aiConsentState: ConsentState.declined,
         ));
       }
       if (!current()) return false;
@@ -4059,6 +4165,83 @@ class CaptureDeviceRegistrationService {
     return ack != null && ack.cloud;
   }
 
+  /// Phase 3: stops native smart-analysis uploads AT ONCE, before the choice
+  /// to turn it off is committed: the active account's mirror is written
+  /// restrictive (Cloud and AI off) on this device, so the App Intent's next
+  /// [authorizeUpload] answers local-only. Local only; the following
+  /// [syncBackendState] republishes the mirror from the committed settings
+  /// (Cloud as it is) and narrows the server's copy.
+  Future<void> restrictSmartAnalysisNow() async {
+    if (!_isIos()) return;
+    final session = _readSession();
+    if (session == null) return;
+    final settings = await _settingsRepository.getSettings();
+    final generation = await _clientGeneration(session.uid);
+    await _writeConsentMirror(
+      uid: session.uid,
+      cloud: false,
+      ai: false,
+      version: settings.consentVersion,
+      transitionGeneration: generation,
+    );
+  }
+
+  /// Phase 3: the owner of the smart-analysis lane, or null. Non-null only on
+  /// iOS, for the CURRENT session user whose settings hold smart-analysis
+  /// consent with Cloud OFF and whose server link acknowledged exactly that
+  /// (AI on), while the gate is not blocked. The caller then makes its analysis
+  /// calls in `CloudEgressGate.runSmartAnalysis(owner, ...)`.
+  Future<String?> smartAnalysisLaneOwner() async {
+    if (!_isIos() || !_isBackendConfigured()) return null;
+    if (await _gateState() == _Gate.blocked) return null;
+    final uid = _readSession()?.uid;
+    if (uid == null || await _readReplicaOwnerUid() != uid) return null;
+    final settings = await _settingsRepository.getSettings();
+    if (!ConsentAuthority.decide(EgressClass.smartAnalysis, settings) ||
+        !_smartOnly(_snapshotOf(settings))) {
+      return null;
+    }
+    final ack = await _readAck(uid);
+    return ack != null && ack.ai && !ack.cloud ? uid : null;
+  }
+
+  /// Phase 3: narrows the server's copy of the smart-analysis consent after it
+  /// was turned off with Cloud OFF (the ack still says AI on, Cloud off). One
+  /// set-device-consent in the lane, identifiers and the OFF state only; the
+  /// ack then records the narrower state. A failure is retried by the next
+  /// sync; the device itself already stopped sending.
+  Future<void> _narrowSmartAnalysis(_Tx tx) async {
+    if (!_isIos() || !_isBackendConfigured()) return;
+    final session = _readSession();
+    if (session == null || session.uid != tx.owner) return;
+    final ack = await _readAck(session.uid);
+    if (ack == null || !ack.ai || ack.cloud) return;
+    final snapshot = _snapshotOf(await _settingsRepository.getSettings());
+    if (snapshot.ai || snapshot.cloud || !await _holds(tx)) return;
+    try {
+      final installId = await _loadInstallId();
+      final secret = await _storage.read(key: _secretKey);
+      if (secret == null || secret.isEmpty || !await _holds(tx)) return;
+      final generation = await _consentGeneration(session.uid, ack);
+      if (!await _holds(tx)) return;
+      await _gate.runSmartAnalysis(
+          session.uid,
+          () => _consent.setConsent(
+                installId: installId,
+                deviceSecret: secret,
+                jwt: session.jwt,
+                cloud: false,
+                ai: false,
+                version: snapshot.version,
+                clientGeneration: generation,
+              ));
+    } catch (_) {
+      return;
+    }
+    if (!await _holds(tx)) return;
+    await _writeAck(session.uid, snapshot);
+  }
+
   Future<void> syncApnsToken(ApnsTokenInfo token) {
     final tokenKey = '${token.environment}:${token.token}';
     if (_lastSyncedApnsTokenKey == tokenKey) return Future.value();
@@ -4082,42 +4265,50 @@ class CaptureDeviceRegistrationService {
     String tokenKey,
   ) async {
     if (!_isIos() || !_isBackendConfigured()) return;
-    if (await _gateState() != _Gate.open) return;
+    final gateState = await _gateState();
+    if (gateState == _Gate.blocked) return;
     final tx = await _beginTx();
     if (!await _holds(tx)) return;
     final settings = await _settingsRepository.getSettings();
     if (!await _holds(tx)) return;
-    if (!settings.cloudProcessingEnabled) return;
+    // Phase 3: Cloud ON through the open gate, or the smart-analysis lane.
+    final smart = _smartOnly(_snapshotOf(settings));
+    if (!smart && (gateState != _Gate.open || !settings.cloudProcessingEnabled)) {
+      return;
+    }
     final secret = await _storage.read(key: _secretKey);
     if (!await _holds(tx)) return;
     if (secret == null || secret.isEmpty) return;
     final installId = await _loadInstallId();
     if (!await _holds(tx)) return;
     try {
-      await _backendClient.registerPushToken(
-        installId: installId,
-        deviceSecret: secret,
-        apnsToken: token.token,
-        apnsEnvironment: token.environment,
-      );
+      await _lane(smart, tx.owner, () => _backendClient.registerPushToken(
+            installId: installId,
+            deviceSecret: secret,
+            apnsToken: token.token,
+            apnsEnvironment: token.environment,
+          ));
     } on CaptureBackendException catch (error) {
       if (_isRateLimited(error)) {
         _apnsRetryBlockedUntil = DateTime.now().add(const Duration(hours: 1));
         rethrow;
       }
       if (!_isUnauthorized(error)) rethrow;
-      final freshSecret = await _recoverRejectedSecret(
-        rejectedSecret: secret,
-        installId: installId,
-        current: tx.current,
-      );
+      final freshSecret = await _lane(
+          smart,
+          tx.owner,
+          () => _recoverRejectedSecret(
+                rejectedSecret: secret,
+                installId: installId,
+                current: tx.current,
+              ));
       if (!await _holds(tx)) return;
-      await _backendClient.registerPushToken(
-        installId: installId,
-        deviceSecret: freshSecret,
-        apnsToken: token.token,
-        apnsEnvironment: token.environment,
-      );
+      await _lane(smart, tx.owner, () => _backendClient.registerPushToken(
+            installId: installId,
+            deviceSecret: freshSecret,
+            apnsToken: token.token,
+            apnsEnvironment: token.environment,
+          ));
     }
     // P4: a registration that completed after an account switch / transition is
     // not recorded as synced for the new state.
@@ -4143,13 +4334,18 @@ class CaptureDeviceRegistrationService {
     final live = current ?? _captureLifetime();
     if (!live()) throw const StaleAdmissionException();
     // Cloud OFF = zero egress (R6): a 401 never re-registers the device while
-    // the user's Cloud consent is OFF (e.g. switched off mid-flight).
-    if (await _gateState(current: live) != _Gate.open || !live()) {
+    // the user's Cloud consent is OFF (e.g. switched off mid-flight), except in
+    // the phase-3 smart-analysis lane while that consent holds.
+    final recoveryGate = await _gateState(current: live);
+    if (recoveryGate == _Gate.blocked || !live()) {
       throw const CaptureBackendException('recovery_skipped_cloud_off');
     }
     final recoverySettings = await _settingsRepository.getSettings();
     if (!live()) throw const StaleAdmissionException();
-    if (!recoverySettings.cloudProcessingEnabled) {
+    final recoverySmart = _smartOnly(_snapshotOf(recoverySettings));
+    if (!recoverySmart &&
+        (recoveryGate != _Gate.open ||
+            !recoverySettings.cloudProcessingEnabled)) {
       throw const CaptureBackendException('recovery_skipped_cloud_off');
     }
     if (!live()) throw const StaleAdmissionException();
@@ -4166,7 +4362,8 @@ class CaptureDeviceRegistrationService {
       if (!live() || !await _holds(tx)) {
         throw const StaleAdmissionException();
       }
-      final fresh = await _backendClient.registerDevice(installId: installId);
+      final fresh = await _lane(recoverySmart, tx.owner,
+          () => _backendClient.registerDevice(installId: installId));
       if (!live() || !await _holds(tx)) {
         throw const StaleAdmissionException();
       }
@@ -4196,8 +4393,7 @@ class CaptureDeviceRegistrationService {
         deviceSecret: fresh,
         backendUrl: SupabaseConfig.url,
         anonKey: SupabaseConfig.anonKey,
-        aiConsentGranted:
-            settings.cloudProcessingEnabled && settings.aiConsentGranted,
+        aiConsentGranted: _snapshotOf(settings).ai,
         ownerUid: tx.owner ?? '',
         transitionGeneration: generation,
       );
@@ -4211,6 +4407,24 @@ class CaptureDeviceRegistrationService {
         _credentialRecovery = null;
       }
     }
+  }
+}
+
+/// Phase 3: runs [body] in the smart-analysis lane of [owner]
+/// ([CloudEgressGate.runSmartAnalysis]), or as is when [owner] is null.
+Future<T> inSmartAnalysisLane<T>(String? owner, Future<T> Function() body) =>
+    owner == null
+        ? body()
+        : CloudEgressGate.instance.runSmartAnalysis(owner, body);
+
+/// Phase 3: [CaptureDeviceRegistrationService.smartAnalysisLaneOwner], failing
+/// closed (null) on any error.
+Future<String?> smartAnalysisLaneOf(
+    CaptureDeviceRegistrationService service) async {
+  try {
+    return await service.smartAnalysisLaneOwner();
+  } catch (_) {
+    return null;
   }
 }
 
