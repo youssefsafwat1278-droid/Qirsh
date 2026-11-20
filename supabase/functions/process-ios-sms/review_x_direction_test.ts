@@ -55,9 +55,9 @@ const PERSON_TRANSFER: Array<[string, number]> = [
   ['Ali Hassan sent you SAR 120.00', 120],
   ['Your wallet was topped up with SAR 95.00 by Ali Hassan', 95],
 ];
-// Gemini-first phase 1: a transfer whose flow names no other side ("by Ali"
-// is not a transfer flow) stays local on the AI-primary path too.
-const LOCAL_ON_PRIMARY = new Set(['Your wallet was topped up with SAR 95.00 by Ali Hassan']);
+// Gemini-first phase 2 (C, replaces the phase 1 local exception): every person transfer reaches the model on the
+// AI-primary path, a wallet top-up by a person included.
+const LOCAL_ON_PRIMARY = new Set<string>();
 
 const CONFLICTING: Array<[string, number]> = [
   ['Purchase SAR 150.00 at Noon card *4521 completed. Merchant confirmation received', 150],

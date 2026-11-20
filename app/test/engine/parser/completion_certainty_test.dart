@@ -52,6 +52,10 @@ void main() {
     expect(CompletionCertainty.transferForModel('IPN EGP 300.00 18/11 08:36 PM'), isTrue);
     expect(CompletionCertainty.transferForModel('تم تحويل مبلغ 500 ريال لحسابك في بنك آخر'), isFalse);
     expect(CompletionCertainty.transferForModel('تحويل بين حساباتك بمبلغ 500 ريال تم بنجاح'), isFalse);
+    // Gemini-first phase 2 (F): a mobile wallet is a channel too.
+    expect(CompletionCertainty.transferForModel('تحويل 300 جنيه عبر فودافون كاش'), isTrue);
+    expect(CompletionCertainty.transferForModel('Orange Cash transfer EGP 150'), isTrue);
+    expect(CompletionCertainty.transferForModel('e& money transfer EGP 90'), isTrue);
   });
 
   // Review X (X-M1/X-M2/X-M4): the direction the rule parser reads — the

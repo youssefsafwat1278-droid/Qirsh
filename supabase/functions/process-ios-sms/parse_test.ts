@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertNotEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
-import { deterministicParse, isDeclinedText, isResolved, messageMeaning, parseSms } from './parse.ts';
+import { deterministicParse, isDeclinedText, isResolved, isReversal, messageMeaning, parseSms } from './parse.ts';
 import { isTransfer } from './completion_certainty.ts';
 import declinedTable from './declined_cases.json' with { type: 'json' };
 import declinedDeviations from './declined_cases_deviations.json' with { type: 'json' };
@@ -642,10 +642,14 @@ Deno.test('declined table: not completed is never confirmed money, on every serv
       try {
         const primary = await parseSms({ text, rawText: text, sender: 'BANK', receivedAt: RECEIVED,
           tzOffsetMinutes: 180, locale: 'ar', allowAi: true, aiPrimary: true });
-        assertEquals(primary.accepted, false, text);
+        // Gemini-first phase 2 (C): a cancelled purchase is a reversal the
+        // model reads on the AI-primary path; a debit answer never records.
+        const reversal = isReversal(text);
+        if (!reversal || direction === 'debit') assertEquals(primary.accepted, false, text);
+        if (reversal) assert(stub.calls > 0, text);
         // Gemini-first phase 1: on the AI-primary path a pending transfer
         // reaches the model like any pending message (never accepted).
-        if (!(m.kind === 'not_completed' && m.reason === 'pending')) {
+        if (!(m.kind === 'not_completed' && m.reason === 'pending') && !reversal) {
           assertEquals(stub.calls, 0, text);
           // (A transfer may be held on its own reading: deterministic.)
           const sources = isTransfer(text) ? ['ai_ignored', 'deterministic'] : ['ai_ignored'];

@@ -981,7 +981,8 @@ class CaptureSyncService {
     if (meaningHoldReason(
             _string(parsed['rawMessage']) ?? capture.sanitizedText ?? '',
             amount: heldAmount is num ? heldAmount : null,
-            modelDecided: isModelDecidedRow(parsed)) !=
+            modelDecided: isModelDecidedRow(parsed),
+            modelRow: isModelRow(parsed)) !=
         null) {
       await _persistBackendUnprocessableCapture(
           capture, requireCurrentAdmission, committed);
@@ -997,6 +998,7 @@ class CaptureSyncService {
       direction: _string(parsed['direction']),
       type: _string(parsed['type']),
       senderId: _string(parsed['senderId']),
+      modelRow: isModelRow(parsed),
       // PR-06: an amount the device cannot read is never taken as agreeing.
       amount: parsed['amount'] == null
           ? null

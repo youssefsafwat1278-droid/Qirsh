@@ -1,7 +1,9 @@
 import '../../engine/ai/ai_candidate_validator.dart';
 import '../finance/currency_scale.dart';
+import '../../engine/parser/completion_certainty.dart';
 import '../../engine/parser/direction_signal.dart';
 import '../../engine/parser/message_meaning.dart';
+import '../../engine/parser/normalizer.dart';
 import '../../engine/models/transaction_type.dart';
 import '../../engine/parser/parser_engine.dart';
 
@@ -105,9 +107,9 @@ String? canonicalCaptureMoneyText(String token, [String? currency]) {
 
 // A numeric token is a maximal digit run with digit-flanked group/decimal
 // separators (ASCII or Arabic), so a longer number never yields a sub-token.
-final RegExp _numericToken = RegExp('[0-9٠-٩]+(?:[,٬.٫][0-9٠-٩]+)*');
-final RegExp _dateTimeSepBefore = RegExp('[0-9٠-٩][-/:]\$');
-final RegExp _dateTimeSepAfter = RegExp('^[-/:][0-9٠-٩]');
+final RegExp _numericToken = RegExp('[0-9٠-٩۰-۹]+(?:[,٬،.٫][0-9٠-٩۰-۹]+)*');
+final RegExp _dateTimeSepBefore = RegExp('[0-9٠-٩۰-۹][-/:]\$');
+final RegExp _dateTimeSepAfter = RegExp('^[-/:][0-9٠-٩۰-۹]');
 final RegExp _last4Prefix = RegExp(
   r'(?:[*•xX]|(?:ending|ends|acct|account|a/c|card|بطاقة|حساب|رقم|تنتهي|منتهية)'
   r'(?:\s+(?:in|with|no\.?|number|#|بـ|ب))?[\s:#.-]*)$',
@@ -118,7 +120,10 @@ String? _canonicalTokenText(String token) {
   final ascii = token
       .replaceAllMapped(RegExp('[٠-٩]'),
           (d) => String.fromCharCode(d[0]!.codeUnitAt(0) - 0x0660 + 0x30))
+      .replaceAllMapped(RegExp('[۰-۹]'),
+          (d) => String.fromCharCode(d[0]!.codeUnitAt(0) - 0x06F0 + 0x30))
       .replaceAll('٬', ',')
+      .replaceAll('،', ',')
       .replaceAll('٫', '.');
   return canonicalCaptureMoneyText(ascii);
 }
@@ -235,8 +240,16 @@ bool localParseOpposesDirection({
 /// `total_with_parts`) whose [amount]
 /// (the server's or model's answer) is the total the message states
 /// ([AiCandidateValidator.statedTotal]) may be recorded.
+///
+/// Gemini-first phase 2: for a server row whose reading is the model's
+/// ([modelRow]) the server's rule applies — a reversal (a cancelled purchase
+/// or debit) is the model's to read, and an advert tail is set aside first.
 String? meaningHoldReason(String text,
-    {num? amount, bool modelDecided = false}) {
+    {num? amount, bool modelDecided = false, bool modelRow = false}) {
+  if (modelRow) {
+    if (isReversalMessage(text)) return null;
+    text = withoutAdvertTail(text);
+  }
   final meaning = ParserEngine.meaningOf(text);
   // Follow-up 15 (VAL-1): released only by the single rule, which reads
   // not-completed first. (Round 5: [modelDecided] — the row is a model's
@@ -253,21 +266,84 @@ String? meaningHoldReason(String text,
 
 /// Round 5 (review X, X-M1): a server row whose direction is a model's
 /// answer (the rule parse + model or AI-primary path) is refused when the
-/// device's rule parser reads another direction in [text], or reads none and
-/// the message has a completed-event form the model does not decide
-/// ([DirectionSignal.modelDirectionRefused]).
+/// text explicitly names another direction.
+///
+/// Gemini-first phase 2: only an explicit contradiction holds the row, as on
+/// the server — never the device's parser reading the text differently or
+/// having no reading ([_explicitlyContradicts]).
 bool modelRowDirectionRefused(Map<String, dynamic>? parsed, String text) {
   if (!isModelRow(parsed)) return false;
-  return _modelDirectionRefused(text,
+  return _modelDirectionRefused(
+      text,
       _asDirection(parsed?['direction'] as String?),
       _directionOfType(parsed?['type'] as String?));
 }
 
 bool _modelDirectionRefused(
         String text, TxnDirection direction, TxnDirection typeDirection) =>
-    [direction, typeDirection].any((d) =>
-        d != TxnDirection.unknown &&
-        DirectionSignal.modelDirectionRefused(text, d));
+    [direction, typeDirection].any((d) => _explicitlyContradicts(text, d));
+
+/// The text's explicit direction — a transfer's own flow, else the clause's
+/// money words, with an advert tail set aside — is known and is not
+/// [direction]. A reversal names the original debit, so it never contradicts.
+bool _explicitlyContradicts(String text, TxnDirection direction) {
+  if (direction == TxnDirection.unknown || isReversalMessage(text)) {
+    return false;
+  }
+  final cue = withoutAdvertTail(text);
+  final flow = CompletionCertainty.isTransfer(cue)
+      ? CompletionCertainty.transferFlowCredit(cue)
+      : null;
+  final local = flow == null
+      ? DirectionSignal.localOf(cue)
+      : (flow ? TxnDirection.credit : TxnDirection.debit);
+  return local != TxnDirection.unknown && local != direction;
+}
+
+final RegExp _reversal = RegExp(
+    r'(?<![ء-ي])(?:تم )?(?:ال)?[اإ]لغاء (?:عمليه |عملية )?(?:ال)?(?:شراء|خصم|سحب)(?![ء-ي])'
+    r'|(?<![a-z])(?:purchase|debit|charge|withdrawal|transaction)(?: of [^.\n]{0,30}?)? (?:has been |was |is )?(?:cancell?ed|canceled|reversed)(?![a-z])');
+
+/// A cancelled purchase, debit or ATM withdrawal: money returned, which the
+/// model reads. Twin of `isReversal` in `process-ios-sms/parse.ts`.
+bool isReversalMessage(String text) =>
+    _reversal.hasMatch(Normalizer.normalize(text).toLowerCase()) &&
+    !ParserEngine.isIgnoredMessage(text);
+
+final RegExp _moneyFigure = RegExp(
+    '(?<![a-z])(?:${AiCandidateValidator.currencyCodes.join('|')}|le|l\\.e)(?![a-z])\\.?\\s?[0-9٠-٩۰-۹]'
+    '|[0-9٠-٩۰-۹]\\s?(?:(?:${AiCandidateValidator.currencyCodes.join('|')}|le)(?![a-z])|جنيه|جم|ج\\.م|ريال|ر\\.س|درهم|د\\.إ|دولار)',
+    caseSensitive: false);
+final RegExp _advertCue = RegExp(
+    r'%|(?<![a-z])(?:apply|enjoy|shop|download|visit|offer|discount|cashback|earn|win|subscribe|register|free|now)(?![a-z])|(?<![ء-ي])(?:احصل|استمتع|اشترك|حمل التطبيق|(?:ال)?عرض|(?:ال)?عروض|(?:ال)?قرض|(?:ال)?تقسيط|بادر|سارع|الآن|الان)(?![ء-ي])|(?<![ء-ي])مجان',
+    caseSensitive: false);
+final RegExp _sentence =
+    RegExp(r'[^\n!?؟;؛.]+(?:\.(?=[0-9٠-٩])[^\n!?؟;؛.]*)*[\n!?؟;؛.]?');
+// A completed-event or status word: a sentence carrying one is never an
+// advert tail.
+final RegExp _doneCue = RegExp(
+    r'(?<![a-z])(?:credited|debited|deducted|charged|received|sent|transferred|withdrawn|deposited|paid|refunded|reversed|declined|rejected|failed|pending|processing|on hold)(?![a-z])|(?<![ء-ي])(?:تم|لم|قيد|معلق[ةه]?|مرفوض[ةه]?|فشلت?)(?![ء-ي])',
+    caseSensitive: false);
+
+/// [text] with each sentence after the first one that states money blanked
+/// when it is an advert (an offer word, a percentage), states no money itself
+/// and names no completed event. Same length. Twin of `withoutAdvertTail` in
+/// `process-ios-sms/parse.ts`.
+String withoutAdvertTail(String text) {
+  var seenMoney = false;
+  return text.replaceAllMapped(_sentence, (m) {
+    final s = m[0]!;
+    final money = _moneyFigure.hasMatch(s);
+    if (seenMoney &&
+        !money &&
+        _advertCue.hasMatch(s) &&
+        !_doneCue.hasMatch(s)) {
+      return ' ' * s.length;
+    }
+    seenMoney = seenMoney || money;
+    return s;
+  });
+}
 
 /// A server row whose figure and direction are a model's answer.
 bool isModelRow(Map<String, dynamic>? parsed) =>
@@ -288,7 +364,8 @@ final RegExp _sentenceCut = RegExp(r'[\n!?؟;؛]|\.(?![0-9])');
 /// Server twin: `gatedMeaning` in `process-ios-sms/meaning_gate.ts`.
 bool severalMovements(String text, [MessageMeaning? meaning]) {
   meaning ??= ParserEngine.meaningOf(text);
-  if (meaning.kind != MessageKind.completedMovement || meaning.footerCount > 0) {
+  if (meaning.kind != MessageKind.completedMovement ||
+      meaning.footerCount > 0) {
     return false;
   }
   final movement = text
@@ -318,6 +395,7 @@ bool localParseContradictsServer({
   String? senderId,
   num? amount,
   String? merchant,
+  bool modelRow = false,
 }) =>
     ParserEngine.isIgnoredMessage(text, senderId: senderId) ||
     // V1-086: as the AI candidate validator, a notice line unrelated to the
@@ -328,6 +406,25 @@ bool localParseContradictsServer({
             : AiCandidateValidator.withoutUnrelatedNotices(
                 text, amount.toDouble()),
         senderId: senderId) ||
+    // Gemini-first phase 2: the model's reading is not opposed by the
+    // device's own parse ([modelRowDirectionRefused] holds an explicit
+    // contradiction).
+    (!modelRow &&
+        _localReadingDiffers(text,
+            direction: direction,
+            type: type,
+            senderId: senderId,
+            amount: amount,
+            merchant: merchant));
+
+bool _localReadingDiffers(
+  String text, {
+  String? direction,
+  String? type,
+  String? senderId,
+  num? amount,
+  String? merchant,
+}) =>
     localParseOpposesDirection(
         text: text,
         direction: direction,
@@ -391,8 +488,14 @@ CaptureValidation validateCaptureCandidate({
   // Follow-up 13: any meaning other than `record` rejects
   // ([AiCandidateValidator.meaningRejectionOf]): the not-completed reason
   // first, another non-record meaning just before acceptance.
-  final meaningRejection = AiCandidateValidator.meaningRejectionOf(text,
-      amount: candidate.amount, modelDecided: modelDecided);
+  // Gemini-first phase 2: a server model row ([fromModel]) is read as the
+  // server reads it — a reversal is the model's, an advert tail set aside.
+  final reversal = fromModel && isReversalMessage(text);
+  final cueText = fromModel ? withoutAdvertTail(text) : text;
+  final meaningRejection = reversal
+      ? null
+      : AiCandidateValidator.meaningRejectionOf(cueText,
+          amount: candidate.amount, modelDecided: modelDecided);
   if (meaningRejection == 'transaction_not_completed') {
     return reject('transaction_not_completed');
   }
@@ -430,19 +533,20 @@ CaptureValidation validateCaptureCandidate({
     return reject('amount_text_not_grounded');
   }
 
-  final wording = AiCandidateValidator.bookedDirection(text,
-      amount: amount,
-      merchant: _merchantGrounded(candidate.merchant, text)
-          ? candidate.merchant
-          : null);
+  final wording = reversal
+      ? TxnDirection.unknown
+      : AiCandidateValidator.bookedDirection(cueText,
+          amount: amount,
+          merchant: _merchantGrounded(candidate.merchant, text)
+              ? candidate.merchant
+              : null);
   final aiDirection = _asDirection(candidate.direction);
   final typeDirection = _directionOfType(candidate.type);
-  // Round 5 (X-M1): a model's direction only where the device's rule parser
-  // reads the same one ([modelRowDirectionRefused]).
+  // Round 5 (X-M1): a model's direction only where the text names no other
+  // ([modelRowDirectionRefused]).
   if (_contradicts(wording, typeDirection) ||
       _contradicts(wording, aiDirection) ||
-      (fromModel &&
-          _modelDirectionRefused(text, aiDirection, typeDirection))) {
+      (fromModel && _modelDirectionRefused(text, aiDirection, typeDirection))) {
     return reject('direction_contradiction');
   }
   // Direction is required: the explicit direction, else the one the type implies.

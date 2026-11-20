@@ -485,7 +485,8 @@ class CaptureImportService {
     final heldAmount = result?.parsed['amount'];
     final held = meaningHoldReason(item.text,
         amount: heldAmount is num ? heldAmount : null,
-        modelDecided: isModelDecidedRow(result?.parsed));
+        modelDecided: isModelDecidedRow(result?.parsed),
+        modelRow: isModelRow(result?.parsed));
     if (aiPrimary) {
       if (result?.parsed['parserSource'] == 'ai_ignored') {
         // Only the device's deterministic OTP/promo filter may drop a capture.
@@ -628,6 +629,7 @@ class CaptureImportService {
       type: p['type'] is String ? p['type'] as String : null,
       senderId: item.sender,
       merchant: p['merchant'] is String ? p['merchant'] as String : null,
+      modelRow: isModelRow(p),
       // PR-06: an amount the device cannot read is never taken as agreeing.
       amount: p['amount'] is num
           ? p['amount'] as num

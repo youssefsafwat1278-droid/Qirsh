@@ -106,6 +106,10 @@ export function confirmationReasonCode(invalid: string | undefined): ReasonCode 
  */
 const CHANNEL_ALIASES: Array<{ pattern: RegExp; name: string }> = [
   { pattern: /\bipn\b|insta ?pay|إنستا ?باي|انستا ?باي/i, name: 'InstaPay' },
+  // Gemini-first phase 2: Egyptian mobile wallets (Arabic and English spellings).
+  { pattern: /vodafone ?cash|فودافون ?كاش/i, name: 'Vodafone Cash' },
+  { pattern: /orange ?(?:cash|money)|[اأ]ورا?نج ?(?:كاش|موني)/i, name: 'Orange Cash' },
+  { pattern: /e& ?money|etisalat ?cash|اتصالات ?كاش|إي ?آند ?(?:موني|ماني)/i, name: 'e& money' },
 ];
 
 /** The payment channel a message names, as its display name. */
@@ -116,6 +120,6 @@ export function channelIn(text: string): string | undefined {
 /** [merchant] under its channel display name when it is a known alias ("IPN" -> "InstaPay"). */
 export function channelDisplayName(merchant: string | undefined): string | undefined {
   if (merchant == null) return undefined;
-  const alias = CHANNEL_ALIASES.find((a) => a.pattern.test(merchant) && merchant.trim().length <= 12);
+  const alias = CHANNEL_ALIASES.find((a) => a.pattern.test(merchant) && merchant.trim().length <= 14);
   return alias?.name ?? merchant;
 }

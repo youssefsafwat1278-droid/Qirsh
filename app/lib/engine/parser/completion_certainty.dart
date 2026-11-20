@@ -179,7 +179,10 @@ class CompletionCertainty {
       transferFlowCredit(text) != null || _paymentChannel.hasMatch(text);
 
   static final RegExp _paymentChannel = RegExp(
-      r'\bipn\b|insta ?pay|إنستا ?باي|انستا ?باي',
+      r'\bipn\b|insta ?pay|إنستا ?باي|انستا ?باي'
+      // Gemini-first phase 2: the mobile wallets in `CHANNEL_ALIASES`.
+      r'|vodafone ?cash|فودافون ?كاش|orange ?(?:cash|money)|[اأ]ورا?نج ?(?:كاش|موني)'
+      r'|e& ?money|etisalat ?cash|اتصالات ?كاش|إي ?آند ?(?:موني|ماني)',
       caseSensitive: false);
 
   /// Narrow check Z (N-M1b): a stated credit wording next to an installment,
