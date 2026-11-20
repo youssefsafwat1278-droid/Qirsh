@@ -78,9 +78,9 @@ STRINGS = {
              "وهي مقفولة، مفيش بيانات مالية بتغادر جهازك — وده مفروض عند كل "
              "اتصال بالشبكة، مش في شاشة الإعدادات بس."),
             ("الموديل اللي بيصنّف مصاريفك بيشتغل على جهازك.",
-             "ولو وافقت على «التحليل الذكي والمزامنة» — مقفول لحد ما توافق — "
-             "نسخة متنضّفة من رسالة البنك ممكن تتبعت لسيرفراتنا ولـ Gemini من "
-             "Google عشان تتقرا."),
+             "ولو شغّلت «التحليل الذكي» — مع المزامنة أو لوحده على الآيفون، "
+             "ومقفول لحد ما توافق — نسخة متنضّفة من رسالة البنك ممكن تتبعت "
+             "لسيرفراتنا ولـ Gemini من Google عشان تتقرا."),
             ("إحنا مابنبيعش بياناتك.",
              "مفيش ملف إعلاني بيتبني من عملياتك."),
         ],
@@ -97,7 +97,7 @@ STRINGS = {
              "الخصوصية."),
             ("الذكاء الاصطناعي بيشتغل فين؟",
              "تصنيف مصاريفك بيحصل على جهازك. قراءة الرسالة بـ Gemini من Google "
-             "بتحصل بس لو وافقت على «التحليل الذكي والمزامنة»، وبيتبعت نص "
+             "بتحصل بس لو شغّلت «التحليل الذكي» (مع المزامنة أو لوحده)، وبيتبعت نص "
              "متنضّف من أرقام البطاقات والحسابات والتليفونات."),
             ("إيه العملات المدعومة؟",
              "كل حساب بعملته، والمبالغ بتتخزَّن بدقة كاملة — بما فيها العملات "
@@ -207,8 +207,9 @@ STRINGS = {
              "With it off, no financial data leaves your device — enforced at "
              "every network call, not only in the settings screen."),
             ("The model that categorises your spending runs on your device.",
-             "If you accept Smart Analysis & Cloud Sync — off until you accept "
-             "it — a sanitized copy of a bank message may be sent to our servers "
+             "If you turn on Smart Analysis — with Cloud Sync, or on its own on "
+             "iPhone, and off until you accept it — a sanitized copy of a bank "
+             "message may be sent to our servers "
              "and to Google's Gemini API to help read it."),
             ("We do not sell your data.",
              "There is no advertising profile built from your transactions."),
@@ -227,8 +228,8 @@ STRINGS = {
              "the Privacy Policy."),
             ("Where does the AI run?",
              "Categorising your spending happens on your device. Reading a "
-             "message with Google's Gemini API happens only if you accept Smart "
-             "Analysis & Cloud Sync, and the text is sanitized of card, account "
+             "message with Google's Gemini API happens only if you turn on Smart "
+             "Analysis (with or without Cloud Sync), and the text is sanitized of card, account "
              "and phone numbers first."),
             ("Which currencies are supported?",
              "Each account carries its own currency, and amounts are stored "
