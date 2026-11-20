@@ -163,6 +163,26 @@ class DriftSmartInboxRepository implements SmartInboxRepository {
     return rows.map(_fromRow).toList(growable: false);
   }
 
+  /// The local capture rows of [payloadIds], whatever their status (the
+  /// analysis log lists resolved and dismissed ones too).
+  Future<List<SmartInboxItemEntity>> captureItems(
+      List<String> payloadIds) async {
+    final items = <SmartInboxItemEntity>[];
+    for (var i = 0; i < payloadIds.length; i += 200) {
+      final chunk = payloadIds.sublist(
+          i, i + 200 > payloadIds.length ? payloadIds.length : i + 200);
+      final rows = await _db.customSelect(
+        'SELECT * FROM smart_inbox_items WHERE id IN '
+        '(${List.filled(chunk.length, '?').join(', ')});',
+        variables: [
+          for (final id in chunk) Variable.withString('local_capture:$id'),
+        ],
+      ).get();
+      items.addAll(rows.map(_fromRow));
+    }
+    return items;
+  }
+
   @override
   Future<void> dismiss(String id) => _setStatus(id, 'dismissed', true);
 

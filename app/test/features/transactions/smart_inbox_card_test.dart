@@ -2,12 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/di/app_providers.dart';
 import 'package:money_companion/domain/capture/analysis_reason.dart';
+import 'package:money_companion/domain/entities/account_entity.dart';
 import 'package:money_companion/domain/entities/smart_inbox_item_entity.dart';
+import 'package:money_companion/domain/repositories/account_repository.dart';
 import 'package:money_companion/domain/entities/supporting_entities.dart';
 import 'package:money_companion/domain/repositories/smart_inbox_repository.dart';
+import 'package:money_companion/features/transactions/manual_transaction_sheet.dart';
 import 'package:money_companion/features/transactions/transactions_screen.dart';
 
 import '../consent/consent_test_harness.dart';
+
+class _NoAccounts implements AccountRepository {
+  @override
+  Future<AccountEntity?> getDefault() async => null;
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
+}
 
 class _FakeInbox implements SmartInboxRepository {
   @override
@@ -63,6 +73,7 @@ Future<void> _pump(
       ...consentOverrides(
           repo, registrationService ?? FakeRegistrationService()),
       smartInboxRepositoryProvider.overrideWithValue(_FakeInbox()),
+      accountRepositoryProvider.overrideWithValue(_NoAccounts()),
     ],
     home: Scaffold(body: SmartInboxCard(item: item)),
   ));
@@ -210,8 +221,11 @@ void main() {
       expect(find.text('Retry smart analysis'), findsNothing);
     });
 
-    testWidgets('amount mismatch: one-tap confirmation of the model reading',
-        (tester) async {
+    // Gemini-first phase 2 (owner decision): the model's amount does not
+    // match the text, so it is never saved by one tap.
+    testWidgets(
+        'amount mismatch: opens the pre-filled editor with the message, '
+        'saves nothing', (tester) async {
       await _pump(
           tester,
           _item(
@@ -222,8 +236,25 @@ void main() {
                 amountText: '54.00', currency: 'EGP', isDebit: true),
           ),
           consentOn: true);
-      expect(find.textContaining('Record as expense 54.00'), findsOneWidget);
+      expect(find.textContaining('Record as expense'), findsNothing);
       expect(find.textContaining('Record as income'), findsNothing);
+      await tester.tap(find.text('Check the amount and record it'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      final sheet = tester
+          .widget<ManualTransactionSheet>(find.byType(ManualTransactionSheet));
+      expect(sheet.transaction, isNull, reason: 'a new entry, not an edit');
+      expect(sheet.prefill!.amountText, '54.00');
+      expect(sheet.prefill!.currency, 'EGP');
+      expect(sheet.prefill!.messageText, _sms);
+    });
+
+    testWidgets('not added for a settled reason: "Record it anyway"',
+        (tester) async {
+      await _pump(tester, _item(body: _sms, reasonCode: 'declined'),
+          consentOn: true);
+      expect(find.text('Record it anyway'), findsOneWidget);
+      expect(find.text('Add manually'), findsNothing);
     });
   });
 }

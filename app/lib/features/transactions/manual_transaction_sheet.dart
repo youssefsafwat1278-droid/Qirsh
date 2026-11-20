@@ -40,11 +40,35 @@ import '../../core/theme/widgets/glass_dialog.dart';
 import '../../core/theme/widgets/glass_pickers.dart';
 import '../../core/theme/widgets/glass_dropdown_field.dart';
 
+/// What a new manual entry starts from when the user records a captured
+/// bank message by hand (Gemini-first phase 2: «سجّلها على أي حال», an amount
+/// to check). Nothing is saved until the user taps save.
+class ManualEntryPrefill {
+  const ManualEntryPrefill({
+    this.amountText,
+    this.currency,
+    this.merchant,
+    this.isDebit,
+    this.occurredAt,
+    this.messageText,
+  });
+
+  final String? amountText;
+  final String? currency;
+  final String? merchant;
+  final bool? isDebit;
+  final DateTime? occurredAt;
+
+  /// The bank message, already masked, shown above the form.
+  final String? messageText;
+}
+
 class ManualTransactionSheet extends ConsumerStatefulWidget {
   const ManualTransactionSheet({
     super.key,
     this.transaction,
     this.initialCardLast4,
+    this.prefill,
   });
 
   final TransactionEntity? transaction;
@@ -52,11 +76,15 @@ class ManualTransactionSheet extends ConsumerStatefulWidget {
   /// لما تُفتح من صفحة بطاقة معيّنة: العملية الجديدة تُنسب لهذه البطاقة.
   final String? initialCardLast4;
 
+  /// A new entry recorded from a captured bank message (never an edit).
+  final ManualEntryPrefill? prefill;
+
   /// Completes with true only when a transaction was saved from the sheet.
   static Future<bool> show(
     BuildContext context, {
     TransactionEntity? transaction,
     String? cardLast4,
+    ManualEntryPrefill? prefill,
   }) async {
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -66,6 +94,7 @@ class ManualTransactionSheet extends ConsumerStatefulWidget {
       builder: (_) => navySheetTheme(ManualTransactionSheet(
         transaction: transaction,
         initialCardLast4: cardLast4,
+        prefill: prefill,
       )),
     );
     return saved ?? false;
@@ -135,13 +164,24 @@ class _ManualTransactionSheetState
         });
       }
     } else {
+      final prefill = widget.prefill;
+      if (prefill != null) {
+        _amount.text = prefill.amountText ?? '';
+        _merchant.text = prefill.merchant ?? '';
+        if (prefill.currency != null) _currency.text = prefill.currency!;
+        if (prefill.isDebit == false) _type = TransactionTypeEntity.income;
+        if (prefill.occurredAt != null) {
+          _occurredAt = prefill.occurredAt!.toLocal();
+        }
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         // الحساب الافتراضي يحدّد العملة المبدئية.
         final account = await ref.read(accountRepositoryProvider).getDefault();
         if (mounted && account != null && _accountId == null) {
           setState(() {
             _accountId = account.id;
-            _currency.text = account.currency;
+            // A currency read from the bank message is kept.
+            if (prefill?.currency == null) _currency.text = account.currency;
           });
         }
       });
@@ -600,6 +640,15 @@ class _ManualTransactionSheetState
       ),
       children: [
         const SizedBox(height: AppSpacing.s4),
+        if (widget.prefill?.messageText?.isNotEmpty == true) ...[
+          Text(context.l10n.mtFromMessage,
+              style: AppTypography.subhead(c.textSecondary)),
+          const SizedBox(height: 4),
+          Text(widget.prefill!.messageText!,
+              key: const ValueKey('manual-prefill-message'),
+              style: AppTypography.caption(c.textMuted)),
+          const SizedBox(height: AppSpacing.s4),
+        ],
         // A pair cannot change type in place: it is two rows.
         IgnorePointer(
           ignoring: _isPairEdit,

@@ -71,6 +71,9 @@ import '../../core/theme/widgets/glass_pickers.dart';
 import '../common/app_error_state.dart';
 import '../../domain/capture/analysis_reason.dart';
 import '../capture/analysis_reason_text.dart';
+import '../capture/analysis_log_screen.dart';
+import '../../domain/capture/analysis_outcome.dart';
+import '../../engine/privacy/sms_sanitizer.dart';
 
 class TransactionsScreen extends ConsumerStatefulWidget {
   const TransactionsScreen({super.key});
@@ -1578,6 +1581,13 @@ class _TransactionsHeader extends StatelessWidget {
             onTap: onSearch,
           ),
           const SizedBox(width: AppSpacing.s2),
+          // Gemini-first phase 2: every captured bank message and its outcome.
+          _HeroGlassAction(
+            icon: AppLucideIcons.history,
+            semanticLabel: context.l10n.analysisLogTitle,
+            onTap: () => AnalysisLogScreen.open(context),
+          ),
+          const SizedBox(width: AppSpacing.s2),
           _AddButton(onTap: onAdd),
         ],
       ),
@@ -1848,9 +1858,20 @@ class _SmartInboxSheet extends ConsumerWidget {
           if (index == 0) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                context.l10n.txnSmartInbox,
-                style: AppTypography.sectionTitle(context.colors.textMain),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      context.l10n.txnSmartInbox,
+                      style:
+                          AppTypography.sectionTitle(context.colors.textMain),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => AnalysisLogScreen.open(context),
+                    child: Text(context.l10n.analysisLogTitle),
+                  ),
+                ],
               ),
             );
           }
@@ -1908,6 +1929,22 @@ class _RetryInboxAnalysisState extends ConsumerState<_RetryInboxAnalysis> {
   );
 }
 
+/// What the manual entry starts from for a held capture: the model's
+/// reading when there is one, and the message, masked.
+ManualEntryPrefill inboxManualPrefill(SmartInboxItemEntity item) {
+  final proposal = item.proposal;
+  final body = item.body?.trim();
+  return ManualEntryPrefill(
+    amountText: proposal?.amountText,
+    currency: proposal?.currency,
+    merchant: proposal?.merchant,
+    isDebit: proposal?.isDebit,
+    occurredAt: item.createdAt,
+    messageText:
+        body == null || body.isEmpty ? null : SmsSanitizer.sanitize(body),
+  );
+}
+
 class SmartInboxCard extends ConsumerWidget {
   const SmartInboxCard({super.key, required this.item});
   final SmartInboxItemEntity item;
@@ -1946,16 +1983,15 @@ class SmartInboxCard extends ConsumerWidget {
               children: [
                 if (item.proposal != null)
                   ..._confirmProposalButtons(context, ref, item.proposal!),
+                // Gemini-first phase 2: the manual entry starts from what is
+                // known (the model's reading, the masked message); a message
+                // not added for a settled reason can be recorded anyway.
                 TextButton(
-                  onPressed: () async {
-                    final saved = await ManualTransactionSheet.show(context);
-                    if (!saved) return;
-                    await ref
-                        .read(smartInboxRepositoryProvider)
-                        .resolve(item.id);
-                    ref.invalidate(smartInboxItemsProvider);
-                  },
-                  child: Text(context.l10n.cesManualEntry),
+                  onPressed: () => _recordManually(context, ref),
+                  child: Text(AnalysisOutcome.forInboxItem(item) ==
+                          AnalysisOutcomeState.notAdded
+                      ? context.l10n.inboxRecordAnyway
+                      : context.l10n.cesManualEntry),
                 ),
                 // Only where a new analysis can change the outcome (never
                 // analysed by the model, and no reason that settles it).
@@ -2004,6 +2040,17 @@ class SmartInboxCard extends ConsumerWidget {
   /// both directions, an amount mismatch the model's.
   List<Widget> _confirmProposalButtons(
       BuildContext context, WidgetRef ref, CaptureProposal proposal) {
+    // Owner decision (phase 2): the model's amount does not match the text,
+    // so it is never saved by one tap: the editor opens pre-filled, with the
+    // message beside it.
+    if (inboxReasonCode(item) == AnalysisReason.amountMismatch) {
+      return [
+        FilledButton.tonal(
+          onPressed: () => _recordManually(context, ref),
+          child: Text(context.l10n.inboxCheckAmountAndRecord),
+        ),
+      ];
+    }
     final amount = '${formatMoney(Money.parse(proposal.amountText, proposal.currency))} '
         '${Currency.label(context, proposal.currency)}';
     final directions = inboxReasonCode(item) == AnalysisReason.directionConflict
@@ -2018,6 +2065,16 @@ class SmartInboxCard extends ConsumerWidget {
               : context.l10n.inboxRecordAsIncome(amount)),
         ),
     ];
+  }
+
+  /// The manual entry, pre-filled from this capture; nothing is saved
+  /// unless the user saves it.
+  Future<void> _recordManually(BuildContext context, WidgetRef ref) async {
+    final saved = await ManualTransactionSheet.show(context,
+        prefill: inboxManualPrefill(item));
+    if (!saved) return;
+    await ref.read(smartInboxRepositoryProvider).resolve(item.id);
+    ref.invalidate(smartInboxItemsProvider);
   }
 
   Future<void> _confirmProposal(
