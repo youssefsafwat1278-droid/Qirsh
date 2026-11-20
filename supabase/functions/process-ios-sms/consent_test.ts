@@ -1,4 +1,4 @@
-import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
+import { assert, assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import { handleProcessIosSms } from './index.ts';
 import { fakeCapture } from './capture_rpc_fake.ts';
 
@@ -19,11 +19,14 @@ const GOOD_AI = {
 
 type Device = NonNullable<Parameters<typeof fakeCapture>[0]>['device'];
 
-async function run(device: Device, body: Record<string, unknown> = {}) {
+const A1 = '00000000-0000-0000-0000-00000000a001';
+
+function run(device: Device, body: Record<string, unknown> = {}) {
   // H1: an ownerless (build-50) upload is only eligible for an install with proven single-owner history.
-  const fake = fakeCapture({
-    device: { user_id: '00000000-0000-0000-0000-00000000a001', consent_owner_uid: '00000000-0000-0000-0000-00000000a001', ...device },
-  });
+  return runWith(fakeCapture({ device: { user_id: A1, consent_owner_uid: A1, ...device } }), body);
+}
+
+async function runWith(fake: ReturnType<typeof fakeCapture>, body: Record<string, unknown> = {}) {
   let fetchCalls = 0;
   const originalFetch = globalThis.fetch;
   const previousKey = Deno.env.get('GEMINI_API_KEY');
@@ -68,11 +71,43 @@ async function run(device: Device, body: Record<string, unknown> = {}) {
   }
 }
 
-Deno.test('cloud OFF is a typed process-ios-sms refusal and stops before parse, storage and AI', async () => {
-  const r = await run({ cloud: false, ai: true });
+Deno.test('neither Cloud nor smart-analysis consent is a typed refusal before parse, storage and AI', async () => {
+  const r = await run({ cloud: false, ai: false });
   assertEquals([r.response.status, r.body.error], [403, 'consent_required']);
   assertEquals(r.fake.state.rows.size, 0);
   assertEquals(r.fetchCalls, 0);
+  assertEquals(r.fake.state.budgetCalls, 0);
+});
+
+// Gemini-first phase 3 (20261120120000): smart analysis no longer needs Cloud.
+Deno.test('Cloud OFF with smart-analysis consent is analysed, under the quota and the global AI ceiling', async () => {
+  const r = await run({ cloud: false, ai: true });
+  assertEquals(r.response.status, 200);
+  assertEquals([r.fetchCalls, r.body.capture.status], [1, 'processed']);
+  assertEquals(r.fake.state.dispatches, 1);
+  assertEquals(r.fake.state.budgetCalls, 1); // consume_ai_global_budget before the provider
+  assertEquals(r.fake.state.rateLimitBumps, 1); // the per-install daily quota
+});
+
+Deno.test('Cloud OFF: the global AI ceiling still refuses the provider call', async () => {
+  const fake = fakeCapture({
+    device: { user_id: A1, consent_owner_uid: A1, cloud: false, ai: true },
+    budget: 'ceiling',
+    budgetLimit: 0,
+  });
+  const r = await runWith(fake);
+  assertEquals(r.fetchCalls, 0);
+  assertEquals(fake.state.dispatches, 1);
+  assertEquals(fake.state.budgetCalls, 1);
+});
+
+Deno.test('Cloud OFF: the per-install daily quota still applies', async () => {
+  const fake = fakeCapture({ device: { user_id: A1, consent_owner_uid: A1, cloud: false, ai: true } });
+  fake.state.rateLimited = true;
+  const r = await runWith(fake);
+  assertEquals([r.response.status, r.body.error], [429, 'rate_limit_exceeded']);
+  assertEquals(r.fetchCalls, 0);
+  assertEquals(fake.state.budgetCalls, 0);
 });
 
 Deno.test('revoked device is refused even when both consent flags remain true', async () => {
@@ -88,7 +123,7 @@ Deno.test('legacy: consent that does not belong to the linked user fails closed'
   assertEquals(r.fake.state.rows.size, 0);
 });
 
-Deno.test('AI requires cloud enabled, AI consent, and the caller request', async () => {
+Deno.test('AI requires AI consent and the caller request', async () => {
   const aiOff = await run({ cloud: true, ai: false });
   assertEquals([aiOff.fetchCalls, aiOff.body.capture.status], [0, 'rejected']);
   const notRequested = await run({ cloud: true, ai: true }, { allowAi: false });

@@ -24,7 +24,7 @@ Deno.test('index.ts: every processed capture has passed meaningRejectionOf', () 
   assert(gate < at('const duplicate = await detectDuplicate('));
   const stored = at("state: transient ? 'retryable' : status === 'rejected' ? 'rejected' : 'processed',");
   assert(gate < stored);
-  assert(gate < at("if (status === 'processed' && ownerUid) {"));
+  assert(gate < at("if (status === 'processed' && ownerUid && cloudAllowed) {"));
   // No other stored-state value can say processed (the type declaration
   // `state: 'processed' | …` aside).
   assertEquals([...src.matchAll(/state:(?!\s*'processed' \|)[^,\n]*'processed'/g)].length, 1);

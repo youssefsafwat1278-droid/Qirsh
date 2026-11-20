@@ -278,10 +278,11 @@ Deno.serve(async (req) => {
   // or user JWT), never the caller-supplied install_id, is required, and the AI
   // processing consent is enforced server-side. A missing verified identity or
   // consent returns a typed failure and the client falls back to local parsing.
+  // Gemini-first phase 3: smart analysis needs the AI consent only ('smart').
   const identity = await resolveVerifiedIdentity(req, supabase, body, cid);
   if (!identity.ok) return identity.response;
 
-  const consentBad = consentError(identity.identity, 'ai', cid);
+  const consentBad = consentError(identity.identity, 'smart', cid);
   if (consentBad) return consentBad;
 
   if (typeof body.sanitized_sms !== 'string' || !body.sanitized_sms.trim()) {
@@ -536,7 +537,7 @@ Return ONLY valid JSON. No markdown, no explanation.`;
       validate, beforeAttempt: async () => {
         const fresh = await resolveVerifiedIdentity(req, supabase, body, cid);
         return fresh.ok && fresh.identity.ownerKey === identity.identity.ownerKey &&
-          consentError(fresh.identity, 'ai', cid) == null;
+          consentError(fresh.identity, 'smart', cid) == null;
       }, reserveAttempt });
     if (!result.ok) {
       if (result.reason === 'budget') return budgetRefused();

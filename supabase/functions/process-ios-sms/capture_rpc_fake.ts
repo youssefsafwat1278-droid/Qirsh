@@ -1,5 +1,5 @@
 // Test helper (not a test): an in-memory model of the capture_* RPCs from
-// migration 0111 (the SQL proofs in supabase/tests/capture_state_machine_p1.sql are
+// migration 0111, as changed by 20261120120000 (smart analysis without Cloud) (the SQL proofs in supabase/tests/capture_state_machine_p1.sql are
 // the authority; this mirrors their semantics so handler logic can be pinned in
 // Deno). Also records every table touched, so tests can assert that the capture
 // path never reads or writes user_transactions (I-2 runtime guard).
@@ -66,6 +66,7 @@ export function fakeCapture(opts: {
     writes: [] as Array<{ table: string; op: string; row?: Row; opts?: Row; filters: Array<[string, unknown]> }>,
     tablesTouched: new Set<string>(),
     rateLimited: false,
+    rateLimitBumps: 0,
     dbSkewMs: 0,
     dbFixedMs: null as number | null, // pin the database clock for exact-boundary tests
     budgetCalls: 0,
@@ -113,7 +114,10 @@ export function fakeCapture(opts: {
   };
 
   const rpcImpl = (fn: string, a: Row): unknown => {
-    if (fn === 'bump_capture_rate_limit') return state.rateLimited;
+    if (fn === 'bump_capture_rate_limit') {
+      state.rateLimitBumps++;
+      return state.rateLimited;
+    }
     if (fn === 'capture_claim') {
       const contract = a.p_contract as number;
       if (device.revoked) return { outcome: 'denied', code: 'credential_revoked' };
@@ -129,7 +133,8 @@ export function fakeCapture(opts: {
       } else {
         ownerless = true;
       }
-      if (!device.cloud) return { outcome: 'denied', code: 'consent_required' };
+      // 20261120120000: Cloud OR smart-analysis (AI) consent admits an upload.
+      if (!device.cloud && !device.ai) return { outcome: 'denied', code: 'consent_required' };
       // OWNERLESS (build 50), H1 option B: mirrors capture_claim (0111). Only the trusted install
       // history counts; nothing the client sends (no received_at).
       const h = device.history;
@@ -148,6 +153,7 @@ export function fakeCapture(opts: {
         consent_owner_uid: device.consent_owner_uid,
         consent_version: device.version,
         ai_allowed: device.ai,
+        cloud_allowed: device.cloud,
       });
       if (!ex) {
         const r: Row = {
@@ -214,7 +220,7 @@ export function fakeCapture(opts: {
         expireRow(r);
         return { allowed: false, reason: 'expired' };
       }
-      const revoked = device.revoked || !device.cloud || !device.ai || device.version !== r.consent_version;
+      const revoked = device.revoked || !device.ai || device.version !== r.consent_version;
       const moved = device.user_id !== r.claimed_user_id || device.consent_owner_uid !== r.consent_owner_uid ||
         device.consent_owner_uid !== device.user_id;
       const reason = moved ? 'owner_changed' : revoked ? 'consent_revoked' : null;
@@ -236,7 +242,7 @@ export function fakeCapture(opts: {
         expireRow(r);
         return { written: false, push_allowed: false, reason: 'expired' };
       }
-      const revoked = device.revoked || !device.cloud || device.version !== r.consent_version;
+      const revoked = device.revoked || (!device.cloud && !device.ai) || device.version !== r.consent_version;
       const moved = device.user_id !== r.claimed_user_id || device.consent_owner_uid !== r.consent_owner_uid ||
         device.consent_owner_uid !== device.user_id;
       const reason = moved ? 'owner_changed' : revoked ? 'consent_revoked' : null;

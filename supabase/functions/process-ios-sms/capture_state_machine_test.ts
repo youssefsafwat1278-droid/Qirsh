@@ -132,9 +132,9 @@ Deno.test('schema_version 3 is still refused', async () => {
   assertEquals([r.status, r.json.error], [400, 'unsupported_schema_version']);
 });
 
-Deno.test('cloud OFF / revoked: typed refusals, no row, no AI', async () => {
+Deno.test('no Cloud and no smart-analysis consent / revoked: typed refusals, no row, no AI', async () => {
   const off = await post(
-    fakeCapture({ device: { ...linkedA, cloud: false } }),
+    fakeCapture({ device: { ...linkedA, cloud: false, ai: false } }),
     v2({ payloadId: 'p', sanitizedText: UNRESOLVED, allowAi: true }),
   );
   assertEquals([off.status, off.json.error, off.calls], [403, 'consent_required', 0]);
@@ -829,6 +829,51 @@ Deno.test('another user\'s rule, a deleted rule, or a failed read leaves the ale
       assertEquals(stored.title, 'تم رصد عملية شراء 🛒');
       assert(!stored.body.includes('سحب نقدي'), stored.body);
     });
+  }
+});
+
+// Gemini-first phase 3: a device with smart-analysis consent and Cloud OFF is
+// analysed, but none of the account's Cloud data is read or acted on for it.
+Deno.test('Cloud OFF: the synced merchant rule is not read and no server budget evaluation runs', async () => {
+  const fake = fakeCapture({
+    device: { ...linkedA, cloud: false, ai: true, apns_token: 'tok' },
+    merchantRules: [{ user_id: A, merchant_key: 'CARREFOUR', category_key: 'cash', deleted_at: null }],
+  });
+  const previous = { secret: Deno.env.get('ENGAGEMENT_WORKER_SECRET'), url: Deno.env.get('SUPABASE_URL') };
+  Deno.env.set('ENGAGEMENT_WORKER_SECRET', 'worker');
+  Deno.env.set('SUPABASE_URL', 'https://project.test');
+  const background: Promise<unknown>[] = [];
+  const stub = stubFetch(() => aiResponse(null));
+  try {
+    await withApns(ok200, async (sent) => {
+      const res = await handleProcessIosSms(
+        new Request('https://example.test/process-ios-sms', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ installId: 'i', deviceSecret: 's', ...v2({ payloadId: 'p', sanitizedText: RESOLVED, locale: 'ar_EG' }) }),
+        }),
+        {
+          createServiceClient: (() => fake.client) as never,
+          verifyDevice: (() => Promise.resolve({ ok: true, installIdHash: 'h', userId: A })) as never,
+          waitUntil: (work: Promise<unknown>) => background.push(work),
+        },
+      );
+      assertEquals(res.status, 200);
+      assertEquals(fake.state.rows.get('p')!.state, 'processed');
+      assertEquals(sent.length, 1); // the one outcome push still goes out
+      const stored = fake.state.rows.get('p')!.notification as Record<string, string>;
+      assert(!stored.body.includes('سحب نقدي'), stored.body);
+    });
+    await Promise.all(background);
+    assert(!fake.state.tablesTouched.has('user_merchant_rules'));
+    assertEquals(background.length, 0);
+    assert(!stub.urls.some((u) => u.includes('evaluate-budgets')));
+  } finally {
+    stub.restore();
+    for (const [k, v] of [['ENGAGEMENT_WORKER_SECRET', previous.secret], ['SUPABASE_URL', previous.url]]) {
+      if (v == null) Deno.env.delete(k!);
+      else Deno.env.set(k!, v);
+    }
   }
 });
 

@@ -20,7 +20,7 @@ Deno.test('parse-sms reserves the gemini budget for every attempt of the primary
 Deno.test('parse-sms reserves the budget before the legacy request, after consent, quota and replay', () => {
   const reserve = at('if (!(await reserveAttempt())) return await budgetRefused();');
   assert(reserve < at('const geminiRes = await fetchWithTimeout('));
-  assert(at("consentError(identity.identity, 'ai', cid)") < reserve);
+  assert(at("consentError(identity.identity, 'smart', cid)") < reserve);
   assert(at("bumpCaptureEndpointRateLimit(") < reserve);
   assert(at('const claim = await claimIdempotency(') < at('const reserveAttempt'));
 });

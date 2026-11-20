@@ -375,7 +375,10 @@ export async function completeIdempotency(
   });
 }
 
-export type ConsentKind = 'ai' | 'cloud';
+// 'smart' (Gemini-first phase 3): smart analysis of a captured bank message
+// (parse-sms) needs the AI consent only, not Cloud; 'ai' (bank discovery,
+// shared learning) still needs both.
+export type ConsentKind = 'ai' | 'cloud' | 'smart';
 
 /// Returns a `consent_required` Response when the verified identity has not
 /// granted the required processing consent; null when it is granted. Cloud is
@@ -385,7 +388,11 @@ export function consentError(
   kind: ConsentKind,
   cid: string,
 ): Response | null {
-  const granted = kind === 'ai' ? identity.cloudConsent && identity.aiConsent : identity.cloudConsent;
+  const granted = kind === 'smart'
+    ? identity.aiConsent
+    : kind === 'ai'
+    ? identity.cloudConsent && identity.aiConsent
+    : identity.cloudConsent;
   if (granted) return null;
   return apiError('consent_required', { correlationId: cid, retryable: false });
 }

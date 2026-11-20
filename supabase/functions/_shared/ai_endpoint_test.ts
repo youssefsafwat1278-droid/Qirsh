@@ -340,6 +340,22 @@ Deno.test('AI consent cannot bypass the cloud-processing master gate', () => {
   assertEquals(consentError(cloudOff, 'ai', CID)?.status, 403);
 });
 
+// Gemini-first phase 3: smart analysis (parse-sms) needs the AI consent only.
+Deno.test("'smart' needs the AI consent and nothing else; Cloud alone never opens it", () => {
+  const identity = (aiConsent: boolean, cloudConsent: boolean): VerifiedIdentity => ({
+    kind: 'device',
+    ownerKey: 'd:x',
+    userId: null,
+    installIdHash: 'x',
+    aiConsent,
+    cloudConsent,
+  });
+  assertEquals(consentError(identity(true, false), 'smart', CID), null);
+  assertEquals(consentError(identity(true, true), 'smart', CID), null);
+  assertEquals(consentError(identity(false, true), 'smart', CID)?.status, 403);
+  assertEquals(consentError(identity(false, false), 'smart', CID)?.status, 403);
+});
+
 Deno.test('correlationId is opaque and unique', () => {
   const a = correlationId();
   const b = correlationId();

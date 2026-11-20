@@ -254,6 +254,12 @@ export async function handleProcessIosSms(
   }
   const leaseToken = claim.lease_token as number;
   const aiAllowed = allowAi && claim.ai_allowed === true;
+  // Gemini-first phase 3: a device may hold smart-analysis consent without
+  // Cloud consent (20261120120000). Such a capture is analysed, but nothing of
+  // the account's Cloud data (synced merchant rules, server budgets) is read or
+  // acted on for it. A server reply without the field is the pre-phase-3 claim,
+  // which admitted Cloud devices only.
+  const cloudAllowed = claim.cloud_allowed !== false;
   const background = backgroundRequested && aiAllowed;
 
   const finalize = (args: {
@@ -430,7 +436,7 @@ export async function handleProcessIosSms(
     // The app files this capture under the user's own merchant rule
     // (learnedRuleCategoryFor), so the alert says the same. Display only: the
     // stored parse is unchanged and the device still applies the rule itself.
-    const shown: ShownCapture = status !== 'rejected' && ownerUid
+    const shown: ShownCapture = status !== 'rejected' && ownerUid && cloudAllowed
       ? await withUserMerchantRule(supabase, ownerUid, parsed)
       : parsed;
     // Each primary analysis already made its bounded provider attempts. A
@@ -488,7 +494,7 @@ export async function handleProcessIosSms(
     }
 
     console.log(JSON.stringify({ event: 'capture_stored', status, retryable: transient }));
-    if (status === 'processed' && ownerUid) {
+    if (status === 'processed' && ownerUid && cloudAllowed) {
       const secret = Deno.env.get('ENGAGEMENT_WORKER_SECRET');
       const url = Deno.env.get('SUPABASE_URL');
       const runtime = (globalThis as unknown as {
