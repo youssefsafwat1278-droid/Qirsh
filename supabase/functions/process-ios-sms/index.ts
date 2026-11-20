@@ -9,6 +9,9 @@ import {
 } from '../_shared/capture_auth.ts';
 import { sendCapturePush } from '../_shared/apns.ts';
 import {
+  analysisOutcomeAlert,
+  analysisStateOf,
+  type AnalysisState,
   type CaptureOutcome,
   captureStatusLine,
   clearDeadApnsToken,
@@ -17,6 +20,7 @@ import {
   transactionPushAlert,
   isDeadApnsToken,
   safeLast4,
+  withPushDelivery,
 } from '../_shared/capture_push.ts';
 import { fingerprintTimeKeys } from '../_shared/capture_fingerprint.ts';
 import { redactPii, redactSenderForAi, redactThirdPartyNames } from '../_shared/sms_redaction.ts';
@@ -49,6 +53,13 @@ type NotificationPayload = {
   /// 3.12: what the server knows about the capture (additive; build 147
   /// ignores it). Picks the wording of a push sent without details.
   captureOutcome?: CaptureOutcome;
+  /// Gemini-first phase 2 (AI-primary path, additive): the visible outcome
+  /// this push states, its reason code, and (after the push attempt) whether
+  /// APNs took it. The importing device notifies itself only when the push
+  /// did not go out or its own outcome differs.
+  analysisState?: AnalysisState;
+  reasonCode?: string | null;
+  pushed?: boolean;
 };
 
 /// A parse plus the category of the owner's saved merchant rule, the only
@@ -422,17 +433,6 @@ export async function handleProcessIosSms(
     const shown: ShownCapture = status !== 'rejected' && ownerUid
       ? await withUserMerchantRule(supabase, ownerUid, parsed)
       : parsed;
-    const captureOutcome = outcomeOf(status, sanitizedText, { ...outcome, meaning });
-    const notification: NotificationPayload = aiPrimary && status === 'rejected'
-      ? { title: '', body: '', type: 'received' }
-      : buildNotification(status, shown, sender, receivedAt, tzOffsetMinutes, locale, captureOutcome);
-    notification.pushLanguage = locale.toLowerCase().startsWith('ar') ? 'ar' : 'en';
-    if (body.localNotification === true && !background) notification.localDelivery = true;
-    if (body.notificationDetails === true && notification.title) {
-      notification.pushAlert = transactionPushAlert(shown, locale,
-        { receivedAt, tzOffsetMinutes, outcome: captureOutcome, finalCategory: shown.ruleCategory,
-          includeLast4: true });
-    }
     // Each primary analysis already made its bounded provider attempts. A
     // model answer the validator rejected is terminal and preserved for
     // review, with no push. A provider that could not be reached at all never
@@ -444,11 +444,33 @@ export async function handleProcessIosSms(
     // never saved from an unvalidated local reading.
     const transient = budgetRefused || (outcome.aiTransientFailure === true &&
       (!aiPrimary || (outcome as { aiProviderUnavailable?: boolean }).aiProviderUnavailable === true));
+    const captureOutcome = outcomeOf(status, sanitizedText, { ...outcome, meaning });
+    // Gemini-first phase 2: on the AI-primary path the push states the
+    // outcome (saved / not added / needs your confirmation); a clearly
+    // non-financial message gets none (as every rejected capture had before).
+    // A capture the provider never judged is "awaiting analysis" (no push).
+    const analysisState = aiPrimary && !transient ? analysisStateOf(status, parsed.reasonCode) : null;
+    const notification: NotificationPayload = aiPrimary
+      ? analysisNotification(analysisState, status, shown, locale, parsed.reasonCode ?? null)
+      : buildNotification(status, shown, sender, receivedAt, tzOffsetMinutes, locale, captureOutcome);
+    notification.pushLanguage = locale.toLowerCase().startsWith('ar') ? 'ar' : 'en';
+    if (body.localNotification === true && !background) notification.localDelivery = true;
+    if (analysisState) {
+      // The detailed alert only when the user did not hide details; the
+      // stored state words the generic one (capturePushContent).
+      if (body.notificationDetails === true) {
+        notification.pushAlert = { title: notification.title, body: notification.body };
+      }
+    } else if (body.notificationDetails === true && notification.title) {
+      notification.pushAlert = transactionPushAlert(shown, locale,
+        { receivedAt, tzOffsetMinutes, outcome: captureOutcome, finalCategory: shown.ruleCategory,
+          includeLast4: true });
+    }
     const fin = await finalize({
       state: transient ? 'retryable' : status === 'rejected' ? 'rejected' : 'processed',
       status,
       parsed,
-      notification: aiPrimary && status === 'rejected' ? null : notification,
+      notification: aiPrimary && !analysisState ? null : notification,
       sanitized: status === 'rejected' ? sanitizedText : null,
       failureReason: dispatchDenied === 'analysis_exhausted'
         ? 'analysis_exhausted'
@@ -489,6 +511,12 @@ export async function handleProcessIosSms(
     const pushSent = push
       ? await sendFinalizedPush(supabase, auth.installIdHash, payloadId, push, notification, parsed)
       : false;
+    if (done.push_allowed === true && push == null && analysisState) {
+      // No push was handed off (no APNs token on this install): the device
+      // notifies on import.
+      await supabase.from('processed_captures').update(withPushDelivery(notification, false))
+        .eq('install_id_hash', auth.installIdHash).eq('payload_id', payloadId);
+    }
     console.log(JSON.stringify({ event: 'process_ios_sms_complete', status, pushSent }));
     const row = done.row as Json;
     return json({
@@ -783,6 +811,29 @@ export function buildNotification(
   };
 }
 
+/// Gemini-first phase 2 (AI-primary path): the one push of an analysed
+/// capture, stating its outcome; an empty title (no push queued) when it gets
+/// none. The tap routes as before: a saved one as a new transaction, a
+/// duplicate as one, anything to confirm as a review.
+export function analysisNotification(
+  state: AnalysisState | null,
+  status: CaptureStatus,
+  parsed: ShownCapture,
+  locale: string,
+  reasonCode: string | null,
+): NotificationPayload {
+  if (!state) return { title: '', body: '', type: 'received' };
+  const alert = analysisOutcomeAlert(parsed, locale, { state, reasonCode, finalCategory: parsed.ruleCategory });
+  return {
+    ...alert,
+    type: state === 'saved' ? 'new_transaction'
+      : status === 'duplicate' || reasonCode === 'duplicate' ? 'suspicious_duplicate'
+      : state === 'needs_confirmation' ? 'needs_review' : 'received',
+    analysisState: state,
+    reasonCode,
+  };
+}
+
 // قائمة التفاصيل — سطر لكل معلومة متاحة. الرصيد لا يظهر أبداً (شاشة القفل).
 function detailLines(
   parsed: ShownCapture,
@@ -1007,6 +1058,7 @@ async function sendFinalizedPush(
       .update({
         apns_push_sent_at: new Date().toISOString(),
         apns_push_error: null,
+        ...withPushDelivery(notification, true),
       })
       .eq('install_id_hash', installIdHash)
       .eq('payload_id', payloadId);
@@ -1020,9 +1072,11 @@ async function sendFinalizedPush(
     return true;
   }
 
+  const transientFailure = isTransientApnsFailure(result.httpStatus, result.errorCode);
   await supabase
     .from('processed_captures')
-    .update({ apns_push_error: result.reason })
+    // A push that will not be retried leaves the alert to the importing device.
+    .update({ apns_push_error: result.reason, ...(transientFailure ? {} : withPushDelivery(notification, false)) })
     .eq('install_id_hash', installIdHash)
     .eq('payload_id', payloadId);
   await markApnsLogFailed(supabase, notificationLogId, {
@@ -1041,7 +1095,7 @@ async function sendFinalizedPush(
 
   if (isDeadApnsToken(result)) await clearDeadApnsToken(supabase, installIdHash, push.apns_token);
 
-  if (isTransientApnsFailure(result.httpStatus, result.errorCode)) {
+  if (transientFailure) {
     await enqueueNotificationRetry(supabase, {
       notificationLogId,
       installIdHash,

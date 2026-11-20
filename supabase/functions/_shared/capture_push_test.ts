@@ -1,5 +1,8 @@
 import { assertEquals } from 'jsr:@std/assert@1';
-import { clearDeadApnsToken, enqueueNotificationRetry, GENERIC_CAPTURE_PUSH, isDeadApnsToken, capturePushContent, transactionPushAlert } from './capture_push.ts';
+import {
+  analysisGenericAlert, analysisOutcomeAlert, analysisStateOf, clearDeadApnsToken, enqueueNotificationRetry,
+  GENERIC_CAPTURE_PUSH, isDeadApnsToken, capturePushContent, REASON_LINES, transactionPushAlert, withPushDelivery,
+} from './capture_push.ts';
 
 // 3.12: every detailed alert ends with what the server knows; nothing is "recorded".
 const QUEUED_EN = 'Not recorded yet: Qirsh checks it before adding it.';
@@ -211,4 +214,74 @@ Deno.test('3.12: hidden-details / generic pushes carry no digits at all', () => 
       }
     }
   }
+});
+
+// ── Gemini-first phase 2: one push per financial outcome ─────────────────────
+
+Deno.test('phase 2: the outcome of each status and reason code; non-financial codes are silent', () => {
+  assertEquals(analysisStateOf('processed', null), 'saved');
+  assertEquals(analysisStateOf('duplicate', 'duplicate'), 'not_added');
+  for (const code of ['declined', 'pending', 'payment_reminder', 'own_account']) {
+    assertEquals(analysisStateOf('rejected', code), 'not_added', code);
+  }
+  for (const code of ['amount_mismatch', 'direction_conflict', 'unclear', null]) {
+    assertEquals(analysisStateOf('rejected', code), 'needs_confirmation', String(code));
+  }
+  for (const code of ['otp', 'promo', 'not_financial', 'balance_only']) {
+    assertEquals(analysisStateOf('rejected', code), null, code);
+  }
+});
+
+Deno.test('phase 2: reason sentences and headings are the app ARB strings, in both languages', () => {
+  const arb = (lang: string) => JSON.parse(Deno.readTextFileSync(
+    new URL(`../../../app/lib/l10n/app_${lang}.arb`, import.meta.url))) as Record<string, string>;
+  const en = arb('en'), ar = arb('ar');
+  const key = (code: string) => 'inboxReason' + code.split('_').map((w) => w[0].toUpperCase() + w.slice(1)).join('');
+  for (const [code, [enLine, arLine]] of Object.entries(REASON_LINES)) {
+    assertEquals(enLine, en[key(code)], code);
+    assertEquals(arLine, ar[key(code)], code);
+  }
+  for (const [state, arbKey] of [['saved', 'outcomeSavedTitle'], ['not_added', 'outcomeNotAddedTitle'],
+    ['needs_confirmation', 'outcomeNeedsConfirmationTitle']] as const) {
+    assertEquals(analysisGenericAlert(state, 'declined', false).title, en[arbKey]);
+    assertEquals(analysisGenericAlert(state, 'declined', true).title, ar[arbKey]);
+  }
+});
+
+Deno.test('phase 2: a saved purchase reads "Saved: expense 250.00 EGP" with merchant and the user category only', () => {
+  const parsed = { amount: 250, currency: 'EGP', merchant: 'CARREFOUR', type: 'payment', direction: 'debit' };
+  assertEquals(analysisOutcomeAlert(parsed, 'ar', { state: 'saved', finalCategory: 'groceries' }),
+    { title: 'سُجّل مصروف 250.00 EGP', body: 'CARREFOUR · بقالة' });
+  assertEquals(analysisOutcomeAlert(parsed, 'en', { state: 'saved' }),
+    { title: 'Saved: expense 250.00 EGP', body: 'CARREFOUR' });
+});
+
+Deno.test('phase 2: a transfer to a person is "transfer to a friend" and never names them', () => {
+  const alert = analysisOutcomeAlert({ amount: 500, currency: 'EGP', merchant: 'Ahmed Ali', type: 'transfer',
+    direction: 'debit', counterpartyKind: 'person' }, 'ar', { state: 'saved' });
+  assertEquals(alert.title, 'سُجّل تحويل لصديق 500.00 EGP');
+  assertEquals(JSON.stringify(alert).includes('Ahmed'), false);
+});
+
+Deno.test('phase 2: not added / needs confirmation carry the reason sentence; hidden details carry no digits', () => {
+  const parsed = { amount: 250, currency: 'EGP', type: 'payment', direction: 'debit' };
+  assertEquals(analysisOutcomeAlert(parsed, 'ar', { state: 'not_added', reasonCode: 'declined' }),
+    { title: 'لم تُضَف · 250.00 EGP', body: 'عملية مرفوضة أو لم تكتمل، ولم يتحرك أي مبلغ' });
+  assertEquals(analysisOutcomeAlert({}, 'en', { state: 'needs_confirmation', reasonCode: 'amount_mismatch' }),
+    { title: 'Needs your confirmation',
+      body: 'The amount does not match the message; confirm it before recording' });
+  for (const analysisState of ['saved', 'not_added', 'needs_confirmation']) {
+    for (const pushLanguage of ['en', 'ar']) {
+      const alert = capturePushContent({ type: 'received', analysisState, reasonCode: 'declined', pushLanguage,
+        title: 'x 4521', body: '45.00 SAR' });
+      assertEquals(/[0-9٠-٩]/.test(alert.title + alert.body), false, `${analysisState}/${pushLanguage}`);
+    }
+  }
+});
+
+Deno.test('phase 2: the delivery mark touches only a notification that states an outcome', () => {
+  assertEquals(withPushDelivery({ title: 't', analysisState: 'saved' }, true),
+    { notification: { title: 't', analysisState: 'saved', pushed: true } });
+  assertEquals(withPushDelivery({ title: 't', type: 'new_transaction' }, false), {});
+  assertEquals(withPushDelivery(null, false), {});
 });

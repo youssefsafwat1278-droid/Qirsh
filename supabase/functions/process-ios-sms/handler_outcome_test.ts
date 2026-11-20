@@ -22,6 +22,12 @@ function fakeSupabase(opts: { aiConsent?: boolean; duplicateOf?: string; apnsTok
       get inserts() {
         return fake.state.claims;
       },
+      get writes() {
+        return fake.state.writes;
+      },
+      get logs() {
+        return fake.state.logs;
+      },
     },
     captures: fake.state.rows,
     client: fake.client,
@@ -334,7 +340,7 @@ Deno.test('AI-primary Shortcut gets a pending receipt before its verified result
   }
 });
 
-Deno.test('AI-primary failed extraction is kept for review without local substitution or failure push', async () => {
+Deno.test('AI-primary failed extraction is kept for review without local substitution', async () => {
   const fake = fakeSupabase();
   const result = await call(fake, {
     payloadId: 'primary-uncertain', sanitizedText: RESOLVED,
@@ -344,9 +350,55 @@ Deno.test('AI-primary failed extraction is kept for review without local substit
   assertEquals(result.calls, 3);
   assertEquals(result.json.capture.status, 'rejected');
   assertEquals(result.json.capture.parsed.amount, undefined);
-  assertEquals(result.json.capture.notification.title, '');
+  // Gemini-first phase 2: it needs the user, so it is announced as such
+  // (never as saved); no APNs token here, so no push went out.
+  assertEquals(result.json.capture.notification.analysisState, 'needs_confirmation');
   assertEquals(result.json.pushSent, false);
   assertEquals(fake.captures.get('primary-uncertain')!.state, 'rejected');
+});
+
+// ── Gemini-first phase 2: one push per financial outcome ─────────────────────
+
+Deno.test('phase 2: a saved AI-primary capture stores "saved" and, with no token, marks it not pushed', async () => {
+  const fake = fakeSupabase();
+  await call(fake, { payloadId: 'p2-saved', ...PRIMARY }, PRIMARY_GOOD_AI);
+  const row = fake.captures.get('p2-saved')!;
+  assertEquals(row.state, 'processed');
+  const n = row.notification as Record<string, unknown>;
+  assertEquals(n.analysisState, 'saved');
+  assertEquals(n.title, 'Saved: expense 250.00 EGP');
+  assertEquals(n.type, 'new_transaction');
+  const mark = fake.state.writes.find((w) => w.table === 'processed_captures' && w.op === 'update');
+  assertEquals((mark!.row!.notification as Record<string, unknown>).pushed, false);
+});
+
+Deno.test('phase 2: a declined message is "not added" with its reason and a push is queued', async () => {
+  const fake = fakeSupabase({ apnsToken: 'token-1' });
+  await call(fake, { payloadId: 'p2-declined', ...PRIMARY,
+    sanitizedText: 'Your purchase of EGP 250.00 at CARREFOUR was declined due to insufficient funds' },
+  { is_transaction: false, message_type: 'declined_or_failed', reason_code: 'declined' });
+  const row = fake.captures.get('p2-declined')!;
+  const n = row.notification as Record<string, unknown>;
+  assertEquals(n.analysisState, 'not_added');
+  assertEquals(n.reasonCode, 'declined');
+  assertEquals(n.body, 'A declined or failed operation; no money moved');
+  assertEquals(fake.state.logs.length, 1, 'one push handed off');
+});
+
+Deno.test('phase 2: an OTP or an advert gets no push and no stored notification', async () => {
+  for (const [id, text, verdict] of [
+    ['p2-otp', 'Your verification code is 482913. Do not share it.',
+      { is_transaction: false, message_type: 'otp_or_security', reason_code: 'otp' }],
+    ['p2-promo', 'Get 20% cashback on all purchases this weekend with your CIB card!',
+      { is_transaction: false, message_type: 'marketing', reason_code: 'promo' }],
+  ] as const) {
+    const fake = fakeSupabase({ apnsToken: 'token-1' });
+    await call(fake, { payloadId: id, ...PRIMARY, sanitizedText: text }, verdict);
+    const row = fake.captures.get(id)!;
+    assertEquals(row.state, 'rejected', id);
+    assertEquals((row.notification as Record<string, unknown>).title ?? '', '', id);
+    assertEquals(fake.state.logs.length, 0, `${id}: no push`);
+  }
 });
 
 // ── AI-primary: a provider outage is retryable, not a stored rejection ──────

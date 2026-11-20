@@ -219,3 +219,25 @@ Deno.test('F1 boundaries: retry fence modelled on the DB clock; expired -> dropp
     }
   }
 });
+
+// Gemini-first phase 2: the importing device notifies itself only when the
+// outcome push did not go out, so a retry records whether it did.
+Deno.test('phase 2: a delivered retry marks the outcome notification pushed; an exhausted one marks it not pushed', async () => {
+  const notification = { title: 'Saved: expense 250.00 EGP', body: 'CARREFOUR', type: 'new_transaction',
+    analysisState: 'saved' };
+  const sent = fakeSupabase(allowed, false, notification);
+  await processOne(sent.client, row, () => Promise.resolve({ ok: true, apnsId: 'a' } as const));
+  const sentMark = sent.updates.find((u) => u.table === 'processed_captures')!;
+  assertEquals((sentMark.values.notification as Record<string, unknown>).pushed, true);
+
+  const failed = fakeSupabase(allowed, false, notification);
+  await processOne(failed.client, { ...row, attempt_number: 4 }, () =>
+    Promise.resolve({ ok: false, reason: 'apns_503_x', httpStatus: 503, errorCode: 'ServiceUnavailable' } as const));
+  const failedMark = failed.updates.find((u) => u.table === 'processed_captures')!;
+  assertEquals((failedMark.values.notification as Record<string, unknown>).pushed, false);
+
+  // An older notification shape is never rewritten.
+  const old = fakeSupabase(allowed, false, { title: 't', body: 'b', type: 'new_transaction' });
+  await processOne(old.client, row, () => Promise.resolve({ ok: true, apnsId: 'a' } as const));
+  assertEquals('notification' in old.updates.find((u) => u.table === 'processed_captures')!.values, false);
+});

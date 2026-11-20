@@ -1,6 +1,6 @@
 import { serviceClient } from '../_shared/capture_auth.ts';
 import { sendCapturePush } from '../_shared/apns.ts';
-import { clearDeadApnsToken, capturePushContent, isDeadApnsToken } from '../_shared/capture_push.ts';
+import { clearDeadApnsToken, capturePushContent, isDeadApnsToken, withPushDelivery } from '../_shared/capture_push.ts';
 import { markApnsLogFailed, markApnsLogSent } from '../_shared/notification_logs.ts';
 import { isTransientApnsFailure, nextRetryDelayMs } from '../_shared/notification_retry_policy.ts';
 
@@ -83,7 +83,8 @@ export async function processOne(
     await Promise.all([
       supabase
         .from('processed_captures')
-        .update({ apns_push_sent_at: new Date().toISOString(), apns_push_error: null })
+        .update({ apns_push_sent_at: new Date().toISOString(), apns_push_error: null,
+          ...withPushDelivery(content.data?.notification, true) })
         .eq('install_id_hash', row.install_id_hash)
         .eq('payload_id', row.payload_id),
       markApnsLogSent(supabase, row.notification_log_id, result.apnsId),
@@ -110,7 +111,9 @@ export async function processOne(
   await Promise.all([
     supabase
       .from('processed_captures')
-      .update({ apns_push_error: result.reason })
+      // A push that will not be retried leaves the alert to the importing device.
+      .update({ apns_push_error: result.reason,
+        ...(exhausted ? withPushDelivery(content.data?.notification, false) : {}) })
       .eq('install_id_hash', row.install_id_hash)
       .eq('payload_id', row.payload_id),
     markApnsLogFailed(supabase, row.notification_log_id, {

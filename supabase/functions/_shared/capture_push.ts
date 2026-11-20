@@ -47,8 +47,140 @@ export function captureStatusLine(outcome: CaptureOutcome, ar: boolean): string 
   return STATUS_LINES[outcome][ar ? 1 : 0];
 }
 
+// ── Gemini-first phase 2: one notification per financial outcome ───────────
+//
+// On the AI-primary path the model's verdict is the analysis, and the server
+// push is the one notification for it (the App Intent returns at once and the
+// app may not run). It states one of the visible outcomes; a message that is
+// clearly not financial (OTP, advert, balance-only notice, nothing about
+// money) gets no push at all and is seen only in the app's analysis log. The
+// device replaces this push when its own import ends differently (it holds a
+// row), so the push never stays wrong. "Awaiting analysis" is never pushed
+// here: a capture the provider could not analyse stays retryable and has no
+// push (capture_finalize).
+
+/** What the user is told about an analysed bank message (additive `analysisState`). */
+export type AnalysisState = 'saved' | 'not_added' | 'needs_confirmation';
+
+/** Reason codes with no notification (clearly not financial). Twin of `AnalysisOutcome.silentCodes`. */
+export const SILENT_REASON_CODES: readonly string[] = ['otp', 'promo', 'not_financial', 'balance_only'];
+
+/** Settled financial reasons: not added, the user may record it anyway. Twin of `AnalysisOutcome.notAddedCodes`. */
+export const NOT_ADDED_REASON_CODES: readonly string[] =
+  ['declined', 'pending', 'duplicate', 'payment_reminder', 'own_account'];
+
+/** The visible outcome of an analysed capture, or null when it gets no notification. */
+export function analysisStateOf(status: string, reasonCode: string | null | undefined): AnalysisState | null {
+  if (status === 'processed') return 'saved';
+  if (status === 'duplicate') return 'not_added';
+  if (reasonCode && SILENT_REASON_CODES.includes(reasonCode)) return null;
+  return reasonCode && NOT_ADDED_REASON_CODES.includes(reasonCode) ? 'not_added' : 'needs_confirmation';
+}
+
+/**
+ * The app's sentence for each reason code, verbatim from the app's ARB files
+ * (`inboxReason*`; capture_push_test pins the parity). Never model text.
+ */
+export const REASON_LINES: Record<string, [string, string]> = {
+  otp: ['A verification code or security message, with no transaction', 'رمز تحقق أو رسالة أمان، ولا تحتوي على عملية'],
+  promo: ['An offer or marketing message, with no transaction', 'عرض أو رسالة تسويقية، ولا تحتوي على عملية'],
+  declined: ['A declined or failed operation; no money moved', 'عملية مرفوضة أو لم تكتمل، ولم يتحرك أي مبلغ'],
+  pending: ['A pending or scheduled operation that has not completed yet', 'عملية معلّقة أو مجدولة لم تكتمل بعد'],
+  balance_only: ['A balance or limit notice only, with no transaction', 'إشعار بالرصيد أو الحد فقط، ولا توجد عملية'],
+  payment_reminder: ['A payment reminder; nothing has been paid yet', 'تذكير بدفعة مستحقة، ولم يتم الدفع بعد'],
+  own_account: ['A transfer between your own accounts; review it and record it if you want',
+    'تحويل بين حساباتك، راجعه وسجّله إن أردت'],
+  not_financial: ['This message is not about a money movement', 'رسالة لا تخص عملية مالية'],
+  unclear: ['The operation is not clear; please review it', 'لم يتضح نوع العملية، راجعها'],
+  duplicate: ['Looks like a duplicate of a recorded transaction', 'تبدو مكررة لعملية مسجّلة'],
+  amount_mismatch: ['The amount does not match the message; confirm it before recording',
+    'المبلغ لا يطابق نص الرسالة، أكّده قبل التسجيل'],
+  direction_conflict: ['Unclear whether this is spending or income; confirm before recording',
+    'لم يتضح إن كانت مصروفًا أم دخلًا، أكّد قبل التسجيل'],
+};
+
+/** Outcome headings, verbatim from the app's ARB files (`outcome*Title`). */
+const STATE_TITLES: Record<AnalysisState, [string, string]> = {
+  saved: ['Saved', 'سُجّلت'],
+  not_added: ['Not added', 'لم تُضَف'],
+  needs_confirmation: ['Needs your confirmation', 'تحتاج تأكيدك'],
+};
+
+function reasonLine(code: string | null | undefined, ar: boolean): string {
+  return (REASON_LINES[code ?? ''] ?? REASON_LINES.unclear)[ar ? 1 : 0];
+}
+
+/** The alert with no transaction detail (details hidden): the outcome and its reason only, no digits. */
+export function analysisGenericAlert(state: AnalysisState, reasonCode: string | null | undefined, ar: boolean) {
+  const heading = STATE_TITLES[state][ar ? 1 : 0];
+  return {
+    title: heading,
+    body: state === 'saved'
+      ? (ar ? 'سُجّلت عملية جديدة في قِرش.' : 'A new transaction was saved in Qirsh.')
+      : reasonLine(state === 'not_added' && !reasonCode ? 'duplicate' : reasonCode, ar),
+  };
+}
+
+/**
+ * The detailed alert of an analysed capture: "Saved: expense 250.00 EGP" with
+ * the merchant (or payment network) and the user's own saved category; "Not
+ * added · 250.00 EGP" / "Needs your confirmation · 250.00 EGP" with the
+ * reason. A person is never named; the masked rules of [transactionPushAlert]
+ * apply (no long digit runs, no raw text).
+ */
+export function analysisOutcomeAlert(
+  parsed: { amount?: number | null; currency?: string | null; merchant?: string | null;
+    direction?: string | null; type?: string | null; rawMessage?: string; counterpartyKind?: string | null },
+  locale: string,
+  context: { state: AnalysisState; reasonCode?: string | null; finalCategory?: string | null },
+): { title: string; body: string } {
+  const ar = locale.toLowerCase().startsWith('ar');
+  const generic = analysisGenericAlert(context.state, context.reasonCode, ar);
+  const valid = typeof parsed.amount === 'number' && Number.isFinite(parsed.amount) && parsed.amount > 0 &&
+    /^[A-Z]{3}$/.test(parsed.currency ?? '');
+  if (!valid) return generic;
+  const amount = `${parsed.amount!.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${parsed.currency}`;
+  if (context.state !== 'saved') return { title: `${generic.title} · ${amount}`, body: generic.body };
+  const friend = parsed.type === 'transfer' && parsed.counterpartyKind === 'person';
+  const credit = parsed.direction === 'credit';
+  const kind = parsed.type === 'refund' ? (ar ? 'استرداد' : 'refund')
+    : friend ? (credit ? (ar ? 'تحويل من صديق' : 'transfer from a friend') : (ar ? 'تحويل لصديق' : 'transfer to a friend'))
+    : parsed.type === 'withdrawal' ? (ar ? 'سحب نقدي' : 'cash withdrawal')
+    : parsed.type === 'transfer' ? (credit ? (ar ? 'تحويل وارد' : 'incoming transfer') : (ar ? 'تحويل صادر' : 'outgoing transfer'))
+    : credit || parsed.type === 'income' ? (ar ? 'دخل' : 'income')
+    : (ar ? 'مصروف' : 'expense');
+  const merchant = friend ? undefined : parsed.merchant?.replace(/[\r\n\t]/g, ' ')
+    .replace(/[0-9٠-٩۰-۹]{5,}/g, '•••').trim().slice(0, 80);
+  const network = /\b(?:ipn|instapay)\b/i.test(parsed.rawMessage ?? '') && parsed.type === 'transfer'
+    ? 'InstaPay' : undefined;
+  const category = PUSH_CATEGORIES[context.finalCategory ?? '']?.[ar ? 1 : 0];
+  const body = [network ?? merchant, category].filter(Boolean).join(' · ');
+  return {
+    title: ar ? `سُجّل ${kind} ${amount}` : `Saved: ${kind} ${amount}`,
+    body: body || generic.body,
+  };
+}
+
+/**
+ * The stored-notification update that records whether an analysis push was
+ * delivered (`pushed`), so the importing device knows whether it must notify
+ * itself; nothing for a notification without an [AnalysisState] (old shapes
+ * keep their contract). Spread into the processed_captures update.
+ */
+export function withPushDelivery(notification: unknown, pushed: boolean): { notification?: Record<string, unknown> } {
+  const n = notification as Record<string, unknown> | null | undefined;
+  return n && typeof n === 'object' && typeof n.analysisState === 'string' ? { notification: { ...n, pushed } } : {};
+}
+
 /** Generic (no-detail) alert for a stored notification, by outcome then by type. */
-function genericCapturePush(n: { type?: unknown; captureOutcome?: unknown } | null, ar: boolean) {
+function genericCapturePush(
+  n: { type?: unknown; captureOutcome?: unknown; analysisState?: unknown; reasonCode?: unknown } | null,
+  ar: boolean,
+) {
+  const state = n?.analysisState;
+  if (state === 'saved' || state === 'not_added' || state === 'needs_confirmation') {
+    return analysisGenericAlert(state, typeof n?.reasonCode === 'string' ? n.reasonCode : null, ar);
+  }
   const outcome = typeof n?.captureOutcome === 'string' && n.captureOutcome in STATUS_LINES
     ? n.captureOutcome as CaptureOutcome
     : n?.type === 'suspicious_duplicate' ? 'duplicate'
@@ -65,7 +197,7 @@ function genericCapturePush(n: { type?: unknown; captureOutcome?: unknown } | nu
 export function capturePushContent(notification: unknown): { title: string; body: string } {
   const n = notification as {
     pushAlert?: { title?: unknown; body?: unknown }; pushLanguage?: string;
-    type?: unknown; captureOutcome?: unknown;
+    type?: unknown; captureOutcome?: unknown; analysisState?: unknown; reasonCode?: unknown;
   } | null;
   const alert = n?.pushAlert;
   return alert && typeof alert.title === 'string' && typeof alert.body === 'string' &&
