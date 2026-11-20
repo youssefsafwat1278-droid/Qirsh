@@ -1,6 +1,6 @@
 # Qirsh — Privacy Policy
 
-**Last updated: 2026-11-17**
+**Last updated: 2026-11-21**
 
 Qirsh (قِرش) is a personal finance app that reads bank SMS on your device and
 turns them into a private record of your spending.
@@ -36,6 +36,9 @@ that used to be aspirational are now enforced in code and covered by tests.
   still personal financial information; **it is not anonymous**.
 - **Turning it off turns both off.** One action stops cloud sync and AI message
   reading together. Anything already sent cannot be recalled.
+- **On iPhone, Smart Analysis can also be on by itself**, without Cloud Sync
+  (section 4). Then only the sanitized text of the bank messages you capture is
+  sent for reading — no transactions, accounts or other data.
 - **No advertising.** This version of Qirsh shows no ads (section 7).
 - **We do not sell your data.** There is no advertising profile built from your
   transactions.
@@ -143,6 +146,16 @@ scrubbed.
   both" stops cloud sync and AI message reading together, including retries,
   background work and new shared-learning contributions. The check is performed
   at each transmission. **A request that was already sent cannot be recalled.**
+- **Smart Analysis on its own (iPhone).** You can turn on Smart Analysis without
+  Cloud Sync — from its own consent screen ("Allow" / "Not now") or Settings →
+  Privacy → Smart Analysis. Then the sanitized text of each bank message you
+  capture is sent to our servers and to Google's Gemini API to read it (section
+  8). No merchant is looked up with Google Places in this mode (section 7).
+  Nothing else is uploaded: no transactions, accounts, budgets, backups or
+  shared-learning contributions. With "Not now" nothing is sent, and your
+  messages wait on your device in the analysis log, where you can record them
+  yourself. Turning Smart Analysis off stops sending at once; nothing already
+  recorded is deleted, and a message already sent cannot be recalled.
 - **Shared category learning is part of that consent.** When you agree, it is
   included; you can still turn shared learning off on its own in Privacy, and
   the choice is kept for your account on that device. If you agreed to Smart
@@ -209,6 +222,9 @@ account and we will action the deletion.
 | Daily request counters | **No fixed expiry** — removed when you delete your account |
 | Device identifiers used for capture | **No fixed expiry** — removed when you delete your account |
 | Merchant names added to the shared merchant catalogue | **No fixed expiry** — a business name and category, not linked to you or your account |
+| Shared message-format memory (section 8) | **No fixed expiry** — the shape of a bank's message with every amount, merchant and number replaced by a placeholder, the bank sender name and how the message reads; never a person's name, an amount or anything linked to you or your account |
+| Shared merchant-code memory (section 8) | **No fixed expiry** — a merchant code as banks print it, its category and the display name Google Places returned; not linked to you or your account |
+| Daily analysis counters | **No fixed expiry** — the date and counts only (for example how many messages were read), no user, device or message data |
 | Your shared-learning contributions (merchant name, category, one-way code) | **No fixed expiry** — withdrawn when you delete that learned rule, and all deleted when you delete your account. A pair already added to the shared catalogue stays there as a business name and category, not linked to you |
 | Learned merchant rules in the cloud | **No fixed expiry** — a rule you delete is kept as a deletion marker so your other devices drop it too; all of it is removed when you delete your account |
 | Profile photo in the cloud | **No fixed expiry** — one copy, replaced when you choose a new photo; deleted when you delete your account |
@@ -230,7 +246,7 @@ data written before a deletion can remain in those backups until they expire.
 | Provider | Receives | When |
 |---|---|---|
 | Supabase (hosting, database, auth) | Whatever you have consented to sync, and sanitized message text for reading | Only with consent |
-| Google — Gemini API (message reading) | Sanitized bank-message text; for an unrecognised bank, the sender's name | Only with Smart Analysis & Cloud Sync on, which turns on **both** cloud processing and AI assistance |
+| Google — Gemini API (message reading) | Sanitized bank-message text; for an unrecognised bank, the sender's name | Only with Smart Analysis on — together with Cloud Sync, or on its own on iPhone |
 | Google — Places API (merchant lookup) | A merchant name, without your identity | Only with Smart Analysis & Cloud Sync on |
 | Sentry (crash reporting) | Crash diagnostics | Only with consent |
 | Apple Push Notification service | The notification content Qirsh shows you | Only for notifications you allow |
@@ -266,9 +282,9 @@ Policy (https://policies.google.com/privacy). A name that contains an identifier
 
 **About the AI row.** The model that categorises your spending is on your device
 and sends nothing (section 2). That is separate from *reading* a bank message: if
-you accept Smart Analysis & Cloud Sync, a sanitized copy of the message may be
-sent to Google's Gemini API to help parse it. It is off unless you accept it,
-and withdrawing consent stops it.
+you turn on Smart Analysis (with Cloud Sync, or on its own on iPhone), a
+sanitized copy of the message may be sent to Google's Gemini API to help parse
+it. It is off unless you accept it, and withdrawing consent stops it.
 
 ---
 
@@ -339,8 +355,9 @@ Qirsh does not request location, contacts, or the microphone.
 **By default, captured message text is read on your device and does not leave
 it.**
 
-If you accept **Smart Analysis & Cloud Sync** — a separate consent from the SMS
-permission, off unless you accept it — captured bank messages are **sanitized**
+If you accept **Smart Analysis & Cloud Sync**, or turn on **Smart Analysis**
+on its own on iPhone — a separate consent from the SMS permission, off unless
+you accept it — captured bank messages are **sanitized**
 on your device and then sent to Qirsh's servers, which sanitize them again and
 pass the text to **Google's Gemini API** to read the amount, currency, merchant,
 transaction type and date. When you paste or share a message in the app, the
@@ -383,16 +400,37 @@ them.
 For a bank sender we do not recognise, the sender's name may also be sent to
 Gemini to identify the bank — only a name made of letters (such as a bank's
 registered sender name); a phone number or numeric sender is never sent. For a
-purchase we cannot categorise, the merchant name may be sent to Google's Places
-API.
+purchase we cannot categorise, with Smart Analysis & Cloud Sync on, the merchant
+name may be sent to Google's Places API.
+
+**Shared, non-personal memory.** So that the same bank message format is not
+sent to Gemini again and again, our servers remember the *shape* of a bank's
+message once Gemini has read that shape the same way at least three times from
+at least two devices: the message with every amount, merchant and number
+replaced by a placeholder, together with how it reads (for example "a card
+purchase"). A message in which a person's name was masked is never remembered.
+A later message of the same shape may then be read from that memory instead of
+being sent to Gemini (a sample is still checked with Gemini, and a shape Gemini
+disagrees with is dropped for good). Separately, for a merchant code as banks
+print it (for example "CARREFOUR MAADI"), we remember its category and the
+display name Google Places returned, so it is looked up only once. This memory
+holds no amounts, no people's names and nothing that identifies you, your
+device or your account; to count distinct devices it keeps a short one-way code
+per shape that cannot be linked across shapes or back to you.
+
+**The analysis log.** On your device, Qirsh keeps a log of each captured bank
+message and what became of it — recorded, not added (with the reason), waiting
+for your confirmation, or waiting for analysis — with the masked message text.
+It stays on your device and is removed with your data.
 
 What we keep, and for how long, is in section 6: for Android messages our
 database does not store the message text; for iOS the sanitized text is kept for
 at most 168 hours. The transactions created from your messages are synced like
 any other transaction and kept until you delete them or your account.
 
-So: with the default settings, message text stays on your device. If you accept
-Smart Analysis & Cloud Sync, sanitized text does leave your device and is
+So: with the default settings, message text stays on your device. If you turn
+on Smart Analysis (with or without Cloud Sync), sanitized text does leave your
+device and is
 processed by Google — we will not tell you otherwise. You can withdraw consent at
 any time in Settings → Privacy & data; sending stops immediately.
 
