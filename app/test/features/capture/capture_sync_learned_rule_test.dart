@@ -52,7 +52,8 @@ class _Guard extends OwnershipGuard {
   Future<bool> isCurrent(AdmissionToken token) async => token == _token;
 }
 
-Map<String, Object?> _serverRow(String id, String merchant) {
+Map<String, Object?> _serverRow(String id, String merchant,
+    {String? display}) {
   final at = DateTime.utc(2026, 4, 8, 9, 45).toIso8601String();
   return {
     'payload_id': id,
@@ -64,6 +65,7 @@ Map<String, Object?> _serverRow(String id, String merchant) {
       'direction': 'debit',
       'type': 'payment',
       'merchant': merchant,
+      if (display != null) 'merchantDisplay': display,
       'category': 'shopping',
       'last4': '4521',
       'occurredAt': at,
@@ -206,5 +208,40 @@ void main() {
     rows.add(_serverRow('srv-7', 'ZARYAB DIMASHQI'));
     await sync.sync();
     expect(await categoryOf('srv-7'), 'shopping');
+  });
+
+  Future<String?> merchantOf(String id) async => (await db.customSelect(
+        'SELECT raw_merchant AS m FROM transactions WHERE id = ?;',
+        variables: [Variable.withString(id)],
+      ).getSingle())
+          .read<String?>('m');
+
+  test('phase 4: the server display name of a merchant code is recorded',
+      () async {
+    rows.add(_serverRow('srv-8', 'PAYMOB RAF SPECIALIT',
+        display: 'RAF Specialized Hospital'));
+    await sync.sync();
+    expect(await merchantOf('srv-8'), 'RAF Specialized Hospital');
+    expect(await categoryOf('srv-8'), 'shopping');
+  });
+
+  test('phase 4: a user rule on the code keeps the code and the rule',
+      () async {
+    await merchants.confirmMerchantCategory(
+        rawMerchant: 'PAYMOB RAF SPECIALIT',
+        categoryKey: 'health',
+        isUserConfirmed: true);
+    rows.add(_serverRow('srv-9', 'PAYMOB RAF SPECIALIT',
+        display: 'RAF Specialized Hospital'));
+    await sync.sync();
+    expect(await merchantOf('srv-9'), 'PAYMOB RAF SPECIALIT');
+    expect(await categoryOf('srv-9'), 'health');
+  });
+
+  test('phase 4: an old server reply (no display name) is unchanged',
+      () async {
+    rows.add(_serverRow('srv-10', 'PAYMOB RAF SPECIALIT'));
+    await sync.sync();
+    expect(await merchantOf('srv-10'), 'PAYMOB RAF SPECIALIT');
   });
 }

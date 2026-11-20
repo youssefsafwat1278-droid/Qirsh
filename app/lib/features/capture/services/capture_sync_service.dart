@@ -1079,6 +1079,10 @@ class CaptureSyncService {
     final rawMessage = _string(parsed['rawMessage']) ??
         capture.sanitizedText ??
         'Backend processed capture ${capture.payloadId}';
+    // Gemini-first phase 4: the merchant's clean display name from the
+    // server's shared memory, unless the user saved a rule for the code the
+    // message names (that rule keeps applying to it).
+    final merchant = await _merchantFor(parsed);
     // The same duplicate signals the on-device ingest applies
     // (AddTransactionUseCase), so a server result is never auto-confirmed as
     // a second transaction where a local capture would have gone to review —
@@ -1089,7 +1093,7 @@ class CaptureSyncService {
     final possibleDuplicate = await _possibleDuplicateOf(
       amount: amountMoney,
       currency: normalizedCurrency,
-      merchant: _string(parsed['merchant']),
+      merchant: merchant,
       cardLast4: _string(parsed['last4']),
       rawMessage: rawMessage,
       comparisonTimestamp: comparisonTimestamp,
@@ -1105,7 +1109,7 @@ class CaptureSyncService {
           amountMoney: amountMoney,
           currency: normalizedCurrency,
           rawMerchant: MerchantSanity.forMessage(
-              _string(parsed['merchant']), rawMessage),
+              merchant, rawMessage),
           occurredAt: occurredAt,
           createdAt: now,
           cardLast4: _string(parsed['last4']),
@@ -1174,7 +1178,7 @@ class CaptureSyncService {
       rawMerchant: internalTransfer
           ? null
           : MerchantSanity.forMessage(
-              _string(parsed['merchant']),
+              merchant,
               rawMessage,
             ),
       cardLast4: _string(parsed['last4']),
@@ -1223,6 +1227,15 @@ class CaptureSyncService {
             capture.status == 'duplicate'
         ? saved.id
         : null;
+  }
+
+  Future<String?> _merchantFor(Map<String, dynamic> parsed) async {
+    final code = _string(parsed['merchant']);
+    final display = _string(parsed['merchantDisplay']);
+    if (code == null || display == null) return code;
+    final rule =
+        await _merchantCategoryRepository?.userConfirmedCategoryFor(code);
+    return rule != null ? code : display;
   }
 
   static String _payloadHash(String payloadId) => 'capture_payload:$payloadId';
