@@ -3,6 +3,17 @@ import { geminiRequestBody } from '../_shared/gemini_request.ts';
 import rules from './parser_rules.json' with { type: 'json' };
 import { canonicalMoneyText } from '../_shared/money_text.ts';
 import {
+  type AnalysisMemoryReader,
+  buildShape,
+  matchShape,
+  merchantCodeEligible,
+  merchantCodeKey,
+  senderKey,
+  type ShapeReading,
+  type ShapeTemplate,
+  TEMPLATE_CHECK_EVERY,
+} from '../_shared/sms_shape_memory.ts';
+import {
   channelDisplayName,
   channelIn,
   confirmationReasonCode,
@@ -106,6 +117,13 @@ export type ParsedCapture = {
    * (`amount_mismatch`, `direction_conflict`): never recorded by the server.
    */
   proposal?: CaptureProposal;
+  /** Gemini-first phase 4 (additive): read from a stored shape, not by a model request. */
+  analysisSource?: 'template';
+  /**
+   * Gemini-first phase 4 (additive): a clean display name of [merchant] from
+   * the shared merchant memory. [merchant] stays the code the message names.
+   */
+  merchantDisplay?: string;
 };
 
 export type CaptureProposal = {
@@ -177,6 +195,22 @@ export type ParseOutcome = {
    * with no AI. `currencyAbsent` = the message names no currency (4.4).
    */
   meaning?: MessageMeaning;
+  /** Gemini-first phase 4, not persisted: what the shared memory should learn or drop. */
+  memory?: MemoryEffects;
+};
+
+/** Gemini-first phase 4: the memory side effects of one AI-primary analysis (applied after the record). */
+export type MemoryEffects = {
+  /** The template this message was read from (no model request). */
+  templateHit?: string;
+  /** A template match that was sent to Gemini as the 1-in-50 check. */
+  checked?: string;
+  /** The template to drop: Gemini disagreed with it. */
+  drop?: string;
+  /** A Gemini read that may teach a shape. */
+  shape?: { senderKey: string; skeleton: string; reading: ShapeReading };
+  /** A Gemini read of a merchant code with its category. */
+  merchant?: { codeKey: string; category: string };
 };
 
 /**
@@ -739,6 +773,10 @@ export async function parseSms(input: {
   aiPrimary?: boolean;
   /** AI linearization point: must commit before any AI request; false => AI never starts. */
   beforeAi?: () => Promise<boolean>;
+  /** Gemini-first phase 4 (AI-primary only): the shared shape and merchant memory. */
+  memory?: AnalysisMemoryReader;
+  /** In [0, 1): picks the 1-in-50 template matches still read by Gemini (tests pin it). */
+  random?: () => number;
 }): Promise<ParseOutcome> {
   // Follow-up 3 (SM-09): the parser reads at most MAX_TEXT_LENGTH characters.
   input = { ...input, text: bounded(input.text) };
@@ -1068,9 +1106,95 @@ ${input.text}`;
       receivedAt: input.receivedAt, local: null, directionText });
     return checked.accepted ? checkPrimaryAmount(v, input.text) : checked.reason;
   };
+  // The model's answer (or a template's reading of the same shape), from the
+  // validated value to the outcome; [aiInvoked] false for a template reading.
+  const outcomeOf = (value: Record<string, unknown>, aiInvoked: boolean): ParseOutcome => {
+    if (value.is_transaction === false) {
+      return { parsed: { parserSource: 'ai_ignored', reasonCode: obviousReason(verdictReasonCode(value), input.text) },
+        accepted: false, aiInvoked };
+    }
+    const ai = candidate(value);
+    const checked = validateAiCandidate({ candidate: ai, sanitizedText: input.text,
+      receivedAt: input.receivedAt, local: null, directionText });
+    if (!checked.accepted) return { parsed: pending, accepted: false, aiInvoked, aiTransientFailure: true };
+    if (!reversal && textDoubts(meaning)) {
+      return { parsed: { ...pending, reviewReason: meaning.reason, reasonCode: meaningReasonCode(meaning.reason) },
+        accepted: false, aiInvoked, meaning };
+    }
+    const counterpartyKind = counterpartyKindOf(value.counterparty_kind);
+    if (counterpartyKind === 'own_account') {
+      // The app has no neutral server transfer: own accounts stay for review.
+      return { parsed: { ...pending, parserSource: 'ai', reviewReason: 'own_accounts', reasonCode: 'own_account' },
+        accepted: false, aiInvoked, meaning };
+    }
+    const direction = ai.direction === 'credit' || ai.direction === 'debit'
+      ? ai.direction : ai.type === 'income' || ai.type === 'refund' ? 'credit' : 'debit';
+    // A reversal returns money: only a credit answer is its reading.
+    const outgoingCredit = !reversal && direction === 'credit' && isTransfer(input.text) && isOutgoingTransfer(cueText);
+    if (reversal ? direction !== 'credit' : outgoingCredit || modelDirectionRefused(cueText, meaning, direction, true)) {
+      const reviewReason = reversal || outgoingCredit ? 'direction_contradiction' : refusalReason(cueText, meaning, true);
+      if (reviewReason !== 'direction_contradiction') {
+        return { parsed: { ...pending, parserSource: 'ai', reviewReason, reasonCode: meaningReasonCode(reviewReason) },
+          accepted: false, aiInvoked, meaning };
+      }
+      const proposal = proposalOf({ ...value, amount_text: checked.amountText, currency: checked.currency, direction },
+        input.text);
+      return { parsed: { ...pending, parserSource: 'ai', reviewReason,
+        reasonCode: 'direction_conflict', ...(proposal ? { proposal } : {}) }, accepted: false, aiInvoked, meaning };
+    }
+    // Ground the clock in the literal SMS before trusting model formatting. The
+    // candidate validator normalizes a naive clock to UTC for its age check;
+    // using that normalized value here incorrectly shifts Egyptian SMS by +2h.
+    const literalStamp = extractTimestamp(normalize(input.text), input.receivedAt, input.tzOffsetMinutes);
+    const stamp = trustedSmsTimestamp(literalStamp ?? ai.occurred_at,
+      input.receivedAt, input.tzOffsetMinutes);
+    const merchant = recordedMerchant(value, input.text, ai.type ?? '', counterpartyKind);
+    const decided = reversal
+      ? { ...meaning, kind: 'completed_movement' as const, disposition: dispositionOf('completed_movement'), reason: 'model_reversal' }
+      : decidedByModel(meaning);
+    return { accepted: true, aiInvoked, meaning: decided, parsed: {
+      amount: Number(checked.amountText), amount_text: checked.amountText,
+      currency: checked.currency, type: ai.type, direction,
+      merchant, category: ai.category, counterpartyKind,
+      last4: last4Grounded(ai.last4, input.text) ? ai.last4 : undefined,
+      occurredAt: stamp, comparisonTimestamp: stamp ?? input.receivedAt,
+      comparisonTimestampSource: stamp ? 'sms_body' : 'received_at',
+      rawMessage: input.rawText, senderId: input.sender || undefined, parserSource: 'ai',
+    } };
+  };
+
+  // Gemini-first phase 4: a message of a stored shape is read from it, with
+  // every check a model answer gets (amount, direction, own accounts …). Only
+  // a reading that records is used; anything else goes to the model.
+  const templated = reversal ? null : await templateReading(input);
+  let fromTemplate: ParseOutcome | null = null;
+  if (templated && validate(templated.value) == null) {
+    const read = outcomeOf(templated.value, false);
+    if (read.accepted) fromTemplate = { ...read, parsed: { ...read.parsed, analysisSource: 'template' } };
+  }
+  const check = fromTemplate != null && (input.random ?? Math.random)() * TEMPLATE_CHECK_EVERY < 1;
+  if (fromTemplate && !check) return { ...fromTemplate, memory: { templateHit: templated!.template.hash } };
+
   const result = await runPrimaryAi({ prompt, key: GEMINI_API_KEY(), model: GEMINI_MODEL(),
     beforeAttempt: input.beforeAi ?? (() => Promise.resolve(true)), validate });
-  if (!result.ok) {
+  if (fromTemplate && check) {
+    const hash = templated!.template.hash;
+    // A check the provider never answered: the template's reading stands.
+    if (!result.ok && (result.reason === 'unavailable' || result.reason === 'budget')) {
+      return { ...fromTemplate, memory: { templateHit: hash } };
+    }
+    const out = result.ok ? outcomeOf(result.value, true) : failedOutcome(result);
+    // Gemini's answer wins; a disagreement drops the template for good.
+    const memory: MemoryEffects = { checked: hash, ...learned(out, result.ok ? result.value : null) };
+    if (!sameReading(out, fromTemplate)) memory.drop = hash;
+    return { ...out, memory };
+  }
+  if (!result.ok) return failedOutcome(result);
+  const out = outcomeOf(result.value, true);
+  const memory = learned(out, result.value);
+  return Object.keys(memory).length ? { ...out, memory } : out;
+
+  function failedOutcome(result: Extract<Awaited<ReturnType<typeof runPrimaryAi>>, { ok: false }>): ParseOutcome {
     // Gemini-first phase 1: an answer whose figure is not in the text, or whose
     // direction contradicts the wording, is held for a one-tap confirmation —
     // never recorded, and never "awaiting analysis" (a new analysis would not
@@ -1096,58 +1220,80 @@ ${input.text}`;
       ...(result.reason === 'unavailable' ? { aiProviderUnavailable: true } : {}),
       ...(result.reason === 'denied' ? { aiDenied: true } : {}) };
   }
-  if (result.value.is_transaction === false) {
-    return { parsed: { parserSource: 'ai_ignored', reasonCode: obviousReason(verdictReasonCode(result.value), input.text) },
-      accepted: false, aiInvoked: true };
+
+  /** What a recorded Gemini read teaches the shared memory (a shape, a merchant code). */
+  function learned(out: ParseOutcome, value: Record<string, unknown> | null): MemoryEffects {
+    const p = out.parsed;
+    if (!out.accepted || value == null || reversal) return {};
+    const effects: MemoryEffects = {};
+    const merchant = p.merchant;
+    const merchantCode = p.counterpartyKind === 'merchant' && merchantCodeEligible(merchant) ? merchant : undefined;
+    if (merchantCode && p.category) effects.merchant = { codeKey: merchantCodeKey(merchantCode), category: p.category };
+    const key = senderKey(input.sender);
+    // Never a shape: a transfer, a person or own accounts, a foreign amount,
+    // a merchant that is not a plain code, a clock only the model read.
+    if (!key || isTransfer(input.text)) return effects;
+    if (p.counterpartyKind !== 'merchant' && p.counterpartyKind !== 'unknown') return effects;
+    if (!['payment', 'withdrawal', 'income', 'refund'].includes(p.type ?? '')) return effects;
+    if (typeof value.original_amount_text === 'string' && value.original_amount_text) return effects;
+    if (merchant != null && merchantCode == null) return effects;
+    const modelClock = value.occurredAt ?? value.occurred_at;
+    if (typeof modelClock === 'string' && modelClock &&
+      extractTimestamp(normalize(input.text), input.receivedAt, input.tzOffsetMinutes) == null) return effects;
+    if (!p.amount_text || !p.currency || !p.direction || !p.category) return effects;
+    const skeleton = buildShape(input.text, {
+      amountText: p.amount_text, ...(merchantCode ? { merchant: merchantCode } : {}), ...(p.last4 ? { last4: p.last4 } : {}),
+    });
+    if (!skeleton) return effects;
+    effects.shape = { senderKey: key, skeleton, reading: {
+      currency: p.currency, type: p.type!, direction: p.direction, counterparty_kind: p.counterpartyKind!,
+      ...(merchantCode ? {} : { category: p.category }),
+    } };
+    return effects;
   }
-  const ai = candidate(result.value);
-  const checked = validateAiCandidate({ candidate: ai, sanitizedText: input.text,
-    receivedAt: input.receivedAt, local: null, directionText });
-  if (!checked.accepted) return { parsed: pending, accepted: false, aiInvoked: true, aiTransientFailure: true };
-  if (!reversal && textDoubts(meaning)) {
-    return { parsed: { ...pending, reviewReason: meaning.reason, reasonCode: meaningReasonCode(meaning.reason) },
-      accepted: false, aiInvoked: true, meaning };
-  }
-  const counterpartyKind = counterpartyKindOf(result.value.counterparty_kind);
-  if (counterpartyKind === 'own_account') {
-    // The app has no neutral server transfer: own accounts stay for review.
-    return { parsed: { ...pending, parserSource: 'ai', reviewReason: 'own_accounts', reasonCode: 'own_account' },
-      accepted: false, aiInvoked: true, meaning };
-  }
-  const direction = ai.direction === 'credit' || ai.direction === 'debit'
-    ? ai.direction : ai.type === 'income' || ai.type === 'refund' ? 'credit' : 'debit';
-  // A reversal returns money: only a credit answer is its reading.
-  const outgoingCredit = !reversal && direction === 'credit' && isTransfer(input.text) && isOutgoingTransfer(cueText);
-  if (reversal ? direction !== 'credit' : outgoingCredit || modelDirectionRefused(cueText, meaning, direction, true)) {
-    const reviewReason = reversal || outgoingCredit ? 'direction_contradiction' : refusalReason(cueText, meaning, true);
-    if (reviewReason !== 'direction_contradiction') {
-      return { parsed: { ...pending, parserSource: 'ai', reviewReason, reasonCode: meaningReasonCode(reviewReason) },
-        accepted: false, aiInvoked: true, meaning };
+}
+
+/** The same recorded reading (merchant compared by its memory key). */
+function sameReading(a: ParseOutcome, b: ParseOutcome): boolean {
+  if (!a.accepted || !b.accepted) return false;
+  const x = a.parsed;
+  const y = b.parsed;
+  const merchant = (m?: string) => (m == null ? null : merchantCodeKey(m));
+  return x.amount_text === y.amount_text && x.currency === y.currency && x.type === y.type &&
+    x.direction === y.direction && x.category === y.category && x.counterpartyKind === y.counterpartyKind &&
+    (x.last4 ?? null) === (y.last4 ?? null) && merchant(x.merchant) === merchant(y.merchant);
+}
+
+/**
+ * Gemini-first phase 4: the reading of the first stored shape of this bank
+ * sender that [input] has exactly, as a model answer would state it. Null
+ * when none matches, the shape has a merchant the shared memory does not know
+ * with one agreed category, or the memory cannot be read.
+ */
+async function templateReading(
+  input: Parameters<typeof parseSms>[0],
+): Promise<{ template: ShapeTemplate; value: Record<string, unknown> } | null> {
+  const key = senderKey(input.sender);
+  if (!input.memory || !key || isTransfer(input.text)) return null;
+  try {
+    for (const template of await input.memory.templates(key)) {
+      const m = matchShape(template.skeleton, input.text);
+      if (!m) continue;
+      const r = template.reading;
+      const category = m.merchant != null
+        ? (await input.memory.merchant(merchantCodeKey(m.merchant)))?.category ?? undefined
+        : r.category;
+      if (!category || !AI_CATEGORIES.includes(category)) return null;
+      return { template, value: {
+        is_transaction: true, message_type: 'transaction', status: 'completed',
+        amount: Number(m.amountText), amount_text: m.amountText, currency: r.currency,
+        type: r.type, direction: r.direction, category, counterparty_kind: r.counterparty_kind,
+        ...(m.merchant != null ? { merchant: m.merchant } : {}),
+        ...(m.last4 != null ? { last4: m.last4 } : {}),
+      } };
     }
-    const proposal = proposalOf({ ...result.value, amount_text: checked.amountText, currency: checked.currency, direction },
-      input.text);
-    return { parsed: { ...pending, parserSource: 'ai', reviewReason,
-      reasonCode: 'direction_conflict', ...(proposal ? { proposal } : {}) }, accepted: false, aiInvoked: true, meaning };
-  }
-  // Ground the clock in the literal SMS before trusting model formatting. The
-  // candidate validator normalizes a naive clock to UTC for its age check;
-  // using that normalized value here incorrectly shifts Egyptian SMS by +2h.
-  const literalStamp = extractTimestamp(normalize(input.text), input.receivedAt, input.tzOffsetMinutes);
-  const stamp = trustedSmsTimestamp(literalStamp ?? ai.occurred_at,
-    input.receivedAt, input.tzOffsetMinutes);
-  const merchant = recordedMerchant(result.value, input.text, ai.type ?? '', counterpartyKind);
-  const decided = reversal
-    ? { ...meaning, kind: 'completed_movement' as const, disposition: dispositionOf('completed_movement'), reason: 'model_reversal' }
-    : decidedByModel(meaning);
-  return { accepted: true, aiInvoked: true, meaning: decided, parsed: {
-    amount: Number(checked.amountText), amount_text: checked.amountText,
-    currency: checked.currency, type: ai.type, direction,
-    merchant, category: ai.category, counterpartyKind,
-    last4: last4Grounded(ai.last4, input.text) ? ai.last4 : undefined,
-    occurredAt: stamp, comparisonTimestamp: stamp ?? input.receivedAt,
-    comparisonTimestampSource: stamp ? 'sms_body' : 'received_at',
-    rawMessage: input.rawText, senderId: input.sender || undefined, parserSource: 'ai',
-  } };
+  } catch { /* nothing known: the model reads it */ }
+  return null;
 }
 
 // null = no usable candidate (final); 'transient' = transport timeout / HTTP error (retryable).

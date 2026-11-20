@@ -39,6 +39,16 @@ import { AI_PRIMARY_MODE } from '../_shared/ai_primary.ts';
 import { UNDERSTANDING_SYSTEM_VERSION } from '../_shared/ai_understanding.ts';
 import { reserveAiBudget } from '../_shared/ai_budget_gate.ts';
 import { meaningReasonCode } from '../_shared/analysis_reasons.ts';
+import {
+  analysisMemoryReader,
+  bumpAnalysisCounter,
+  dropShape,
+  merchantCodeEligible,
+  merchantCodeKey,
+  observeMerchant,
+  observeShape,
+} from '../_shared/sms_shape_memory.ts';
+import { lookUpMerchantOnce } from '../_shared/merchant_lookup.ts';
 
 export type { ParsedCapture };
 
@@ -301,6 +311,7 @@ export async function handleProcessIosSms(
       return json({ error: 'rate_limit_exceeded' }, 429);
     }
 
+    const memoryReader = analysisMemoryReader(supabase);
     let dispatchDenied: string | null = null;
     // V1-022: the global AI budget refused a provider request (no call made).
     let budgetRefused = false;
@@ -321,6 +332,9 @@ export async function handleProcessIosSms(
       // Server-authoritative: never the raw caller flag.
       allowAi: aiAllowed,
       aiPrimary,
+      // Gemini-first phase 4: the shared, non-personal shape and merchant
+      // memory (no account data: read for Cloud and smart-analysis-only alike).
+      memory: aiPrimary ? memoryReader : undefined,
       beforeAi: async () => {
         const dispatch = await rpc('capture_ai_dispatch', {
           p_install_id_hash: auth.installIdHash,
@@ -433,12 +447,22 @@ export async function handleProcessIosSms(
       }
     }
 
+    // Gemini-first phase 4: the merchant code's clean display name, when the
+    // shared memory has one (looked up once, in the background, after an
+    // earlier message). The code itself stays in `merchant`.
+    if (aiPrimary && status !== 'rejected' && parsed.counterpartyKind === 'merchant' &&
+      merchantCodeEligible(parsed.merchant)) {
+      const known = await memoryReader.merchant(merchantCodeKey(parsed.merchant));
+      if (known?.displayName) parsed.merchantDisplay = known.displayName;
+    }
+
     // The app files this capture under the user's own merchant rule
     // (learnedRuleCategoryFor), so the alert says the same. Display only: the
     // stored parse is unchanged and the device still applies the rule itself.
-    const shown: ShownCapture = status !== 'rejected' && ownerUid && cloudAllowed
+    const ruled: ShownCapture = status !== 'rejected' && ownerUid && cloudAllowed
       ? await withUserMerchantRule(supabase, ownerUid, parsed)
       : parsed;
+    const shown: ShownCapture = parsed.merchantDisplay ? { ...ruled, merchant: parsed.merchantDisplay } : ruled;
     // Each primary analysis already made its bounded provider attempts. A
     // model answer the validator rejected is terminal and preserved for
     // review, with no push. A provider that could not be reached at all never
@@ -494,6 +518,20 @@ export async function handleProcessIosSms(
     }
 
     console.log(JSON.stringify({ event: 'capture_stored', status, retryable: transient }));
+    if (aiPrimary) {
+      // Gemini-first phase 4: memory writes and counts after the record, never
+      // delaying or failing it. Only a recorded reading teaches the memory.
+      const recorded = status === 'processed' || status === 'duplicate';
+      const memoryWork = rememberAnalysis(supabase, {
+        outcome, recorded, parsed, installIdHash: auth.installIdHash,
+        // A Places lookup is cloud processing, as in enrich-merchant.
+        lookUp: cloudAllowed,
+      }).catch(() => undefined);
+      const runtime = (globalThis as unknown as {
+        EdgeRuntime?: { waitUntil: (work: Promise<unknown>) => void }
+      }).EdgeRuntime;
+      runtime?.waitUntil(memoryWork);
+    }
     if (status === 'processed' && ownerUid && cloudAllowed) {
       const secret = Deno.env.get('ENGAGEMENT_WORKER_SECRET');
       const url = Deno.env.get('SUPABASE_URL');
@@ -657,6 +695,38 @@ export function duplicateFingerprintBase(
   return (owner ? [`owner:${owner}`, ...fields] : fields).join('|');
 }
 
+/**
+ * Gemini-first phase 4: what one AI-primary analysis teaches the shared memory
+ * (sms_shape_memory.ts) and its daily counts. Best effort throughout.
+ */
+async function rememberAnalysis(
+  supabase: ReturnType<typeof serviceClient>,
+  input: { outcome: ParseOutcome; recorded: boolean; parsed: ParsedCapture; installIdHash: string; lookUp: boolean },
+): Promise<void> {
+  const effects = input.outcome.memory ?? {};
+  if (input.outcome.aiInvoked) await bumpAnalysisCounter(supabase, 'model_read');
+  if (effects.templateHit) await bumpAnalysisCounter(supabase, 'template_hit');
+  if (effects.checked) await bumpAnalysisCounter(supabase, 'template_check');
+  if (effects.drop) {
+    await dropShape(supabase, effects.drop);
+    await bumpAnalysisCounter(supabase, 'template_drop');
+  }
+  if (!input.recorded) return;
+  if (effects.merchant) await observeMerchant(supabase, effects.merchant.codeKey, effects.merchant.category);
+  if (effects.shape && !effects.drop) {
+    const state = await observeShape(supabase, { ...effects.shape, installIdHash: input.installIdHash });
+    if (state === 'activated') await bumpAnalysisCounter(supabase, 'template_activated');
+  }
+  const code = input.parsed.merchant;
+  if (input.lookUp && !input.parsed.merchantDisplay && input.parsed.counterpartyKind === 'merchant' &&
+    merchantCodeEligible(code)) {
+    await lookUpMerchantOnce(supabase, {
+      codeKey: merchantCodeKey(code), code, currency: input.parsed.currency,
+      apiKey: Deno.env.get('GOOGLE_MAPS_API_KEY') ?? '',
+    });
+  }
+}
+
 /// The device's merchant key (AppDatabase.normalizeMerchant), which is also
 /// the shape user_merchant_rules.merchant_key is constrained to.
 export function merchantRuleKey(raw: string): string {
@@ -671,17 +741,23 @@ async function withUserMerchantRule(
   ownerUid: string,
   parsed: ParsedCapture,
 ): Promise<ShownCapture> {
-  const key = parsed.merchant ? merchantRuleKey(parsed.merchant) : '';
-  if (!key) return parsed;
+  // The code the message names first, then its display name (phase 4: the
+  // app may file the transaction under the display name).
+  const keys = [...new Set([parsed.merchant, parsed.merchantDisplay]
+    .map((m) => (m ? merchantRuleKey(m) : '')).filter((k) => k))];
   try {
-    const { data, error } = await supabase
-      .from('user_merchant_rules')
-      .select('category_key')
-      .eq('user_id', ownerUid)
-      .eq('merchant_key', key)
-      .is('deleted_at', null)
-      .maybeSingle();
-    const category = !error && typeof data?.category_key === 'string' ? data.category_key : null;
+    let category: string | null = null;
+    for (const key of keys) {
+      const { data, error } = await supabase
+        .from('user_merchant_rules')
+        .select('category_key')
+        .eq('user_id', ownerUid)
+        .eq('merchant_key', key)
+        .is('deleted_at', null)
+        .maybeSingle();
+      category = !error && typeof data?.category_key === 'string' ? data.category_key : null;
+      if (category) break;
+    }
     if (!category) return parsed;
     // The app names the cash category "سحب نقدي"; the title says so too.
     const type = category === 'cash' && parsed.direction !== 'credit' ? 'withdrawal' : parsed.type;
