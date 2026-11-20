@@ -506,7 +506,10 @@ class AiCandidateValidator {
   /// as "ALL" or "TOP" are never a currency (server `currencyGrounded`).
   static bool currencyGrounded(String iso, String text) {
     if (iso.isEmpty) return false;
-    final normalized = Normalizer.normalizeCurrencyTokens(text);
+    var normalized = Normalizer.normalizeCurrencyTokens(text);
+    for (final (re, code) in _shortForms) {
+      normalized = normalized.replaceAll(re, code);
+    }
     final e = RegExp.escape(iso);
     final code = Normalizer.isoCurrencyAlternation.split('|').contains(iso)
         ? RegExp('(?<![A-Za-z])$e(?![A-Za-z])', caseSensitive: false)
@@ -515,6 +518,28 @@ class AiCandidateValidator {
     final extras = _extraAliases[iso] ?? const <String>[];
     return extras.any(text.contains);
   }
+
+  /// Gemini-first phase 2: short currency forms banks write right next to
+  /// the figure («118 جم», «40 ج م», «55 رس», «55 دإ», "Dhs 55"). Used only to
+  /// ground a model's currency, never by the rule parser. Server twin:
+  /// SHORT_FORMS.
+  static final List<(RegExp, String)> _shortForms = [
+    for (final (form, code) in const [
+      (r'ج\s?م', 'EGP'),
+      (r'ر\s?س', 'SAR'),
+      (r'د\s?إ', 'AED'),
+      (r'dhs?\.?', 'AED'),
+    ])
+      (
+        RegExp(
+          '(?<=[0-9٠-٩۰-۹]\\s{0,2})$form(?![\\p{L}\\p{M}])'
+          '|(?<![\\p{L}\\p{M}])$form(?=\\s{0,2}[0-9٠-٩۰-۹])',
+          caseSensitive: false,
+          unicode: true,
+        ),
+        code,
+      ),
+  ];
 
   static bool _merchantGrounded(String? merchant, String text) {
     // "01" is a substring of almost any SMS; a time/date/reference is never

@@ -999,5 +999,212 @@
       "accepted": true,
       "currency": "SAR"
     }
+  },
+  {
+    "name": "Egyptian short form جم grounds EGP",
+    "sanitized_text": "تم شراء بمبلغ 118.00 جم من CARREFOUR",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 118,
+      "amount_text": "118.00",
+      "currency": "EGP",
+      "type": "payment",
+      "merchant": "CARREFOUR"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "EGP",
+      "merchant": "CARREFOUR",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "Egyptian short form glued جم grounds EGP",
+    "sanitized_text": "خصم 75جم من بطاقتك لدى NOON",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 75,
+      "amount_text": "75",
+      "currency": "EGP",
+      "type": "payment",
+      "merchant": "NOON"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "EGP",
+      "merchant": "NOON",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "Egyptian short form ج م grounds EGP",
+    "sanitized_text": "تم خصم 40 ج م من بطاقتك لدى NOON",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 40,
+      "amount_text": "40",
+      "currency": "EGP",
+      "type": "payment",
+      "merchant": "NOON"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "EGP",
+      "merchant": "NOON",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "Egyptian جنيها grounds EGP",
+    "sanitized_text": "تم خصم 40 جنيها من بطاقتك لدى NOON",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 40,
+      "amount_text": "40",
+      "currency": "EGP",
+      "type": "payment",
+      "merchant": "NOON"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "EGP",
+      "merchant": "NOON",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "Egyptian L.E. grounds EGP",
+    "sanitized_text": "Purchase of L.E. 40 at NOON",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 40,
+      "amount_text": "40",
+      "currency": "EGP",
+      "type": "payment",
+      "merchant": "NOON"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "EGP",
+      "merchant": "NOON",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "Saudi short form رس grounds SAR",
+    "sanitized_text": "شراء 55 رس لدى JARIR",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 55,
+      "amount_text": "55",
+      "currency": "SAR",
+      "type": "payment",
+      "merchant": "JARIR"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "SAR",
+      "merchant": "JARIR",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "UAE short form دإ grounds AED",
+    "sanitized_text": "شراء 55 دإ لدى NOON",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 55,
+      "amount_text": "55",
+      "currency": "AED",
+      "type": "payment",
+      "merchant": "NOON"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "AED",
+      "merchant": "NOON",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "UAE short form Dhs grounds AED",
+    "sanitized_text": "Purchase of Dhs 55.00 at NOON",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 55,
+      "amount_text": "55.00",
+      "currency": "AED",
+      "type": "payment",
+      "merchant": "NOON"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "AED",
+      "merchant": "NOON",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "Persian digits with Arabic separators grounded",
+    "sanitized_text": "تم خصم ۱٬۲۵۰٫۵۰ جنيه لدى NOON",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 1250.5,
+      "amount_text": "1250.50",
+      "currency": "EGP",
+      "type": "payment",
+      "merchant": "NOON"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "EGP",
+      "merchant": "NOON",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "Arabic-Indic digits with جم grounded",
+    "sanitized_text": "شراء بمبلغ ١١٨٫٠٠ جم لدى NOON",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 118,
+      "amount_text": "118.00",
+      "currency": "EGP",
+      "type": "payment",
+      "merchant": "NOON"
+    },
+    "expected": {
+      "accepted": true,
+      "currency": "EGP",
+      "merchant": "NOON",
+      "occurred_at_kept": false
+    }
+  },
+  {
+    "name": "a word containing جم is not a currency",
+    "sanitized_text": "حجم الشراء 40 لدى NOON",
+    "received_at": "2026-06-16T12:00:00Z",
+    "local": null,
+    "ai": {
+      "amount": 40,
+      "amount_text": "40",
+      "currency": "EGP",
+      "type": "payment",
+      "merchant": "NOON"
+    },
+    "expected": {
+      "accepted": false,
+      "reason": "currency_not_grounded"
+    }
   }
 ]

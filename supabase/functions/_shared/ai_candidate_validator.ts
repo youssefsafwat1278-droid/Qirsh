@@ -276,20 +276,23 @@ function amountClause(text: string, amountText?: string): string {
 
 // ── Amount grounding (port of app GroundingCheck) ────────────────────────────
 const ARABIC_INDIC_DIGIT = /[٠-٩]/g;
+/** Gemini-first phase 2: Arabic-Indic and Persian (۰-۹) digits as ASCII (app twin: Normalizer.normalizeDigits). */
+const asciiDigits = (s: string) =>
+  s.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x06F0));
 
 // A numeric token is a maximal digit run with digit-flanked group/decimal
 // separators (ASCII or Arabic), so a longer number never yields a sub-token.
-const NUMERIC_TOKEN = /[0-9٠-٩]+(?:[,٬،.٫][0-9٠-٩]+)*/g;
+const NUMERIC_TOKEN = /[0-9٠-٩۰-۹]+(?:[,٬،.٫][0-9٠-٩۰-۹]+)*/g;
 
 // Digits that belong to a date/time/identifier rather than an amount.
-const DATE_TIME_SEP_BEFORE = /[0-9٠-٩][-/:]$/;
-const DATE_TIME_SEP_AFTER = /^[-/:][0-9٠-٩]/;
+const DATE_TIME_SEP_BEFORE = /[0-9٠-٩۰-۹][-/:]$/;
+const DATE_TIME_SEP_AFTER = /^[-/:][0-9٠-٩۰-۹]/;
 const LAST4_PREFIX =
   /(?:[*•xX]|(?:ending|ends|acct|account|a\/c|card|بطاقة|حساب|رقم|تنتهي|منتهية)(?:\s+(?:in|with|no\.?|number|#|بـ|ب))?[\s:#.-]*)$/i;
 
 function canonicalTokenText(token: string): string | null {
-  const ascii = token
-    .replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660))
+  const ascii = asciiDigits(token)
     .replaceAll('٬', ',')
     .replaceAll('،', ',') // Arabic comma between digits (V1-057)
     .replaceAll('٫', '.');
@@ -361,6 +364,23 @@ const LOCAL_FORMS = CURRENCY_TABLE.localForms.map(([form, code]) => {
 });
 
 /**
+ * Gemini-first phase 2: short currency forms banks write right next to the
+ * figure («118 جم», «40 ج م», «55 رس», «55 دإ», "Dhs 55"). Used only to ground
+ * a model's currency, never by the rule parser. App twin:
+ * AiCandidateValidator.currencyGrounded.
+ */
+const FIGURE = '[0-9٠-٩۰-۹]';
+const SHORT_FORMS: Array<[RegExp, string]> = ([
+  ['ج\\s?م', 'EGP'],
+  ['ر\\s?س', 'SAR'],
+  ['د\\s?إ', 'AED'],
+  ['dhs?\\.?', 'AED'],
+] as const).map(([form, code]) => [
+  new RegExp(`(?<=${FIGURE}\\s{0,2})${form}(?![\\p{L}\\p{M}])|(?<![\\p{L}\\p{M}])${form}(?=\\s{0,2}${FIGURE})`, 'giu'),
+  code,
+]);
+
+/**
  * A core parser code counts in any case as a whole word (unchanged); any other
  * table code only in capitals right next to a figure ("NGN 5,000"), so words
  * such as "ALL" or "TOP" are never a currency (ParserEngine._hasCurrency).
@@ -369,6 +389,7 @@ export function currencyGrounded(iso: string, text: string): boolean {
   if (!iso) return false;
   let normalized = normalizeCurrencyTokens(text);
   for (const [re, code] of LOCAL_FORMS) normalized = normalized.replace(re, code);
+  for (const [re, code] of SHORT_FORMS) normalized = normalized.replace(re, code);
   const code = CURRENCY_TABLE.core.includes(iso)
     ? new RegExp(`(?<![A-Za-z])${iso}(?![A-Za-z])`, 'i')
     : new RegExp(`(?<![A-Za-z])${iso}(?=\\s?[0-9])|(?<=[0-9]\\s?)${iso}(?![A-Za-z])`);
@@ -718,6 +739,12 @@ export function validateAiCandidate(input: {
    * text names no currency at all and the answer gives exactly it.
    */
   accountCurrency?: string | null;
+  /**
+   * Gemini-first phase 2 (AI-primary path only): the text the direction
+   * check reads — the transaction clause without an advert tail. Defaults to
+   * [sanitizedText].
+   */
+  directionText?: string;
 }): AiCandidateValidation {
   const { candidate: c, sanitizedText: text, local } = input;
   const reject = (reason: string): AiCandidateValidation => ({ accepted: false, reason });
@@ -734,7 +761,7 @@ export function validateAiCandidate(input: {
   }
   if (!amountGrounded(c.amount, text)) return reject('amount_not_grounded');
   // OR-03 — a limit, balance or minimum-due figure is never the amount.
-  const ascii = text.replace(ARABIC_INDIC_DIGIT, (d) => String(d.charCodeAt(0) - 0x0660));
+  const ascii = asciiDigits(text);
   if (!amountGrounded(c.amount, maskAccountFigures(ascii))) return reject('amount_is_account_figure');
   const total = chargedTotal(text);
   if (total != null && Math.abs((c.amount as number) - total) >= 0.005) return reject('amount_not_charged_total');
@@ -765,7 +792,7 @@ export function validateAiCandidate(input: {
   if (!(Math.abs(Number(amountText) - amount) < 0.01)) return reject('amount_text_mismatch');
   if (!amountTextGrounded(amountText, text)) return reject('amount_text_not_grounded');
 
-  if (directionContradictsWording(text, c.type, c.direction, amountText,
+  if (directionContradictsWording(input.directionText ?? text, c.type, c.direction, amountText,
     merchantGrounded(c.merchant, text) ? c.merchant : null)) return reject('direction_contradiction');
   // Direction is required (ValidatedCapture v1): resolved as process-ios-sms does,
   // from the deterministic direction, else the AI direction, else the AI type.
