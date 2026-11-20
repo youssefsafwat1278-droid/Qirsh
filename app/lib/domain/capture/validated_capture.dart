@@ -268,9 +268,11 @@ String? meaningHoldReason(String text,
 /// answer (the rule parse + model or AI-primary path) is refused when the
 /// text explicitly names another direction.
 ///
-/// Gemini-first phase 2: only an explicit contradiction holds the row, as on
-/// the server — never the device's parser reading the text differently or
-/// having no reading ([_explicitlyContradicts]).
+/// Gemini-first phase 2: the server's rule holds the row
+/// ([DirectionSignal.modelDirectionRefused], its twin) — never the device's
+/// own parse reading the text differently; where the device's meaning finds
+/// no event in the text ("charged by EGP 1105", which the server reads as a
+/// debit) only an explicit contradiction does ([_explicitlyContradicts]).
 bool modelRowDirectionRefused(Map<String, dynamic>? parsed, String text) {
   if (!isModelRow(parsed)) return false;
   return _modelDirectionRefused(
@@ -281,15 +283,26 @@ bool modelRowDirectionRefused(Map<String, dynamic>? parsed, String text) {
 
 bool _modelDirectionRefused(
         String text, TxnDirection direction, TxnDirection typeDirection) =>
-    [direction, typeDirection].any((d) => _explicitlyContradicts(text, d));
+    [direction, typeDirection].any((d) => _serverRuleRefuses(text, d));
+
+bool _serverRuleRefuses(String text, TxnDirection direction) {
+  if (direction == TxnDirection.unknown) return false;
+  // A reversal returns money: only a credit answer is its reading (server:
+  // `parsePrimarySms`).
+  if (isReversalMessage(text)) return direction != TxnDirection.credit;
+  final cue = withoutAdvertTail(text);
+  final meaning = ParserEngine.meaningOf(cue);
+  if (meaning.kind == MessageKind.undetermined &&
+      meaning.reason == 'no_event_amount') {
+    return _explicitlyContradicts(text, direction);
+  }
+  return DirectionSignal.modelDirectionRefused(cue, direction);
+}
 
 /// The text's explicit direction — a transfer's own flow, else the clause's
 /// money words, with an advert tail set aside — is known and is not
-/// [direction]. A reversal names the original debit, so it never contradicts.
+/// [direction].
 bool _explicitlyContradicts(String text, TxnDirection direction) {
-  if (direction == TxnDirection.unknown || isReversalMessage(text)) {
-    return false;
-  }
   final cue = withoutAdvertTail(text);
   final flow = CompletionCertainty.isTransfer(cue)
       ? CompletionCertainty.transferFlowCredit(cue)

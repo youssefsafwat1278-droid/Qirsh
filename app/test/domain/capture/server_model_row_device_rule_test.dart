@@ -78,6 +78,9 @@ void main() {
         isFalse);
     // A rule-parse row keeps the old rule.
     expect(meaningHoldReason(text, amount: 250), isNotNull);
+    // A debit answer is not a reversal's reading (server twin).
+    expect(modelRowDirectionRefused(row('debit', 'payment'), text), isTrue);
+    expect(validate(text, 250, '250', 'debit', 'payment').accepted, isFalse);
   });
 
   test('an advert tail does not overrule the transaction clause', () {
