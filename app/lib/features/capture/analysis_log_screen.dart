@@ -7,6 +7,7 @@ import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
 import '../../core/theme/widgets/navy_sheet_theme.dart';
 import '../../core/utils/app_lucide_icons.dart';
+import '../../core/utils/formatters.dart';
 import '../../core/utils/l10n_ext.dart';
 import '../../data/repositories/analysis_log_repository.dart';
 import '../../domain/capture/analysis_outcome.dart';
@@ -16,7 +17,6 @@ import '../common/app_loading_state.dart';
 import '../settings/widgets/settings_v2.dart';
 import '../transactions/transaction_details_screen.dart';
 import '../transactions/transactions_screen.dart' show SmartInboxCard;
-import 'services/capture_notification_content.dart';
 import 'services/capture_receipts.dart';
 import 'services/native_capture_bridge.dart';
 import 'services/outcome_notification_content.dart';
@@ -78,6 +78,9 @@ class AnalysisLogScreen extends ConsumerWidget {
       onRefresh: () async => ref.invalidate(analysisLogProvider),
       children: [
         entries.when(
+          // A background sync bumps the DB revision and reloads the list:
+          // keep the rows on screen instead of flashing the spinner.
+          skipLoadingOnReload: true,
           loading: () => const Padding(
             padding: EdgeInsets.only(top: AppSpacing.s8),
             child: AppLoadingState(),
@@ -100,25 +103,55 @@ class AnalysisLogScreen extends ConsumerWidget {
       );
 }
 
-/// The log's rows (separate from the page so it is testable on its own).
+/// The log's rows (separate from the page so it is testable on its own),
+/// grouped by day in cards like the transactions list.
 class AnalysisLogList extends StatelessWidget {
   const AnalysisLogList({super.key, required this.entries});
 
   final List<AnalysisLogEntry> entries;
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
-        child: Column(
-          children: [
-            for (final e in entries)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.s2),
-                child: AnalysisLogTile(entry: e),
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final groups = <String, List<AnalysisLogEntry>>{};
+    for (final e in entries) {
+      groups
+          .putIfAbsent(Formatters.dateGroupLabel(e.at.toLocal(), context),
+              () => [])
+          .add(e);
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.gutter),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final group in groups.entries) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(4, AppSpacing.s3, 4, AppSpacing.s2),
+              child: Text(group.key, style: AppTypography.caption(c.textMuted)),
+            ),
+            Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                color: c.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: c.border),
               ),
+              child: Column(
+                children: [
+                  for (var i = 0; i < group.value.length; i++) ...[
+                    if (i > 0) Divider(height: 1, indent: 66, color: c.divider),
+                    AnalysisLogTile(entry: group.value[i]),
+                  ],
+                ],
+              ),
+            ),
           ],
-        ),
-      );
+          const SizedBox(height: AppSpacing.s8),
+        ],
+      ),
+    );
+  }
 }
 
 class AnalysisLogTile extends StatelessWidget {
@@ -161,38 +194,62 @@ class AnalysisLogTile extends StatelessWidget {
     // Masked only: card, account and phone numbers and a person's name never
     // appear here.
     final masked = raw == null || raw.isEmpty ? null : SmsSanitizer.sanitize(raw);
-    final onTap = _onTap(context);
+    final (Color fg, Color bg) = switch (entry.state) {
+      AnalysisOutcomeState.saved => (c.success, c.successBg),
+      AnalysisOutcomeState.notAdded => (c.textMuted, c.surfaceMuted),
+      AnalysisOutcomeState.needsConfirmation => (c.warning, c.warningBg),
+      AnalysisOutcomeState.awaiting => (c.info, c.infoBg),
+    };
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: c.surface2,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: c.border),
-        ),
+      onTap: _onTap(context),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(_icon(entry.state), size: 18, color: c.textMuted),
-            const SizedBox(width: 10),
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+              child: Icon(_icon(entry.state), size: 18, color: fg),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(text.title, style: AppTypography.bodyStrong(c.textMain)),
-                  const SizedBox(height: 3),
-                  Text(text.body, style: AppTypography.caption(c.textMain)),
-                  const SizedBox(height: 3),
-                  Text(captureTimeLabel(entry.at, lang: lang),
-                      style: AppTypography.caption(c.textMuted)),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(text.title,
+                            style: AppTypography.bodyStrong(c.textPrimary)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(Formatters.time(entry.at.toLocal(), context),
+                          style: AppTypography.caption(c.textMuted)),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(text.body,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.caption(c.textSecondary)),
                   if (masked != null) ...[
-                    const SizedBox(height: 5),
-                    Text(masked,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTypography.caption(c.textMuted)),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: c.surfaceMuted,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(masked,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.caption(c.textMuted)),
+                    ),
                   ],
                 ],
               ),

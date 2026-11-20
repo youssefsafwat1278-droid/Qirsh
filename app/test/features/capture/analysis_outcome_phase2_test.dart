@@ -353,6 +353,15 @@ void main() {
     });
   });
 
+  test('an InstaPay debit filed under transfers reads as a transfer to a friend',
+      () {
+    final notice = buildOutcomeNotice(
+      state: AnalysisOutcomeState.saved,
+      tx: _tx(merchant: 'InstaPay', category: 'transfers'),
+    );
+    expect(notice.title, 'سُجّل تحويل لصديق 250 EGP');
+  });
+
   group('the analysis log', () {
     final entries = [
       AnalysisLogEntry(

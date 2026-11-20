@@ -75,7 +75,11 @@ CaptureNotificationContent buildOutcomeNotice({
 /// A transfer to or from a person: no own-account pair, and no merchant but
 /// at most the payment channel (the same reading as [personTransferTitle]).
 bool _isFriendTransfer(TransactionEntity tx) {
-  if (tx.type != TransactionTypeEntity.transfer || tx.transferGroupId != null) {
+  // The analysed transfer may be filed as a debit under «transfers» (the
+  // transactions list reads it the same way: personTransferTitle).
+  if ((tx.type != TransactionTypeEntity.transfer &&
+          tx.categoryId != 'transfers') ||
+      tx.transferGroupId != null) {
     return false;
   }
   final merchant = tx.rawMerchant?.trim() ?? '';
@@ -84,6 +88,11 @@ bool _isFriendTransfer(TransactionEntity tx) {
 
 String _kind(AppL10n l10n, TransactionEntity tx, bool friend) {
   final credit = tx.direction == TransactionDirectionEntity.credit;
+  if (friend) {
+    return credit
+        ? l10n.outcomeKindTransferFromFriend
+        : l10n.outcomeKindTransferToFriend;
+  }
   return switch (tx.type) {
     TransactionTypeEntity.refund => l10n.outcomeKindRefund,
     TransactionTypeEntity.withdrawal => l10n.outcomeKindWithdrawal,

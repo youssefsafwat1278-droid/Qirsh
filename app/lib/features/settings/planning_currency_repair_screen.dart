@@ -47,7 +47,9 @@ class _PlanningCurrencyRepairScreenState
     final c = context.colors;
     final repair = ref.watch(planningCurrencyRepairProvider);
     final serverItems = ref.watch(serverUnresolvedPlanningItemsProvider);
-    final serverRepairSettledEmpty = !serverItems.isLoading &&
+    // A background sync bumps the DB revision and reloads both providers:
+    // judge by the last value so the page does not flip while reloading.
+    final serverRepairSettledEmpty =
         !serverItems.hasError && serverItems.valueOrNull?.isEmpty == true;
     return Directionality(
       textDirection: Directionality.of(context),
@@ -62,6 +64,7 @@ class _PlanningCurrencyRepairScreenState
             SliverToBoxAdapter(child: PlanningServerRepairSection()),
           ],
           body: repair.when(
+                skipLoadingOnReload: true,
                 loading: () => const Center(child: CircularProgressIndicator()),
                 error: (error, stackTrace) => _LoadError(
                   onRetry: () => ref
