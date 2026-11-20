@@ -26,6 +26,24 @@ void main() {
     });
   }
 
+  test('a per-upload details preference overrides the client default', () async {
+    late Request sent;
+    // Built like captureBackendClientProvider: no preference of its own.
+    final client = CaptureBackendClient(
+      supabaseUrl: 'https://example.supabase.co', anonKey: 'anon',
+      httpClient: MockClient((request) async {
+        sent = request;
+        return Response('{}', 200);
+      }),
+    );
+    await client.processIosSms(
+      installId: 'i', deviceSecret: 's', payloadId: 'p', smsText: 'sanitized',
+      receivedAt: DateTime.utc(2026), allowAi: true, ownerUid: 'u', ownerGeneration: 1,
+      notificationDetails: true,
+    );
+    expect((jsonDecode(sent.body) as Map)['notificationDetails'], isTrue);
+  });
+
   test('pending-send retry preserves payload id and AI consent', () async {
     late Request sent;
     final client = CaptureBackendClient(

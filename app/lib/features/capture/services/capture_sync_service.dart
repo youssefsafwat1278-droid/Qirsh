@@ -500,6 +500,9 @@ class CaptureSyncService {
         // LEN-1: the queued length when the native layer stored it, else the
         // same measure on the raw text (never the redacted one).
         textLength: message.textLength ?? message.text.length,
+        // The app-wide client is built without the user's preference: without
+        // this the server's push is always the generic «سُجّلت» alert.
+        notificationDetails: !preferences.hideLockScreenContent,
       ));
     } on CaptureBackendException catch (e) {
       // §4.8 / G1: a 409 (`capture_owner_mismatch`, `capture_owner_conflict`,

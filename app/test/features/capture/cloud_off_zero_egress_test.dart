@@ -122,6 +122,7 @@ class _SpyBackend extends CaptureBackendClient {
     required int ownerGeneration,
     bool schemaV2 = false,
     int? textLength,
+    bool? notificationDetails,
   }) async {
     calls.add(_tag('processIosSms'));
   }

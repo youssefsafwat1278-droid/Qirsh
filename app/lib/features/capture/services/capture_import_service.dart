@@ -317,6 +317,7 @@ class CaptureImportService {
       var guardFailed = false;
       _uploadRateLimited = false;
       _awaiting.clear();
+      _underWay.clear();
       for (final item in items) {
         if (_barrier) break;
         final id = item.id!.trim();
@@ -417,6 +418,11 @@ class CaptureImportService {
   /// This run's first-time deferrals ([CaptureImportReport.awaiting]).
   final List<SharedCapturedMessage> _awaiting = [];
 
+  /// Items deferred on this run only because the server is analysing them
+  /// right now (accepted, or its row is `processing`): nothing is waiting for
+  /// a connection, so no "awaiting analysis" notice is raised for them.
+  final Set<String> _underWay = {};
+
   /// A 429 was seen on this run: no further upload is attempted on it.
   bool _uploadRateLimited = false;
   final Set<String> _rateLimitedIds = {};
@@ -436,7 +442,9 @@ class CaptureImportService {
     final decision = await ledger.recordFailure(id, kind,
         rateLimited: _rateLimitedIds.remove(id));
     if (!decision.exhausted) {
-      if (decision.attempts == 1 && kind == CaptureFailureKind.temporary) {
+      if (decision.attempts == 1 &&
+          kind == CaptureFailureKind.temporary &&
+          !_underWay.remove(id)) {
         _awaiting.add(item);
       }
       return false;
@@ -501,7 +509,10 @@ class CaptureImportService {
           onRefetch(refetch);
           results.addAll(refetch.results);
           // Accepted but not listed yet: the lease may still be open.
-          if (!results.containsKey(id)) return null;
+          if (!results.containsKey(id)) {
+            _underWay.add(id);
+            return null;
+          }
         case CaptureUploadStatus.notAllowed:
         case CaptureUploadStatus.conflict:
           local = true;
@@ -585,7 +596,11 @@ class CaptureImportService {
               transactionId: review ?? id),
         );
       }
-      if (result?.state == 'processing' || result?.state == 'retryable' ||
+      if (result?.state == 'processing') {
+        _underWay.add(id);
+        return null;
+      }
+      if (result?.state == 'retryable' ||
           fetchStatus == CaptureFetchStatus.unavailable) {
         return null;
       }

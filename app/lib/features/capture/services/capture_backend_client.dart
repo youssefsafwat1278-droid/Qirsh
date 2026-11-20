@@ -172,6 +172,9 @@ class CaptureBackendClient {
     // LEN-1: the UTF-16 length of the raw text before redaction (the server
     // decides "over length" on it); omitted when unknown.
     int? textLength,
+    // Whether the server's push may carry the outcome's details (the user's
+    // lock-screen preference at upload time); the constructor's value if null.
+    bool? notificationDetails,
   }) async {
     final response = await _http
         .post(
@@ -188,7 +191,7 @@ class CaptureBackendClient {
             'locale': locale,
             'tzOffsetMinutes': DateTime.now().timeZoneOffset.inMinutes,
             'allowAi': allowAi,
-            'notificationDetails': _notificationDetails,
+            'notificationDetails': notificationDetails ?? _notificationDetails,
             if (allowAi) 'analysis_mode': 'ai_primary_v1',
             if (allowAi) 'backgroundAnalysis': true,
             if (allowAi) 'localNotification': false,

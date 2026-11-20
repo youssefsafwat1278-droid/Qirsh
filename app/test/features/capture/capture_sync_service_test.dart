@@ -19,6 +19,8 @@ import 'package:money_companion/data/repositories/drift_suspected_duplicate_repo
 import 'package:money_companion/data/repositories/drift_transaction_repository.dart';
 import 'package:money_companion/data/repositories/drift_user_settings_repository.dart';
 import 'package:money_companion/domain/entities/captured_message.dart';
+import 'package:money_companion/domain/entities/engagement_entities.dart';
+import 'package:money_companion/domain/usecases/user_settings_usecases.dart';
 import 'package:money_companion/domain/entities/transaction_entity.dart';
 import 'package:money_companion/domain/finance/money.dart';
 import 'package:money_companion/domain/entities/account_entity.dart';
@@ -171,6 +173,7 @@ class _FakeCaptureBackendClient implements CaptureBackendClient {
   bool? lastSchemaV2;
   String? lastLocale;
   int? lastTextLength;
+  bool? lastNotificationDetails;
   Object? processError;
 
   @override
@@ -187,6 +190,7 @@ class _FakeCaptureBackendClient implements CaptureBackendClient {
     required int ownerGeneration,
     bool schemaV2 = false,
     int? textLength,
+    bool? notificationDetails,
   }) async {
     processedPayloadIds.add(payloadId);
     if (processError != null) throw processError!;
@@ -196,6 +200,7 @@ class _FakeCaptureBackendClient implements CaptureBackendClient {
     lastSchemaV2 = schemaV2;
     lastLocale = locale;
     lastTextLength = textLength;
+    lastNotificationDetails = notificationDetails;
   }
 
   @override
@@ -937,6 +942,27 @@ void main() {
     await settingsRepository.saveSettings(settings.copyWith(language: 'en'));
     expect(await syncService.retryPendingSend(native), isTrue);
     expect(client.lastLocale, 'en');
+  });
+
+  // The replay path's push carries the outcome's details unless the user
+  // hides lock-screen content (else it is always the generic «سُجّلت»).
+  test('replay sends the lock-screen details preference', () async {
+    final client = _FakeCaptureBackendClient([]);
+    final syncService = service(client);
+    final native = SharedCapturedMessage(
+      id: 'details-replay',
+      text: 'Purchase EGP 245.50 at CARREFOUR MAADI',
+      source: CapturedMessageSource.iosShortcut,
+      status: 'pendingSend',
+      receivedAt: DateTime.utc(2026, 11, 20),
+    );
+    final save = SaveNotificationPreferencesUseCase(settingsRepository);
+    await save(const NotificationPreferences(hideLockScreenContent: false));
+    expect(await syncService.retryPendingSend(native), isTrue);
+    expect(client.lastNotificationDetails, isTrue);
+    await save(const NotificationPreferences(hideLockScreenContent: true));
+    expect(await syncService.retryPendingSend(native), isTrue);
+    expect(client.lastNotificationDetails, isFalse);
   });
 
   // LEN-1 (client side): every replay sends the length of the raw text before

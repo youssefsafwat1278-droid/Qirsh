@@ -19,11 +19,13 @@ import 'package:money_companion/data/repositories/drift_suspected_duplicate_repo
 import 'package:money_companion/data/repositories/drift_transaction_repository.dart';
 import 'package:money_companion/data/repositories/drift_user_settings_repository.dart';
 import 'package:money_companion/domain/entities/captured_message.dart';
+import 'package:money_companion/domain/entities/engagement_entities.dart';
 import 'package:money_companion/domain/entities/smart_inbox_item_entity.dart';
 import 'package:money_companion/domain/entities/supporting_entities.dart';
 import 'package:money_companion/domain/entities/transaction_entity.dart';
 import 'package:money_companion/domain/usecases/add_transaction_usecase.dart';
 import 'package:money_companion/domain/usecases/ingest_captured_message_usecase.dart';
+import 'package:money_companion/domain/usecases/user_settings_usecases.dart';
 import 'package:money_companion/features/capture/services/capture_backend_client.dart';
 import 'package:money_companion/features/capture/services/capture_device_registration_service.dart';
 import 'package:money_companion/features/capture/services/capture_import_ports.dart';
@@ -75,6 +77,7 @@ class _Backend implements CaptureBackendClient {
   final acked = <String>[];
   Object? uploadError;
   var uploads = 0;
+  bool? notificationDetails;
 
   @override
   Future<List<ProcessedCaptureDto>> syncCaptures({
@@ -105,8 +108,10 @@ class _Backend implements CaptureBackendClient {
     required int ownerGeneration,
     bool schemaV2 = false,
     int? textLength,
+    bool? notificationDetails,
   }) async {
     uploads++;
+    this.notificationDetails = notificationDetails;
     if (uploadError != null) throw uploadError!;
   }
 
@@ -498,6 +503,24 @@ void main() {
           reason: 'the drain must be able to tell 409 from "not allowed"');
     });
 
+    test(
+        'the app\'s replay carries the lock-screen details preference, so '
+        'the server\'s push of a saved capture is not the generic one',
+        () async {
+      // The app-wide backend client is built without the preference; the
+      // replay states it per upload (shown by default).
+      final backend = _Backend(const []);
+      final sync = buildSync(backend);
+      expect(await sync.retryPendingSend(pending(_id(14))), isTrue);
+      expect(backend.notificationDetails, isTrue);
+
+      await SaveNotificationPreferencesUseCase(DriftUserSettingsRepository(db))
+          .call(const NotificationPreferences(hideLockScreenContent: true));
+      expect(await sync.retryPendingSend(pending(_id(15))), isTrue);
+      expect(backend.notificationDetails, isFalse,
+          reason: 'hidden details keep the generic alert');
+    });
+
     test('a transient failure is not a terminal refusal', () async {
       final backend = _Backend(const [])
         ..uploadError =
@@ -642,6 +665,51 @@ void main() {
       expect(late.imported, isEmpty);
       expect(await txIds(), isEmpty);
       expect(await reviewRows(), hasLength(1));
+    });
+
+    test(
+        'an analysis under way on the server is not announced as awaiting '
+        'analysis; it is imported once the result lands', () async {
+      // The App Intent's request is being analysed right now: the replay is
+      // accepted (202 in_progress) and the row is listed as `processing`.
+      queue.items.addAll([item(_id(31)), item(_id(32))]);
+      server
+        ..upload = CaptureUploadStatus.sent
+        ..results[_id(31)] = ProcessedCaptureDto(
+            payloadId: _id(31),
+            status: 'rejected',
+            state: 'processing',
+            parsed: const {},
+            notification: const {});
+      // _id(32): accepted, not listed yet (the lease is still open).
+      final service = buildV3(ledger());
+      final first = await service.run();
+      expect(first.awaiting, isEmpty,
+          reason: 'nothing waits for a connection while it is analysed');
+      expect(first.imported, isEmpty);
+      expect(queue.items, hasLength(2), reason: 'still durable');
+
+      server.results
+        ..[_id(31)] = _processedFor(_id(31))
+        ..[_id(32)] = _processedFor(_id(32));
+      now = now.add(const Duration(seconds: 31));
+      final second = await service.run();
+      expect(second.awaiting, isEmpty);
+      expect(second.imported.map((i) => i.id), containsAll([_id(31), _id(32)]));
+    });
+
+    test('a capture released as retryable is still announced once', () async {
+      queue.items.add(item(_id(33)));
+      server
+        ..upload = CaptureUploadStatus.sent
+        ..results[_id(33)] = ProcessedCaptureDto(
+            payloadId: _id(33),
+            status: 'rejected',
+            state: 'retryable',
+            parsed: const {},
+            notification: const {});
+      final first = await buildV3(ledger()).run();
+      expect(first.awaiting.map((m) => m.id), [_id(33)]);
     });
 
     test('a never-uploaded item is sent with its own id, then imported',
