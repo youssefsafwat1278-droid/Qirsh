@@ -147,6 +147,23 @@ String normalizeHeader(String value) => value
     .replaceAll(RegExp(r'[\s_\-./]+'), '')
     .replaceAll(RegExp(r'[():]'), '');
 
+/// The inverse of [_safeCell] for a Qirsh package, whose every text cell was
+/// written by it: drops the apostrophe it put before `=`, `+`, `-` or `@`, so
+/// an id such as `-LtBg…` comes back unchanged after export -> import.
+PortableCsvDocument unescapePackageCsv(PortableCsvDocument document) =>
+    PortableCsvDocument(
+      headers: document.headers,
+      rows: [
+        for (final row in document.rows)
+          {for (final e in row.entries) e.key: _unescapeCell(e.value)},
+      ],
+    );
+
+String _unescapeCell(String value) =>
+    value.length > 1 && value[0] == "'" && const {'=', '+', '-', '@'}.contains(value[1])
+        ? value.substring(1)
+        : value;
+
 Object? _safeCell(Object? value) {
   if (value == null || value is num || value is bool) return value ?? '';
   final text = value.toString();

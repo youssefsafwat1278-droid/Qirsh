@@ -31,6 +31,16 @@ void main() {
     expect(decoded.rows.single['merchant'], startsWith("'="));
   });
 
+  test('a Qirsh package gets back the exact value the escaping changed', () {
+    const values = ['-LtBgvXKsE5Fk4k05cnSFA', '=x', '+20', '@a', "'plain", 'ok'];
+    final bytes = encodePortableCsv(
+      const ['record_id'],
+      [for (final v in values) [v]],
+    );
+    final decoded = unescapePackageCsv(decodePortableCsv(bytes));
+    expect([for (final r in decoded.rows) r['record_id']], values);
+  });
+
   test('auto detects semicolon separated files', () {
     final bytes = Uint8List.fromList(
       utf8.encode('Date;Amount;Currency\r\n2026-01-01;12.50;EGP'),

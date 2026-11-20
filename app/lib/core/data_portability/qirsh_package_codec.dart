@@ -172,7 +172,7 @@ QirshPackageData decodeQirshPackage(Uint8List bytes) {
     if (expected == null || expected != actual) {
       throw DataPortabilityException('فشل التحقق من سلامة $fileName.', code: DataPortabilityError.integrityCheckFailed, args: [fileName]);
     }
-    final document = decodePortableCsv(content);
+    final document = unescapePackageCsv(decodePortableCsv(content));
     totalRows += document.rows.length;
     if (totalRows > maxImportRows) {
       throw const DataPortabilityException('الحزمة تتجاوز 100,000 صف إجمالي.', code: DataPortabilityError.packageTooManyRows);
