@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../core/backend/supabase_config.dart';
 import '../../../core/observability/diagnostics.dart';
 import '../../../core/privacy/consent_authority.dart';
+import '../../../core/privacy/smart_analysis_consent.dart';
 import '../../../data/db/ownership_guard.dart';
 import '../../../domain/entities/captured_message.dart';
 import '../../../domain/entities/smart_inbox_item_entity.dart';
@@ -334,13 +335,12 @@ class LegacyCaptureDrain {
         // earlier failed attempt never re-sends its SMS to the server or to
         // AI. A `localOnly` item is never AI-selected.
         final settings = await _loadSettings();
-        final aiSelected = settings.cloudProcessingEnabled &&
-            settings.aiConsentGranted &&
+        // Phase 3: on iOS (the native upload pipeline) smart analysis is its
+        // own consent; on Android AI stays under Cloud.
+        final ios = _uploadsNatively();
+        final aiSelected = smartAnalysisSelected(settings, ios: ios) &&
             message.localOnly != true;
-        final aiAllowed = ConsentAuthority.decide(
-          EgressClass.aiProcessing,
-          settings,
-        );
+        final aiAllowed = smartAnalysisAllowed(settings, ios: ios);
         var route = legacyDrainRoute(
           aiSelected: aiSelected,
           status: message.status,
@@ -361,6 +361,24 @@ class LegacyCaptureDrain {
           relayResultUnknown: relayFetchFailed ||
               (backendSync?.failedPayloadIds.contains(payloadId) ?? false),
         );
+        if (route == LegacyDrainRoute.awaitSmartAnalysis) {
+          if (ParserEngine.isIgnoredMessage(message.text,
+              senderId: message.sender)) {
+            // The deterministic OTP/promo filter still drops it on the device.
+            route = LegacyDrainRoute.ingest;
+          } else {
+            // Phase 3: kept, never sent and never recorded on the device's own
+            // reading; no notice (the capture banner already told the person).
+            await _captureSync.persistUnprocessableCapture(
+              message,
+              isOwnerCurrent: isOwnerCurrent,
+              reviewReason: SmartInboxReviewReason.smartAnalysisOff,
+            );
+            await ackMessage(message);
+            report.smartInboxChanged = true;
+            continue;
+          }
+        }
         if (route == LegacyDrainRoute.wait) {
           // The server still owns the analysis and its result is not readable
           // yet. Counted, so the wait is bounded and ends in Smart Inbox

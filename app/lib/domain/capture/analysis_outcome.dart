@@ -61,12 +61,20 @@ abstract final class AnalysisOutcome {
       (item.reviewReason == SmartInboxReviewReason.analysisUnavailable ||
           item.reviewReason == SmartInboxReviewReason.processingFailed);
 
+  /// Phase 3: a capture kept because smart analysis is off.
+  static bool awaitsSmartAnalysis(SmartInboxItemEntity item) =>
+      item.reasonCode == null &&
+      item.reviewReason == SmartInboxReviewReason.smartAnalysisOff;
+
   /// The outcome of a capture held in the Smart Inbox.
   static AnalysisOutcomeState forInboxItem(SmartInboxItemEntity item) =>
-      unanalysed(item)
-          ? AnalysisOutcomeState.needsConfirmation
-          : forCode(AnalysisReason.of(
-              reasonCode: item.reasonCode, reviewReason: item.reviewReason));
+      awaitsSmartAnalysis(item)
+          ? AnalysisOutcomeState.awaiting
+          : unanalysed(item)
+              ? AnalysisOutcomeState.needsConfirmation
+              : forCode(AnalysisReason.of(
+                  reasonCode: item.reasonCode,
+                  reviewReason: item.reviewReason));
 }
 
 /// What the device decided for one imported capture, and what the server

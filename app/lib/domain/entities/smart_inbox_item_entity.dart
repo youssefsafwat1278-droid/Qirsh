@@ -47,4 +47,10 @@ abstract final class SmartInboxReviewReason {
   /// Local processing of this capture kept failing; it was parked for manual
   /// review.
   static const String processingFailed = 'processing_failed';
+
+  /// Gemini-first phase 3: smart analysis is off (declined, not now, or
+  /// turned off), so nothing was sent. The row reads "awaiting analysis — turn
+  /// on Smart Analysis to record it automatically" and offers the consent and
+  /// manual entry.
+  static const String smartAnalysisOff = 'smart_analysis_off';
 }

@@ -69,7 +69,8 @@ void main() {
       expect(
           File('lib/features/capture/services/legacy_capture_drain.dart')
               .readAsStringSync(),
-          contains('EgressClass.aiProcessing'),
+          // Phase 3: Smart Analysis (its own consent on iOS) per message.
+          contains('smartAnalysisAllowed(settings, ios: ios)'),
           reason: 'consent is read inside the drain, per message');
     });
   });

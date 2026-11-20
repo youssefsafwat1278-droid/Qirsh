@@ -25,17 +25,51 @@ LegacyDrainRoute route({
     );
 
 void main() {
-  group('AI not selected (Cloud or AI consent off, or a localOnly item)', () {
-    test('every item is ingested on device, whatever else is true', () {
+  group('AI not selected (Smart Analysis off, or a localOnly item)', () {
+    // Gemini-first phase 3 (owner decision): on iOS nothing is sent and the
+    // device's own reading records nothing; the message waits for Smart
+    // Analysis (or the person records it). Never an upload or an AI request.
+    test('iOS: every item with a payload id waits for Smart Analysis', () {
+      for (final status in ['sent', 'pendingSend', 'pending', null]) {
+        expect(
+            route(
+                aiSelected: false,
+                status: status,
+                uploadsNatively: true,
+                mayUseAiFallback: true),
+            LegacyDrainRoute.awaitSmartAnalysis);
+      }
+    });
+
+    test('Android, or an item without a payload id: ingested on device', () {
+      for (final status in ['sent', 'pendingSend', 'pending', null]) {
+        expect(
+            route(
+                aiSelected: false,
+                status: status,
+                uploadsNatively: false,
+                mayUseAiFallback: true),
+            LegacyDrainRoute.ingest);
+        expect(
+            route(
+                aiSelected: false,
+                status: status,
+                hasPayloadId: false,
+                mayUseAiFallback: true),
+            LegacyDrainRoute.ingest);
+      }
+    });
+
+    test('never an upload or an AI request', () {
       for (final native in [true, false]) {
         for (final status in ['sent', 'pendingSend', 'pending', null]) {
-          expect(
-              route(
-                  aiSelected: false,
-                  status: status,
-                  uploadsNatively: native,
-                  mayUseAiFallback: true),
-              LegacyDrainRoute.ingest);
+          final r = route(
+              aiSelected: false,
+              status: status,
+              uploadsNatively: native,
+              mayUseAiFallback: true);
+          expect(r, isNot(LegacyDrainRoute.upload));
+          expect(r, isNot(LegacyDrainRoute.ingestWithAi));
         }
       }
     });

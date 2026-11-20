@@ -136,6 +136,8 @@ class AnalysisLogTile extends StatelessWidget {
       tx: entry.transaction,
       proposal: entry.inboxItem?.proposal,
       lang: lang,
+      smartAnalysisOff: entry.inboxItem != null &&
+          AnalysisOutcome.awaitsSmartAnalysis(entry.inboxItem!),
     );
     final ignored = entry.transaction == null &&
         entry.inboxItem == null &&

@@ -96,7 +96,8 @@ class DriftSmartInboxRepository implements SmartInboxRepository {
         // Gemini-first phase 1: the generic "unsupported" title only when no
         // reason is known ([reasonTitle] is the reason in [lang]).
         Variable.withString(awaitingAnalysis ||
-                reviewReason == SmartInboxReviewReason.analysisUnavailable
+                reviewReason == SmartInboxReviewReason.analysisUnavailable ||
+                reviewReason == SmartInboxReviewReason.smartAnalysisOff
             ? (lang == 'en' ? 'Bank message awaiting analysis'
                 : 'رسالة بنكية بانتظار التحليل')
             : reasonTitle ??

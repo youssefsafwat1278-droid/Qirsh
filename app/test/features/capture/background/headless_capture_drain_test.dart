@@ -302,8 +302,12 @@ void main() {
     messenger.setMockMethodCallHandler(captureChannel, null);
     await runner.run();
     final db = runner.accountScope.current!.database;
+    // Gemini-first phase 3: without Smart Analysis (this account never
+    // consented) the capture's one durable record is its Smart Inbox row
+    // ("awaiting analysis"), keyed by the payload id like a transaction.
     return (await db
-            .customSelect('SELECT id FROM transactions ORDER BY rowid;')
+            .customSelect('SELECT id FROM transactions '
+                'UNION ALL SELECT id FROM smart_inbox_items;')
             .get())
         .map((r) => r.read<String>('id'))
         .toList();
@@ -516,8 +520,11 @@ void main() {
     );
     expect(native.acked, ['p-1', 'p-2', 'p-3']);
     expect(left, isNot(contains('p-1')));
+    // Phase 3: no Smart Analysis here, so each capture's one durable record
+    // is its Smart Inbox row (see [committed]).
     final ids = (await runner.accountScope.current!.database
-            .customSelect('SELECT id FROM transactions;')
+            .customSelect('SELECT id FROM transactions '
+                'UNION ALL SELECT id FROM smart_inbox_items;')
             .get())
         .map((r) => r.read<String>('id'))
         .toList();

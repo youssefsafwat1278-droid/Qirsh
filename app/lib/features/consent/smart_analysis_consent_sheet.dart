@@ -11,6 +11,7 @@ import '../../core/di/app_providers.dart';
 import '../../core/privacy/consent_authority.dart';
 import '../../core/privacy/diagnostics_consent_gate.dart';
 import '../../core/privacy/shared_learning_preference.dart';
+import '../../core/privacy/smart_analysis_consent.dart';
 import '../../core/session/admission_authority.dart';
 import '../../core/session/app_session.dart';
 import '../../core/session/consent_capability.dart';
@@ -35,6 +36,11 @@ import '../../core/theme/widgets/glass_sheet.dart';
 /// its secondary action is a plain Cancel that writes nothing (first-use "Continue
 /// locally", which persists a denial of both, is not offered there), and the
 /// link back to the Privacy page is dropped because the person is already on it.
+///
+/// [smartAnalysisOnly] (Gemini-first phase 3) shows the Smart Analysis consent
+/// on its own: what is sent, to whom, why, that it is optional and how to turn
+/// it off, with Allow / Not now. Allow turns on Smart Analysis only (Cloud is
+/// untouched); Not now writes nothing.
 Future<bool> showSmartAnalysisConsentSheet(
   BuildContext context,
   WidgetRef ref, {
@@ -42,6 +48,7 @@ Future<bool> showSmartAnalysisConsentSheet(
   ConsentLocalWork? work,
   bool management = false,
   bool restoreCloud = false,
+  bool smartAnalysisOnly = false,
 }) async {
   final scope = work ?? ref.read(consentLocalWorkProvider)();
   final granted = await showGlassSheet<bool>(
@@ -61,6 +68,7 @@ Future<bool> showSmartAnalysisConsentSheet(
             work: scope,
             management: management,
             restoreCloud: restoreCloud,
+            smartAnalysisOnly: smartAnalysisOnly,
             onDone: (granted) {
               onAnswered?.call();
               Navigator.of(sheetContext).pop(granted);
@@ -115,6 +123,7 @@ Future<ReaskOutcome> maybeReaskConsent(
   Future<AccountCloudChoice> Function()? readChoice,
   bool Function()? isForeground,
   Future<void> Function()? beforePresent,
+  int smartAnalysisVersion = kSmartAnalysisConsentVersion,
 }) async {
   final work = ref.read(consentLocalWorkProvider)();
   if (work == null) return ReaskOutcome.stale;
@@ -123,6 +132,15 @@ Future<ReaskOutcome> maybeReaskConsent(
   try {
     final settings = await work.run(repository.getSettings);
     if (!work.current) return ReaskOutcome.stale;
+    // Phase 3: a Smart Analysis consent given to an older wording no longer
+    // counts. It is turned off first (sending stops), then asked once.
+    if (await ref.read(smartAnalysisConsentRecordProvider).needsReconsent(
+        work.capability.uid, settings,
+        current: smartAnalysisVersion)) {
+      if (!context.mounted || !work.current) return ReaskOutcome.stale;
+      return await _reaskSmartAnalysisWording(context, ref, work,
+          isForeground: isForeground, beforePresent: beforePresent);
+    }
     if (settings.cloudConsentState != ConsentState.unset ||
         settings.aiConsentState != ConsentState.unset) {
       // Decision 3.10 transition: an account that accepted before shared
@@ -194,6 +212,36 @@ Future<ReaskOutcome> maybeReaskConsent(
       }
     },
   );
+  return ReaskOutcome.shown;
+}
+
+/// Phase 3: the Smart Analysis wording changed since this account accepted it.
+/// The old consent is withdrawn (Smart Analysis turned off, sending stops),
+/// then the Smart Analysis consent is shown once; Not now leaves it off.
+Future<ReaskOutcome> _reaskSmartAnalysisWording(
+  BuildContext context,
+  WidgetRef ref,
+  ConsentLocalWork work, {
+  bool Function()? isForeground,
+  Future<void> Function()? beforePresent,
+}) async {
+  try {
+    await saveSmartAnalysisChoice(ref, on: false, work: work);
+  } on StaleAdmissionException {
+    return ReaskOutcome.stale;
+  } catch (_) {
+    // Not withdrawn: asked again on the next resume.
+    return ReaskOutcome.deferred;
+  }
+  if (!context.mounted || !work.current) return ReaskOutcome.stale;
+  if (isForeground != null && !isForeground()) return ReaskOutcome.deferred;
+  if (beforePresent != null) {
+    await beforePresent();
+    if (!context.mounted || !work.current) return ReaskOutcome.stale;
+  }
+  if (!context.mounted) return ReaskOutcome.stale;
+  await showSmartAnalysisConsentSheet(context, ref,
+      work: work, smartAnalysisOnly: true);
   return ReaskOutcome.shown;
 }
 
@@ -376,8 +424,52 @@ Future<UserSettingsEntity> saveConsentChoice(
   return updated;
 }
 
+/// Gemini-first phase 3: turns Smart Analysis on or off by itself; Cloud is
+/// left as it is. Off stops native sending FIRST (the restrictive mirror the
+/// App Intent reads), then commits the choice, then narrows the server's copy
+/// through the ordinary sync. Turning it off deletes nothing. On records the
+/// accepted wording version for this account.
+Future<UserSettingsEntity> saveSmartAnalysisChoice(
+  WidgetRef ref, {
+  required bool on,
+  ConsentLocalWork? work,
+  CaptureDeviceRegistrationService? registration,
+}) async {
+  final scope = work ?? ref.read(consentLocalWorkProvider)();
+  if (scope == null) throw const StaleAdmissionException();
+  final CaptureDeviceRegistrationService service =
+      registration ?? ref.read(captureDeviceRegistrationServiceProvider);
+  final record = ref.read(smartAnalysisConsentRecordProvider);
+  if (!on) {
+    try {
+      await service.restrictSmartAnalysisNow();
+    } catch (_) {
+      // Best effort: the committed choice below is what every Dart send
+      // checks, and the sync that follows republishes the mirror.
+    }
+  }
+  if (on) {
+    // Recorded BEFORE the consent is committed, so no reconciliation can ever
+    // see this new consent without its wording (and take it for a dormant one
+    // from an earlier build). A record without consent means nothing.
+    await record.recordAccepted(scope.capability.uid);
+  }
+  final updated = await applyConsentChoice(
+    scope: scope,
+    repository: ref.read(userSettingsRepositoryProvider),
+    writer: ref.read(consentSettingsWriterProvider),
+    service: service,
+    choices: ConsentChoices(
+        ai: on ? ConsentState.accepted : ConsentState.declined),
+  );
+  if (ref.context.mounted) ref.invalidate(userSettingsProvider);
+  if (scope.current) unawaited(service.syncBackendState().catchError((_) {}));
+  return updated;
+}
+
 /// The widget-free core of [saveConsentChoice]: chooses the protocol for the
-/// explicit choice and runs it, bound to [scope].
+/// explicit choice and runs it, bound to [scope]. [choices] (phase 3) replaces
+/// the flags with an exact choice (Smart Analysis on its own).
 Future<UserSettingsEntity> applyConsentChoice({
   required ConsentLocalWork scope,
   required UserSettingsRepository repository,
@@ -386,6 +478,7 @@ Future<UserSettingsEntity> applyConsentChoice({
   bool cloud = false,
   bool ai = false,
   bool declined = false,
+  ConsentChoices? choices,
 }) async {
   void requireCurrent() {
     if (!scope.current) throw const StaleAdmissionException();
@@ -393,7 +486,7 @@ Future<UserSettingsEntity> applyConsentChoice({
 
   final current = await scope.run(repository.getSettings);
   requireCurrent();
-  final choices = ConsentChoices(
+  choices ??= ConsentChoices(
     cloud: declined
         ? ConsentState.declined
         : cloud
@@ -407,7 +500,7 @@ Future<UserSettingsEntity> applyConsentChoice({
   );
   final updated = choices.applyTo(current);
   Future<void> commit() async {
-    await writer.saveConsentChoice(scope.capability, choices);
+    await writer.saveConsentChoice(scope.capability, choices!);
   }
 
   // Astra G: widening Cloud is an explicit enable (new generation + version).
@@ -483,6 +576,7 @@ class SmartAnalysisConsentPanel extends ConsumerStatefulWidget {
     this.work,
     this.management = false,
     this.restoreCloud = false,
+    this.smartAnalysisOnly = false,
   });
 
   final ValueChanged<bool> onDone;
@@ -497,6 +591,9 @@ class SmartAnalysisConsentPanel extends ConsumerStatefulWidget {
   /// first-use denial, and no link back to the page it is shown on.
   final bool management;
   final bool restoreCloud;
+
+  /// Phase 3: the Smart Analysis consent on its own (Allow / Not now).
+  final bool smartAnalysisOnly;
 
   @override
   ConsumerState<SmartAnalysisConsentPanel> createState() =>
@@ -576,6 +673,13 @@ class _SmartAnalysisConsentPanelState
     // write leaves it OFF (fail closed); the sending gates still require
     // Cloud AND AI consent at every send. The keychain write does not hold up
     // completing the consent itself.
+    // Phase 3: the Smart Analysis wording this account accepted.
+    if (ai && saved.aiConsentGranted && work.current) {
+      unawaited(container
+          .read(smartAnalysisConsentRecordProvider)
+          .recordAccepted(work.capability.uid)
+          .catchError((Object _) {}));
+    }
     if (ai && saved.cloudProcessingEnabled && saved.aiConsentGranted &&
         work.current) {
       unawaited(container
@@ -608,6 +712,47 @@ class _SmartAnalysisConsentPanelState
       }
     } on StaleAdmissionException {
       // An old sheet cannot update the new account.
+    } finally {
+      if (mounted) setState(() => _granting = false);
+    }
+  }
+
+  /// Phase 3: Allow on the Smart Analysis consent. Turns Smart Analysis on by
+  /// itself, then connects this device for it (in the smart-analysis lane when
+  /// Cloud is off). A failed save grants nothing.
+  Future<void> _grantSmartAnalysis() async {
+    if (_granting) return;
+    final work = _work;
+    if (work == null) {
+      AppToast.showError(context, context.l10n.setupSaveFailed);
+      return;
+    }
+    if (!work.current) return;
+    final service = ref.read(captureDeviceRegistrationServiceProvider);
+    setState(() => _granting = true);
+    try {
+      final saved = await saveSmartAnalysisChoice(ref,
+          on: true, work: work, registration: service);
+      if (!mounted || !work.current) return;
+      try {
+        await service.retry();
+      } catch (_) {}
+      if (!mounted || !work.current) return;
+      final confirmed = saved.cloudProcessingEnabled
+          ? await confirmSavedConsent(ref, work, service, saved)
+          : await service.deviceConsentMatches(saved);
+      if (!mounted || !work.current) return;
+      if (!confirmed) {
+        // Saved: the next sync connects it; until then nothing is analysed.
+        AppToast.showError(context, context.l10n.smartConsentStatusFailed);
+      }
+      _complete(work, true);
+    } on StaleAdmissionException {
+      // An old sheet cannot update the new account.
+    } catch (_) {
+      if (mounted && work.current) {
+        AppToast.showError(context, context.l10n.setupSaveFailed);
+      }
     } finally {
       if (mounted) setState(() => _granting = false);
     }
@@ -652,6 +797,50 @@ class _SmartAnalysisConsentPanelState
     // Decision 3.8: both choices have the same size and weight; only the
     // affirmative "Agree and enable" turns anything on.
     const buttonSize = Size.fromHeight(AppSpacing.buttonHeight);
+    if (widget.smartAnalysisOnly) {
+      // Phase 3: Smart Analysis alone. Allow / Not now, the same size and
+      // weight; Not now writes nothing (it stays off, offered again only from
+      // the analysis log or Settings).
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(l10n.smartOnlyTitle, style: AppTypography.sectionTitle(fg)),
+          const SizedBox(height: AppSpacing.s3),
+          para(l10n.smartOnlyIntro),
+          heading(l10n.smartConsentHeadSent),
+          para(l10n.smartOnlySent),
+          heading(l10n.smartConsentHeadWho),
+          para(l10n.smartOnlyWho),
+          heading(l10n.smartConsentHeadWhy),
+          para(l10n.smartOnlyWhy),
+          heading(l10n.smartOnlyHeadOptional),
+          para(l10n.smartOnlyOptional),
+          heading(l10n.smartConsentHeadOff),
+          para(l10n.smartOnlyOff),
+          LegalLinks(color: fg),
+          const SizedBox(height: AppSpacing.s3),
+          FilledButton(
+            key: const Key('smartOnlyAllow'),
+            style: FilledButton.styleFrom(minimumSize: buttonSize),
+            onPressed: _granting ? null : _grantSmartAnalysis,
+            child: Text(
+                _granting ? l10n.consentStatusTurningOn : l10n.smartOnlyAllow,
+                textAlign: TextAlign.center),
+          ),
+          const SizedBox(height: AppSpacing.s2),
+          OutlinedButton(
+            key: const Key('smartOnlyNotNow'),
+            style: OutlinedButton.styleFrom(
+                minimumSize: buttonSize,
+                foregroundColor: fg,
+                side: BorderSide(color: fg)),
+            onPressed: _granting ? null : () => widget.onDone(false),
+            child: Text(l10n.smartConsentNotNow, textAlign: TextAlign.center),
+          ),
+        ],
+      );
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,

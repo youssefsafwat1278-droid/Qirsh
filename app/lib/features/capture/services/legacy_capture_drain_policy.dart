@@ -13,6 +13,13 @@ enum LegacyDrainRoute {
   /// AI is not selected: the shipped on-device ingest (no egress).
   ingest,
 
+  /// Gemini-first phase 3 (iOS): smart analysis is off, so nothing is sent
+  /// and nothing is recorded on the device's own reading. The message is kept
+  /// in Smart Inbox as "awaiting analysis — turn on Smart Analysis to record
+  /// it automatically", with the consent and manual entry beside it (an OTP or
+  /// advert is still dropped by the deterministic filter).
+  awaitSmartAnalysis,
+
   /// On-device deterministic parse with binary acceptance and NO egress: a
   /// valid parse is a transaction, anything else is a Smart Inbox row.
   ingestOnDevice,
@@ -24,8 +31,10 @@ enum LegacyDrainRoute {
 
 /// The routing rule, as a pure function so every branch is unit-tested.
 ///
-/// - [aiSelected]: Cloud AND AI consent, read fresh for this message, and the
-///   item is not `localOnly`. False always means on-device only.
+/// - [aiSelected]: smart analysis selected (iOS: its own consent; Android:
+///   Cloud AND AI), read fresh for this message, and the item is not
+///   `localOnly`. False means nothing leaves the device: on iOS the message
+///   waits for Smart Analysis (phase 3), on Android it is read on the device.
 /// - [uploadsNatively]: this platform has a native upload pipeline (the iOS App
 ///   Intent). Android has none.
 /// - [inAppAiEnabled]: the in-app AI request is permitted for a platform
@@ -44,7 +53,11 @@ LegacyDrainRoute legacyDrainRoute({
   required bool inAppAiEnabled,
   required bool relayResultUnknown,
 }) {
-  if (!aiSelected) return LegacyDrainRoute.ingest;
+  if (!aiSelected) {
+    return uploadsNatively && hasPayloadId
+        ? LegacyDrainRoute.awaitSmartAnalysis
+        : LegacyDrainRoute.ingest;
+  }
   // No native upload pipeline (Android): nothing else ever analyses this
   // capture. AI when the user's settings and the kill switch allow it,
   // otherwise the deterministic parser.

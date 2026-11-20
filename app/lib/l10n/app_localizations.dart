@@ -5074,13 +5074,13 @@ abstract class AppL10n {
   /// No description provided for @privCloudProcessingBody.
   ///
   /// In ar, this message translates to:
-  /// **'تتم مزامنة بياناتك ونسخها احتياطيًا على خوادم قِرش، وقد تُرسَل إليها رسائل البنك الملتقطة لقراءتها بعد حذف ما يتعرّف عليه قِرش من أرقام البطاقات والحسابات وأرقام IBAN والجوال والرموز (يتم ذلك آليًا وقد يفوته بعضها)، وقد يُرسَل اسم التاجر إلى Google Places لتصنيفه. عند الإيقاف يتوقف الإرسال: تُقرأ الرسائل بقواعد قِرش المحلية ولا تتم مزامنة أي بيانات جديدة، ويظل الإدخال اليدوي متاحًا.'**
+  /// **'تتم مزامنة بياناتك ونسخها احتياطيًا على خوادم قِرش، وقد تُرسَل إليها رسائل البنك الملتقطة لقراءتها بعد حذف ما يتعرّف عليه قِرش من أرقام البطاقات والحسابات وأرقام IBAN والجوال والرموز (يتم ذلك آليًا وقد يفوته بعضها)، وقد يُرسَل اسم التاجر إلى Google Places لتصنيفه. عند الإيقاف تتوقف المزامنة: لا تتم مزامنة أي بيانات جديدة، ولا تُرسَل رسائل البنك إلا للتحليل الذكي إن كان مفعّلًا، ويظل الإدخال اليدوي متاحًا.'**
   String get privCloudProcessingBody;
 
   /// No description provided for @privAiAnalysisBody.
   ///
   /// In ar, this message translates to:
-  /// **'عند تشغيله مع المزامنة السحابية، قد تُحلَّل رسائل البنك الملتقطة — ومنها رسائل SMS البنكية التي تُقرأ تلقائيًا على أندرويد — بعد حذف ما يتعرّف عليه قِرش من أرقام البطاقات والحسابات وأرقام IBAN والجوال والرموز وإخفاء ما يتعرّف عليه من أسماء وعناوين بريد إلكتروني وأرقام مرجعية (يتم ذلك آليًا وقد يفوته بعضها)، بواسطة Google Gemini لقراءة المبلغ والتاجر والبنك. يبقى في النص المبالغ والتجار والتواريخ والأرصدة. سحب الموافقة يقصر القراءة على قواعد قِرش داخل جهازك.'**
+  /// **'عند تشغيل التحليل الذكي، قد تُحلَّل رسائل البنك الملتقطة — ومنها رسائل SMS البنكية التي تُقرأ تلقائيًا على أندرويد — بعد حذف ما يتعرّف عليه قِرش من أرقام البطاقات والحسابات وأرقام IBAN والجوال والرموز وإخفاء ما يتعرّف عليه من أسماء وعناوين بريد إلكتروني وأرقام مرجعية (يتم ذلك آليًا وقد يفوته بعضها)، بواسطة Google Gemini لقراءة المبلغ والتاجر والبنك. يبقى في النص المبالغ والتجار والتواريخ والأرصدة. سحب الموافقة يوقف إرسال الرسائل للتحليل.'**
   String get privAiAnalysisBody;
 
   /// No description provided for @privSharedLearningTitle.
@@ -13242,6 +13242,90 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'من الرسالة'**
   String get mtFromMessage;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'التحليل الذكي'**
+  String get smartOnlyTitle;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'يتيح التحليل الذكي لقِرش تسجيل رسائل البنك تلقائيًا. وهو اختياري ومنفصل عن المزامنة السحابية.'**
+  String get smartOnlyIntro;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'نص كل رسالة بنكية تلتقطها، بعد أن يُخفي قِرش على جهازك ما يتعرّف عليه من أسماء وأرقام جوال وأرقام بطاقات وحسابات. يتم ذلك آليًا وقد يفوته بعضها. تبقى المبالغ والتجار والأرصدة، لذا فهو ليس مجهول الهوية. لا يُرسَل شيء غير ذلك: لا معاملات ولا حسابات ولا أي بيانات أخرى.'**
+  String get smartOnlySent;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'Google Gemini عبر خادم قِرش (المستضاف لدى Supabase). يحتفظ خادم قِرش بالرسالة حتى ينتهي التحليل فقط، ولمدة أقصاها 7 أيام.'**
+  String get smartOnlyWho;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'لقراءة المبلغ ونوع العملية (مصروف أو دخل أو تحويل) والتاجر، فتُسجَّل المعاملة نيابةً عنك.'**
+  String get smartOnlyWhy;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'اختياري'**
+  String get smartOnlyHeadOptional;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'إذا اخترت «ليس الآن» فلن يُرسَل شيء. تبقى رسائلك على هذا الجهاز بانتظار التحليل، ويمكنك تسجيلها بنفسك أو تفعيل التحليل الذكي لاحقًا.'**
+  String get smartOnlyOptional;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'يمكنك إيقافه في أي وقت من الإعدادات ← الخصوصية ← التحليل الذكي. يتوقف الإرسال فورًا ولا يُحذف شيء مما سُجِّل. لا يمكن استرجاع رسالة أُرسلت بالفعل.'**
+  String get smartOnlyOff;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'السماح'**
+  String get smartOnlyAllow;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'تفعيل التحليل الذكي'**
+  String get smartOnlyTurnOn;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'مفعّل: تُحلَّل رسائل البنك الملتقطة بواسطة Google Gemini عبر خادم قِرش، مع المزامنة السحابية أو بدونها.'**
+  String get smartOnlySwitchOn;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'متوقف: لا يُرسَل شيء للتحليل. تنتظر الرسائل الملتقطة في سجل التحليل، ويمكنك تسجيلها بنفسك.'**
+  String get smartOnlySwitchOff;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'فعّل التحليل الذكي لتسجيلها تلقائيًا'**
+  String get outcomeAwaitingSmartOffBody;
+
+  /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
+  ///
+  /// In ar, this message translates to:
+  /// **'المزامنة السحابية متوقفة فلا يُزامَن شيء. التحليل الذكي مفعّل، لذا ما زالت رسائل البنك الملتقطة تُحلَّل (انظر «التحليل الذكي» أدناه).'**
+  String get consentStatusOffSmartOnBody;
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {

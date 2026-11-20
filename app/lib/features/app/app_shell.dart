@@ -60,7 +60,7 @@ import '../whats_new/whats_new_sheet.dart';
 import '../whats_new/whats_new_trigger.dart';
 import '../../core/backend/app_version.dart';
 import '../transactions/manual_transaction_sheet.dart';
-import '../../core/privacy/consent_authority.dart';
+import '../../core/privacy/smart_analysis_consent.dart';
 import '../capture/services/capture_import_service.dart';
 import '../capture/services/unbound_capture_prompt_service.dart';
 import 'capture_notification_actions.dart';
@@ -2135,11 +2135,13 @@ class _AppShellState extends ConsumerState<AppShell> {
         await ref.read(smartInboxRepositoryProvider).resolve(itemId);
         ref.invalidate(smartInboxItemsProvider);
       },
-      isSmartAnalysisGranted: () async => ConsentAuthority.decide(
-        EgressClass.aiProcessing,
+      // Phase 3: on iOS Smart Analysis is its own consent (no Cloud needed).
+      isSmartAnalysisGranted: () async => smartAnalysisAllowed(
         await ref.read(userSettingsRepositoryProvider).getSettings(),
+        ios: ref.read(smartAnalysisOwnLaneProvider),
       ),
-      openConsentSheet: () => showSmartAnalysisConsentSheet(context, ref),
+      openConsentSheet: () => showSmartAnalysisConsentSheet(context, ref,
+          smartAnalysisOnly: ref.read(smartAnalysisOwnLaneProvider)),
       openPrivacy: () => context.push('/privacy'),
     );
   }

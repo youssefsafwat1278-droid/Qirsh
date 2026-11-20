@@ -16,6 +16,7 @@ import '../../core/config/legal_urls.dart';
 import '../../core/privacy/consent_authority.dart';
 import '../../core/privacy/diagnostics_consent_gate.dart';
 import '../../core/privacy/shared_learning_preference.dart';
+import '../../core/privacy/smart_analysis_consent.dart';
 import '../../domain/errors/repo_exceptions.dart';
 import '../capture/services/capture_device_registration_service.dart';
 import '../consent/smart_analysis_consent_sheet.dart';
@@ -112,7 +113,10 @@ class PrivacyScreen extends ConsumerWidget {
                       settings: settings,
                       withdraw: _withdrawConsent,
                     ),
-                    if (settings.cloudProcessingEnabled &&
+                    // Phase 3: Smart Analysis connects without Cloud too.
+                    if ((settings.cloudProcessingEnabled ||
+                            smartAnalysisSelected(settings,
+                                ios: ref.watch(smartAnalysisOwnLaneProvider))) &&
                         ref
                                 .watch(captureRegistrationStatusProvider)
                                 .phase !=
@@ -147,6 +151,9 @@ class PrivacyScreen extends ConsumerWidget {
                     // Shared category learning: a separate opt-in, OFF by
                     // default, usable only with Cloud AND AI on.
                     _SharedLearningSwitch(settings: settings),
+                    // Gemini-first phase 3: Smart Analysis has its own switch,
+                    // independent of Cloud Sync (the owner's request).
+                    _SmartAnalysisSwitch(settings: settings),
                   ],
                 ),
                 orElse: () => const SizedBox.shrink(),
@@ -443,6 +450,9 @@ class _ConsentManagementCardState
     final l10n = context.l10n;
     final facts = ref.watch(consentLiveFactsProvider).valueOrNull;
     final status = deriveConsentStatus(widget.settings, facts);
+    // Phase 3: Cloud OFF while Smart Analysis stays on is not "nothing sent".
+    final smartOn =
+        ref.watch(smartAnalysisInEffectProvider).valueOrNull ?? false;
     final (label, body, icon, _) = switch (status) {
       ConsentStatus.active => (
           l10n.consentStatusActive,
@@ -458,7 +468,9 @@ class _ConsentManagementCardState
         ),
       ConsentStatus.off => (
           l10n.consentStatusOff,
-          l10n.consentStatusOffBody,
+          smartOn
+              ? l10n.consentStatusOffSmartOnBody
+              : l10n.consentStatusOffBody,
           AppLucideIcons.cloud,
           c.textMuted
         ),
@@ -696,6 +708,89 @@ class _SharedLearningSwitch extends ConsumerWidget {
                 ref.invalidate(sharedLearningOptInProvider);
               }
             : null,
+      ),
+    );
+  }
+}
+
+/// Gemini-first phase 3: the one switch for Smart Analysis, independent of
+/// Cloud Sync. Off -> On opens the Smart Analysis consent (nothing turns on
+/// without Allow); On -> Off stops sending at once and deletes nothing. On a
+/// platform without the smart-analysis lane (Android) it needs Cloud Sync.
+/// Phase 3: whether Smart Analysis is in effect for the admitted account: its
+/// consent is given and, with Cloud OFF on iOS, given to the Smart Analysis
+/// wording. A dormant pre-phase-3 AI choice (kept while Cloud was off) reads
+/// OFF — nothing is analysed for it — until the person allows it again.
+final smartAnalysisInEffectProvider =
+    FutureProvider.autoDispose<bool>((ref) async {
+  final settings = await ref.watch(userSettingsProvider.future);
+  final ownLane = ref.watch(smartAnalysisOwnLaneProvider);
+  if (!smartAnalysisSelected(settings, ios: ownLane)) return false;
+  if (settings.cloudProcessingEnabled || !ownLane) return true;
+  final uid = ref.read(consentLocalWorkProvider)()?.capability.uid;
+  if (uid == null || uid.isEmpty) return false;
+  try {
+    return await ref.watch(smartAnalysisConsentRecordProvider).hasRecord(uid);
+  } catch (_) {
+    return false;
+  }
+});
+
+class _SmartAnalysisSwitch extends ConsumerStatefulWidget {
+  const _SmartAnalysisSwitch({required this.settings});
+
+  final UserSettingsEntity settings;
+
+  @override
+  ConsumerState<_SmartAnalysisSwitch> createState() =>
+      _SmartAnalysisSwitchState();
+}
+
+class _SmartAnalysisSwitchState extends ConsumerState<_SmartAnalysisSwitch> {
+  bool _busy = false;
+
+  Future<void> _change(bool value) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      if (value) {
+        await showSmartAnalysisConsentSheet(context, ref,
+            smartAnalysisOnly: true);
+      } else {
+        await saveSmartAnalysisChoice(ref, on: false);
+      }
+    } on StaleAdmissionException {
+      // The lifecycle ended: nothing reaches the live scope.
+    } catch (_) {
+      if (mounted) AppToast.showError(context, context.l10n.setupSaveFailed);
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+        ref.invalidate(userSettingsProvider);
+        ref.invalidate(smartAnalysisInEffectProvider);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = context.l10n;
+    final ownLane = ref.watch(smartAnalysisOwnLaneProvider);
+    final settings = widget.settings;
+    final on = ref.watch(smartAnalysisInEffectProvider).valueOrNull ?? false;
+    final needsCloud = !ownLane && !settings.cloudProcessingEnabled;
+    return KeyedSubtree(
+      key: const Key('smartAnalysisSwitch'),
+      child: _ConsentSwitchCard(
+        icon: AppLucideIcons.sparkles,
+        title: l10n.smartOnlyTitle,
+        subtitle: needsCloud
+            ? l10n.smartConsentAiNeedsCloud
+            : on
+                ? l10n.smartOnlySwitchOn
+                : l10n.smartOnlySwitchOff,
+        value: on,
+        onChanged: needsCloud || _busy ? null : _change,
       ),
     );
   }

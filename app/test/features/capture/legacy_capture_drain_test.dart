@@ -17,7 +17,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
-import 'package:money_companion/core/privacy/consent_authority.dart';
+import 'package:money_companion/core/privacy/cloud_egress_gate.dart';
+import 'package:money_companion/core/privacy/smart_analysis_consent.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
 import 'package:money_companion/data/db/ownership_guard.dart';
@@ -63,6 +64,16 @@ class _Registration implements CaptureDeviceRegistrationService {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => null;
+}
+
+/// Phase 3: a device linked for Smart Analysis only (Cloud OFF): no Cloud
+/// link, the lane's own owner.
+class _LaneRegistration extends _Registration {
+  @override
+  Future<bool> isLinkedForCloud() async => false;
+
+  @override
+  Future<String?> smartAnalysisLaneOwner() async => 'user-A';
 }
 
 class _Guard extends OwnershipGuard {
@@ -151,6 +162,9 @@ class _FakeServer {
   final uploads = <String>[];
   final aiRequests = <String>[];
 
+  /// Phase 3: the egress grant each request was made under (null = none).
+  final lanes = <String?>[];
+
   /// HTTP status for `sync-captures` (200 = healthy).
   int syncStatus = 200;
 
@@ -167,6 +181,7 @@ class _FakeServer {
   Map<String, Object?> aiBody = const {'is_transaction': false};
 
   Future<http.Response> handle(http.Request request) async {
+    lanes.add(CloudEgressGate.debugZoneGrant?.kind.name);
     final body = jsonDecode(request.body) as Map<String, dynamic>;
     if (request.url.path.endsWith('/sync-captures')) {
       if (syncStatus != 200) return http.Response('{}', syncStatus);
@@ -283,7 +298,8 @@ void main() {
 
   /// Builds the production object graph over the fakes. [android] selects the
   /// platform shape: no native upload pipeline.
-  LegacyCaptureDrain build({required bool android}) {
+  LegacyCaptureDrain build(
+      {required bool android, CaptureDeviceRegistrationService? registration}) {
     final httpClient = MockClient(server.handle);
     final txRepo = DriftTransactionRepository(
       db,
@@ -300,7 +316,7 @@ void main() {
       dedupStore: DriftDedupStore(db),
       smartInboxRepository: DriftSmartInboxRepository(db),
       suspectedDuplicateRepository: DriftSuspectedDuplicateRepository(db),
-      registrationService: _Registration(),
+      registrationService: registration ?? _Registration(),
       ownershipGuard: _Guard(),
       currentUserId: () => 'user-A',
       accountRepository: DriftAccountRepository(db),
@@ -331,13 +347,12 @@ void main() {
         getAnonJwt: () async => 'jwt',
         httpClient: httpClient,
       ),
-      // Exactly the production wiring: both read fresh at call time.
-      loadAiConsent: () async => ConsentAuthority.decide(
-          EgressClass.aiProcessing, await settings.getSettings()),
-      aiPrimarySelected: () async {
-        final s = await settings.getSettings();
-        return s.cloudProcessingEnabled && s.aiConsentGranted;
-      },
+      // Exactly the production wiring: both read fresh at call time (the
+      // Android rule here; the iOS drain decides its own routes).
+      loadAiConsent: () async =>
+          smartAnalysisAllowed(await settings.getSettings(), ios: !android),
+      aiPrimarySelected: () async =>
+          smartAnalysisSelected(await settings.getSettings(), ios: !android),
       findSameTextCapture: txRepo.findSameTextCapture,
       installId: 'install',
     ));
@@ -561,6 +576,66 @@ void main() {
     });
   });
 
+  // Gemini-first phase 3 (owner decision 2026-11-20): Smart Analysis is
+  // separated from Cloud. With its consent the capture is analysed whether
+  // Cloud is on or off; without it nothing is sent for AI and the device's
+  // own reading records nothing: the message waits in the analysis log.
+  group('phase 3 (iOS): Smart Analysis separated from Cloud', () {
+    test('Cloud OFF with Smart Analysis: analysed through the lane and saved',
+        () async {
+      await consent(cloud: false, ai: true);
+      server.analyse = _processedRow;
+      native.add('p3-smart', _purchase, status: 'pendingSend');
+      await run(build(android: false, registration: _LaneRegistration()));
+      expect(server.uploads, ['p3-smart']);
+      expect(server.lanes, isNotEmpty);
+      expect(server.lanes.every((l) => l == 'smartAnalysis'), isTrue,
+          reason: 'upload and result pull both in the smart-analysis lane');
+      expect(await transactions(), ['p3-smart:confirmed']);
+    });
+
+    test('Smart Analysis off (Cloud OFF): nothing is sent, nothing recorded; '
+        'the message waits, an OTP is still dropped', () async {
+      await consent(cloud: false, ai: false);
+      native
+        ..add('p3-off', _purchase, status: 'sent')
+        ..add('p3-otp', _otp, status: 'sent');
+      await run(build(android: false, registration: _LaneRegistration()));
+      expect(server.uploads, isEmpty);
+      expect(server.aiRequests, isEmpty);
+      expect(server.lanes, isEmpty, reason: 'no request at all');
+      expect(await transactions(), isEmpty);
+      expect((await reviewRows()).map(reasonOf), ['smart_analysis_off']);
+      expect(native.items, isEmpty);
+    });
+
+    test('Smart Analysis off with Cloud ON: nothing sent for AI, nothing '
+        'recorded on the device reading', () async {
+      await consent(cloud: true, ai: false);
+      native.add('p3-cloud', _purchase, status: 'sent');
+      await run(build(android: false));
+      expect(server.uploads, isEmpty);
+      expect(server.aiRequests, isEmpty);
+      expect(await transactions(), isEmpty);
+      expect((await reviewRows()).map(reasonOf), ['smart_analysis_off']);
+    });
+
+    test('turned off: the next capture is not sent', () async {
+      await consent(cloud: false, ai: true);
+      server.analyse = _processedRow;
+      native.add('p3-before', _purchase, status: 'pendingSend');
+      final drain = build(android: false, registration: _LaneRegistration());
+      await run(drain);
+      expect(server.uploads, ['p3-before']);
+
+      await consent(cloud: false, ai: false);
+      native.add('p3-after', _purchase, status: 'pendingSend');
+      await run(drain);
+      expect(server.uploads, ['p3-before'], reason: 'nothing more was sent');
+      expect((await reviewRows()).map(reasonOf), ['smart_analysis_off']);
+    });
+  });
+
   group('iOS captures the server never received', () {
     test('a Share Extension item is uploaded with its own payload id', () async {
       native.add('ios-share', _purchase, status: 'pending');
@@ -581,12 +656,16 @@ void main() {
       expect(await transactions(), ['ios-waiting:confirmed']);
     });
 
+    // Phase 3: a localOnly item was captured without Smart Analysis; it never
+    // leaves the device and waits for Smart Analysis (or manual entry).
     test('a localOnly item never leaves the device', () async {
       native.add('ios-local', _purchase, status: 'sent', localOnly: true);
       await run(build(android: false));
       expect(server.uploads, isEmpty);
       expect(server.aiRequests, isEmpty);
-      expect(await transactions(), ['ios-local:confirmed']);
+      expect(await transactions(), isEmpty);
+      expect((await reviewRows()).map(reasonOf), ['smart_analysis_off']);
+      expect(native.items, isEmpty, reason: 'kept in Smart Inbox, then acked');
     });
 
     test('the native gate refusing the upload means on-device, not review',

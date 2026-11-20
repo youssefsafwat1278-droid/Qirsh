@@ -2969,11 +2969,11 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get privCloudProcessingBody =>
-      'Your data is synced and backed up on Qirsh servers, and captured bank messages may be sent there to be read, with the card and account numbers, IBANs, mobile numbers and codes Qirsh recognises removed (this is automatic and can miss some); a merchant name may be sent to Google Places to categorise it. Turning it off stops sending: messages are read by Qirsh\'s on-device rules and nothing new is synced. Manual entry keeps working.';
+      'Your data is synced and backed up on Qirsh servers, and captured bank messages may be sent there to be read, with the card and account numbers, IBANs, mobile numbers and codes Qirsh recognises removed (this is automatic and can miss some); a merchant name may be sent to Google Places to categorise it. Turning it off stops syncing: nothing new is synced, and bank messages are sent only for Smart Analysis, if it is on. Manual entry keeps working.';
 
   @override
   String get privAiAnalysisBody =>
-      'With Cloud Sync on, captured bank messages — including bank SMS read automatically on Android — with the card and account numbers, IBANs, mobile numbers and codes Qirsh recognises removed and the names, e-mails and reference numbers it recognises masked (this is automatic and can miss some), may be analysed by Google Gemini to read the amount, merchant and bank. The text still contains amounts, merchants, dates and balances. Withdrawing consent limits reading to Qirsh\'s on-device rules.';
+      'With Smart Analysis on, captured bank messages — including bank SMS read automatically on Android — with the card and account numbers, IBANs, mobile numbers and codes Qirsh recognises removed and the names, e-mails and reference numbers it recognises masked (this is automatic and can miss some), may be analysed by Google Gemini to read the amount, merchant and bank. The text still contains amounts, merchants, dates and balances. Withdrawing consent stops sending messages for analysis.';
 
   @override
   String get privSharedLearningTitle => 'Help improve categories for everyone';
@@ -7976,4 +7976,56 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get mtFromMessage => 'From the message';
+
+  @override
+  String get smartOnlyTitle => 'Smart Analysis';
+
+  @override
+  String get smartOnlyIntro =>
+      'Smart Analysis lets Qirsh record your bank messages automatically. It is optional and separate from Cloud Sync.';
+
+  @override
+  String get smartOnlySent =>
+      'The text of each bank message you capture, after Qirsh hides, on your device, the names, phone numbers and card and account numbers it recognises. This is automatic and can miss some. Amounts, merchants and balances remain, so it is not anonymous. Nothing else is sent: no transactions, accounts or other data.';
+
+  @override
+  String get smartOnlyWho =>
+      'Google Gemini, through Qirsh\'s server (hosted by Supabase). Qirsh\'s server keeps the message only until the analysis finishes, at most 7 days.';
+
+  @override
+  String get smartOnlyWhy =>
+      'To read the amount, the type (expense, income or transfer) and the merchant, so the transaction is recorded for you.';
+
+  @override
+  String get smartOnlyHeadOptional => 'It is optional';
+
+  @override
+  String get smartOnlyOptional =>
+      'If you choose Not now, nothing is sent. Your messages stay on this device as awaiting analysis, and you can record them yourself or turn Smart Analysis on later.';
+
+  @override
+  String get smartOnlyOff =>
+      'Turn it off at any time in Settings → Privacy → Smart Analysis. Sending stops at once and nothing already recorded is deleted. A message already sent cannot be recalled.';
+
+  @override
+  String get smartOnlyAllow => 'Allow';
+
+  @override
+  String get smartOnlyTurnOn => 'Turn on Smart Analysis';
+
+  @override
+  String get smartOnlySwitchOn =>
+      'On: captured bank messages are analysed by Google Gemini through Qirsh\'s server, with or without Cloud Sync.';
+
+  @override
+  String get smartOnlySwitchOff =>
+      'Off: nothing is sent for analysis. Captured messages wait in the analysis log, and you can record them yourself.';
+
+  @override
+  String get outcomeAwaitingSmartOffBody =>
+      'Turn on Smart Analysis to record it automatically';
+
+  @override
+  String get consentStatusOffSmartOnBody =>
+      'Cloud Sync is off, so nothing is synced. Smart Analysis is on, so captured bank messages are still analysed (see Smart Analysis below).';
 }

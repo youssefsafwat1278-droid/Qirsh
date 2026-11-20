@@ -20,6 +20,7 @@ CaptureNotificationContent buildOutcomeNotice({
   TransactionEntity? tx,
   CaptureProposal? proposal,
   String lang = 'ar',
+  bool smartAnalysisOff = false,
 }) {
   final l10n = lookupAppL10n(Locale(lang == 'en' ? 'en' : 'ar'));
   final amount = tx != null
@@ -61,8 +62,13 @@ CaptureNotificationContent buildOutcomeNotice({
                 : l10n.outcomeTapToConfirm,
       );
     case AnalysisOutcomeState.awaiting:
+      // Phase 3: kept because smart analysis is off — nothing is waiting for
+      // a connection; the person turns it on or records it.
       return CaptureNotificationContent(
-          title: l10n.outcomeAwaitingTitle, body: l10n.outcomeAwaitingBody);
+          title: l10n.outcomeAwaitingTitle,
+          body: smartAnalysisOff
+              ? l10n.outcomeAwaitingSmartOffBody
+              : l10n.outcomeAwaitingBody);
   }
 }
 

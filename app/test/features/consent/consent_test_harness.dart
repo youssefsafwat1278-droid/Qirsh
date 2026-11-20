@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:money_companion/core/di/app_providers.dart';
+import 'package:money_companion/core/privacy/smart_analysis_consent.dart';
 import 'package:money_companion/core/session/consent_capability.dart';
 import 'package:money_companion/core/theme/app_theme.dart';
 import 'package:money_companion/domain/entities/supporting_entities.dart';
@@ -171,6 +172,14 @@ class FakeRegistrationService implements CaptureDeviceRegistrationService {
   @override
   Future<void> syncBackendState() async => syncCalls++;
 
+  /// Phase 3: each restrictive native write made before Smart Analysis is
+  /// turned off, with the AI consent the store still held at that moment.
+  final restrictSeen = <bool>[];
+
+  @override
+  Future<void> restrictSmartAnalysisNow() async => restrictSeen.add(
+      (writer as FakeSettingsRepository?)?.settings.aiConsentGranted ?? false);
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -196,6 +205,9 @@ List<Override> consentOverrides(
       userSettingsProvider.overrideWith((_) => repo.getSettings()),
       captureDeviceRegistrationServiceProvider.overrideWithValue(service),
       consentSettingsWriterProvider.overrideWithValue(repo),
+      // Phase 3: the Smart Analysis wording record in memory (no keychain).
+      smartAnalysisConsentRecordProvider
+          .overrideWithValue(SmartAnalysisConsentRecord.memory()),
       // A confirmed, resolved gate by default; tests of uncertain / pending
       // states override this provider after these.
       consentLiveFactsProvider

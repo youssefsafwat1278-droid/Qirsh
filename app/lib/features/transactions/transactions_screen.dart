@@ -12,7 +12,7 @@ import '../../core/utils/async_reload_safe.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/di/app_providers.dart';
-import '../../core/privacy/consent_authority.dart';
+import '../../core/privacy/smart_analysis_consent.dart';
 import '../consent/smart_analysis_consent_sheet.dart';
 import '../settings/settings_providers.dart';
 import '../../core/theme/app_colors.dart';
@@ -1958,8 +1958,10 @@ class SmartInboxCard extends ConsumerWidget {
     final isUnprocessable =
         item.id.startsWith('local_capture:') && item.transactionId == null;
     final settings = ref.watch(userSettingsProvider).valueOrNull;
-    final smartAnalysisOn = settings != null &&
-        ConsentAuthority.decide(EgressClass.aiProcessing, settings);
+    // Phase 3: on iOS Smart Analysis is its own consent (no Cloud needed).
+    final ownLane = ref.watch(smartAnalysisOwnLaneProvider);
+    final smartAnalysisOn =
+        settings != null && smartAnalysisAllowed(settings, ios: ownLane);
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -2001,9 +2003,13 @@ class SmartInboxCard extends ConsumerWidget {
                   _RetryInboxAnalysis(item: item),
                 if (settings != null && !smartAnalysisOn)
                   TextButton(
-                    onPressed: () =>
-                        showSmartAnalysisConsentSheet(context, ref),
-                    child: Text(context.l10n.smartConsentEnable),
+                    key: const Key('inboxTurnOnSmartAnalysis'),
+                    onPressed: () => showSmartAnalysisConsentSheet(
+                        context, ref,
+                        smartAnalysisOnly: ownLane),
+                    child: Text(ownLane
+                        ? context.l10n.smartOnlyTurnOn
+                        : context.l10n.smartConsentEnable),
                   ),
               ],
             ),

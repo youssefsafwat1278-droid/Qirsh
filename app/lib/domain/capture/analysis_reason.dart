@@ -65,7 +65,8 @@ abstract final class AnalysisReason {
     if (code != null) return code;
     if (reviewReason == null ||
         reviewReason == SmartInboxReviewReason.analysisUnavailable ||
-        reviewReason == SmartInboxReviewReason.processingFailed) {
+        reviewReason == SmartInboxReviewReason.processingFailed ||
+        reviewReason == SmartInboxReviewReason.smartAnalysisOff) {
       return null;
     }
     return parse(reviewReason) ?? _byReviewReason[reviewReason] ?? unclear;

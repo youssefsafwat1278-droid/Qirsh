@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:money_companion/core/di/app_providers.dart';
+import 'package:money_companion/core/privacy/smart_analysis_consent.dart';
+import 'package:money_companion/data/repositories/analysis_log_repository.dart';
+import 'package:money_companion/domain/capture/analysis_outcome.dart';
+import 'package:money_companion/features/capture/analysis_log_screen.dart';
 import 'package:money_companion/domain/capture/analysis_reason.dart';
 import 'package:money_companion/domain/entities/account_entity.dart';
 import 'package:money_companion/domain/entities/smart_inbox_item_entity.dart';
@@ -60,6 +64,7 @@ Future<void> _pump(
   required bool consentOn,
   FakeSettingsRepository? settingsRepository,
   FakeRegistrationService? registrationService,
+  bool? ownLane,
 }) async {
   final repo = settingsRepository ?? FakeSettingsRepository();
   if (consentOn) {
@@ -74,6 +79,8 @@ Future<void> _pump(
           repo, registrationService ?? FakeRegistrationService()),
       smartInboxRepositoryProvider.overrideWithValue(_FakeInbox()),
       accountRepositoryProvider.overrideWithValue(_NoAccounts()),
+      if (ownLane != null)
+        smartAnalysisOwnLaneProvider.overrideWithValue(ownLane),
     ],
     home: Scaffold(body: SmartInboxCard(item: item)),
   ));
@@ -255,6 +262,66 @@ void main() {
           consentOn: true);
       expect(find.text('Record it anyway'), findsOneWidget);
       expect(find.text('Add manually'), findsNothing);
+    });
+  });
+
+  // Gemini-first phase 3: a capture kept because Smart Analysis is off reads
+  // "awaiting analysis — turn on Smart Analysis to record it automatically",
+  // with a one-tap path to the Smart Analysis consent and manual entry.
+  group('phase 3: kept because Smart Analysis is off (iOS)', () {
+    final off = _item(
+        body: _sms, reviewReason: SmartInboxReviewReason.smartAnalysisOff);
+
+    test('its outcome is awaiting, with the turn-on sentence', () {
+      expect(AnalysisOutcome.forInboxItem(off), AnalysisOutcomeState.awaiting);
+      final entry = AnalysisLogEntry(
+        payloadId: 'p1',
+        at: DateTime.utc(2026, 1, 1),
+        state: AnalysisOutcome.forInboxItem(off),
+        inboxItem: off,
+      );
+      final en = AnalysisLogTile.textOf(entry, 'en', '');
+      expect(en.title, 'Awaiting analysis');
+      expect(en.body, 'Turn on Smart Analysis to record it automatically');
+      final ar = AnalysisLogTile.textOf(entry, 'ar', '');
+      expect(ar.title, 'بانتظار التحليل');
+      expect(ar.body, 'فعّل التحليل الذكي لتسجيلها تلقائيًا');
+    });
+
+    testWidgets('Turn on Smart Analysis and Add manually; the turn-on opens '
+        'the Smart Analysis consent only and grants nothing by itself',
+        (tester) async {
+      final repo = FakeSettingsRepository();
+      final service = FakeRegistrationService();
+      await tester.binding.setSurfaceSize(const Size(800, 2400));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pump(tester, off,
+          consentOn: false,
+          ownLane: true,
+          settingsRepository: repo,
+          registrationService: service);
+      expect(find.text('Add manually'), findsOneWidget);
+      expect(find.text('Turn on Smart Analysis'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('inboxTurnOnSmartAnalysis')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('smartOnlyAllow')), findsOneWidget);
+      expect(find.text('Agree and enable'), findsNothing,
+          reason: 'not the combined Cloud disclosure');
+      expect(repo.saveCalls, 0);
+      expect(service.retryCalls, 0);
+    });
+
+    testWidgets('with Smart Analysis on (Cloud off): no turn-on, a retry',
+        (tester) async {
+      final repo = FakeSettingsRepository()
+        ..settings = FakeSettingsRepository().settings.copyWith(
+            cloudConsentState: ConsentState.declined,
+            aiConsentState: ConsentState.accepted);
+      await _pump(tester, off,
+          consentOn: false, ownLane: true, settingsRepository: repo);
+      expect(find.text('Turn on Smart Analysis'), findsNothing);
+      expect(find.text('Add manually'), findsOneWidget);
+      expect(find.text('Retry smart analysis'), findsOneWidget);
     });
   });
 }

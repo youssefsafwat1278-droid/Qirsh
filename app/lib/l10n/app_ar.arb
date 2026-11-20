@@ -1491,8 +1491,8 @@
   "annOpen": "فتح",
   "annInAppCampaign": "حملة داخل التطبيق",
   "annFromQirsh": "إعلان من قرش",
-  "privCloudProcessingBody": "تتم مزامنة بياناتك ونسخها احتياطيًا على خوادم قِرش، وقد تُرسَل إليها رسائل البنك الملتقطة لقراءتها بعد حذف ما يتعرّف عليه قِرش من أرقام البطاقات والحسابات وأرقام IBAN والجوال والرموز (يتم ذلك آليًا وقد يفوته بعضها)، وقد يُرسَل اسم التاجر إلى Google Places لتصنيفه. عند الإيقاف يتوقف الإرسال: تُقرأ الرسائل بقواعد قِرش المحلية ولا تتم مزامنة أي بيانات جديدة، ويظل الإدخال اليدوي متاحًا.",
-  "privAiAnalysisBody": "عند تشغيله مع المزامنة السحابية، قد تُحلَّل رسائل البنك الملتقطة — ومنها رسائل SMS البنكية التي تُقرأ تلقائيًا على أندرويد — بعد حذف ما يتعرّف عليه قِرش من أرقام البطاقات والحسابات وأرقام IBAN والجوال والرموز وإخفاء ما يتعرّف عليه من أسماء وعناوين بريد إلكتروني وأرقام مرجعية (يتم ذلك آليًا وقد يفوته بعضها)، بواسطة Google Gemini لقراءة المبلغ والتاجر والبنك. يبقى في النص المبالغ والتجار والتواريخ والأرصدة. سحب الموافقة يقصر القراءة على قواعد قِرش داخل جهازك.",
+  "privCloudProcessingBody": "تتم مزامنة بياناتك ونسخها احتياطيًا على خوادم قِرش، وقد تُرسَل إليها رسائل البنك الملتقطة لقراءتها بعد حذف ما يتعرّف عليه قِرش من أرقام البطاقات والحسابات وأرقام IBAN والجوال والرموز (يتم ذلك آليًا وقد يفوته بعضها)، وقد يُرسَل اسم التاجر إلى Google Places لتصنيفه. عند الإيقاف تتوقف المزامنة: لا تتم مزامنة أي بيانات جديدة، ولا تُرسَل رسائل البنك إلا للتحليل الذكي إن كان مفعّلًا، ويظل الإدخال اليدوي متاحًا.",
+  "privAiAnalysisBody": "عند تشغيل التحليل الذكي، قد تُحلَّل رسائل البنك الملتقطة — ومنها رسائل SMS البنكية التي تُقرأ تلقائيًا على أندرويد — بعد حذف ما يتعرّف عليه قِرش من أرقام البطاقات والحسابات وأرقام IBAN والجوال والرموز وإخفاء ما يتعرّف عليه من أسماء وعناوين بريد إلكتروني وأرقام مرجعية (يتم ذلك آليًا وقد يفوته بعضها)، بواسطة Google Gemini لقراءة المبلغ والتاجر والبنك. يبقى في النص المبالغ والتجار والتواريخ والأرصدة. سحب الموافقة يوقف إرسال الرسائل للتحليل.",
   "privSharedLearningTitle": "ساعد في تحسين التصنيفات للجميع",
   "privSharedLearningBody": "يُفعَّل عند موافقتك على المزامنة السحابية والتحليل الذكي، ويمكنك إيقافه في أي وقت. عند تشغيله، في كل مرة تختار «تذكّر التصنيف لهذا المتجر» يرسل قِرش اسم المتجر والتصنيف الذي اخترته فقط. لا تُرسَل أبدًا المبالغ أو التواريخ أو الرسائل أو التحويلات أو أسماء الأشخاص. تُجمَع الاختيارات مع اختيارات المستخدمين الآخرين. ويُضاف الاختيار إلى التصنيفات التي يتلقاها الجميع عندما يتفق عليه 6 مستخدمين على الأقل ويكونون أغلبية واضحة (75%)، أو بعد مراجعة مشرف، ويمكن للمشرف إزالته في أي وقت. يتطلب تشغيل المزامنة السحابية والتحليل الذكي.",
   "privSharedLearningNeedsConsent": "شغّل المزامنة السحابية والتحليل الذكي لاستخدام هذا الخيار.",
@@ -4338,5 +4338,61 @@
   "mtFromMessage": "من الرسالة",
   "@mtFromMessage": {
     "description": "Label above the (masked) bank message text shown in the pre-filled manual entry sheet."
+  },
+  "smartOnlyTitle": "التحليل الذكي",
+  "@smartOnlyTitle": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlyIntro": "يتيح التحليل الذكي لقِرش تسجيل رسائل البنك تلقائيًا. وهو اختياري ومنفصل عن المزامنة السحابية.",
+  "@smartOnlyIntro": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlySent": "نص كل رسالة بنكية تلتقطها، بعد أن يُخفي قِرش على جهازك ما يتعرّف عليه من أسماء وأرقام جوال وأرقام بطاقات وحسابات. يتم ذلك آليًا وقد يفوته بعضها. تبقى المبالغ والتجار والأرصدة، لذا فهو ليس مجهول الهوية. لا يُرسَل شيء غير ذلك: لا معاملات ولا حسابات ولا أي بيانات أخرى.",
+  "@smartOnlySent": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlyWho": "Google Gemini عبر خادم قِرش (المستضاف لدى Supabase). يحتفظ خادم قِرش بالرسالة حتى ينتهي التحليل فقط، ولمدة أقصاها 7 أيام.",
+  "@smartOnlyWho": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlyWhy": "لقراءة المبلغ ونوع العملية (مصروف أو دخل أو تحويل) والتاجر، فتُسجَّل المعاملة نيابةً عنك.",
+  "@smartOnlyWhy": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlyHeadOptional": "اختياري",
+  "@smartOnlyHeadOptional": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlyOptional": "إذا اخترت «ليس الآن» فلن يُرسَل شيء. تبقى رسائلك على هذا الجهاز بانتظار التحليل، ويمكنك تسجيلها بنفسك أو تفعيل التحليل الذكي لاحقًا.",
+  "@smartOnlyOptional": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlyOff": "يمكنك إيقافه في أي وقت من الإعدادات ← الخصوصية ← التحليل الذكي. يتوقف الإرسال فورًا ولا يُحذف شيء مما سُجِّل. لا يمكن استرجاع رسالة أُرسلت بالفعل.",
+  "@smartOnlyOff": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlyAllow": "السماح",
+  "@smartOnlyAllow": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlyTurnOn": "تفعيل التحليل الذكي",
+  "@smartOnlyTurnOn": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlySwitchOn": "مفعّل: تُحلَّل رسائل البنك الملتقطة بواسطة Google Gemini عبر خادم قِرش، مع المزامنة السحابية أو بدونها.",
+  "@smartOnlySwitchOn": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "smartOnlySwitchOff": "متوقف: لا يُرسَل شيء للتحليل. تنتظر الرسائل الملتقطة في سجل التحليل، ويمكنك تسجيلها بنفسك.",
+  "@smartOnlySwitchOff": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "outcomeAwaitingSmartOffBody": "فعّل التحليل الذكي لتسجيلها تلقائيًا",
+  "@outcomeAwaitingSmartOffBody": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
+  },
+  "consentStatusOffSmartOnBody": "المزامنة السحابية متوقفة فلا يُزامَن شيء. التحليل الذكي مفعّل، لذا ما زالت رسائل البنك الملتقطة تُحلَّل (انظر «التحليل الذكي» أدناه).",
+  "@consentStatusOffSmartOnBody": {
+    "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
   }
 }

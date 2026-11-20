@@ -204,9 +204,15 @@ void main() {
       set(ConsentState.accepted, ConsentState.accepted);
       await pump(tester);
       expect(status(_en.consentStatusActive), findsOneWidget);
-      // The only switch is the separate shared-learning opt-in.
-      expect(find.byType(SwitchListTile), findsOneWidget,
-          reason: 'no daily cloud/AI switches');
+      // The switches are the separate shared-learning opt-in and, phase 3
+      // (owner decision 2026-11-20), Smart Analysis's own; never a Cloud one.
+      expect(find.byType(SwitchListTile), findsNWidgets(2),
+          reason: 'no daily cloud switch');
+      expect(
+          find.descendant(
+              of: find.byKey(const Key('smartAnalysisSwitch')),
+              matching: find.byType(SwitchListTile)),
+          findsOneWidget);
       expect(
           find.descendant(
               of: find.byKey(const Key('sharedLearningSwitch')),
