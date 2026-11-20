@@ -502,6 +502,14 @@ class LocalNotificationService {
     );
   }
 
+  /// Removes a capture notification posted with [stableId] (delivered or
+  /// pending). Never throws: a missing one is already gone.
+  Future<void> cancelCaptureLight(String stableId) async {
+    try {
+      await _plugin.cancel(id: notificationEventId('captureLight', stableId));
+    } catch (_) {}
+  }
+
   /// Returns whether the notification was actually handed to the OS —
   /// never throws (see docs/NOTIFICATION_PIPELINE_AUDIT.md), so the caller
   /// (settings_screen.dart's "send test notification" button) can show an

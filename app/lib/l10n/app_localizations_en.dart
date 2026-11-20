@@ -7902,4 +7902,78 @@ class AppL10nEn extends AppL10n {
 
   @override
   String get txnTransferFromFriend => 'Transfer from a friend';
+
+  @override
+  String get outcomeSavedTitle => 'Saved';
+
+  @override
+  String get outcomeNotAddedTitle => 'Not added';
+
+  @override
+  String get outcomeNeedsConfirmationTitle => 'Needs your confirmation';
+
+  @override
+  String get outcomeAwaitingTitle => 'Awaiting analysis';
+
+  @override
+  String get outcomeAwaitingBody =>
+      'It will be analysed automatically when the connection is back';
+
+  @override
+  String get outcomeCouldNotAnalyse =>
+      'We couldn\'t analyse this message; open it and record it';
+
+  @override
+  String outcomeSavedLine(String kind, String amount) {
+    return 'Saved: $kind $amount';
+  }
+
+  @override
+  String get outcomeSavedGeneric => 'A new transaction was saved in Qirsh.';
+
+  @override
+  String get outcomeKindExpense => 'expense';
+
+  @override
+  String get outcomeKindIncome => 'income';
+
+  @override
+  String get outcomeKindRefund => 'refund';
+
+  @override
+  String get outcomeKindWithdrawal => 'cash withdrawal';
+
+  @override
+  String get outcomeKindTransferOut => 'outgoing transfer';
+
+  @override
+  String get outcomeKindTransferIn => 'incoming transfer';
+
+  @override
+  String get outcomeKindTransferToFriend => 'transfer to a friend';
+
+  @override
+  String get outcomeKindTransferFromFriend => 'transfer from a friend';
+
+  @override
+  String get outcomeTapToConfirm => 'Tap to review and confirm it';
+
+  @override
+  String get outcomeIgnoredMessage =>
+      'A verification code or an offer, with no transaction';
+
+  @override
+  String get analysisLogTitle => 'Analysis log';
+
+  @override
+  String get analysisLogEmpty => 'No bank messages yet';
+
+  @override
+  String get inboxRecordAnyway => 'Record it anyway';
+
+  @override
+  String get inboxCheckAmountAndRecord => 'Check the amount and record it';
+
+  @override
+  String get mtFromMessage => 'From the message';
 }

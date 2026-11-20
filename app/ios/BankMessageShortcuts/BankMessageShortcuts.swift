@@ -203,9 +203,23 @@ struct PostBankStatusIntent: AppIntent {
         return .result()
       }
       if mirrorAllowsAi {
-        _ = SharedCaptureStore.updateStatus(payloadID: payloadID,
-          status: .pendingSend, failureReason: "ai_primary_pending")
+        // Gemini-first phase 2: the analysis cannot run now (offline or the
+        // backend is down). The message waits and is retried by the app; the
+        // user is told once, unless the on-device preview reads no amount in
+        // it (an OTP or an advert gets no notification). The reason marks
+        // that this banner exists, so the app does not post a second one.
+        let notify = Self.looksFinancial(smsText)
+        let queued = SharedCaptureStore.updateStatus(payloadID: payloadID,
+          status: .pendingSend,
+          failureReason: notify ? Self.awaitingNotifiedReason : "ai_primary_pending")
         SharedCaptureStore.notifyPendingCaptureUpdateAvailable()
+        if queued && notify {
+          await scheduleNotification(
+            Self.awaitingBanner(arabic: (SharedCaptureStore.notificationLanguage ?? "").hasPrefix("ar")),
+            payloadID: payloadID,
+            identifierPrefix: "capture_generic"
+          )
+        }
         return .result()
       }
       // Backend unreachable after the idempotent retry. Notify ONLY when the
@@ -242,6 +256,28 @@ struct PostBankStatusIntent: AppIntent {
       }
     }
     return .result()
+  }
+
+  /// The native item's failure reason when this intent already showed the
+  /// "awaiting analysis" banner (read by the app's import, which then posts
+  /// none of its own).
+  static let awaitingNotifiedReason = "ai_primary_awaiting_notified"
+
+  /// "Awaiting analysis": no amount, no merchant, nothing from the message.
+  static func awaitingBanner(arabic ar: Bool) -> BackendNotification {
+    BackendNotification(
+      title: ar ? "بانتظار التحليل" : "Awaiting analysis",
+      body: ar ? "ستُحلَّل تلقائيًا عند عودة الاتصال"
+        : "It will be analysed automatically when the connection is back",
+      type: "received"
+    )
+  }
+
+  /// Whether the on-device preview reads an amount and does not drop the
+  /// message (OTP, advert): only such a message is announced as awaiting.
+  private static func looksFinancial(_ text: String) -> Bool {
+    guard let result = PreviewParser.shared?.parse(text) else { return false }
+    return result.outcome != .ignored && result.amount != nil
   }
 
   /// One idempotent retry on timeout-shaped failures: the first call may have

@@ -1505,6 +1505,10 @@ class _AppShellState extends ConsumerState<AppShell> {
         return;
       }
       if (!mounted) return;
+      // Gemini-first phase 2: awaiting-analysis and 24-hour notices.
+      await alertLegacyDrainOutcomes(
+          database, report, notificationPreferences);
+      if (!mounted) return;
       _reportCaptureQueueRead(failed: report.readFailed);
       if (report.authRequired) await authFailure();
       if (!mounted) return;
@@ -1623,6 +1627,13 @@ class _AppShellState extends ConsumerState<AppShell> {
     if (!report.guardFailed && !report.barrierHeld) {
       _reportCaptureQueueRead(failed: report.readFailed);
     }
+    if (report.awaiting.isNotEmpty) {
+      await alertAwaitingAnalysis(
+          ref.read(appDatabaseProvider),
+          report.awaiting,
+          await ref.read(loadNotificationPreferencesUseCaseProvider).call());
+      if (!mounted) return;
+    }
     if (report.imported.isEmpty) return;
     unawaited(ref.read(appDatabaseProvider).pruneOldDedupHashes());
     final preferences =
@@ -1657,6 +1668,9 @@ class _AppShellState extends ConsumerState<AppShell> {
       }
     }
     if (notifyV2) await _alertImportedV2(report.imported, preferences);
+    // Gemini-first phase 2: the outcomes the server's push did not state.
+    await alertServerOutcomes(
+        ref.read(appDatabaseProvider), report.imported, preferences);
     unawaited(
       ref.read(notificationJourneyServiceProvider).evaluateAfterCapture(),
     );

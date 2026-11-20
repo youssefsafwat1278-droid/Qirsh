@@ -48,15 +48,14 @@ class SharedCaptureHandoffService {
         );
         break;
       case CapturedMessageDisposition.ignored:
-        // Intentional non-transactions (OTP/promo) have no durable record by
-        // design and may be dropped. A duplicate has a transaction id, so keep
-        // the payload marker before acknowledging it.
-        if (payloadId != null &&
-            payloadId.isNotEmpty &&
-            transactionId != null) {
+        // Intentional non-transactions (OTP/promo) keep no content and may be
+        // dropped; a content-free `ignored` receipt lets the analysis log list
+        // them (Gemini-first phase 2). A duplicate has a transaction id, so
+        // keep the payload marker before acknowledging it.
+        if (payloadId != null && payloadId.isNotEmpty) {
           await _captureSyncService.markPayloadImported(
             payloadId: payloadId,
-            transactionId: transactionId,
+            transactionId: transactionId ?? 'ignored',
           );
         }
         break;

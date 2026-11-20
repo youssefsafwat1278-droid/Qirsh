@@ -13104,6 +13104,144 @@ abstract class AppL10n {
   /// In ar, this message translates to:
   /// **'تحويل من صديق'**
   String get txnTransferFromFriend;
+
+  /// Heading of a captured bank message that was recorded (analysis outcome).
+  ///
+  /// In ar, this message translates to:
+  /// **'سُجّلت'**
+  String get outcomeSavedTitle;
+
+  /// Heading of a captured bank message that was not recorded, followed by the reason.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم تُضَف'**
+  String get outcomeNotAddedTitle;
+
+  /// Heading of a captured bank message held for one decision of the user.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحتاج تأكيدك'**
+  String get outcomeNeedsConfirmationTitle;
+
+  /// Heading of a captured bank message waiting for the network or the analysis service.
+  ///
+  /// In ar, this message translates to:
+  /// **'بانتظار التحليل'**
+  String get outcomeAwaitingTitle;
+
+  /// Body of the awaiting-analysis notification and log entry.
+  ///
+  /// In ar, this message translates to:
+  /// **'ستُحلَّل تلقائيًا عند عودة الاتصال'**
+  String get outcomeAwaitingBody;
+
+  /// A capture still not analysed 24 hours after it arrived: the user is asked to open it and record it manually.
+  ///
+  /// In ar, this message translates to:
+  /// **'لم نتمكن من تحليل الرسالة، افتحها وسجّلها'**
+  String get outcomeCouldNotAnalyse;
+
+  /// Notification title of a recorded capture. kind is the transaction kind (outcomeKind*), amount the formatted amount with its currency.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُجّل {kind} {amount}'**
+  String outcomeSavedLine(String kind, String amount);
+
+  /// No description provided for @outcomeSavedGeneric.
+  ///
+  /// In ar, this message translates to:
+  /// **'سُجّلت عملية جديدة في قِرش.'**
+  String get outcomeSavedGeneric;
+
+  /// No description provided for @outcomeKindExpense.
+  ///
+  /// In ar, this message translates to:
+  /// **'مصروف'**
+  String get outcomeKindExpense;
+
+  /// No description provided for @outcomeKindIncome.
+  ///
+  /// In ar, this message translates to:
+  /// **'دخل'**
+  String get outcomeKindIncome;
+
+  /// No description provided for @outcomeKindRefund.
+  ///
+  /// In ar, this message translates to:
+  /// **'استرداد'**
+  String get outcomeKindRefund;
+
+  /// No description provided for @outcomeKindWithdrawal.
+  ///
+  /// In ar, this message translates to:
+  /// **'سحب نقدي'**
+  String get outcomeKindWithdrawal;
+
+  /// No description provided for @outcomeKindTransferOut.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل صادر'**
+  String get outcomeKindTransferOut;
+
+  /// No description provided for @outcomeKindTransferIn.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل وارد'**
+  String get outcomeKindTransferIn;
+
+  /// No description provided for @outcomeKindTransferToFriend.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل لصديق'**
+  String get outcomeKindTransferToFriend;
+
+  /// No description provided for @outcomeKindTransferFromFriend.
+  ///
+  /// In ar, this message translates to:
+  /// **'تحويل من صديق'**
+  String get outcomeKindTransferFromFriend;
+
+  /// No description provided for @outcomeTapToConfirm.
+  ///
+  /// In ar, this message translates to:
+  /// **'اضغط لمراجعتها وتأكيدها'**
+  String get outcomeTapToConfirm;
+
+  /// Analysis log line of a message the device dropped as an OTP or an advert (no text is kept).
+  ///
+  /// In ar, this message translates to:
+  /// **'رمز تحقق أو عرض، ولا تحتوي على عملية'**
+  String get outcomeIgnoredMessage;
+
+  /// Screen listing every captured bank message with its analysis outcome.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجل التحليل'**
+  String get analysisLogTitle;
+
+  /// No description provided for @analysisLogEmpty.
+  ///
+  /// In ar, this message translates to:
+  /// **'لا توجد رسائل بنكية بعد'**
+  String get analysisLogEmpty;
+
+  /// Opens manual entry pre-filled with what is known about a capture that was not added.
+  ///
+  /// In ar, this message translates to:
+  /// **'سجّلها على أي حال'**
+  String get inboxRecordAnyway;
+
+  /// Amount-mismatch capture: opens the pre-filled editor with the message text instead of saving the model's amount.
+  ///
+  /// In ar, this message translates to:
+  /// **'راجع المبلغ وسجّلها'**
+  String get inboxCheckAmountAndRecord;
+
+  /// Label above the (masked) bank message text shown in the pre-filled manual entry sheet.
+  ///
+  /// In ar, this message translates to:
+  /// **'من الرسالة'**
+  String get mtFromMessage;
 }
 
 class _AppL10nDelegate extends LocalizationsDelegate<AppL10n> {

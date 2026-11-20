@@ -334,15 +334,22 @@ void main() {
       expect(d.nextDue.difference(now), const Duration(hours: 1));
     });
 
-    test('temporary failures are bounded; the end state is temporary',
-        () async {
+    test(
+        'temporary failures are retried for 24 hours (Gemini-first phase 2); '
+        'the last retry is due at the 24-hour mark', () async {
       final l = ledger();
-      late CaptureRetryDecision d;
-      for (var i = 0; i < CaptureRetryLedger.maxAttempts; i++) {
+      final start = now;
+      var d = await l.recordFailure('a', CaptureFailureKind.temporary);
+      var passes = 1;
+      while (!d.exhausted && passes < 50) {
+        now = (await l.dueAt('a'))!;
         d = await l.recordFailure('a', CaptureFailureKind.temporary);
-        expect(d.exhausted, i == CaptureRetryLedger.maxAttempts - 1);
+        passes++;
       }
+      expect(d.exhausted, isTrue);
+      expect(now.difference(start), CaptureRetryLedger.unresolvedLimit);
       expect(d.kind, CaptureFailureKind.temporary);
+      expect(passes, greaterThan(5), reason: 'retried automatically meanwhile');
     });
 
     test('permanent failures stop sooner and stay distinguishable', () async {
@@ -586,23 +593,55 @@ void main() {
       expect(server.uploaded, hasLength(2));
     });
 
+    // Runs 7 hours apart: 0, 7, 14, 21 h, then 28 h is past the 24 hours.
+    const passesTo24h = 5;
+
     test('retries are bounded and end as a retryable Smart Inbox row',
         () async {
       queue.items.add(item(_id(11)));
       final service = buildV3(ledger());
-      for (var i = 0; i < CaptureRetryLedger.maxAttempts; i++) {
+      for (var i = 0; i < passesTo24h; i++) {
         await service.run();
         now = now.add(const Duration(hours: 7));
       }
-      expect(server.uploaded, hasLength(CaptureRetryLedger.maxAttempts));
+      expect(server.uploaded, hasLength(passesTo24h));
       final row = (await reviewRows()).single;
       expect(row['id'], 'local_capture:${_id(11)}');
       expect(row['body'], _bankPurchase, reason: 'the full text is kept');
       expect(reasonOf(row), SmartInboxReviewReason.analysisUnavailable);
       expect(queue.acked, [_id(11)], reason: 'removed only after the row');
       await service.run();
-      expect(server.uploaded, hasLength(CaptureRetryLedger.maxAttempts),
+      expect(server.uploaded, hasLength(passesTo24h),
           reason: 'nothing is retried after the bound');
+    });
+
+    test(
+        'Gemini-first phase 2: awaiting analysis at the first failure; after '
+        '24 hours one "record it" item; a late server success adds nothing',
+        () async {
+      queue.items.add(item(_id(30)));
+      final service = buildV3(ledger());
+      final first = await service.run();
+      expect(first.awaiting.map((m) => m.id), [_id(30)]);
+      CaptureImportReport last = first;
+      for (var i = 1; i < passesTo24h; i++) {
+        now = now.add(const Duration(hours: 7));
+        last = await service.run();
+        expect(last.awaiting, isEmpty, reason: 'announced once');
+      }
+      final parked = last.imported.single;
+      expect(parked.id, _id(30));
+      expect(parked.outcome!.unanalysed, isTrue);
+      expect(parked.outcome!.deviceNotifies, isTrue);
+      expect((await reviewRows()).single['id'], 'local_capture:${_id(30)}');
+
+      // The analysis finally succeeds on the server: nothing is imported
+      // twice (no device copy is left, and the receipt consumes it).
+      server.results[_id(30)] = _processedFor(_id(30));
+      final late = await service.run();
+      expect(late.imported, isEmpty);
+      expect(await txIds(), isEmpty);
+      expect(await reviewRows(), hasLength(1));
     });
 
     test('a never-uploaded item is sent with its own id, then imported',

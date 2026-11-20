@@ -18,6 +18,7 @@ import 'capture_sync_service.dart';
 import 'native_capture_bridge.dart';
 import 'shared_capture_handoff_service.dart';
 import '../../../domain/capture/analysis_reason.dart';
+import '../../../domain/capture/analysis_outcome.dart';
 
 enum CaptureImportPath {
   /// A receipt or a transaction with the capture id already existed: the item
@@ -39,7 +40,14 @@ class CaptureImportItem {
     this.local,
     this.reviewTransactionId,
     this.committedTransactions = const [],
+    this.outcome,
   });
+
+  /// Gemini-first phase 2: the outcome of a capture imported from a server
+  /// result on the AI-primary path (or parked unanalysed), with what the
+  /// server's push already said. Null where the local notification paths
+  /// own the alert.
+  final DeviceCaptureOutcome? outcome;
 
   /// Newly committed rows only; receipt/ACK-only deliveries contribute none.
   /// The budget checker applies expense, status and budget-scope eligibility.
@@ -63,7 +71,12 @@ class CaptureImportReport {
     this.guardFailed = false,
     this.barrierHeld = false,
     this.readFailed = false,
+    this.awaiting = const [],
   });
+
+  /// Gemini-first phase 2: captures whose analysis could not run on this pass
+  /// for the first time (network or provider down): "awaiting analysis".
+  final List<SharedCapturedMessage> awaiting;
 
   /// The native queue could not be READ: nothing was written or acknowledged.
   final bool readFailed;
@@ -296,6 +309,7 @@ class CaptureImportService {
       final acks = <String>{};
       var guardFailed = false;
       _uploadRateLimited = false;
+      _awaiting.clear();
       for (final item in items) {
         if (_barrier) break;
         final id = item.id!.trim();
@@ -308,7 +322,13 @@ class CaptureImportService {
           handled.add(id);
           if (results.containsKey(id)) acks.add(id);
           imported.add(CaptureImportItem(
-              id: id, path: CaptureImportPath.server, message: item));
+              id: id,
+              path: CaptureImportPath.server,
+              message: item,
+              // 24-hour rule: the user is asked to record it (one notice).
+              outcome: const DeviceCaptureOutcome(
+                  state: AnalysisOutcomeState.needsConfirmation,
+                  unanalysed: true)));
           return true;
         }
 
@@ -382,9 +402,13 @@ class CaptureImportService {
         skippedAwaiting: awaiting,
         guardFailed: guardFailed,
         barrierHeld: _barrier,
+        awaiting: List.of(_awaiting),
       );
     });
   }
+
+  /// This run's first-time deferrals ([CaptureImportReport.awaiting]).
+  final List<SharedCapturedMessage> _awaiting = [];
 
   /// A 429 was seen on this run: no further upload is attempted on it.
   bool _uploadRateLimited = false;
@@ -404,7 +428,12 @@ class CaptureImportService {
     if (ledger == null) return false;
     final decision = await ledger.recordFailure(id, kind,
         rateLimited: _rateLimitedIds.remove(id));
-    if (!decision.exhausted) return false;
+    if (!decision.exhausted) {
+      if (decision.attempts == 1 && kind == CaptureFailureKind.temporary) {
+        _awaiting.add(item);
+      }
+      return false;
+    }
     await _sync.persistUnprocessableCapture(
       item,
       isOwnerCurrent: () => _stillOwner(owner),
@@ -488,26 +517,66 @@ class CaptureImportService {
         modelDecided: isModelDecidedRow(result?.parsed),
         modelRow: isModelRow(result?.parsed));
     if (aiPrimary) {
+      // Gemini-first phase 2: what the device decided, beside what the
+      // server's push said (the notification is the device's when they differ).
+      final notice = DeviceCaptureOutcome.serverNotice(result?.notification);
+      DeviceCaptureOutcome outcome(AnalysisOutcomeState state,
+              {String? code, String? transactionId, CaptureProposal? proposal}) =>
+          DeviceCaptureOutcome(
+            state: state,
+            reasonCode: code,
+            transactionId: transactionId,
+            proposal: proposal,
+            serverState: notice.state,
+            serverPushed: notice.pushed,
+          );
       if (result?.parsed['parserSource'] == 'ai_ignored') {
         // Only the device's deterministic OTP/promo filter may drop a capture.
         // A model "not a transaction" verdict keeps the full native message in
         // Smart Inbox (row + receipt, one transaction) before it is removed.
-        if (!ParserEngine.isIgnoredMessage(item.text, senderId: item.sender)) {
+        final server = ServerReviewInfo.fromParsed(result?.parsed);
+        final code = server?.reasonCode;
+        final dropped =
+            ParserEngine.isIgnoredMessage(item.text, senderId: item.sender);
+        if (!dropped) {
           await _sync.persistUnprocessableCapture(item,
-              isOwnerCurrent: () => _stillOwner(owner),
-              server: ServerReviewInfo.fromParsed(result?.parsed));
+              isOwnerCurrent: () => _stillOwner(owner), server: server);
+        } else {
+          // A content-free receipt, so the analysis log lists it.
+          await _sync.markPayloadImported(
+              payloadId: id, transactionId: 'ignored');
         }
         await _removeNative(owner, id);
         acks.add(id);
         return CaptureImportItem(id: id, path: CaptureImportPath.server,
-            message: item, committedTransactions: const []);
+            message: item, committedTransactions: const [],
+            outcome: dropped
+                ? outcome(AnalysisOutcomeState.notAdded,
+                    code: AnalysisOutcome.isSilent(code)
+                        ? code
+                        : AnalysisReason.notFinancial)
+                : outcome(AnalysisOutcome.forCode(code),
+                    code: code, proposal: server?.proposal));
       }
       if (result != null &&
           held == null &&
           _isProcessed(result) &&
           _validates(result, item) &&
           !_localContradicts(result, item)) {
-        return _importFromServer(owner, item, id, result, acks);
+        final imported = await _importFromServer(owner, item, id, result, acks);
+        final review = imported.reviewTransactionId;
+        return CaptureImportItem(
+          id: id,
+          path: imported.path,
+          message: item,
+          committedTransactions: imported.committedTransactions,
+          reviewTransactionId: review,
+          outcome: outcome(
+              review == null
+                  ? AnalysisOutcomeState.saved
+                  : AnalysisOutcomeState.needsConfirmation,
+              transactionId: review ?? id),
+        );
       }
       if (result?.state == 'processing' || result?.state == 'retryable' ||
           fetchStatus == CaptureFetchStatus.unavailable) {
@@ -529,20 +598,25 @@ class CaptureImportService {
       final refused = result != null && _isProcessed(result)
           ? (_validation(result, item).reason ?? 'local_reading_differs')
           : null;
+      final reviewReason =
+          held ?? (serverReason is String ? serverReason : null) ?? refused;
+      // The device's own hold reason decides the wording over the
+      // server's code; a server proposal is kept for confirmation.
+      final server = held == null && refused == null
+          ? ServerReviewInfo.fromParsed(result?.parsed)
+          : null;
       await _sync.persistUnprocessableCapture(item,
           isOwnerCurrent: () => _stillOwner(owner),
-          reviewReason: held ??
-              (serverReason is String ? serverReason : null) ??
-              refused,
-          // The device's own hold reason decides the wording over the
-          // server's code; a server proposal is kept for confirmation.
-          server: held == null && refused == null
-              ? ServerReviewInfo.fromParsed(result?.parsed)
-              : null);
+          reviewReason: reviewReason,
+          server: server);
       await _removeNative(owner, id);
       if (result != null) acks.add(id);
+      final code = AnalysisReason.of(
+          reasonCode: server?.reasonCode, reviewReason: reviewReason);
       return CaptureImportItem(id: id, path: CaptureImportPath.server,
-          message: item, committedTransactions: const []);
+          message: item, committedTransactions: const [],
+          outcome: outcome(AnalysisOutcome.forCode(code),
+              code: code, proposal: server?.proposal));
     }
     if (!local) {
       if (result == null) {

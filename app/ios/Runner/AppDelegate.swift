@@ -1051,8 +1051,16 @@ enum ApnsEnvironment {
         }
         let center = UNUserNotificationCenter.current()
         let wanted = Set(["capture_generic_", "capture_fallback_", "capture_backend_"].map { $0 + payloadId })
+        // Gemini-first phase 2: includePush also removes this capture's
+        // delivered APNs push (its userInfo carries the payloadId) when the
+        // app's import ended with another outcome than the push stated.
+        let includePush = (call.arguments as? [String: Any])?["includePush"] as? Bool ?? false
         center.getDeliveredNotifications { delivered in
-          let hits = delivered.map { $0.request.identifier }.filter { wanted.contains($0) }
+          let hits = delivered.filter {
+            wanted.contains($0.request.identifier) || (includePush
+              && $0.request.trigger is UNPushNotificationTrigger
+              && ($0.request.content.userInfo["payloadId"] as? String) == payloadId)
+          }.map { $0.request.identifier }
           if !hits.isEmpty { center.removeDeliveredNotifications(withIdentifiers: hits) }
           DispatchQueue.main.async { result(!hits.isEmpty) }
         }

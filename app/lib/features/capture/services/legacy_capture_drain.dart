@@ -51,6 +51,12 @@ class LegacyDrainReport {
   final List<LegacyDrainItem> ingested = [];
   final List<TransactionEntity> budgetCommits = [];
   bool smartInboxChanged = false;
+
+  /// Gemini-first phase 2: messages whose analysis could not run on this run
+  /// for the first time ("awaiting analysis"), and those parked for the user
+  /// after 24 hours unresolved (one "record it" notice each).
+  final List<SharedCapturedMessage> awaiting = [];
+  final List<SharedCapturedMessage> parked = [];
 }
 
 /// The legacy native-queue drain (Android always; iOS unless
@@ -217,7 +223,12 @@ class LegacyCaptureDrain {
           '[Capture]',
           'unfinished kind=${kind.name} attempts=${decision.attempts} '
               'exhausted=${decision.exhausted}');
-      if (!decision.exhausted) return;
+      if (!decision.exhausted) {
+        if (decision.attempts == 1 && kind == CaptureFailureKind.temporary) {
+          report.awaiting.add(message);
+        }
+        return;
+      }
       await _captureSync.persistUnprocessableCapture(
         message,
         isOwnerCurrent: isOwnerCurrent,
@@ -227,6 +238,7 @@ class LegacyCaptureDrain {
       );
       await ackMessage(message);
       report.smartInboxChanged = true;
+      report.parked.add(message);
     }
 
     // The relay returned a result for this capture WITHOUT any text (see

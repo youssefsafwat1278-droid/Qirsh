@@ -590,10 +590,13 @@ void main() {
     server.aiOffline = true;
     var last = BackgroundDrainOutcome.failed;
     var perAttempt = 0;
-    for (var i = 0; i < CaptureRetryLedger.maxAttempts; i++) {
+    // Gemini-first phase 2: retried for 24 hours. Runs 7 hours apart: 0, 7,
+    // 14, 21 h, then 28 h is past the bound.
+    const passes = 5;
+    for (var i = 0; i < passes; i++) {
       last = await background(engine()).run();
       if (i == 0) perAttempt = server.aiRequests.length;
-      if (i < CaptureRetryLedger.maxAttempts - 1) {
+      if (i < passes - 1) {
         // A run inside the backoff window sends nothing.
         final sent = server.aiRequests.length;
         expect(
@@ -609,7 +612,7 @@ void main() {
     expect(native.items, isEmpty);
     expect(await transactions(), isEmpty);
     expect(server.aiRequests,
-        hasLength(perAttempt * CaptureRetryLedger.maxAttempts),
+        hasLength(perAttempt * passes),
         reason: 'requests only on due attempts, never more');
   });
 

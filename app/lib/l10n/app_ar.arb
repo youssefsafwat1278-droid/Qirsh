@@ -4271,5 +4271,72 @@
   "txnTransferFromFriend": "تحويل من صديق",
   "@txnTransferFromFriend": {
     "description": "Title of an incoming transfer from a person; the person is never named."
+  },
+  "outcomeSavedTitle": "سُجّلت",
+  "@outcomeSavedTitle": {
+    "description": "Heading of a captured bank message that was recorded (analysis outcome)."
+  },
+  "outcomeNotAddedTitle": "لم تُضَف",
+  "@outcomeNotAddedTitle": {
+    "description": "Heading of a captured bank message that was not recorded, followed by the reason."
+  },
+  "outcomeNeedsConfirmationTitle": "تحتاج تأكيدك",
+  "@outcomeNeedsConfirmationTitle": {
+    "description": "Heading of a captured bank message held for one decision of the user."
+  },
+  "outcomeAwaitingTitle": "بانتظار التحليل",
+  "@outcomeAwaitingTitle": {
+    "description": "Heading of a captured bank message waiting for the network or the analysis service."
+  },
+  "outcomeAwaitingBody": "ستُحلَّل تلقائيًا عند عودة الاتصال",
+  "@outcomeAwaitingBody": {
+    "description": "Body of the awaiting-analysis notification and log entry."
+  },
+  "outcomeCouldNotAnalyse": "لم نتمكن من تحليل الرسالة، افتحها وسجّلها",
+  "@outcomeCouldNotAnalyse": {
+    "description": "A capture still not analysed 24 hours after it arrived: the user is asked to open it and record it manually."
+  },
+  "outcomeSavedLine": "سُجّل {kind} {amount}",
+  "@outcomeSavedLine": {
+    "description": "Notification title of a recorded capture. kind is the transaction kind (outcomeKind*), amount the formatted amount with its currency.",
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      },
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "outcomeSavedGeneric": "سُجّلت عملية جديدة في قِرش.",
+  "outcomeKindExpense": "مصروف",
+  "outcomeKindIncome": "دخل",
+  "outcomeKindRefund": "استرداد",
+  "outcomeKindWithdrawal": "سحب نقدي",
+  "outcomeKindTransferOut": "تحويل صادر",
+  "outcomeKindTransferIn": "تحويل وارد",
+  "outcomeKindTransferToFriend": "تحويل لصديق",
+  "outcomeKindTransferFromFriend": "تحويل من صديق",
+  "outcomeTapToConfirm": "اضغط لمراجعتها وتأكيدها",
+  "outcomeIgnoredMessage": "رمز تحقق أو عرض، ولا تحتوي على عملية",
+  "@outcomeIgnoredMessage": {
+    "description": "Analysis log line of a message the device dropped as an OTP or an advert (no text is kept)."
+  },
+  "analysisLogTitle": "سجل التحليل",
+  "@analysisLogTitle": {
+    "description": "Screen listing every captured bank message with its analysis outcome."
+  },
+  "analysisLogEmpty": "لا توجد رسائل بنكية بعد",
+  "inboxRecordAnyway": "سجّلها على أي حال",
+  "@inboxRecordAnyway": {
+    "description": "Opens manual entry pre-filled with what is known about a capture that was not added."
+  },
+  "inboxCheckAmountAndRecord": "راجع المبلغ وسجّلها",
+  "@inboxCheckAmountAndRecord": {
+    "description": "Amount-mismatch capture: opens the pre-filled editor with the message text instead of saving the model's amount."
+  },
+  "mtFromMessage": "من الرسالة",
+  "@mtFromMessage": {
+    "description": "Label above the (masked) bank message text shown in the pre-filled manual entry sheet."
   }
 }

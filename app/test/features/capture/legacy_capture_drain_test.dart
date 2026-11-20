@@ -527,10 +527,16 @@ void main() {
       native.add('and-7', _purchase);
       server.aiOffline = true;
       final drain = build(android: true);
-      for (var i = 0; i < CaptureRetryLedger.maxAttempts; i++) {
-        await run(drain);
+      // Gemini-first phase 2: retried for 24 hours (runs at 0, 7, 14, 21 h;
+      // 28 h is past the bound). Awaiting is reported once, parking once.
+      final reports = <LegacyDrainReport>[];
+      for (var i = 0; i < 5; i++) {
+        reports.add(await run(drain));
         now = now.add(const Duration(hours: 7));
       }
+      expect(reports.first.awaiting.map((m) => m.id), ['and-7']);
+      expect(reports.skip(1).every((r) => r.awaiting.isEmpty), isTrue);
+      expect(reports.last.parked.map((m) => m.id), ['and-7']);
       final row = (await reviewRows()).single;
       expect(row['body'], _purchase);
       expect(reasonOf(row), SmartInboxReviewReason.analysisUnavailable);

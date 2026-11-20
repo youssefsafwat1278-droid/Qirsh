@@ -7936,4 +7936,76 @@ class AppL10nAr extends AppL10n {
 
   @override
   String get txnTransferFromFriend => 'تحويل من صديق';
+
+  @override
+  String get outcomeSavedTitle => 'سُجّلت';
+
+  @override
+  String get outcomeNotAddedTitle => 'لم تُضَف';
+
+  @override
+  String get outcomeNeedsConfirmationTitle => 'تحتاج تأكيدك';
+
+  @override
+  String get outcomeAwaitingTitle => 'بانتظار التحليل';
+
+  @override
+  String get outcomeAwaitingBody => 'ستُحلَّل تلقائيًا عند عودة الاتصال';
+
+  @override
+  String get outcomeCouldNotAnalyse =>
+      'لم نتمكن من تحليل الرسالة، افتحها وسجّلها';
+
+  @override
+  String outcomeSavedLine(String kind, String amount) {
+    return 'سُجّل $kind $amount';
+  }
+
+  @override
+  String get outcomeSavedGeneric => 'سُجّلت عملية جديدة في قِرش.';
+
+  @override
+  String get outcomeKindExpense => 'مصروف';
+
+  @override
+  String get outcomeKindIncome => 'دخل';
+
+  @override
+  String get outcomeKindRefund => 'استرداد';
+
+  @override
+  String get outcomeKindWithdrawal => 'سحب نقدي';
+
+  @override
+  String get outcomeKindTransferOut => 'تحويل صادر';
+
+  @override
+  String get outcomeKindTransferIn => 'تحويل وارد';
+
+  @override
+  String get outcomeKindTransferToFriend => 'تحويل لصديق';
+
+  @override
+  String get outcomeKindTransferFromFriend => 'تحويل من صديق';
+
+  @override
+  String get outcomeTapToConfirm => 'اضغط لمراجعتها وتأكيدها';
+
+  @override
+  String get outcomeIgnoredMessage => 'رمز تحقق أو عرض، ولا تحتوي على عملية';
+
+  @override
+  String get analysisLogTitle => 'سجل التحليل';
+
+  @override
+  String get analysisLogEmpty => 'لا توجد رسائل بنكية بعد';
+
+  @override
+  String get inboxRecordAnyway => 'سجّلها على أي حال';
+
+  @override
+  String get inboxCheckAmountAndRecord => 'راجع المبلغ وسجّلها';
+
+  @override
+  String get mtFromMessage => 'من الرسالة';
 }

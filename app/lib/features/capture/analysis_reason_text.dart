@@ -1,3 +1,4 @@
+import '../../domain/capture/analysis_outcome.dart';
 import '../../domain/capture/analysis_reason.dart';
 import '../../domain/entities/smart_inbox_item_entity.dart';
 import '../../domain/entities/transaction_entity.dart';
@@ -27,6 +28,9 @@ String? inboxReasonCode(SmartInboxItemEntity item) => AnalysisReason.of(
 /// The title a Smart Inbox card shows: the reason in the reader's language
 /// when one is known, else the stored title.
 String inboxItemTitle(AppL10n l10n, SmartInboxItemEntity item) {
+  // Gemini-first phase 2: an analysis that never ran asks the user to record
+  // the message (the 24-hour rule), whatever the stored title says.
+  if (AnalysisOutcome.unanalysed(item)) return l10n.outcomeCouldNotAnalyse;
   final code = inboxReasonCode(item);
   return code == null ? item.title : analysisReasonText(l10n, code);
 }

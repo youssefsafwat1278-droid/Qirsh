@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../domain/capture/analysis_outcome.dart';
 import 'capture_backend_client.dart';
 
 /// Why a capture could not be finished on a drain pass.
@@ -92,9 +93,11 @@ class PrefsCaptureRetryStore implements CaptureRetryStore {
 ///
 /// Every drain pass that neither commits nor acknowledges a capture records a
 /// failure here. Retries back off exponentially (a rate-limited upload waits at
-/// least an hour) and stop after [maxAttempts] passes, or after
+/// least an hour) and stop [unresolvedLimit] (24 hours, owner decision of
+/// Gemini-first phase 2) after the capture's first failed pass, or after
 /// [maxPermanentAttempts] local processing failures; the caller then parks the
-/// capture in Smart Inbox, where the user can retry it. The ledger never
+/// capture in Smart Inbox, where the user is asked to record it. Until then it
+/// is "awaiting analysis" and retried automatically. The ledger never
 /// authorizes anything: consent and the egress gates are re-read by the retry
 /// itself. It holds payload ids, counters and timestamps only — never text,
 /// senders, amounts or user ids.
@@ -103,8 +106,11 @@ class CaptureRetryLedger {
       : _store = store ?? MemoryCaptureRetryStore(),
         _now = now ?? DateTime.now;
 
-  static const int maxAttempts = 8;
   static const int maxPermanentAttempts = 3;
+
+  /// A capture whose analysis still could not run this long after its first
+  /// failed pass is parked for the user (the last retry is due exactly then).
+  static const Duration unresolvedLimit = AnalysisOutcome.unresolvedLimit;
 
   /// Waits after the 1st, 2nd, ... temporary failure. The last value repeats.
   static const List<Duration> temporaryBackoff = [
@@ -234,14 +240,21 @@ class CaptureRetryLedger {
     final permanent = (previous?.permanent ?? 0) +
         (kind == CaptureFailureKind.permanent ? 1 : 0);
     final permanentExhausted = permanent >= maxPermanentAttempts;
-    final exhausted = permanentExhausted || attempts >= maxAttempts;
-    final nextDue = now.add(
+    final firstMs = previous?.firstMs ?? now.millisecondsSinceEpoch;
+    final deadline = DateTime.fromMillisecondsSinceEpoch(
+        firstMs + unresolvedLimit.inMilliseconds,
+        isUtc: now.isUtc);
+    final exhausted = permanentExhausted || !now.isBefore(deadline);
+    var nextDue = now.add(
         backoffFor(attempts, kind: kind, rateLimited: rateLimited));
+    // The last automatic retry runs at the 24-hour mark, not a backoff later.
+    if (nextDue.isAfter(deadline)) nextDue = deadline;
     entries[payloadId] = _Entry(
       attempts: attempts,
       permanent: permanent,
       dueMs: nextDue.millisecondsSinceEpoch,
       updatedMs: now.millisecondsSinceEpoch,
+      firstMs: firstMs,
     );
     await _save(entries);
     return CaptureRetryDecision(
@@ -267,6 +280,7 @@ class _Entry {
     required this.permanent,
     required this.dueMs,
     required this.updatedMs,
+    required this.firstMs,
   });
 
   final int attempts;
@@ -274,18 +288,25 @@ class _Entry {
   final int dueMs;
   final int updatedMs;
 
+  /// The first failed pass (an entry written before phase 2 has none: its
+  /// last update stands in).
+  final int firstMs;
+
   static _Entry? tryParse(Object? value) {
-    if (value is! List || value.length != 4) return null;
+    if (value is! List || (value.length != 4 && value.length != 5)) {
+      return null;
+    }
     if (value.any((v) => v is! int)) return null;
     return _Entry(
       attempts: value[0] as int,
       permanent: value[1] as int,
       dueMs: value[2] as int,
       updatedMs: value[3] as int,
+      firstMs: value.length == 5 ? value[4] as int : value[3] as int,
     );
   }
 
-  List<int> toJson() => [attempts, permanent, dueMs, updatedMs];
+  List<int> toJson() => [attempts, permanent, dueMs, updatedMs, firstMs];
 }
 
 /// Whether an in-app AI failure reason describes a TEMPORARY condition (the

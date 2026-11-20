@@ -200,6 +200,10 @@ Future<CaptureDrainPass> runHeadlessCapturePass(
     if (notifyV2 && report.imported.isNotEmpty) {
       await alertImportedV2(database, report.imported, preferences);
     }
+    // Gemini-first phase 2: awaiting-analysis notices and the outcomes the
+    // server's push did not state.
+    await alertAwaitingAnalysis(database, report.awaiting, preferences);
+    await alertServerOutcomes(database, report.imported, preferences);
     await _budgetAlerts(
         container,
         preferences,
@@ -219,6 +223,7 @@ Future<CaptureDrainPass> runHeadlessCapturePass(
       '[CaptureBg]',
       'pass queued=${report.queued} ingested=${report.ingested.length} '
           'stopped=${report.stopped} readFailed=${report.readFailed}');
+  await alertLegacyDrainOutcomes(database, report, preferences);
   await _budgetAlerts(container, preferences, report.budgetCommits);
   return CaptureDrainPass(
     stopped: report.stopped,

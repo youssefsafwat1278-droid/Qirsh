@@ -2644,11 +2644,14 @@ class NativeCaptureBridge {
 
   /// CAP-7 correction: removes this capture's still-delivered App Intent banner.
   /// True only when one was delivered (so a correction replaces it).
-  static Future<bool> withdrawDeliveredCaptureAlert(String payloadId) async {
+  /// [includePush] also removes its delivered APNs push (Gemini-first phase 2:
+  /// the device's import ended with another outcome than the push stated).
+  static Future<bool> withdrawDeliveredCaptureAlert(String payloadId,
+      {bool includePush = false}) async {
     if (!_hasNativeQueue) return false;
     try {
-      return await _channel.invokeMethod<bool>(
-              'withdrawDeliveredCaptureAlert', {'payloadId': payloadId}) ??
+      return await _channel.invokeMethod<bool>('withdrawDeliveredCaptureAlert',
+              {'payloadId': payloadId, if (includePush) 'includePush': true}) ??
           false;
     } on PlatformException {
       return false;
