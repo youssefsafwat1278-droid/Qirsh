@@ -13315,6 +13315,12 @@ abstract class AppL10n {
   /// **'متوقف: لا يُرسَل شيء للتحليل. تنتظر الرسائل الملتقطة في سجل التحليل، ويمكنك تسجيلها بنفسك.'**
   String get smartOnlySwitchOff;
 
+  /// Analysis log: a capture kept while Smart Analysis was off, shown now that it is on; it is only analysed when the person asks.
+  ///
+  /// In ar, this message translates to:
+  /// **'وصلت قبل تفعيل التحليل الذكي — اضغط «أعد التحليل بالذكاء الاصطناعي» في صندوق المراجعة الذكي'**
+  String get outcomeAwaitingSmartOnBody;
+
   /// Gemini-first phase 3: smart analysis consent, switch or awaiting state.
   ///
   /// In ar, this message translates to:

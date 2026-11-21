@@ -8022,6 +8022,10 @@ class AppL10nEn extends AppL10n {
       'Off: nothing is sent for analysis. Captured messages wait in the analysis log, and you can record them yourself.';
 
   @override
+  String get outcomeAwaitingSmartOnBody =>
+      'It arrived before Smart Analysis was on — tap «Retry smart analysis» in the Smart review inbox';
+
+  @override
   String get outcomeAwaitingSmartOffBody =>
       'Turn on Smart Analysis to record it automatically';
 

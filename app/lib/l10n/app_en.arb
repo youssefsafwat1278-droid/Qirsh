@@ -4044,6 +4044,7 @@
   "smartOnlyTurnOn": "Turn on Smart Analysis",
   "smartOnlySwitchOn": "On: captured bank messages are analysed by Google Gemini through Qirsh's server, with or without Cloud Sync.",
   "smartOnlySwitchOff": "Off: nothing is sent for analysis. Captured messages wait in the analysis log, and you can record them yourself.",
+  "outcomeAwaitingSmartOnBody": "It arrived before Smart Analysis was on — tap «Retry smart analysis» in the Smart review inbox",
   "outcomeAwaitingSmartOffBody": "Turn on Smart Analysis to record it automatically",
   "consentStatusOffSmartOnBody": "Cloud Sync is off, so nothing is synced. Smart Analysis is on, so captured bank messages are still analysed (see Smart Analysis below)."
 }

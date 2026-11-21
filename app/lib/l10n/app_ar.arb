@@ -4387,6 +4387,10 @@
   "@smartOnlySwitchOff": {
     "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."
   },
+  "outcomeAwaitingSmartOnBody": "وصلت قبل تفعيل التحليل الذكي — اضغط «أعد التحليل بالذكاء الاصطناعي» في صندوق المراجعة الذكي",
+  "@outcomeAwaitingSmartOnBody": {
+    "description": "Analysis log: a capture kept while Smart Analysis was off, shown now that it is on; it is only analysed when the person asks."
+  },
   "outcomeAwaitingSmartOffBody": "فعّل التحليل الذكي لتسجيلها تلقائيًا",
   "@outcomeAwaitingSmartOffBody": {
     "description": "Gemini-first phase 3: smart analysis consent, switch or awaiting state."

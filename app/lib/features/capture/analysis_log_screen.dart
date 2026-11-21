@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/di/app_providers.dart';
+import '../../core/privacy/smart_analysis_consent.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/app_spacing.dart';
 import '../../core/theme/app_typography.dart';
@@ -14,6 +15,7 @@ import '../../domain/capture/analysis_outcome.dart';
 import '../../engine/privacy/sms_sanitizer.dart';
 import '../common/app_empty_state.dart';
 import '../common/app_loading_state.dart';
+import '../settings/settings_providers.dart';
 import '../settings/widgets/settings_v2.dart';
 import '../transactions/transaction_details_screen.dart';
 import '../transactions/transactions_screen.dart' show SmartInboxCard;
@@ -154,14 +156,19 @@ class AnalysisLogList extends StatelessWidget {
   }
 }
 
-class AnalysisLogTile extends StatelessWidget {
+class AnalysisLogTile extends ConsumerWidget {
   const AnalysisLogTile({super.key, required this.entry});
 
   final AnalysisLogEntry entry;
 
   /// Heading and sentence: the same words as the outcome's notification.
+  ///
+  /// [smartOnAwaitingLine], when given, replaces «turn on Smart Analysis» for
+  /// a capture kept while it was off (or before the device knew it was on):
+  /// it is on now, but that capture is never sent on its own.
   static ({String title, String body}) textOf(
-      AnalysisLogEntry entry, String lang, String ignoredLine) {
+      AnalysisLogEntry entry, String lang, String ignoredLine,
+      {String? smartOnAwaitingLine}) {
     final content = buildOutcomeNotice(
       state: entry.state,
       reasonCode: entry.reasonCode,
@@ -175,7 +182,16 @@ class AnalysisLogTile extends StatelessWidget {
     final ignored = entry.transaction == null &&
         entry.inboxItem == null &&
         entry.state == AnalysisOutcomeState.notAdded;
-    return (title: content.title, body: ignored ? ignoredLine : content.body);
+    final keptWhileOff = entry.inboxItem != null &&
+        AnalysisOutcome.awaitsSmartAnalysis(entry.inboxItem!);
+    return (
+      title: content.title,
+      body: ignored
+          ? ignoredLine
+          : keptWhileOff && smartOnAwaitingLine != null
+              ? smartOnAwaitingLine
+              : content.body,
+    );
   }
 
   static IconData _icon(AnalysisOutcomeState state) => switch (state) {
@@ -186,10 +202,14 @@ class AnalysisLogTile extends StatelessWidget {
       };
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.colors;
     final lang = Localizations.localeOf(context).languageCode;
-    final text = textOf(entry, lang, context.l10n.outcomeIgnoredMessage);
+    final settings = ref.watch(userSettingsProvider).valueOrNull;
+    final smartOn = settings != null && smartAnalysisSelected(settings);
+    final text = textOf(entry, lang, context.l10n.outcomeIgnoredMessage,
+        smartOnAwaitingLine:
+            smartOn ? context.l10n.outcomeAwaitingSmartOnBody : null);
     final raw = entry.text?.trim();
     // Masked only: card, account and phone numbers and a person's name never
     // appear here.

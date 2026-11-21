@@ -8054,6 +8054,10 @@ class AppL10nAr extends AppL10n {
       'متوقف: لا يُرسَل شيء للتحليل. تنتظر الرسائل الملتقطة في سجل التحليل، ويمكنك تسجيلها بنفسك.';
 
   @override
+  String get outcomeAwaitingSmartOnBody =>
+      'وصلت قبل تفعيل التحليل الذكي — اضغط «أعد التحليل بالذكاء الاصطناعي» في صندوق المراجعة الذكي';
+
+  @override
   String get outcomeAwaitingSmartOffBody =>
       'فعّل التحليل الذكي لتسجيلها تلقائيًا';
 

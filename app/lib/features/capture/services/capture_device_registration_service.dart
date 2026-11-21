@@ -1312,7 +1312,14 @@ class CaptureDeviceRegistrationService {
     if (ack == snapshot) {
       if (!await _hasVerifiedAck(session.uid, snapshot) && !await _linkOnce()) {
         outcome.consentPushFailed = snapshot.cloud || snapshot.ai;
+        return;
       }
+      // A restrictive owner publication (an ASR adoption, an admission)
+      // narrows the native mirror without changing the ack. Republish what the
+      // server acknowledged, or every capture taken until the next cold start
+      // is stamped local-only for good and waits as "Smart Analysis off".
+      if (!await _holds(tx)) return;
+      await _writeMirror(session.uid, snapshot, lifetime: tx.current);
       return;
     }
     if (!await _holds(tx)) return;
