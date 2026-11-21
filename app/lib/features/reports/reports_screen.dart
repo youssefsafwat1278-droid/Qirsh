@@ -1227,7 +1227,7 @@ class _MerchantBarRow extends StatelessWidget {
                     // v2: the merchant's natural case («Carrefour», not
                     // «CARREFOUR»).
                     _naturalCase(merchant.name),
-                    maxLines: 1,
+                    maxLines: linesUnlessLargeText(context, 1),
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.bodyStrong(c.textMain),
                   ),

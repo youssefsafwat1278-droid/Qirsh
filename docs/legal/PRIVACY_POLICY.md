@@ -429,9 +429,8 @@ at most 168 hours. The transactions created from your messages are synced like
 any other transaction and kept until you delete them or your account.
 
 So: with the default settings, message text stays on your device. If you turn
-on Smart Analysis (with or without Cloud Sync), sanitized text does leave your
-device and is
-processed by Google — we will not tell you otherwise. You can withdraw consent at
+on Smart Analysis (with or without Cloud Sync), sanitized text
+does leave your device and is processed by Google — we will not tell you otherwise. You can withdraw consent at
 any time in Settings → Privacy & data; sending stops immediately.
 
 ---
