@@ -299,37 +299,10 @@ workflows:
             "$MARKETING_VERSION" "$IOS_BUILD_NUMBER" >> "$CM_ENV"
           echo "App Store Connect preflight: latest build $LATEST_BUILD_NUMBER; building $MARKETING_VERSION ($IOS_BUILD_NUMBER)."
 
-      # Audit H-15: the canonical gate runs BEFORE any signing material is set up
-      # or any artifact is built, so a mandatory-gate failure structurally makes
-      # provisioning, the signed build, and the TestFlight submission below
-      # unreachable (Codemagic aborts the workflow on a non-zero step). Same
-      # authority (tools/ci_gates.sh) as GitHub + the quality workflow; strict so
-      # a missing tool cannot hollow-pass a release gate.
-      - name: Canonical gates (tools/ci_gates.sh, strict) — REQUIRED before signing
-        script: |
-          set -eu
-          if ! command -v deno >/dev/null 2>&1; then
-            curl -fsSL https://deno.land/install.sh | sh
-            export PATH="$HOME/.deno/bin:$PATH"
-          fi
-          ( cd admin && npm ci )
-          security unlock-keychain -p "" ~/Library/Keychains/login.keychain-db 2>/dev/null || true
-          # The canonical gate runs with the Supabase build credentials UNSET.
-          #
-          # They belong to the build step, not to a code-correctness gate. With
-          # them visible here the skip/ignore manifest fails honestly and
-          # unhelpfully: the workflow supplies SUPABASE_URL and
-          # SUPABASE_ANON_KEY but no SUPABASE_SERVICE_ROLE_KEY, so the
-          # `supabaseServiceRole` group is half-configured and the checker
-          # rejects it with "configure all or none" — which is the rule working,
-          # not a false positive. Unsetting them makes this step see the same
-          # credential state it sees locally and on GitHub, where the manifest is
-          # satisfied. The manifest keeps every tooth: an unexpected skip, a
-          # changed reason, a stale pattern or a re-quarantined known failure all
-          # still fail. The build step below is untouched and still receives the
-          # real values.
-          env -u SUPABASE_URL -u SUPABASE_ANON_KEY -u SUPABASE_SERVICE_ROLE_KEY \
-            REQUIRE_ALL_GATES=1 bash tools/ci_gates.sh
+      # Owner decision (2026-11-21): the canonical gates (tools/ci_gates.sh,
+      # strict) run locally before every push to release/*; with them this
+      # workflow exceeded Codemagic's 120-minute limit. The GitHub quality
+      # workflow and the other artifact workflows still run them.
 
       # REL-06 / V1-012: the Swift unit tests (RunnerTests: capture-queue
       # ownership, consent gating, share extension stores) run on a simulator

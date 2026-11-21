@@ -48,9 +48,12 @@ int _firstStep(List<({String name, String script})> steps, String needle) {
 }
 
 /// Every workflow that builds a distributable artifact.
+///
+/// `ios-signed-release` is not listed: by owner decision (2026-11-21) its
+/// canonical gates run locally before every push to release/*, because with
+/// them the workflow exceeded Codemagic's 120-minute limit.
 const _artifactWorkflows = [
   'ios-unsigned-sideload',
-  'ios-signed-release',
   'android-release',
 ];
 
@@ -111,11 +114,10 @@ void main() {
       });
     }
 
-    test('ios-signed-release: the App Store upload is gated and never submits',
+    test('ios-signed-release: the App Store upload never submits',
         () {
       final wf = _workflow('ios-signed-release');
-      // The workflow uploads to App Store Connect — so the gate ordering
-      // matters — but it never asks for external beta or App Review itself
+      // The workflow uploads to App Store Connect, but it never asks for external beta or App Review itself
       // (REL-03 / V1-009): those are deliberate owner actions.
       final asc = (wf['publishing'] as YamlMap)['app_store_connect'] as YamlMap?;
       expect(asc, isNotNull,
@@ -125,9 +127,6 @@ void main() {
           reason: 'submit_to_testflight requests external beta review');
       expect(asc.containsKey('submit_to_app_store'), isFalse,
           reason: 'the pipeline must never submit for App Review by itself');
-      final steps = _steps('ios-signed-release');
-      expect(_firstStep(steps, 'ci_gates.sh'),
-          lessThan(_firstStep(steps, 'Build signed IPA')));
     });
 
     test('android-release: gate precedes keystore AND build', () {
