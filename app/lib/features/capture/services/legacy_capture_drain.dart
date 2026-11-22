@@ -413,9 +413,14 @@ class LegacyCaptureDrain {
           if (uploadRateLimited) {
             throw const CaptureBackendException('process_ios_sms_failed_429');
           }
-          // A frozen egress gate is a transient state, not a refusal.
+          // A frozen egress gate is a transient state, not a refusal: on a cold
+          // start it holds until consent is re-confirmed, seconds later, and
+          // the relay pull was skipped too. Retried, never announced
+          // "awaiting": the server may well have analysed it already.
           if (ConsentAuthority.egressFrozen) {
-            throw const CaptureBackendException('egress_frozen');
+            await recordUnfinished(message, CaptureFailureKind.temporary,
+                announce: false);
+            continue;
           }
           final sent = await _captureSync.retryPendingSend(message, true);
           if (sent) {

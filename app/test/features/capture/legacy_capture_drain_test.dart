@@ -18,6 +18,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:money_companion/core/privacy/cloud_egress_gate.dart';
+import 'package:money_companion/core/privacy/consent_authority.dart';
 import 'package:money_companion/core/privacy/smart_analysis_consent.dart';
 import 'package:money_companion/data/db/app_database.dart';
 import 'package:money_companion/data/db/database_key_store.dart';
@@ -762,6 +763,29 @@ void main() {
       expect(await transactions(), ['ios-done:confirmed']);
       // Its "awaiting analysis" notice, had one been shown, is withdrawn.
       expect(second.settled, ['ios-done']);
+    });
+
+    test(
+        'a cold start before consent is re-confirmed is not announced '
+        '"awaiting"; once egress opens the capture is settled', () async {
+      // Device QA 2026-11-22: the app was opened 14 s after the server's push.
+      // On a cold start egress stays frozen until consent is re-confirmed, so
+      // the relay pull is skipped and the upload cannot be sent.
+      native.add('ios-cold', _purchase, status: 'sent');
+      server.rows.add(_processedRow('ios-cold'));
+      final drain = build(android: false);
+      ConsentAuthority.egressFrozen = true;
+      try {
+        final first = await run(drain);
+        expect(first.awaiting, isEmpty);
+        expect(native.items, hasLength(1));
+      } finally {
+        ConsentAuthority.egressFrozen = false;
+      }
+
+      final second = await run(drain);
+      expect(await transactions(), ['ios-cold:confirmed']);
+      expect(second.settled, ['ios-cold']);
     });
 
     test('an upload that failed is still announced "awaiting" once', () async {
