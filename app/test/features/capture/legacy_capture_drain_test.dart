@@ -594,6 +594,26 @@ void main() {
       expect(await transactions(), ['p3-smart:confirmed']);
     });
 
+    test('a relay import is budget-checked on the device only with Cloud OFF',
+        () async {
+      // Cloud OFF: the server does not evaluate budgets, the device must.
+      await consent(cloud: false, ai: true);
+      server.rows.add(_processedRow('p3-off-budget'));
+      native.add('p3-off-budget', _purchase, status: 'sent');
+      final off = await run(
+          build(android: false, registration: _LaneRegistration()));
+      expect(off.budgetCommits.map((t) => t.id), ['p3-off-budget']);
+    });
+
+    test('Cloud ON: a relay import leaves the budget alert to the server',
+        () async {
+      server.rows.add(_processedRow('p3-on-budget'));
+      native.add('p3-on-budget', _purchase, status: 'sent');
+      final on = await run(build(android: false));
+      expect(await transactions(), ['p3-on-budget:confirmed']);
+      expect(on.budgetCommits, isEmpty);
+    });
+
     test('Smart Analysis off (Cloud OFF): nothing is sent, nothing recorded; '
         'the message waits, an OTP is still dropped', () async {
       await consent(cloud: false, ai: false);
@@ -721,6 +741,34 @@ void main() {
         ..rows.add(_processedRow('ios-sent'));
       await run(drain);
       expect(await transactions(), ['ios-sent:confirmed']);
+    });
+
+    test(
+        'a server-analysed capture read while the relay is down is not '
+        'announced "awaiting"; once imported it is settled', () async {
+      // The App Intent got the server's answer (its push already went out):
+      // the native copy is `sent` with no failure reason.
+      native.add('ios-done', _purchase, status: 'sent');
+      server.syncStatus = 503; // the relay pull fails on this open
+      final drain = build(android: false);
+      final first = await run(drain);
+      expect(first.awaiting, isEmpty);
+      expect(native.items, hasLength(1));
+
+      server
+        ..syncStatus = 200
+        ..rows.add(_processedRow('ios-done'));
+      final second = await run(drain);
+      expect(await transactions(), ['ios-done:confirmed']);
+      // Its "awaiting analysis" notice, had one been shown, is withdrawn.
+      expect(second.settled, ['ios-done']);
+    });
+
+    test('an upload that failed is still announced "awaiting" once', () async {
+      native.add('ios-up', _purchase, status: 'pendingSend');
+      server.uploadStatus = 503;
+      final drain = build(android: false);
+      expect((await run(drain)).awaiting.map((m) => m.id), ['ios-up']);
     });
   });
 

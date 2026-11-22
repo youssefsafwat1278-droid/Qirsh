@@ -106,6 +106,14 @@ Deno.test('custom threshold repeats are suppressed but escalation still fires', 
   assertEquals((await run({threshold:70, spend:105, lastSpent:100})).pushes.length, 0);
   assertEquals((await run({threshold:70, spend:110, lastSpent:100})).pushes.length, 1);
 });
+Deno.test('deleted spend no longer silences the alert it was notified at', async () => {
+  // Alerted at 7,522 earlier this period; those transactions were deleted and
+  // the spend is now 245.50 of a 100 budget: exceeded again, so alert.
+  const r = await run({ spend: 245.5, lastSpent: 7522 });
+  assertEquals(r.pushes.length, 1);
+  assertEquals(r.pushes[0].title, 'Budget exceeded');
+  assertEquals(r.updates.length, 1);
+});
 Deno.test('Arabic warning uses the selected percentage', async () => {
   const r = await run({threshold:70, spend:70, locale:'ar'});
   assertStringIncludes(String(r.pushes[0].title), '٧٠');

@@ -102,6 +102,29 @@ void main() {
     expect(content.body, contains('200'));
   });
 
+  test('deleted spend no longer silences the alert it was notified at', () {
+    // Alerted "exceeded" at 7,522 earlier this period; those transactions
+    // were deleted and the spend is now 245.50 of a 200 budget.
+    final fresh = _entry(amountMinor: 20000, spentMinor: 24550);
+    final entry = BudgetProgressEntry(
+      budget: fresh.budget.copyWith(lastNotifiedSpentMoney: Money(752200, 'SAR')),
+      spent: fresh.spent,
+      remaining: fresh.remaining,
+      ratio: fresh.ratio,
+      health: fresh.health,
+      periodStart: fresh.periodStart,
+      periodEnd: fresh.periodEnd,
+    );
+    final content = planner.plan(
+      entry: entry,
+      now: now,
+      currencyLabel: 'ريال',
+      categoryLabel: 'الطعام',
+      accountLabel: 'الراجحي',
+    );
+    expect(content?.type, NotificationType.budgetOver);
+  });
+
   test('different budgets produce different notification ids', () {
     final a = planner.plan(
       entry: _entry(

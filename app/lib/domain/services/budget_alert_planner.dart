@@ -95,7 +95,10 @@ class BudgetAlertPlanner {
     }
     if (crossed < 0) return null;
     final budget = entry.budget;
-    if (budget.lastNotifiedPeriodStart.isAtSameMomentAs(entry.periodStart)) {
+    // Spend now below the figure last alerted on: transactions were deleted
+    // (or refunded) since, so that figure no longer silences this period.
+    if (budget.lastNotifiedPeriodStart.isAtSameMomentAs(entry.periodStart) &&
+        budget.lastNotifiedSpentMoney.minorUnits <= entry.spent.minorUnits) {
       final previous = BigInt.from(budget.lastNotifiedSpentMoney.minorUnits);
       final limit = BigInt.from(budget.amountMoney.minorUnits);
       final alreadyReached = previous * BigInt.from(100) >=

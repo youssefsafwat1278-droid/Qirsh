@@ -58,6 +58,11 @@ class LegacyDrainReport {
   /// after 24 hours unresolved (one "record it" notice each).
   final List<SharedCapturedMessage> awaiting = [];
   final List<SharedCapturedMessage> parked = [];
+
+  /// Captures acknowledged on this run without being ingested here (the relay
+  /// already imported them): an earlier "awaiting analysis" notice of theirs
+  /// is withdrawn.
+  final List<String> settled = [];
 }
 
 /// The legacy native-queue drain (Android always; iOS unless
@@ -111,6 +116,16 @@ class LegacyCaptureDrain {
   /// Whether an in-app AI client exists at all (the backend is configured).
   final bool Function() _aiAvailable;
 
+  /// Budget alerts for the transactions the relay just imported. With Cloud
+  /// ON the server evaluates the budget after its analysis and pushes the
+  /// alert; with Cloud OFF it does not, so the device is the only one to check.
+  Future<void> _addRelayBudgetCommits(
+      LegacyDrainReport report, CaptureSyncResult? sync) async {
+    if (sync == null || sync.committedTransactions.isEmpty) return;
+    if ((await _loadSettings()).cloudProcessingEnabled) return;
+    report.budgetCommits.addAll(sync.committedTransactions);
+  }
+
   bool _flagOn(String key) {
     try {
       return _flag(key);
@@ -152,6 +167,7 @@ class LegacyCaptureDrain {
       }
     }
     report.backendSync = backendSync;
+    await _addRelayBudgetCommits(report, backendSync);
     // Per-item lease (MALI-012): peek does NOT delete the native queue.
     // Each message is acknowledged (removed) individually only after its
     // local import committed — a kill anywhere in this loop re-delivers
@@ -214,6 +230,7 @@ class LegacyCaptureDrain {
       SharedCapturedMessage message,
       CaptureFailureKind kind, {
       bool rateLimited = false,
+      bool announce = true,
     }) async {
       final id = message.id?.trim();
       if (id == null || id.isEmpty) return;
@@ -225,7 +242,9 @@ class LegacyCaptureDrain {
           'unfinished kind=${kind.name} attempts=${decision.attempts} '
               'exhausted=${decision.exhausted}');
       if (!decision.exhausted) {
-        if (decision.attempts == 1 && kind == CaptureFailureKind.temporary) {
+        if (announce &&
+            decision.attempts == 1 &&
+            kind == CaptureFailureKind.temporary) {
           report.awaiting.add(message);
         }
         return;
@@ -299,6 +318,7 @@ class LegacyCaptureDrain {
               debugPrint('[Capture] skip already imported backend payload');
             }
             await ackMessage(message);
+            report.settled.add(payloadId);
             continue;
           }
           // The server answered without any text: resolve it from this copy.
@@ -382,8 +402,10 @@ class LegacyCaptureDrain {
         if (route == LegacyDrainRoute.wait) {
           // The server still owns the analysis and its result is not readable
           // yet. Counted, so the wait is bounded and ends in Smart Inbox
-          // rather than lasting forever.
-          await recordUnfinished(message, CaptureFailureKind.temporary);
+          // rather than lasting forever. No "awaiting analysis" notice: the
+          // server already analysed it and its own notification went out.
+          await recordUnfinished(message, CaptureFailureKind.temporary,
+              announce: false);
           continue;
         }
         if (route == LegacyDrainRoute.upload) {
@@ -399,9 +421,11 @@ class LegacyCaptureDrain {
           if (sent) {
             backendSync = await _captureSync.sync();
             report.backendSync = backendSync;
+            await _addRelayBudgetCommits(report, backendSync);
             if (backendSync.importedPayloadIds.contains(payloadId) ||
                 await _captureSync.isPayloadImported(payloadId!)) {
               await ackMessage(message);
+              report.settled.add(payloadId!);
               continue;
             }
             final deferral = backendSync.deferredPayloadIds[payloadId];

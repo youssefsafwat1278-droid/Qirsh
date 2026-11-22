@@ -167,8 +167,12 @@ export async function handleEvaluateBudgets(req: Request, dependencies = { creat
     const currentSpend = Math.max(0, (txs || []).reduce((sum, tx) =>
       sum + (tx.transaction_type === 'refund' ? -1 : 1) * Number(tx.amount || 0), 0) +
       pendingCaptureSpend(captures ?? [], accounts ?? [], ledgerIds, budget, from, to));
-    const lastNotified = Date.parse(budget.last_notified_period_start) === from
+    const notifiedThisPeriod = Date.parse(budget.last_notified_period_start) === from
       ? Number(budget.last_notified_spent_amount || 0) : 0;
+    // Spend now below the figure last alerted on: transactions were deleted
+    // (or refunded) since, so that figure no longer describes this period and
+    // must not keep silencing the alerts it covered.
+    const lastNotified = notifiedThisPeriod > currentSpend ? 0 : notifiedThisPeriod;
 
     const warning = normalizeBudgetWarning(budget.alert_threshold_percent);
     const thresholds = [...(warning < 100 ? [warning] : []), ...(warning < 90 ? [90] : []), 100];

@@ -250,7 +250,8 @@ Future<void> alertLegacyDrainOutcomes(
   NotificationPreferences preferences,
 ) async {
   await alertAwaitingAnalysis(database, report.awaiting, preferences);
-  await cancelAwaitingNotices(report.ingested.map((i) => i.message.id));
+  await cancelAwaitingNotices(
+      [...report.ingested.map((i) => i.message.id), ...report.settled]);
   await alertServerOutcomes(
     database,
     [
