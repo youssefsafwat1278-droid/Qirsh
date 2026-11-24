@@ -20,7 +20,8 @@ import '../../core/auth/supabase_auth_service.dart'
     show
         AuthCancelledException,
         AuthConfigurationException,
-        googleSignInConfigured;
+        googleSignInConfigured,
+        kGoogleAccountNew;
 import '../../core/backend/supabase_config.dart';
 import '../../core/privacy/cloud_egress_gate.dart' show EgressDeniedException;
 import '../../core/privacy/consent_authority.dart' show ConsentAuthority;
@@ -191,7 +192,7 @@ class _OnboardingAuthScreenState extends ConsumerState<OnboardingAuthScreen> {
     final l = context.l10n;
     if (provider == 'google' &&
         error is supabase.AuthApiException &&
-        error.message == 'Use Create an account to register with Google.') {
+        error.message == kGoogleAccountNew) {
       return l.authGoogleSignupRequired;
     }
     // L5: the previous account's cleanup did not finish. Its data stays

@@ -112,6 +112,11 @@ GoogleSignIn buildGoogleSignIn(TargetPlatform platform) {
   );
 }
 
+/// The exact refusal of the server's enrollment hook for a Google account that
+/// has no Qirsh account yet.
+const String kGoogleAccountNew =
+    'Use Create an account to register with Google.';
+
 class SupabaseAuthService implements AuthService {
   SupabaseAuthService({
     supabase.SupabaseClient? client,
@@ -190,7 +195,7 @@ class SupabaseAuthService implements AuthService {
     return AppDiagnostics.run(AppOperation.authentication, () async {
       final tokens = await _googleTokens();
       final response = await _accountControl(() async {
-        if (create) {
+        Future<void> enroll() async {
           final permit =
               await _client.functions.invoke('google-enrollment', body: {
             'id_token': tokens.idToken,
@@ -204,12 +209,28 @@ class SupabaseAuthService implements AuthService {
             throw const AuthException('google_enrollment_unavailable');
           }
         }
-        return _client.auth.signInWithIdToken(
-          provider: supabase.OAuthProvider.google,
-          idToken: tokens.idToken,
-          accessToken: tokens.accessToken,
-          nonce: tokens.nonce,
-        );
+
+        Future<supabase.AuthResponse> exchange() =>
+            _client.auth.signInWithIdToken(
+              provider: supabase.OAuthProvider.google,
+              idToken: tokens.idToken,
+              accessToken: tokens.accessToken,
+              nonce: tokens.nonce,
+            );
+
+        if (create) {
+          await enroll();
+          return exchange();
+        }
+        try {
+          return await exchange();
+        } on supabase.AuthApiException catch (error) {
+          // A Google account new to Qirsh: registered here, on the same tap,
+          // as Apple's sign-in does. Every other refusal stands.
+          if (error.message != kGoogleAccountNew) rethrow;
+          await enroll();
+          return exchange();
+        }
       });
       return AuthIdentity(
           isCurrent: _responseCurrent(response),
